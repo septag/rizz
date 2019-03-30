@@ -115,7 +115,7 @@ SX_PRAGMA_DIAGNOSTIC_POP();
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
 #include "dds-ktx/dds-ktx.h"
-SX_PRAGMA_DIAGNOSTIC_POP();
+SX_PRAGMA_DIAGNOSTIC_POP()
 
 // stb_image
 #define STB_IMAGE_IMPLEMENTATION
@@ -128,7 +128,7 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wshadow")
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wtype-limits")
 #include "stb/stb_image.h"
-SX_PRAGMA_DIAGNOSTIC_POP();
+SX_PRAGMA_DIAGNOSTIC_POP()
 
 #include rizz_shader_path(shaders_h, debug.vert.h)
 #include rizz_shader_path(shaders_h, debug.frag.h)
