@@ -1615,6 +1615,7 @@ sigjmp_buf env;
 static void cr_signal_handler(int sig, siginfo_t *si, void *uap) {
     CR_TRACE
     (void)uap;
+    (void)si;
     CR_ASSERT(si);
     siglongjmp(env, sig);
 }
