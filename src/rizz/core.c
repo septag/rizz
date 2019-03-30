@@ -205,8 +205,8 @@ static void rizz__print_debug(const char* fmt, ...) {
     sx_strcat(text, sizeof(text), "\n");
     OutputDebugStringA(text);
 #    endif
-
-
+#else
+    sx_unused(fmt);
 #endif
 }
 
@@ -268,6 +268,9 @@ static void rizz__print_error_trace(const char* source_file, int line, const cha
     sx_os_path_basename(basename, sizeof(basename), source_file);
     sx_snprintf(new_fmt, sizeof(new_fmt), "ERROR: %s (%s, Line: %d)", fmt, basename, line);
 #else
+    sx_unused(source_file);
+    sx_unused(line);
+
     sx_strcpy(new_fmt, sizeof(new_fmt), "ERROR: ");
     sx_strcat(new_fmt, sizeof(new_fmt), fmt);
 #endif
@@ -1036,6 +1039,9 @@ static bool rizz__job_test_and_del(sx_job_t job) {
 }
 
 static void rizz__begin_profile_sample(const char* name, uint32_t flags, uint32_t* hash_cache) {
+    sx_unused(name);
+    sx_unused(flags);
+    sx_unused(hash_cache);
     rmt__begin_cpu_sample(name, flags, hash_cache);
 }
 

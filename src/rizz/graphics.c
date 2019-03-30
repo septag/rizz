@@ -127,7 +127,7 @@ SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wshadow")
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wtype-limits")
-SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wmaybe-uninitialized")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_GCC("-Wmaybe-uninitialized")
 #include "stb/stb_image.h"
 SX_PRAGMA_DIAGNOSTIC_POP()
 
@@ -1416,6 +1416,9 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
             fs_data = reader.data + code_chunk.pos;
             fs_size = code_chunk.size;
             stage = RIZZ_SHADER_STAGE_FS;
+        } else {
+            sx_assert(0 && "not implemented");
+            stage = _RIZZ_SHADER_STAGE_COUNT;
         }
 
         // look for reflection chunk

@@ -124,7 +124,15 @@ foreach (native_project ${native_projects})
     if (MSVC)
         target_compile_options(${native_project} PRIVATE /WX)
     else()
-        target_compile_options(${native_project} PRIVATE -Wextra -Wshadow -Wunreachable-code 
-            -Wstrict-aliasing -Werror -Wno-missing-field-initializers)
+        target_compile_options(${native_project} PRIVATE 
+            -Wextra 
+            -Wshadow 
+            -Wunreachable-code 
+            -Wstrict-aliasing 
+            -Werror 
+            -Wno-missing-field-initializers)
+        if (CMAKE_C_COMPILER_ID MATCHES "GNU")
+            target_compile_options(${native_project} PRIVATE -Wno-format-truncation)
+        endif()
     endif()
 endforeach()
