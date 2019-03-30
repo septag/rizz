@@ -1,0 +1,68 @@
+# External junk
+.DS_Store
+_ReSharper*
+*.opensdf
+*.sdf
+*.dir
+*.suo
+*.user
+*.bak
+Win32
+Win64
+Debug
+Release
+Profile
+Development
+Obj
+Bin
+Lib
+.tags
+.tags_sorted_by_file
+*.lnk
+ipch
+__pycache__
+Thumbs.db
+.build*
+
+# Gradle
+.gradle
+/local.properties
+/.idea/workspace.xml
+/.idea/libraries
+/build
+/build-*
+/captures
+
+# assets
+assets/shaders/*
+
+# Generated files
+bin
+docs/Doxyfile
+docs/html
+docs/warnings.txt
+imgui.ini
+install
+*.log
+.vscode/
+shaders_h
+src/rizz/plugin_bundle.h
+src/rizz/plugin_bundle_native.h
+android
+
+# temp
+scripts/generators/fake_libc_include
+temp
+
+# Compiled binaries
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+*.exe
+.build
+*.fso
+*.vso
+*.pyc
+*.obj

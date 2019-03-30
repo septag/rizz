@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+
+  <Type Name="sx_vec4">
+    <DisplayString>{{{x,g},  {y,g},  {z,g},  {w,g}}}</DisplayString>
+  </Type>
+
+  <Type Name="sx_vec3">
+    <DisplayString>{{{x,g},  {y,g},  {z,g}}}</DisplayString>
+  </Type>
+
+  <Type Name="sx_vec2">
+    <DisplayString>{{{x,g},  y={y,g}}}</DisplayString>
+  </Type>
+
+  <Type Name="sx_color">
+    <DisplayString>{{{r,u},  {g,u},  {b,u}, {a,u}}}</DisplayString>
+    <Expand>
+        <Item Name="hex">n,x</Item>
+    </Expand>
+  </Type>
+
+  <Type Name="sx_ivec2">
+    <DisplayString>{{{x,g},  {y,g}}}</DisplayString>
+  </Type>
+
+  <Type Name="sx_quat">
+    <DisplayString>{{{x,g},  {y,g},  {z,g},  {w, g}}</DisplayString>
+  </Type>
+
+  <Type Name="sx_mat3">
+    <DisplayString>{{matrix 3x3}}</DisplayString>
+    <Expand>
+      <Item Name="col1">col1</Item>
+      <Item Name="col2">col2</Item>
+      <Item Name="col3">col3</Item>
+    </Expand>
+  </Type>
+
+  <Type Name="sx_mat4">
+    <DisplayString>{{matrix 4x4}}</DisplayString>
+    <Expand>
+      <Item Name="col1">col1</Item>
+      <Item Name="col2">col2</Item>
+      <Item Name="col3">col3</Item>
+      <Item Name="col4">col4</Item>
+    </Expand>
+  </Type>
+
+</AutoVisualizer>

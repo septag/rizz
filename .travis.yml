@@ -1,0 +1,33 @@
+language: sh
+os:
+  - linux
+  - osx
+  - windows
+
+addons:
+  apt:
+    packages:
+    - gcc
+    - cmake
+    - libglew-dev
+    - libx11-dev
+    - libxrandr-dev
+    - libxi-dev
+
+before_script:
+  - mkdir build
+  - cd build
+
+script: 
+  - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then cmake .. -DCMAKE_BUILD_TYPE=Release; fi
+  - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then make; fi
+  - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then PATH=$PATH:/c/Program\ Files/CMake/bin; fi
+  - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then cmake .. -G "Visual Studio 15 2017 Win64"; fi
+  - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then cmake --build . --config Release --target ALL_BUILD -- -verbosity:m; fi
+
+branches:
+  only:
+    - master
+
+notifications:
+  email: false
