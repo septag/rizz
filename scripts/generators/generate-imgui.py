@@ -1,8 +1,8 @@
 #
 # Copyright 2018 Sepehr Taghdisian (septag@github). All rights reserved.
-# License: https://github.com/sgk/sx#license-bsd-2-clause
+# License: https://github.com/Rizz/sx#license-bsd-2-clause
 #
-# This file uses 'pycparser' to generate sgk Imgui bindings from preprocessed cimgui.h header file
+# This file uses 'pycparser' to generate rizz Imgui bindings from preprocessed cimgui.h header file
 # You must first preprocess the cimgui.h before submitting it to this program
 # Here's clang command to preprocess the file first:
 # Make sure to extract fake_libc_includes.zip to the current directory

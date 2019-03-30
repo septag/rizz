@@ -7,7 +7,7 @@
 #include "rizz/config.h"
 #include "rizz/core.h"
 
-#if SGK_CONFIG_HOT_LOADING
+#if RIZZ_CONFIG_HOT_LOADING
 #    include "efsw/efsw.h"
 typedef enum efsw_action efsw_action;
 typedef enum efsw_error  efsw_error;
@@ -26,7 +26,7 @@ typedef enum efsw_error  efsw_error;
 #    include <jni.h>
 #endif
 
-#if SGK_CONFIG_HOT_LOADING
+#if RIZZ_CONFIG_HOT_LOADING
 static void efsw__fileaction_cb(efsw_watcher watcher, efsw_watchid watchid, const char* dir,
                                 const char* filename, efsw_action action, const char* old_filename,
                                 void* param);
@@ -35,7 +35,7 @@ typedef struct efsw__result {
     efsw_action action;
     char        path[RIZZ_MAX_PATH];
 } efsw__result;
-#endif    // SGK_CONFIG_HOT_LOADING
+#endif    // RIZZ_CONFIG_HOT_LOADING
 
 typedef enum { VFS_COMMAND_READ, VFS_COMMAND_WRITE } rizz__vfs_async_command;
 
@@ -68,7 +68,7 @@ typedef struct {
     char path[RIZZ_MAX_PATH];
     char alias[RIZZ_MAX_PATH];
     int  alias_len;
-#if SGK_CONFIG_HOT_LOADING
+#if RIZZ_CONFIG_HOT_LOADING
     char         efsw_root_dir[RIZZ_MAX_PATH];
     efsw_watchid watch_id;
 #endif
@@ -84,7 +84,7 @@ typedef struct {
     sx_sem         worker_sem;
     int            quit;
 
-#if SGK_CONFIG_HOT_LOADING
+#if RIZZ_CONFIG_HOT_LOADING
     efsw_watcher   watcher;
     sx_queue_spsc* efsw_queue;    // producer: efsw_cb, consumer: main, data: efsw__result
 #endif
@@ -283,7 +283,7 @@ bool rizz__vfs_mount(const char* path, const char* alias) {
         sx_os_path_unixpath(mp.alias, sizeof(mp.alias), alias);
         mp.alias_len = sx_strlen(mp.alias);
 
-#if SGK_CONFIG_HOT_LOADING
+#if RIZZ_CONFIG_HOT_LOADING
         if (SX_PLATFORM_OSX) {
             sx_os_path_abspath(mp.efsw_root_dir, sizeof(mp.efsw_root_dir), mp.path);
         } else {
@@ -334,7 +334,7 @@ bool rizz__vfs_init(const sx_alloc* alloc) {
     g_vfs.worker_thrd =
         sx_thread_create(alloc, rizz__vfs_worker, NULL, 1024 * 1024, "rizz_vfs", NULL);
 
-#if SGK_CONFIG_HOT_LOADING
+#if RIZZ_CONFIG_HOT_LOADING
     g_vfs.watcher = efsw_create(0);
     if (!g_vfs.watcher) {
         rizz_log_error("efsw: could not create context");
@@ -344,7 +344,7 @@ bool rizz__vfs_init(const sx_alloc* alloc) {
     g_vfs.efsw_queue = sx_queue_spsc_create(alloc, sizeof(efsw__result), 128);
     if (!g_vfs.efsw_queue)
         return false;
-#endif    // SGK_CONFIG_HOT_LOADING
+#endif    // RIZZ_CONFIG_HOT_LOADING
 
     return true;
 }
@@ -365,7 +365,7 @@ void rizz__vfs_release() {
     if (g_vfs.res_queue)
         sx_queue_spsc_destroy(g_vfs.res_queue, g_vfs.alloc);
 
-#if SGK_CONFIG_HOT_LOADING
+#if RIZZ_CONFIG_HOT_LOADING
     if (g_vfs.watcher) {
         for (int i = 0, c = sx_array_count(g_vfs.mounts); i < c; i++) {
             rizz__vfs_mount_point* mp = &g_vfs.mounts[i];
@@ -384,7 +384,7 @@ void rizz__vfs_release() {
 }
 
 void rizz__vfs_watch_mounts() {
-#if SGK_CONFIG_HOT_LOADING
+#if RIZZ_CONFIG_HOT_LOADING
     if (sx_array_count(g_vfs.mounts)) {
         efsw_watch(g_vfs.watcher);
     }
@@ -414,7 +414,7 @@ void rizz__vfs_async_update() {
         }
     }
 
-#if SGK_CONFIG_HOT_LOADING
+#if RIZZ_CONFIG_HOT_LOADING
     if (g_vfs.watcher) {
         // process efsw callbacks
         efsw__result efsw_res;
@@ -474,7 +474,7 @@ static bool rizz__vfs_is_file(const char* path) {
     return sx_os_path_isfile(resolved_path);
 }
 
-#if SGK_CONFIG_HOT_LOADING
+#if RIZZ_CONFIG_HOT_LOADING
 static void efsw__fileaction_cb(efsw_watcher watcher, efsw_watchid watchid, const char* dir,
                                 const char* filename, efsw_action action, const char* old_filename,
                                 void* param) {

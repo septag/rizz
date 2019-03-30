@@ -44,7 +44,8 @@ docs/warnings.txt
 imgui.ini
 install
 *.log
-.vscode/
+.vscode/launch.json
+.vscode/c_cpp_properties.json
 shaders_h
 src/rizz/plugin_bundle.h
 src/rizz/plugin_bundle_native.h

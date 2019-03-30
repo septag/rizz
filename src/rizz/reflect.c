@@ -171,7 +171,7 @@ static void rizz__refl_reg(rizz_refl_type internal_type, void* any, const char* 
                 sx_array_push(g_reflect.alloc, _enum.name_ids, id);
                 sx_array_push(g_reflect.alloc, g_reflect.enums, _enum);
             }
-        }    // SGK_REFL_ENUM
+        }    // RIZZ_REFL_ENUM
 
         key = name;
     }

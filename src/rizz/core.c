@@ -378,7 +378,7 @@ static void rizz__init_log(const char* logfile) {
     if (f) {
         time_t t = time(NULL);
         fprintf(f, "%s", asctime(localtime(&t)));
-        fprintf(f, "%s: v%s - SGK v%s%s%s", g_core.app_name, g_core.app_ver, RIZZ_VERSION, EOL, EOL);
+        fprintf(f, "%s: v%s - rizz v%s%s%s", g_core.app_name, g_core.app_ver, RIZZ_VERSION, EOL, EOL);
         fclose(f);
     } else {
         sx_assert(0 && "could not write to log file");
@@ -461,10 +461,11 @@ static void rizz__rmt_input_handler(const char* text, void* context) {
 }
 
 static const sx_alloc* rizz__alloc(rizz_mem_id id) {
-#if SGK_CONFIG_DEBUG_MEMORY
+#if RIZZ_CONFIG_DEBUG_MEMORY
     sx_assert(id < _RIZZ_MEMID_COUNT);
     return &g_core.track_allocs[id].alloc;
 #else
+    sx_unused(id);
     return &g_core.heap_proxy_alloc;
 #endif
 }

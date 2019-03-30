@@ -60,6 +60,9 @@ But as the engine is in it's early age, the current platforms are built and test
   Enables hot reloading of assets and monitoring the assets directories. Doesn't work on mobile OSes.
 - **BUILD_EXAMPLES** (default=1, android/ios=0):
   Build example projects in `/examples` directory. 
+- **RIZZ_CONFIG_HOT_LOADING** (default=0, windows/msvc=1)
+  On msvc compiler, enables `/d2cgsummary` flag for detailed compile stats. Read more about this 
+  [here](https://aras-p.info/blog/2017/10/23/Best-unknown-MSVC-flag-d2cgsummary/)
 
 ## Usage
 To build a compatible game/app module for _rizz_ you should do the following steps:
