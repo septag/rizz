@@ -335,7 +335,7 @@ char* sx_os_path_exepath(char* dst, int size) {
     dst[bytes] = 0;
     return dst;
 #elif SX_PLATFORM_OSX
-    _NSGetExecutablePath(dst, &size);
+    _NSGetExecutablePath(dst, (uint32_t*)&size);
     return dst;
 #else
     sx_assert(0 && "not implemented");
