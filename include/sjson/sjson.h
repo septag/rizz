@@ -1691,7 +1691,7 @@ static bool sjson__parse_string(sjson_context* ctx, const char **sp, char **out)
     const char* s = *sp;
     char throwaway_buffer[4]; /* enough space for a UTF-8 character */
     char* b;
-    char* src;
+    char* src = NULL;
 
     if (*s++ != '"')
         return false;

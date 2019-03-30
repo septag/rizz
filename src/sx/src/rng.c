@@ -10,6 +10,7 @@
 
 // Convert a randomized uint32_t value to a float value x in the range 0.0f <= x < 1.0f. Contributed
 // by Jonatan Hedborg
+SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wstrict-aliasing")
 static inline float sx__rng_float_normalized(uint32_t value) {
     uint32_t exponent = 127;
