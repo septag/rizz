@@ -1342,6 +1342,7 @@ static rizz_asset_group rizz__asset_group_begin(rizz_asset_group group) {
 static void rizz__asset_group_end(rizz_asset_group group) {
     sx_assert(g_asset.cur_group.id == group.id && "group must be set (group_begin)");
     sx_assert(sx_handle_valid(g_asset.group_handles, group.id));
+    sx_unused(group);
 
     g_asset.cur_group = (rizz_asset_group){ 0 };
 }
