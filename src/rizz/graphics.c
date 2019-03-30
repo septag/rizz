@@ -127,6 +127,7 @@ SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wshadow")
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wtype-limits")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wmaybe-uninitialized")
 #include "stb/stb_image.h"
 SX_PRAGMA_DIAGNOSTIC_POP()
 
@@ -1294,12 +1295,12 @@ static sg_shader_desc* rizz__shader_setup_desc(sg_shader_desc*         desc,
 
     for (int i = 0; i < num_stages; i++) {
         const rizz__shader_setup_desc_stage* stage = &stages[i];
-        sg_shader_stage_desc*                stage_desc;
+        sg_shader_stage_desc*                stage_desc = NULL;
         // clang-format off
         switch (stage->refl->stage) {
         case RIZZ_SHADER_STAGE_VS:   stage_desc = &desc->vs;             break;
         case RIZZ_SHADER_STAGE_FS:   stage_desc = &desc->fs;             break;
-        default:                    sx_assert(0 && "not implemented");  break;
+        default:                     sx_assert(0 && "not implemented");  break;
         }
         // clang-format on
 
@@ -1791,7 +1792,7 @@ static int rizz__fnt_text_read_count(char* token) {
 static void rizz__fnt_text_read_char(char* token, rizz__font_glyph* g, int* char_width,
                                      float img_width, float img_height) {
     char  key[32], value[32];
-    float x, y, w, h;
+    float x = 0, y = 0, w = 0, h = 0;
     token = (char*)sx_skip_whitespace(token);
     while (*token) {
         token = rizz__fnt_text_read_keyval(token, key, value, 32);
