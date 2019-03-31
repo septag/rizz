@@ -15,14 +15,14 @@
 #include "imgui/imgui-extra.h"
 #include "imgui/imgui.h"
 
-RIZZ_STATE static rizz_api_core* the_core;
-RIZZ_STATE static rizz_api_gfx*  the_gfx;
-RIZZ_STATE static rizz_api_app*  the_app;
-RIZZ_STATE static rizz_api_imgui*           the_imgui;
-RIZZ_STATE static rizz_api_asset*           the_asset;
-RIZZ_STATE static rizz_api_imgui_extra*     the_imguix;
-RIZZ_STATE static rizz_api_camera*          the_camera;
-RIZZ_STATE static rizz_api_vfs*             the_vfs;
+RIZZ_STATE static rizz_api_core*        the_core;
+RIZZ_STATE static rizz_api_gfx*         the_gfx;
+RIZZ_STATE static rizz_api_app*         the_app;
+RIZZ_STATE static rizz_api_imgui*       the_imgui;
+RIZZ_STATE static rizz_api_asset*       the_asset;
+RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
+RIZZ_STATE static rizz_api_camera*      the_camera;
+RIZZ_STATE static rizz_api_vfs*         the_vfs;
 
 RIZZ_STATE rizz_gfx_stage g_stage;
 
@@ -103,11 +103,11 @@ rizz_plugin_decl_event_handler(hello, e) {
     }
 }
 
-rizz_plugin_implement_info(hello, 100, "Hello", 0);
+rizz_plugin_implement_info(hello, 100, "hello", 0);
 
 rizz_game_decl_config(conf) {
-    conf->app_name = "Hello";
-    conf->app_title = "Hello World";
+    conf->app_name = "hello";
+    conf->app_title = "01 - Hello";
     conf->window_width = 800;
     conf->window_height = 600;
     conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;
