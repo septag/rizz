@@ -11,6 +11,9 @@ I'm not gonna waste time by rewriting the same stuff that others put it a lot be
 Design principles of _rizz_ is pretty much same as 
 [The Machinery's](https://ourmachinery.com/files/guidebook.md.html#omg-design:designprinciples). 
 I will try to stick to these as much as possible, and I recommend every programmer to practice these principles too.
+
+#### Note
+This is not a game engine, it's a relatively low-level framework for programmers to build their own engine/renderer/physics on top of it. The core of _rizz_ does not and will not implement any rendering techniques/physics or impose any specific entity system to the user. It just provides the basic building blocks for game developers. Other features will be implemented as plugins.
   
 ## Features
 #### Core
@@ -30,7 +33,7 @@ I will try to stick to these as much as possible, and I recommend every programm
 - *Draw call submission using multiple threads*: Draw calls can be queued within multiple threads for final submission
 - *Portable shaders*: Write shaders once in GLSL, toolset will translate the shader to other platform APIs.
 - *Multi-threaded GPU command-buffer*: Draw commands can be submitted by multiple threads.
-- *ImGui*: Dear-ImGui integration is present for efficient and fast toolset UI development.
+- *ImGui*: Dear-ImGui plugin is present for efficient and fast toolset UI development.
 
 #### Debugging and Profiling
 - *Remote Profiler*: Integrated *Remotery* for remote debugger/command console and log viewer.
