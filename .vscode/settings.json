@@ -66,5 +66,6 @@
         "misc/**": true
     },
     "C_Cpp.configurationWarnings": "Disabled",
-    "C_Cpp.clang_format_style": "file"
+    "C_Cpp.clang_format_style": "file",
+    "C_Cpp.default.configurationProvider": "vector-of-bool.cmake-tools"
 }

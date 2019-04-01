@@ -1012,8 +1012,8 @@ static void cr_pe_section_save(cr_plugin &ctx, cr_plugin_section_type::e type,
     const auto version = cr_plugin_section_version::current;
     auto p = (cr_internal *)ctx.p;
     auto data = &p->data[type][version];
-    const size_t old_size = data->size;
-    data->base = base;
+    const size_t old_size = (size_t)data->size;
+    data->base = (intptr_t)base;
     data->ptr = (char *)vaddr;
     data->size = shdr.SizeOfRawData;
     data->data = CR_REALLOC(data->data, shdr.SizeOfRawData);
@@ -1806,13 +1806,13 @@ static void cr_plugin_sections_backup(cr_plugin &ctx) {
         auto cur = &p->data[i][cr_plugin_section_version::current];
         if (cur->ptr) {
             auto bkp = &p->data[i][cr_plugin_section_version::backup];
-            bkp->data = CR_REALLOC(bkp->data, cur->size);
+            bkp->data = CR_REALLOC(bkp->data, (size_t)cur->size);
             bkp->ptr = cur->ptr;
             bkp->size = cur->size;
             bkp->base = cur->base;
 
             if (bkp->data) {
-                std::memcpy(bkp->data, cur->data, bkp->size);
+                std::memcpy(bkp->data, cur->data, (size_t)bkp->size);
             }
         }
     }
@@ -1836,7 +1836,7 @@ static void cr_plugin_sections_store(cr_plugin &ctx) {
         if (p->data[i][version].ptr && p->data[i][version].data) {
             const char *ptr = p->data[i][version].ptr;
             const int64_t len = p->data[i][version].size;
-            std::memcpy(p->data[i][version].data, ptr, len);
+            std::memcpy(p->data[i][version].data, ptr, (size_t)len);
         }
     }
 
@@ -1864,7 +1864,7 @@ static void cr_plugin_sections_reload(cr_plugin &ctx,
             if (i != (int)cr_plugin_section_type::ptrs) {
                 auto dest = (void *)p->data[i][current].ptr;
                 if (dest) {
-                    std::memcpy(dest, p->data[i][version].data, len);
+                    std::memcpy(dest, p->data[i][version].data, (size_t)len);
                 }
             } 
         }

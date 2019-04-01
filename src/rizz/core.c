@@ -90,7 +90,7 @@ typedef struct {
 } rizz__core_cmd;
 
 typedef struct {
-    int64_t  size;
+    intptr_t size;
     uint32_t ptr_offset;
     int      track_item_idx;
 } rizz__proxy_alloc_header;
@@ -109,8 +109,8 @@ typedef struct {
     const sx_alloc*  heap_alloc;
     sx_alloc         heap_proxy_alloc;
     rizz__track_alloc track_allocs[_RIZZ_MEMID_COUNT];
-    sx_atomic_int64  heap_size;
-    sx_atomic_int64  heap_max;
+    sx_atomic_size   heap_size;
+    sx_atomic_size   heap_max;
     sx_atomic_int    heap_count;
 
     sx_rng           rng;
@@ -484,9 +484,9 @@ static void rizz__core_register_console_command(const char* cmd, rizz_core_cmd_c
     sx_array_push(rizz__alloc(RIZZ_MEMID_CORE), g_core.console_cmds, c);
 }
 
-static inline void rizz__atomic_max(sx_atomic_int64* _max, int64_t val) {
-    int64_t cur_max = *_max;
-    while (cur_max < val && sx_atomic_cas64(_max, val, cur_max) != cur_max)
+static inline void rizz__atomic_max(sx_atomic_size* _max, intptr_t val) {
+    intptr_t cur_max = *_max;
+    while (cur_max < val && sx_atomic_cas_size(_max, val, cur_max) != cur_max)
         ;
 }
 
@@ -502,7 +502,7 @@ static void* rizz__proxy_alloc_cb(void* ptr, size_t size, uint32_t align, const 
             rizz__proxy_alloc_header* header = (rizz__proxy_alloc_header*)ptr - 1;
             ptr = aligned - header->ptr_offset;
 
-            sx_atomic_fetch_add64(&g_core.heap_size, -header->size);
+            sx_atomic_fetch_add_size(&g_core.heap_size, -header->size);
             sx_atomic_decr(&g_core.heap_count);
 
             sx__free(heap_alloc, ptr, 0, file, func, line);
@@ -514,7 +514,7 @@ static void* rizz__proxy_alloc_cb(void* ptr, size_t size, uint32_t align, const 
         align = sx_max((int)align, SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT);
 
         // do the alignment ourselves
-        int64_t  total = (int64_t)size + sizeof(rizz__proxy_alloc_header) + align;
+        intptr_t  total = (intptr_t)size + sizeof(rizz__proxy_alloc_header) + align;
         uint8_t* _ptr = sx__malloc(heap_alloc, total, 0, file, func, line);
         if (!_ptr) {
             sx_out_of_memory();
@@ -527,7 +527,7 @@ static void* rizz__proxy_alloc_cb(void* ptr, size_t size, uint32_t align, const 
         header->ptr_offset = (uint32_t)(uintptr_t)(aligned - _ptr);
         header->track_item_idx = -1;
 
-        sx_atomic_fetch_add64(&g_core.heap_size, total);
+        sx_atomic_fetch_add_size(&g_core.heap_size, total);
         rizz__atomic_max(&g_core.heap_max, g_core.heap_size);
         sx_atomic_incr(&g_core.heap_count);
 
@@ -537,12 +537,12 @@ static void* rizz__proxy_alloc_cb(void* ptr, size_t size, uint32_t align, const 
         uint8_t*                 aligned = (uint8_t*)ptr;
         rizz__proxy_alloc_header* header = (rizz__proxy_alloc_header*)ptr - 1;
         uint32_t                 offset = header->ptr_offset;
-        int64_t                  prev_size = header->size;
+        intptr_t                 prev_size = header->size;
         ptr = aligned - offset;
-        sx_atomic_fetch_add64(&g_core.heap_size, -header->size);
+        sx_atomic_fetch_add_size(&g_core.heap_size, -header->size);
 
         align = sx_max((int)align, SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT);
-        int64_t total = (int64_t)size + sizeof(rizz__proxy_alloc_header) + align;
+        intptr_t total = (intptr_t)size + sizeof(rizz__proxy_alloc_header) + align;
         ptr = sx__realloc(heap_alloc, ptr, total, 0, file, func, line);
         if (!ptr) {
             sx_out_of_memory();
@@ -560,8 +560,8 @@ static void* rizz__proxy_alloc_cb(void* ptr, size_t size, uint32_t align, const 
         header->size = total;
         header->ptr_offset = (uint32_t)(uintptr_t)(new_aligned - (uint8_t*)ptr);
 
-        int64_t size_diff = total - prev_size;
-        sx_atomic_fetch_add64(&g_core.heap_size, size_diff);
+        intptr_t size_diff = total - prev_size;
+        sx_atomic_fetch_add_size(&g_core.heap_size, size_diff);
         if (size_diff > 0)
             rizz__atomic_max(&g_core.heap_max, g_core.heap_size);
         return new_aligned;
