@@ -3,8 +3,8 @@
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
 
+#include "config.h"
 #include "rizz/vfs.h"
-#include "rizz/config.h"
 #include "rizz/core.h"
 
 #if RIZZ_CONFIG_HOT_LOADING

@@ -113,7 +113,8 @@ endif()
 # native projects
 set(native_projects sx 
                     rizz
-                    imgui)
+                    imgui
+                    sprite)
 
 foreach (native_project ${native_projects})
     add_subdirectory(src/${native_project})

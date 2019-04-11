@@ -3,8 +3,8 @@
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
 
+#include "config.h"
 #include "rizz/asset.h"
-#include "rizz/config.h"
 #include "rizz/core.h"
 #include "rizz/reflect.h"
 #include "rizz/types.h"
@@ -27,17 +27,18 @@
 // They handle loading, unloading, reloading asset objects
 // They also have metdata and parameters memory containers
 typedef struct {
-    const char*           name;
-    rizz_asset_callbacks* callbacks;
+    char                  name[32];
+    rizz_asset_callbacks  callbacks;
     uint32_t              name_hash;
     int                   params_size;
     int                   metadata_size;
-    const char*           params_type_name;
-    const char*           metadata_type_name;
+    char                  params_type_name[32];
+    char                  metadata_type_name[32];
     rizz_asset_obj        failed_obj;
     rizz_asset_obj        async_obj;
     uint8_t*              params_buff;      // sx_array (byte-array, item-size: params_size)
     uint8_t*              metadata_buff;    // sx_array (byte-array, item-size: metadata_size)
+    bool                  unreg;
 } rizz__asset_mgr;
 
 // Assets consist of files (resource) on disk and load params combination
@@ -202,7 +203,7 @@ static void rizz__asset_load_job_cb(int index, void* user) {
     sx_unused(index);
     rizz__asset_async_job* ajob = user;
 
-    ajob->state = ajob->amgr->callbacks->on_load(&ajob->load_data, &ajob->lparams, ajob->mem)
+    ajob->state = ajob->amgr->callbacks.on_load(&ajob->load_data, &ajob->lparams, ajob->mem)
                       ? ASSET_JOB_STATE_SUCCESS
                       : ASSET_JOB_STATE_LOAD_FAILED;
 }
@@ -233,14 +234,14 @@ static void rizz__asset_on_read_complete(const char* path, sx_mem_block* mem) {
     // we don't have the metadata, allocate space and fetch it from the asset-loader
     if (!res->metadata_id) {
         res->metadata_id = rizz_to_id(sx_array_count(amgr->metadata_buff));
-        amgr->callbacks->on_read_metadata(
+        amgr->callbacks.on_read_metadata(
             sx_array_add(g_asset.alloc, amgr->metadata_buff, amgr->metadata_size), &aparams, mem);
     } else if (aparams.flags & RIZZ_ASSET_LOAD_FLAG_RELOAD) {
-        amgr->callbacks->on_read_metadata(&amgr->metadata_buff[rizz_to_index(res->metadata_id)],
+        amgr->callbacks.on_read_metadata(&amgr->metadata_buff[rizz_to_index(res->metadata_id)],
                                           &aparams, mem);
     }
 
-    rizz_asset_load_data load_data = amgr->callbacks->on_prepare(
+    rizz_asset_load_data load_data = amgr->callbacks.on_prepare(
         &aparams, &amgr->metadata_buff[rizz_to_index(res->metadata_id)]);
 
     sx_array_pop(g_asset.async_reqs, async_req_idx);
@@ -651,7 +652,7 @@ static void rizz__asset_destroy_delete(rizz_asset a, rizz__asset_mgr* amgr) {
 
     // unload embeded object
     if (asset->obj.id != amgr->async_obj.id && asset->obj.id != amgr->failed_obj.id) {
-        amgr->callbacks->on_release(asset->obj, asset->alloc);
+        amgr->callbacks.on_release(asset->obj, asset->alloc);
         asset->obj = amgr->failed_obj;
     }
 
@@ -763,20 +764,20 @@ static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, 
             // we don't have the metadata, allocate space and fetch it from the asset-loader
             if (!res->metadata_id) {
                 res->metadata_id = rizz_to_id(sx_array_count(amgr->metadata_buff));
-                amgr->callbacks->on_read_metadata(
+                amgr->callbacks.on_read_metadata(
                     sx_array_add(g_asset.alloc, amgr->metadata_buff, amgr->metadata_size), &aparams,
                     mem);
             } else if (flags & RIZZ_ASSET_LOAD_FLAG_RELOAD) {
-                amgr->callbacks->on_read_metadata(
+                amgr->callbacks.on_read_metadata(
                     &amgr->metadata_buff[rizz_to_index(res->metadata_id)], &aparams, mem);
             }
 
             bool                 success = false;
-            rizz_asset_load_data load_data = amgr->callbacks->on_prepare(
+            rizz_asset_load_data load_data = amgr->callbacks.on_prepare(
                 &aparams, &amgr->metadata_buff[rizz_to_index(res->metadata_id)]);
             if (load_data.obj.id) {
-                if (amgr->callbacks->on_load(&load_data, &aparams, mem)) {
-                    amgr->callbacks->on_finalize(&load_data, &aparams, mem);
+                if (amgr->callbacks.on_load(&load_data, &aparams, mem)) {
+                    amgr->callbacks.on_finalize(&load_data, &aparams, mem);
                     success = true;
                 }
             }
@@ -787,7 +788,7 @@ static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, 
                 a->obj = load_data.obj;
             } else {
                 if (load_data.obj.id)
-                    amgr->callbacks->on_release(load_data.obj, a->alloc);
+                    amgr->callbacks.on_release(load_data.obj, a->alloc);
                 rizz__asset_errmsg(path, real_path, "loading");
                 if (a->obj.id && !a->dead_obj.id) {
                     a->state = RIZZ_ASSET_STATE_FAILED;
@@ -799,9 +800,9 @@ static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, 
 
             // do we have extra work in reload?
             if (flags & RIZZ_ASSET_LOAD_FLAG_RELOAD) {
-                amgr->callbacks->on_reload(asset, a->dead_obj, obj_alloc);
+                amgr->callbacks.on_reload(asset, a->dead_obj, obj_alloc);
                 if (a->dead_obj.id) {
-                    amgr->callbacks->on_release(a->dead_obj, obj_alloc);
+                    amgr->callbacks.on_release(a->dead_obj, obj_alloc);
                     a->dead_obj = (rizz_asset_obj){ .id = 0 };
                 }
             }
@@ -837,6 +838,7 @@ bool rizz__asset_init(const sx_alloc* alloc, const char* dbfile, const char* var
     sx_assert(g_asset.group_handles);
 
     g_asset.hasher = sx_hash_create_xxh32(alloc);
+    sx_assert(g_asset.hasher);
 
     return true;
 }
@@ -855,8 +857,11 @@ void rizz__asset_release() {
                 sx_assert(a->resource_id);
                 rizz_log_warn("un-released asset: %s",
                               g_asset.resources[rizz_to_index(a->resource_id)].path);
-                if (a->obj.id)
-                    g_asset.asset_mgrs[a->asset_mgr_id].callbacks->on_release(a->obj, a->alloc);
+                if (a->obj.id) {
+                    rizz__asset_mgr* amgr = &g_asset.asset_mgrs[a->asset_mgr_id];
+                    if (!amgr->unreg) 
+                        amgr->callbacks.on_release(a->obj, a->alloc);
+                }
             }
         }
     }
@@ -914,7 +919,7 @@ void rizz__asset_update() {
 
             switch (ajob->state) {
             case ASSET_JOB_STATE_SUCCESS:
-                ajob->amgr->callbacks->on_finalize(&ajob->load_data, &ajob->lparams, ajob->mem);
+                ajob->amgr->callbacks.on_finalize(&ajob->load_data, &ajob->lparams, ajob->mem);
                 a->obj = ajob->load_data.obj;
                 a->state = RIZZ_ASSET_STATE_OK;
                 break;
@@ -925,7 +930,7 @@ void rizz__asset_update() {
                 a->state = RIZZ_ASSET_STATE_FAILED;
 
                 if (ajob->load_data.obj.id)
-                    ajob->amgr->callbacks->on_release(ajob->load_data.obj, ajob->lparams.alloc);
+                    ajob->amgr->callbacks.on_release(ajob->load_data.obj, ajob->lparams.alloc);
 
                 break;
 
@@ -1017,11 +1022,11 @@ static rizz_asset rizz__asset_load_from_mem(const char* name, const char* path_a
             // we don't have the metadata, allocate space and fetch it from the asset-loader
             if (!res->metadata_id) {
                 res->metadata_id = rizz_to_id(sx_array_count(amgr->metadata_buff));
-                amgr->callbacks->on_read_metadata(
+                amgr->callbacks.on_read_metadata(
                     sx_array_add(g_asset.alloc, amgr->metadata_buff, amgr->metadata_size), params,
                     mem);
             } else if (flags & RIZZ_ASSET_LOAD_FLAG_RELOAD) {
-                amgr->callbacks->on_read_metadata(
+                amgr->callbacks.on_read_metadata(
                     &amgr->metadata_buff[rizz_to_index(res->metadata_id)], params, mem);
             }
 
@@ -1030,11 +1035,11 @@ static rizz_asset rizz__asset_load_from_mem(const char* name, const char* path_a
             };
 
             bool                 success = false;
-            rizz_asset_load_data load_data = amgr->callbacks->on_prepare(
+            rizz_asset_load_data load_data = amgr->callbacks.on_prepare(
                 &aparams, &amgr->metadata_buff[rizz_to_index(res->metadata_id)]);
             if (load_data.obj.id) {
-                if (amgr->callbacks->on_load(&load_data, &aparams, mem)) {
-                    amgr->callbacks->on_finalize(&load_data, &aparams, mem);
+                if (amgr->callbacks.on_load(&load_data, &aparams, mem)) {
+                    amgr->callbacks.on_finalize(&load_data, &aparams, mem);
                     success = true;
                 }
             }
@@ -1045,7 +1050,7 @@ static rizz_asset rizz__asset_load_from_mem(const char* name, const char* path_a
                 a->obj = load_data.obj;
             } else {
                 if (load_data.obj.id)
-                    amgr->callbacks->on_release(load_data.obj, a->alloc);
+                    amgr->callbacks.on_release(load_data.obj, a->alloc);
                 rizz__asset_errmsg(path_alias, real_path, "loading");
                 if (a->obj.id && !a->dead_obj.id) {
                     a->state = RIZZ_ASSET_STATE_FAILED;
@@ -1057,9 +1062,9 @@ static rizz_asset rizz__asset_load_from_mem(const char* name, const char* path_a
 
             // do we have extra work in reload?
             if (flags & RIZZ_ASSET_LOAD_FLAG_RELOAD) {
-                amgr->callbacks->on_reload(asset, a->dead_obj, alloc);
+                amgr->callbacks.on_reload(asset, a->dead_obj, alloc);
                 if (a->dead_obj.id) {
-                    amgr->callbacks->on_release(a->dead_obj, a->alloc);
+                    amgr->callbacks.on_release(a->dead_obj, a->alloc);
                     a->dead_obj = (rizz_asset_obj){ .id = 0 };
                 }
             }
@@ -1101,12 +1106,10 @@ static void rizz__asset_unload(rizz_asset asset) {
     }
 }
 
-static void rizz__register_asset_type(const char* name, rizz_asset_callbacks* callbacks,
+static void rizz__register_asset_type(const char* name, rizz_asset_callbacks callbacks,
                                       const char* params_type_name, int params_size,
                                       const char* metadata_type_name, int metadata_size,
                                       rizz_asset_obj failed_obj, rizz_asset_obj async_obj) {
-    sx_assert(callbacks);
-
     uint32_t name_hash = sx_hash_fnv32_str(name);
     for (int i = 0; i < sx_array_count(g_asset.asset_name_hashes); i++) {
         if (name_hash == g_asset.asset_name_hashes[i]) {
@@ -1115,18 +1118,25 @@ static void rizz__register_asset_type(const char* name, rizz_asset_callbacks* ca
         }
     }
 
-    rizz__asset_mgr amgr = { .name = name,
-                             .callbacks = callbacks,
+    rizz__asset_mgr amgr = { .callbacks = callbacks,
                              .name_hash = name_hash,
                              .params_size = params_size,
                              .metadata_size = metadata_size,
-                             .params_type_name = params_type_name,
-                             .metadata_type_name = metadata_type_name,
                              .failed_obj = failed_obj,
                              .async_obj = async_obj };
+    sx_strcpy(amgr.name, sizeof(amgr.name), name);
+    sx_strcpy(amgr.params_type_name, sizeof(amgr.params_type_name), params_type_name ? params_type_name : "");
+    sx_strcpy(amgr.metadata_type_name, sizeof(amgr.metadata_type_name), metadata_type_name ? metadata_type_name : "");
 
     sx_array_push(g_asset.alloc, g_asset.asset_mgrs, amgr);
     sx_array_push(g_asset.alloc, g_asset.asset_name_hashes, name_hash);
+}
+
+static void rizz__unregister_asset_type(const char* name) {
+    int amgr_id = rizz__asset_find_asset_mgr(sx_hash_fnv32_str(name));
+    sx_assert(amgr_id != -1 && "asset type is not registered");
+    rizz__asset_mgr* amgr = &g_asset.asset_mgrs[amgr_id];
+    amgr->unreg = true;
 }
 
 static rizz_asset_state rizz__asset_state(rizz_asset asset) {
@@ -1266,7 +1276,7 @@ static void rizz__asset_unload_by_type(const char* name) {
             rizz__asset* a = &g_asset.assets[sx_handle_index(handle)];
             if (a->asset_mgr_id == asset_mgr_id && a->obj.id && a->state == RIZZ_ASSET_STATE_OK) {
                 if (a->obj.id != amgr->async_obj.id && a->obj.id != amgr->failed_obj.id) {
-                    amgr->callbacks->on_release(a->obj, a->alloc);
+                    amgr->callbacks.on_release(a->obj, a->alloc);
                     a->obj = amgr->async_obj;
                     a->state = RIZZ_ASSET_STATE_ZOMBIE;
                 }
@@ -1312,7 +1322,7 @@ static void rizz__asset_unload_by_tags(uint32_t tags) {
             sx_assert(a->resource_id);
             rizz__asset_mgr* amgr = &g_asset.asset_mgrs[a->asset_mgr_id];
             if (a->obj.id != amgr->async_obj.id && a->obj.id != amgr->failed_obj.id) {
-                amgr->callbacks->on_release(a->obj, a->alloc);
+                amgr->callbacks.on_release(a->obj, a->alloc);
                 a->obj = amgr->async_obj;
                 a->state = RIZZ_ASSET_STATE_ZOMBIE;
             }
@@ -1419,6 +1429,7 @@ static int rizz__asset_group_gather(rizz_asset_group group, rizz_asset* out_hand
 }
 
 rizz_api_asset the__asset = { .register_asset_type = rizz__register_asset_type,
+                              .unregister_asset_type = rizz__unregister_asset_type,
                               .load = rizz__asset_load,
                               .load_from_mem = rizz__asset_load_from_mem,
                               .unload = rizz__asset_unload,

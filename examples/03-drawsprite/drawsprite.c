@@ -11,6 +11,7 @@
 #include "rizz/graphics.h"
 #include "rizz/plugin.h"
 #include "rizz/vfs.h"
+#include "sprite/sprite.h"
 
 #include "imgui/imgui-extra.h"
 #include "imgui/imgui.h"
@@ -23,6 +24,7 @@ RIZZ_STATE static rizz_api_asset*       the_asset;
 RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
 RIZZ_STATE static rizz_api_camera*      the_camera;
 RIZZ_STATE static rizz_api_vfs*         the_vfs;
+RIZZ_STATE static rizz_api_sprite*      the_sprite;
 
 RIZZ_STATE rizz_gfx_stage g_stage;
 
@@ -49,7 +51,7 @@ static void render() {
 
     // Use imgui UI
     the_imgui->SetNextWindowContentSize(sx_vec2f(100.0f, 50.0f));
-    if (the_imgui->Begin("Hello", NULL, 0)) {
+    if (the_imgui->Begin("drawsprite", NULL, 0)) {
         the_imgui->LabelText("Fps", "%.3f", the_core->fps());
     }
     the_imgui->End();
@@ -68,6 +70,9 @@ rizz_plugin_decl_main(hello, plugin, e) {
         the_gfx = plugin->api->get_api(RIZZ_API_GFX, 0);
         the_app = plugin->api->get_api(RIZZ_API_APP, 0);
         the_imgui = plugin->api->get_api(RIZZ_API_IMGUI, 0);
+        the_vfs = plugin->api->get_api(RIZZ_API_VFS, 0);
+        the_asset = plugin->api->get_api(RIZZ_API_ASSET, 0);
+        the_sprite = plugin->api->get_api(RIZZ_API_SPRITE, 0);
 
         init();
         break;
@@ -103,12 +108,12 @@ rizz_plugin_decl_event_handler(hello, e) {
     }
 }
 
-rizz_plugin_implement_info(hello, 1000, "hello", 0);
+rizz_plugin_implement_info(drawsprite, 1000, "drawsprite", 0);
 
 rizz_game_decl_config(conf) {
-    conf->app_name = "hello";
+    conf->app_name = "drawsprite";
     conf->app_version = 1000;
-    conf->app_title = "01 - Hello";
+    conf->app_title = "03 - DrawSprite";
     conf->window_width = 800;
     conf->window_height = 600;
     conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;

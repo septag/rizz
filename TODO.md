@@ -1,8 +1,23 @@
 ## TODO
 
-### v0.1:
+### v0.2:
+- [ ] Entity/component system
+- [ ] Sprites
+- [ ] Sprite animation/controller
+- [ ] Sprite debugger
+- [ ] Verbose logging
+- [ ] Sprite demo
+- [ ] Input system 
+- [ ] Gamepad support
+- [ ] Gamepad demo
+- [ ] Cleanup and add something for examples cmake
+- [ ] Add Readme to plugins (imgui, sprite)
+- [ ] Better graphics debugging (stages)
+- [ ] iOS build
+- [ ] Android build
+- [ ] Raspberry build
 
-#### Features
+### v0.1:
 - [x] Asset manager
 - [x] Texture loader
 - [x] Graphics command-buffer with multi-threading support
@@ -20,16 +35,11 @@
 - [x] Tiny FSM
 - [x] Tiny event queue
 - [x] Update imgui and incorporate tabs
-- [ ] Entity/component system
 - [x] Graphics debugger (sokol)
-- [ ] Demo project
-- [ ] iOS build
-- [ ] Android build
-- [ ] Raspberry build
-- [ ] Project rename and initialize
+- [x] Demo project
 
 #### Fixes
-- [x] Fix coroutine callback revival on .so reload
-- [x] Fix cross-compiling shaders
+- [ ] asset manager should ignore loading meta db when we are in development mode
+- [ ] cr find_symbol doesn't need to warn about event function
 
   

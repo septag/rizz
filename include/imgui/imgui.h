@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdarg.h>
-#include <sx/math.h>
+#include "sx/math.h"
 
 typedef struct CustomRect                 CustomRect;
 typedef struct Pair                       Pair;

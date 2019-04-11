@@ -254,8 +254,8 @@ sapp_desc sokol_main(int argc, char* argv[]) {
     // Create default config
     rizz_config conf = { .app_name = default_name,
                          .app_title = default_name,
-                         .app_version = "0",
                          .plugin_path = "",
+                         .app_version = 1000,
                          .app_flags = RIZZ_APP_FLAG_USER_CURSOR,
                          .core_flags = RIZZ_CORE_FLAG_LOG_TO_FILE | RIZZ_CORE_FLAG_LOG_TO_PROFILER,
                          .window_width = 640,
@@ -281,7 +281,6 @@ sapp_desc sokol_main(int argc, char* argv[]) {
     rizz__app_save_config_str(default_name, conf.app_name);
     rizz__app_save_config_str(default_title, conf.app_title);
     rizz__app_save_config_str(default_html5_canvas, conf.html5_canvas_name);
-    rizz__app_save_config_str(default_version, conf.app_version);
     rizz__app_save_config_str(default_plugin_path, conf.plugin_path);
     rizz__app_save_config_str(default_cache_path, conf.cache_path);
 

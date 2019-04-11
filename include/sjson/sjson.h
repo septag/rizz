@@ -233,6 +233,9 @@ const char* sjson_get_string(sjson_node* parent, const char* key, const char* de
 bool 		sjson_get_bool(sjson_node* parent, const char* key, bool default_val);
 bool		sjson_get_floats(float* out, int count, sjson_node* parent, const char* key);
 bool		sjson_get_ints(int* out, int count, sjson_node* parent, const char* key);
+bool        sjson_get_uints(uint32_t* out, int count, sjson_node* parent, const char* key);
+bool        sjson_get_int16s(int16_t* out, int count, sjson_node* parent, const char* key);
+bool        sjson_get_uint16s(uint16_t* out, int count, sjson_node* parent, const char* key);
 
 #define sjson_foreach(i, object_or_array)            \
     for ((i) = sjson_first_child(object_or_array);   \
@@ -267,6 +270,9 @@ sjson_node* sjson_put_string(sjson_context* ctx, sjson_node* parent, const char*
 sjson_node* sjson_put_floats(sjson_context* ctx, sjson_node* parent, const char* key, const float* vals, int count);
 sjson_node* sjson_put_ints(sjson_context* ctx, sjson_node* parent, const char* key, const int* vals, int count);
 sjson_node* sjson_put_strings(sjson_context* ctx, sjson_node* parent, const char* key, const char** vals, int count);
+sjson_node* sjson_put_uints(sjson_context* ctx, sjson_node* parent, const char* key, const uint32_t* vals, int count);
+sjson_node* sjson_put_int16s(sjson_context* ctx, sjson_node* parent, const char* key, const int16_t* vals, int count);
+sjson_node* sjson_put_uint16s(sjson_context* ctx, sjson_node* parent, const char* key, const uint16_t* vals, int count);
 
 // Debugging
 
@@ -284,7 +290,7 @@ bool sjson_check(const sjson_node* node, char errmsg[256]);
 
 #endif // SJSON_H_
 
-#if defined(SJSON_IMPLEMENT) || defined(__INTELLISENSE__)
+#if defined(SJSON_IMPLEMENT)
 
 /*
   Copyright (C) 2011 Joseph A. Adams (joeyadams3.14159@gmail.com)
@@ -1269,7 +1275,7 @@ bool sjson_get_bool(sjson_node* parent, const char* key, bool default_val)
 
 bool sjson_get_floats(float* out, int count, sjson_node* parent, const char* key)
 {
-    sjson_node* p = sjson_find_member(parent, key);
+    sjson_node* p = key ? sjson_find_member(parent, key) : parent;
     if (p) {
         sjson_assert(p->tag == SJSON_ARRAY);
         int index = 0;
@@ -1285,13 +1291,61 @@ bool sjson_get_floats(float* out, int count, sjson_node* parent, const char* key
 
 bool sjson_get_ints(int* out, int count, sjson_node* parent, const char* key)
 {
-    sjson_node* p = sjson_find_member(parent, key);
+    sjson_node* p = key ? sjson_find_member(parent, key) : parent;
     if (p) {
         sjson_assert(p->tag == SJSON_ARRAY);
         int index = 0;
         for (sjson_node* elem = p->children.head; elem && index < count; elem = elem->next) {
             sjson_assert(elem->tag == SJSON_NUMBER);
             out[index++] = (int)elem->number_;
+        }
+        return index == count;
+    } else {
+        return false;
+    }
+}
+
+bool sjson_get_uints(uint32_t* out, int count, sjson_node* parent, const char* key) 
+{
+    sjson_node* p = key ? sjson_find_member(parent, key) : parent;
+    if (p) {
+        sjson_assert(p->tag == SJSON_ARRAY);
+        int index = 0;
+        for (sjson_node* elem = p->children.head; elem && index < count; elem = elem->next) {
+            sjson_assert(elem->tag == SJSON_NUMBER);
+            out[index++] = (uint32_t)elem->number_;
+        }
+        return index == count;
+    } else {
+        return false;
+    }    
+}
+
+bool sjson_get_int16s(int16_t* out, int count, sjson_node* parent, const char* key) 
+{
+    sjson_node* p = key ? sjson_find_member(parent, key) : parent;
+    if (p) {
+        sjson_assert(p->tag == SJSON_ARRAY);
+        int index = 0;
+        for (sjson_node* elem = p->children.head; elem && index < count; elem = elem->next) {
+            sjson_assert(elem->tag == SJSON_NUMBER);
+            out[index++] = (int16_t)elem->number_;
+        }
+        return index == count;
+    } else {
+        return false;
+    }
+}
+
+bool sjson_get_uint16s(uint16_t* out, int count, sjson_node* parent, const char* key) 
+{
+    sjson_node* p = key ? sjson_find_member(parent, key) : parent;
+    if (p) {
+        sjson_assert(p->tag == SJSON_ARRAY);
+        int index = 0;
+        for (sjson_node* elem = p->children.head; elem && index < count; elem = elem->next) {
+            sjson_assert(elem->tag == SJSON_NUMBER);
+            out[index++] = (uint16_t)elem->number_;
         }
         return index == count;
     } else {
@@ -1493,6 +1547,45 @@ sjson_node* sjson_put_floats(sjson_context* ctx, sjson_node* parent, const char*
 }
 
 sjson_node* sjson_put_ints(sjson_context* ctx, sjson_node* parent, const char* key, const int* vals, int count)
+{
+    sjson_node* a = sjson_mkarray(ctx);
+    sjson_assert(a);
+    for (int i = 0; i < count; i++) {
+        sjson_node* n = sjson_mknumber(ctx, (double)vals[i]);
+        sjson_assert(n);
+        sjson_append_element(a, n);
+    }
+    sjson_append_member(ctx, parent, key, a);
+    return a;
+}
+
+sjson_node* sjson_put_uints(sjson_context* ctx, sjson_node* parent, const char* key, const uint32_t* vals, int count)
+{
+    sjson_node* a = sjson_mkarray(ctx);
+    sjson_assert(a);
+    for (int i = 0; i < count; i++) {
+        sjson_node* n = sjson_mknumber(ctx, (double)vals[i]);
+        sjson_assert(n);
+        sjson_append_element(a, n);
+    }
+    sjson_append_member(ctx, parent, key, a);
+    return a;
+}
+
+sjson_node* sjson_put_int16s(sjson_context* ctx, sjson_node* parent, const char* key, const int16_t* vals, int count)
+{
+    sjson_node* a = sjson_mkarray(ctx);
+    sjson_assert(a);
+    for (int i = 0; i < count; i++) {
+        sjson_node* n = sjson_mknumber(ctx, (double)vals[i]);
+        sjson_assert(n);
+        sjson_append_element(a, n);
+    }
+    sjson_append_member(ctx, parent, key, a);
+    return a;
+}
+
+sjson_node* sjson_put_uint16s(sjson_context* ctx, sjson_node* parent, const char* key, const uint16_t* vals, int count)
 {
     sjson_node* a = sjson_mkarray(ctx);
     sjson_assert(a);

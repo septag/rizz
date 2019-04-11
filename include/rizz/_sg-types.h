@@ -5,11 +5,29 @@
 
 #pragma once
 
-#include "config.h"
 #include "types.h"
 #include <stdint.h>
 
 #ifndef SG_TYPES_ALREADY_DEFINED
+/*
+    various compile-time constants
+
+    FIXME: it may make sense to convert some of those into defines so
+    that the user code can override them.
+*/
+enum {
+    SG_INVALID_ID = 0,
+    SG_NUM_SHADER_STAGES = 2,
+    SG_NUM_INFLIGHT_FRAMES = 2,
+    SG_MAX_COLOR_ATTACHMENTS = 4,
+    SG_MAX_SHADERSTAGE_BUFFERS = 4,
+    SG_MAX_SHADERSTAGE_IMAGES = 12,
+    SG_MAX_SHADERSTAGE_UBS = 4,
+    SG_MAX_UB_MEMBERS = 16,
+    SG_MAX_VERTEX_ATTRIBUTES = 16,
+    SG_MAX_MIPMAPS = 16,
+    SG_MAX_TEXTUREARRAY_LAYERS = 128
+};
 
 /*
     Resource id typedefs:

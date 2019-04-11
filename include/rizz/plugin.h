@@ -65,6 +65,7 @@ typedef enum rizz_api_type {
     _RIZZ_API_NATIVE_COUNT,
     RIZZ_API_IMGUI,
     RIZZ_API_IMGUI_EXTRA,
+    RIZZ_API_SPRITE,
     _RIZZ_API_COUNT
 } rizz_api_type;
 

@@ -16,29 +16,31 @@
 #define DEFAULT_REG_SIZE 512
 
 typedef struct {
-    const char* type;
-    int         size;    // size of struct
-    int         num_fields;
+    char type[32];
+    int  size;    // size of struct
+    int  num_fields;
 } rizz__refl_struct;
 
 typedef struct {
-    const char* type;
-    int*        name_ids;    // index-to: rizz__reflect_context:regs
+    char type[32];
+    int* name_ids;    // index-to: rizz__reflect_context:regs
 } rizz__refl_enum;
 
 typedef struct {
     rizz_refl_info r;
-    int       base_id;
-    char raw_type[64];          // keep the raw type name, cuz pointer types have '*' in their type names                         
+    int            base_id;
+    char type[64];    // keep the raw type name, cuz pointer types have '*' in their type names
+    char name[32];
+    char base[32];
 } rizz__refl_data;
 
 typedef struct {
     rizz__refl_struct* structs;
     rizz__refl_enum*   enums;
     rizz__refl_data*   regs;    // sx_array
-    const sx_alloc*   alloc;
-    sx_hashtbl*       reg_tbl;     // refl.name --> index(regs)
-    int               max_regs;    // =0 if unlimited
+    const sx_alloc*    alloc;
+    sx_hashtbl*        reg_tbl;     // refl.name --> index(regs)
+    int                max_regs;    // =0 if unlimited
 } rizz__reflect_context;
 
 static rizz__reflect_context g_reflect;
@@ -113,7 +115,7 @@ static const char* rizz__refl_get_enum_name(const char* type, int val) {
                 const rizz__refl_data* r = &g_reflect.regs[name_ids[k]];
                 sx_assert(r->r.internal_type == RIZZ_REFL_ENUM);
                 if (val == (int)r->r.offset)
-                    return r->r.name;
+                    return r->name;
             }
         }
     }
@@ -130,8 +132,8 @@ static void* rizz__refl_get_field(const char* base_type, void* obj, const char* 
 }
 
 static void rizz__refl_reg(rizz_refl_type internal_type, void* any, const char* type,
-                          const char* name, const char* base, const char* desc, int size,
-                          int base_size) {
+                           const char* name, const char* base, const char* desc, int size,
+                           int base_size) {
     if (g_reflect.max_regs > 0) {
         int count = sx_array_count(g_reflect.regs);
         sx_assert(g_reflect.max_regs > count);
@@ -167,7 +169,8 @@ static void rizz__refl_reg(rizz_refl_type internal_type, void* any, const char* 
                 rizz__refl_enum* _enum = &g_reflect.enums[found_idx];
                 sx_array_push(g_reflect.alloc, _enum->name_ids, id);
             } else {
-                rizz__refl_enum _enum = (rizz__refl_enum){ .type = type };
+                rizz__refl_enum _enum = (rizz__refl_enum){ .name_ids = NULL };
+                sx_strcpy(_enum.type, sizeof(_enum.type), type);
                 sx_array_push(g_reflect.alloc, _enum.name_ids, id);
                 sx_array_push(g_reflect.alloc, g_reflect.enums, _enum);
             }
@@ -183,18 +186,18 @@ static void rizz__refl_reg(rizz_refl_type internal_type, void* any, const char* 
     }
 
     rizz__refl_data r = { .r =
-                             {
-                                 .any = any,
-                                 .type = type,
-                                 .name = name,
-                                 .base = base,
-                                 .desc = desc,
-                                 .size = size,
-                                 .array_size = 1,
-                                 .stride = size,
-                                 .internal_type = internal_type,
-                             },
-                         .base_id = -1 };
+                              {
+                                  .any = any,
+                                  .desc = desc,
+                                  .size = size,
+                                  .array_size = 1,
+                                  .stride = size,
+                                  .internal_type = internal_type,
+                              },
+                          .base_id = -1 };
+    sx_strcpy(r.name, sizeof(r.name), name);
+    if (base)
+        sx_strcpy(r.base, sizeof(r.base), base);
 
     // check for array types []
     const char* bracket = sx_strchar(type, '[');
@@ -218,13 +221,14 @@ static void rizz__refl_reg(rizz_refl_type internal_type, void* any, const char* 
 
     // check if field is a struct (nested structs)
     if (ptr_str_end) {
-        sx_strncpy(r.raw_type, sizeof(r.raw_type), type, ptr_str_end + 1);
+        sx_strncpy(r.type, sizeof(r.type), type, ptr_str_end + 1);
     } else {
-        sx_strcpy(r.raw_type, sizeof(r.raw_type), type);
+        sx_strcpy(r.type, sizeof(r.type), type);
     }
+    r.r.type = r.type;
 
     for (int i = 0, c = sx_array_count(g_reflect.structs); i < c; i++) {
-        if (sx_strequal(g_reflect.structs[i].type, r.raw_type)) {
+        if (sx_strequal(g_reflect.structs[i].type, r.type)) {
             r.r.flags |= RIZZ_REFL_FLAG_IS_STRUCT;
             if (r.r.flags & RIZZ_REFL_FLAG_IS_ARRAY) {
                 r.r.array_size = size / g_reflect.structs[i].size;
@@ -235,7 +239,7 @@ static void rizz__refl_reg(rizz_refl_type internal_type, void* any, const char* 
     }
 
     // determine size of array elements (built-in types)
-    int stride = rizz__refl_type_size(r.raw_type);
+    int stride = rizz__refl_type_size(r.type);
     if ((r.r.flags & RIZZ_REFL_FLAG_IS_ARRAY) && !(r.r.flags & RIZZ_REFL_FLAG_IS_STRUCT)) {
         sx_assert(stride > 0 && "invalid built-in type for array");
         r.r.array_size = size / stride;
@@ -265,7 +269,8 @@ static void rizz__refl_reg(rizz_refl_type internal_type, void* any, const char* 
         }
 
         if (base_id == -1) {
-            rizz__refl_struct _base = (rizz__refl_struct){ .type = base, .size = base_size };
+            rizz__refl_struct _base = (rizz__refl_struct){ .size = base_size };
+            sx_strcpy(_base.type, sizeof(_base.type), base);
             sx_array_push(g_reflect.alloc, g_reflect.structs, _base);
             base_id = sx_array_count(g_reflect.structs) - 1;
         }
@@ -298,36 +303,35 @@ static int rizz__refl_size_of(const char* base_type) {
 }
 
 static int rizz__refl_get_fields(const char* base_type, void* obj, rizz_refl_field* fields,
-                                int max_fields) {
+                                 int max_fields) {
     int num_fields = 0;
     for (int i = 0, c = sx_array_count(g_reflect.regs); i < c; i++) {
         rizz__refl_data* r = &g_reflect.regs[i];
-        if (r->r.internal_type == RIZZ_REFL_FIELD && sx_strequal(r->r.base, base_type)) {
+        if (r->r.internal_type == RIZZ_REFL_FIELD && sx_strequal(r->base, base_type)) {
             sx_assert(r->base_id < sx_array_count(g_reflect.structs));
             rizz__refl_struct* s = &g_reflect.structs[r->base_id];
 
             if (fields && num_fields < max_fields) {
-                bool  value_nil = obj == NULL;
-                void* value = (uint8_t*)obj + r->r.offset;
+                bool           value_nil = obj == NULL;
+                void*          value = (uint8_t*)obj + r->r.offset;
+                rizz_refl_info rinfo = { .any = r->r.any,
+                                         .type = r->type,
+                                         .name = r->name,
+                                         .base = r->base,
+                                         .desc = r->r.desc,
+                                         .size = r->r.size,
+                                         .array_size = r->r.array_size,
+                                         .stride = r->r.stride,
+                                         .flags = r->r.flags,
+                                         .internal_type = r->r.internal_type };
 
                 if (!(r->r.flags & (RIZZ_REFL_FLAG_IS_PTR | RIZZ_REFL_FLAG_IS_ARRAY))) {
-                    fields[num_fields] = (rizz_refl_field){ .info = r->r, .value = value };
+                    fields[num_fields] = (rizz_refl_field){ .info = rinfo, .value = value };
                 } else {
                     // type names for pointers must only include the _type_ part without '*' or '[]'
                     if (value && !value_nil && (r->r.flags & RIZZ_REFL_FLAG_IS_PTR))
                         value = (void*)*((uintptr_t*)value);
-                    fields[num_fields] =
-                        (rizz_refl_field){ .info = { .any = r->r.any,
-                                                    .type = r->raw_type,
-                                                    .name = r->r.name,
-                                                    .base = r->r.base,
-                                                    .desc = r->r.desc,
-                                                    .size = r->r.size,
-                                                    .array_size = r->r.array_size,
-                                                    .stride = r->r.stride,
-                                                    .flags = r->r.flags,
-                                                    .internal_type = r->r.internal_type },
-                                          .value = value };
+                    fields[num_fields] = (rizz_refl_field){ .info = rinfo, .value = value };
                 }
             }    // if (fields)
 
@@ -350,11 +354,11 @@ static bool rizz__refl_is_cstring(const rizz_refl_info* r) {
 
 
 rizz_api_refl the__refl = { ._reg = rizz__refl_reg,
-                           .size_of = rizz__refl_size_of,
-                           .get_func = rizz__refl_get_func,
-                           .get_enum = rizz__refl_get_enum,
-                           .get_enum_name = rizz__refl_get_enum_name,
-                           .get_field = rizz__refl_get_field,
-                           .get_fields = rizz__refl_get_fields,
-                           .reg_count = rizz__refl_reg_count,
-                           .is_cstring = rizz__refl_is_cstring };
+                            .size_of = rizz__refl_size_of,
+                            .get_func = rizz__refl_get_func,
+                            .get_enum = rizz__refl_get_enum,
+                            .get_enum_name = rizz__refl_get_enum_name,
+                            .get_field = rizz__refl_get_field,
+                            .get_fields = rizz__refl_get_fields,
+                            .reg_count = rizz__refl_reg_count,
+                            .is_cstring = rizz__refl_is_cstring };

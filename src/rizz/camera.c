@@ -3,8 +3,8 @@
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
 
+#include "config.h"
 #include "rizz/camera.h"
-#include "rizz/config.h"
 #include "rizz/graphics.h"
 
 static void rizz__cam_init(rizz_camera* cam, float fov_deg, const sx_rect viewport, float fnear,

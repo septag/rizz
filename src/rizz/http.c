@@ -3,8 +3,8 @@
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
 
+#include "config.h"
 #include "rizz/http.h"
-#include "rizz/config.h"
 #include "rizz/core.h"
 
 #include "sx/allocator.h"

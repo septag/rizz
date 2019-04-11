@@ -93,10 +93,11 @@ typedef struct rizz_asset_callbacks {
 } rizz_asset_callbacks;
 
 typedef struct rizz_api_asset {
-    void (*register_asset_type)(const char* name, rizz_asset_callbacks* callbacks,
+    void (*register_asset_type)(const char* name, rizz_asset_callbacks callbacks,
                                 const char* params_type_name, int params_size,
                                 const char* metadata_type_name, int metadata_size,
                                 rizz_asset_obj failed_obj, rizz_asset_obj async_obj);
+    void (*unregister_asset_type)(const char* name);
 
     rizz_asset (*load)(const char* name, const char* path, const void* params,
                        rizz_asset_load_flags flags, const sx_alloc* alloc, uint32_t tags);

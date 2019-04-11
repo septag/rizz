@@ -563,7 +563,7 @@ SOKOL_API_DECL void sg_imgui_draw_capture_window(sg_imgui_t* ctx);
 #endif
 
 /*=== IMPLEMENTATION =========================================================*/
-#if defined(SOKOL_GFX_IMGUI_IMPL) || defined(__INTELLISENSE__)
+#if defined(SOKOL_GFX_IMGUI_IMPL)
 #if !defined(IMGUI_VERSION)
 #error "Please include imgui.h before the sokol_gfx_imgui.h implementation"
 #endif

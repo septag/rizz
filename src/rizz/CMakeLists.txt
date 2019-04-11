@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.1)
 project(rizz)
 
-set(SOURCE_FILES "app.c"
+set(SOURCE_FILES "config.h"
+                 "app.c"
                  "core.c" 
                  "plugin.cpp"
                  "graphics.c"
@@ -16,7 +17,6 @@ set(INCLUDE_FILES "../../include/rizz/types.h"
                   "../../include/rizz/entry.h" 
                   "../../include/rizz/core.h" 
                   "../../include/rizz/plugin.h" 
-                  "../../include/rizz/config.h" 
                   "../../include/rizz/graphics.h"
                   "../../include/rizz/_sg-types.h"
                   "../../include/rizz/asset.h"
@@ -24,7 +24,8 @@ set(INCLUDE_FILES "../../include/rizz/types.h"
                   "../../include/rizz/camera.h"
                   "../../include/rizz/http.h"
                   "../../include/rizz/util.h"
-                  "../../include/rizz/vfs.h")
+                  "../../include/rizz/vfs.h"
+                  "../../include/rizz/json.h")
 
 set(EXTERNAL_INCLUDES ../../3rdparty/sokol/sokol_app.h 
                       ../../3rdparty/sokol/sokol_gfx.h

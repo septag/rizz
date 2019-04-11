@@ -216,10 +216,11 @@ rizz_plugin_decl_event_handler(quad, e) {
     }
 }
 
-rizz_plugin_implement_info(quad, 100, "quad", 0);
+rizz_plugin_implement_info(quad, 1000, "quad", 0);
 
 rizz_game_decl_config(conf) {
     conf->app_name = "quad";
+    conf->app_version = 1000;
     conf->app_title = "02 - Quad";
     conf->window_width = 800;
     conf->window_height = 600;

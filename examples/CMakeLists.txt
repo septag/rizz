@@ -22,6 +22,17 @@ endif()
 target_link_libraries(quad PRIVATE sx)
 add_dependencies(quad rizz)
 
+# drawsprite
+set(DRAWSPRITE_SOURCES 03-drawsprite/drawsprite.c)
+if (BUNDLE)
+    add_executable(drawsprite ${EXEC_TYPE} ${DRAWSPRITE_SOURCES})
+else()
+    add_library(drawsprite SHARED ${DRAWSPRITE_SOURCES})
+endif()
+
+target_link_libraries(drawsprite PRIVATE sx)
+add_dependencies(drawsprite rizz)
+
 
 # set any stand-alone project you want to build here (BUNDLE=1)
 bundle_plugins(quad "")

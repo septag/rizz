@@ -1,10 +1,10 @@
 //
-// Copyright 2019 Sepehr Taghdisian (septag@github). All rights reserved.
+// Sepehr Taghdisian (septag@github). All rights reserved.
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
 
+#include "config.h"
 #include "rizz/plugin.h"
-#include "rizz/config.h"
 #include "rizz/core.h"
 
 #include "sx/allocator.h"
@@ -191,7 +191,7 @@ static bool rizz__plugin_load(const char* plugin_name, rizz_plugin_flags plugin_
                                            sx_array_count(g_plugin.plugin_update_order));
 
         int version = item->info.version;
-        rizz_log_info("plugin: %s - %s - v%d.%d.%d", item->info.name, item->info.desc,
+        rizz_log_info("(init) plugin: %s - %s - v%d.%d.%d", item->info.name, item->info.desc,
                       (version / 100), (version / 10) % 10, version % 100);
 
         item->p._p = (void*)0x1;    // set it to something that indicates plugin is loaded
@@ -247,11 +247,6 @@ void rizz__plugin_broadcast_event(const rizz_app_event* e) {
     }
 }
 #else    // RIZZ_BUNDLE
-static void rizz__plugin_crash_handler(cr_plugin* plugin, const char* filename) {
-    sx_assert(filename);
-    rizz_log_error("plugin crashed: %s, reason: %s", filename,
-                   the__plugin.crash_reason((rizz_plugin_crash)plugin->failure));
-}
 
 static void rizz__plugin_reload_handler(cr_plugin* plugin, const char* filename, const void** ptrs,
                                         const void** new_ptrs, int num_ptrs) {
@@ -287,8 +282,7 @@ bool rizz__plugin_load_abs(const char* filepath, rizz_plugin_flags plugin_flags)
     // We got the info, the plugin seems to be valid, now load and run the plugin
     item.manual_reload =
         sx_cppbool(!RIZZ_CONFIG_HOT_LOADING || (plugin_flags & RIZZ_PLUGIN_FLAG_MANUAL_RELOAD));
-    if (!cr_plugin_load(item.p, filepath, rizz__plugin_crash_handler,
-                        rizz__plugin_reload_handler)) {
+    if (!cr_plugin_load(item.p, filepath, rizz__plugin_reload_handler)) {
         rizz_log_error("plugin load failed: %s", filepath);
         return false;
     }
@@ -316,8 +310,9 @@ bool rizz__plugin_load_abs(const char* filepath, rizz_plugin_flags plugin_flags)
                                        sx_array_count(g_plugin.plugin_update_order));
 
     int version = item.info.version;
-    rizz_log_info("plugin: %s (%s) - %s - v%d.%d.%d", item.info.name, item.filename, item.info.desc,
-                  (version / 100), (version / 10) % 10, version % 100);
+    rizz_log_info("(init) plugin: %s (%s) - %s - v%d.%d.%d", item.info.name, item.filename,
+                  item.info.desc, rizz_version_major(version), rizz_version_minor(version),
+                  rizz_version_bugfix(version));
     return true;
 }
 
@@ -358,8 +353,12 @@ void rizz__plugin_update(float dt) {
         int r = cr_plugin_update(plugin->p, check_reload);
         if (r == -2) {
             rizz_log_error("plugin '%s' failed to reload", g_plugin.plugins[i].info.name);
-        } else if (r == -1) {
-            rizz_log_error("plugin '%s' failed to update", g_plugin.plugins[i].info.name);
+        } else if (r < -1) {
+            if (plugin->p.failure == CR_USER) {
+                rizz_log_error("plugin '%s' failed (main ret = -1)", g_plugin.plugins[i].info.name);
+            } else {
+                rizz_log_error("plugin '%s' crashed", g_plugin.plugins[i].info.name);
+            }
         }
     }
 }

@@ -2,14 +2,14 @@
 // Copyright 2019 Sepehr Taghdisian (septag@github). All rights reserved.
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
-#pragma once 
+#pragma once
 
 #include "types.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // tween helper: useful for small animations and transitions
 //
-// usage: 
+// usage:
 //      frame_update() {
 //          static rizz_tween t;
 //          float val = rizz_tween_update(&t, delta_time, )
@@ -25,7 +25,7 @@ typedef struct rizz_tween {
 
 static inline float rizz_tween_update(rizz_tween* tween, float dt, float max_tm) {
     sx_assert(max_tm > 0.0);
-    float t = sx_min(1.0f, tween->tm/max_tm);
+    float t = sx_min(1.0f, tween->tm / max_tm);
     tween->tm += dt;
     return t;
 }
@@ -41,8 +41,8 @@ static inline bool rizz_tween_done(rizz_tween* tween) {
 //       If you want to use a more general thread-safe queue, use sx/thread.h: sx_queue_spsc
 // NOTE: This is a circular queue, so it only holds RIZZ_EVENTQUEUE_MAX_EVENTS events and overwrites
 //       previous ones if it's overflowed. So use it with this limitation in mind
-//       most gameplay events for a component shouldn't require many events per-frame. If this 
-//       happens to not be the case, then make your own queue or increase the 
+//       most gameplay events for a component shouldn't require many events per-frame. If this
+//       happens to not be the case, then make your own queue or increase the
 //       `RIZZ_EVENTQUEUE_MAX_EVENTS` value
 //
 #ifndef RIZZ_EVENTQUEUE_MAX_EVENTS
@@ -56,8 +56,8 @@ typedef struct rizz_event {
 
 typedef struct rizz_event_queue {
     rizz_event events[RIZZ_EVENTQUEUE_MAX_EVENTS];
-    int       first;
-    int       count;
+    int        first;
+    int        count;
 } rizz_event_queue;
 
 static inline void rizz_event_push(rizz_event_queue* eq, int event, void* user) {
@@ -99,7 +99,7 @@ static inline bool rizz_event_empty(rizz_event_queue* eq) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // fsm:   Tiny finite state machine
 //        state machines can be implemented with co-routines more intuitively
-//        But coroutines allocate much more resources than this 
+//        But coroutines allocate much more resources than this
 // Stolen from: https://github.com/r-lyeh/tinybits/blob/master/tinyfsm.c
 // Example:
 // enum {
@@ -147,11 +147,10 @@ static inline bool rizz_event_empty(rizz_event_queue* eq) {
 #define rizz_fsm_with(st) \
     for (int i = 1; i--; st[1] = st[0]) switch (((st[0]) << 16) | (st[1]))
 #define rizz_fsm_when(a) \
-    break;              \
+    break;               \
     case (((a) << 16) | (a))
 #define rizz_fsm_transition(a, b) \
-    break;                       \
+    break;                        \
     case (((b) << 16) | (a))
 
 typedef int rizz_fsm_state[2];
-

@@ -2,10 +2,9 @@
 // Copyright 2019 Sepehr Taghdisian (septag@github). All rights reserved.
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
-
+#include "config.h"
 #include "rizz/core.h"
 #include "rizz/asset.h"
-#include "rizz/config.h"
 #include "rizz/entry.h"
 #include "rizz/graphics.h"
 #include "rizz/http.h"
@@ -127,8 +126,8 @@ typedef struct {
     float    fps_frame;
 
     char app_name[32];
-    char app_ver[32];
     char logfile[32];
+    uint32_t app_ver;
 
     rizz__core_tmpalloc*  tmp_allocs;        // count: num_workers
     rizz__gfx_cmdbuffer** gfx_cmdbuffers;    // count: num_workers
@@ -381,7 +380,11 @@ static void rizz__init_log(const char* logfile) {
     if (f) {
         time_t t = time(NULL);
         fprintf(f, "%s", asctime(localtime(&t)));
-        fprintf(f, "%s: v%s - rizz v%s%s%s", g_core.app_name, g_core.app_ver, RIZZ_VERSION, EOL, EOL);
+        fprintf(f, "%s: v%d.%d.%d - rizz v%d.%d.%d%s%s", g_core.app_name, 
+            rizz_version_major(g_core.app_ver), rizz_version_minor(g_core.app_ver),
+            rizz_version_bugfix(g_core.app_ver),
+            rizz_version_major(RIZZ_VERSION), rizz_version_minor(RIZZ_VERSION), 
+            rizz_version_bugfix(RIZZ_VERSION), EOL, EOL);
         fclose(f);
     } else {
         sx_assert(0 && "could not write to log file");
@@ -676,7 +679,7 @@ bool rizz__core_init(const rizz_config* conf) {
 
     const sx_alloc* alloc = rizz__alloc(RIZZ_MEMID_CORE);
     sx_strcpy(g_core.app_name, sizeof(g_core.app_name), conf->app_name);
-    sx_strcpy(g_core.app_ver, sizeof(g_core.app_ver), conf->app_version);
+    g_core.app_ver = conf->app_version;
     g_core.flags = conf->core_flags;
 
 #if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
@@ -850,6 +853,10 @@ bool rizz__core_init(const rizz_config* conf) {
         return false;
     } else {
         the_imgui = (rizz_api_imgui*)the__plugin.get_api(RIZZ_API_IMGUI, 0);
+    }
+
+    if (!the__plugin.load("sprite", RIZZ_PLUGIN_FLAG_MANUAL_RELOAD)) {
+        return false;
     }
 
     // initialize cache-dir and load asset database

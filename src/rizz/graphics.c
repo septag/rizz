@@ -10,9 +10,9 @@
 // executed) rizz__gpu_command: overrides for immediate mode commands _sg_xxxx: sokol overrides
 //
 
+#include "config.h"
 #include "rizz/app.h"
 #include "rizz/asset.h"
-#include "rizz/config.h"
 #include "rizz/core.h"
 #include "rizz/reflect.h"
 
@@ -92,13 +92,11 @@ SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-variable")
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-parameter")
-#define SOKOL_CONFIG
 #define SOKOL_IMPL
 #define SOKOL_API_DECL static
 #define SOKOL_API_IMPL static
 #define SOKOL_TRACE_HOOKS
 #define SOKOL_NO_DEPRECATED
-#include "rizz/config.h"             // config enums: SG_MAX_
 #include "sokol/sokol_gfx.h"
 SX_PRAGMA_DIAGNOSTIC_POP();
 
@@ -137,10 +135,9 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 // clang-format on
 
 typedef struct {
-    rizz_asset_callbacks callbacks;
-    rizz_texture         white_tex;
-    rizz_texture         black_tex;
-    rizz_texture         checker_tex;
+    rizz_texture white_tex;
+    rizz_texture black_tex;
+    rizz_texture checker_tex;
 } rizz__gfx_texture_mgr;
 
 typedef enum {
@@ -809,14 +806,6 @@ static void rizz__texture_init() {
     rizz_refl_field(rizz_texture_info, int, mips, "number of texture mips");
     rizz_refl_field(rizz_texture_info, int, bpp, "number of bits-per-pixel");
 
-    g_gfx.tex_mgr.callbacks =
-        (rizz_asset_callbacks){ .on_prepare = rizz__texture_on_prepare,
-                                .on_load = rizz__texture_on_load,
-                                .on_finalize = rizz__texture_on_finalize,
-                                .on_reload = rizz__texture_on_reload,
-                                .on_release = rizz__texture_on_release,
-                                .on_read_metadata = rizz__texture_on_read_metadata };
-
     static uint32_t k_white_pixel = 0xffffffff;
     static uint32_t k_black_pixel = 0xff000000;
     g_gfx.tex_mgr.white_tex = (rizz_texture){
@@ -860,11 +849,17 @@ static void rizz__texture_init() {
     g_gfx.tex_mgr.checker_tex = rizz__texture_create_checker(CHECKER_TEXTURE_SIZE / 2,
                                                              CHECKER_TEXTURE_SIZE, checker_colors);
 
-    the__asset.register_asset_type("texture", &g_gfx.tex_mgr.callbacks, "rizz_texture_load_params",
-                                   sizeof(rizz_texture_load_params), "rizz_texture_info",
-                                   sizeof(rizz_texture_info),
-                                   (rizz_asset_obj){ .ptr = &g_gfx.tex_mgr.white_tex },
-                                   (rizz_asset_obj){ .ptr = &g_gfx.tex_mgr.white_tex });
+    the__asset.register_asset_type(
+        "texture",
+        (rizz_asset_callbacks){ .on_prepare = rizz__texture_on_prepare,
+                                .on_load = rizz__texture_on_load,
+                                .on_finalize = rizz__texture_on_finalize,
+                                .on_reload = rizz__texture_on_reload,
+                                .on_release = rizz__texture_on_release,
+                                .on_read_metadata = rizz__texture_on_read_metadata },
+        "rizz_texture_load_params", sizeof(rizz_texture_load_params), "rizz_texture_info",
+        sizeof(rizz_texture_info), (rizz_asset_obj){ .ptr = &g_gfx.tex_mgr.white_tex },
+        (rizz_asset_obj){ .ptr = &g_gfx.tex_mgr.white_tex });
 }
 
 static void rizz__texture_release() {
@@ -1543,18 +1538,17 @@ static void rizz__shader_on_read_metadata(void* metadata, const rizz_asset_load_
     }
 }
 
-static rizz_asset_callbacks g_shader_asset_callbacks = { .on_prepare = rizz__shader_on_prepare,
-                                                         .on_load = rizz__shader_on_load,
-                                                         .on_finalize = rizz__shader_on_finalize,
-                                                         .on_reload = rizz__shader_on_reload,
-                                                         .on_release = rizz__shader_on_release,
-                                                         .on_read_metadata =
-                                                             rizz__shader_on_read_metadata };
-
 static void rizz__shader_init() {
-    the__asset.register_asset_type("shader", &g_shader_asset_callbacks, NULL, 0, "rizz_shader_info",
-                                   sizeof(rizz_shader_info), (rizz_asset_obj){ .ptr = NULL },
-                                   (rizz_asset_obj){ .ptr = NULL });
+    the__asset.register_asset_type(
+        "shader",
+        (rizz_asset_callbacks){ .on_prepare = rizz__shader_on_prepare,
+                                .on_load = rizz__shader_on_load,
+                                .on_finalize = rizz__shader_on_finalize,
+                                .on_reload = rizz__shader_on_reload,
+                                .on_release = rizz__shader_on_release,
+                                .on_read_metadata = rizz__shader_on_read_metadata },
+        NULL, 0, "rizz_shader_info", sizeof(rizz_shader_info), (rizz_asset_obj){ .ptr = NULL },
+        (rizz_asset_obj){ .ptr = NULL });
     rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT);
     rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT2);
     rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT3);
@@ -2088,9 +2082,6 @@ static void rizz__font_on_reload(rizz_asset handle, rizz_asset_obj prev_obj,
     sx_unused(handle);
     sx_unused(prev_obj);
     sx_unused(alloc);
-    the__asset.register_asset_type(
-        "shader", &g_shader_asset_callbacks, NULL, 0, "rizz__font_metadata",
-        sizeof(rizz_shader_info), (rizz_asset_obj){ .ptr = NULL }, (rizz_asset_obj){ .ptr = NULL });
 }
 
 static void rizz__font_on_release(rizz_asset_obj obj, const sx_alloc* alloc) {
@@ -2150,6 +2141,7 @@ static void rizz__font_on_read_metadata(void* metadata, const rizz_asset_load_pa
         sx_assert(block.id == 3);
         sx_mem_read(&rd, page.path, block.size);
         sx_os_path_join(meta->img_filepath, sizeof(meta->img_filepath), dirname, page.path);
+        sx_os_path_unixpath(meta->img_filepath, sizeof(meta->img_filepath), meta->img_filepath);
 
         meta->img_height = common.scale_w;
         meta->img_height = common.scale_h;
@@ -2216,14 +2208,6 @@ static void rizz__font_on_read_metadata(void* metadata, const rizz_asset_load_pa
     }
 }
 
-static rizz_asset_callbacks g_font_asset_callbacks = { .on_prepare = rizz__font_on_prepare,
-                                                       .on_load = rizz__font_on_load,
-                                                       .on_finalize = rizz__font_on_finalize,
-                                                       .on_reload = rizz__font_on_reload,
-                                                       .on_release = rizz__font_on_release,
-                                                       .on_read_metadata =
-                                                           rizz__font_on_read_metadata };
-
 static void rizz__font_init() {
     rizz_refl_field(rizz__font_metadata, char[RIZZ_MAX_PATH], img_filepath, "img_filepath");
     rizz_refl_field(rizz__font_metadata, int, img_width, "img_width");
@@ -2233,9 +2217,16 @@ static void rizz__font_init() {
 
     // TODO: create default async/fail objects
 
-    the__asset.register_asset_type("font", &g_font_asset_callbacks, NULL, 0, "rizz__font_metadata",
-                                   sizeof(rizz__font_metadata), (rizz_asset_obj){ .ptr = NULL },
-                                   (rizz_asset_obj){ .ptr = NULL });
+    the__asset.register_asset_type(
+        "font",
+        (rizz_asset_callbacks){ .on_prepare = rizz__font_on_prepare,
+                                .on_load = rizz__font_on_load,
+                                .on_finalize = rizz__font_on_finalize,
+                                .on_reload = rizz__font_on_reload,
+                                .on_release = rizz__font_on_release,
+                                .on_read_metadata = rizz__font_on_read_metadata },
+        NULL, 0, "rizz__font_metadata", sizeof(rizz__font_metadata),
+        (rizz_asset_obj){ .ptr = NULL }, (rizz_asset_obj){ .ptr = NULL });
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

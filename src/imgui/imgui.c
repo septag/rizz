@@ -8,7 +8,6 @@
 #include "imguizmo/ImGuizmo.h"
 
 #include "rizz/app.h"
-#include "rizz/config.h"
 #include "rizz/core.h"
 #include "rizz/graphics.h"
 #include "rizz/plugin.h"
@@ -1548,4 +1547,4 @@ rizz_plugin_decl_main(imgui, plugin, e) {
     return 0;
 }
 
-rizz_plugin_implement_info(imgui, 169, "dear-imgui plugin", RIZZ_PLUGIN_INFO_EVENT_HANDLER);
+rizz_plugin_implement_info(imgui, 1690, "dear-imgui plugin", RIZZ_PLUGIN_INFO_EVENT_HANDLER);
