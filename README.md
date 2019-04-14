@@ -67,6 +67,10 @@ But as the engine is in it's early age, the current platforms are built and test
   On msvc compiler, enables `/d2cgsummary` flag for detailed compile stats. Read more about this 
   [here](https://aras-p.info/blog/2017/10/23/Best-unknown-MSVC-flag-d2cgsummary/)
 
+To run the demo on Linux, `cd bin` and run:
+
+   `./riz --run ./libhello.so`
+
 ## Usage
 To build a compatible game/app module for _rizz_ you should do the following steps:
 - Add `rizz_plugin_decl_main(proj_name, plugin, event) {}` to your source. This is actually the main 
