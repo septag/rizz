@@ -817,16 +817,16 @@ static rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs
             rizz_sprite_vertex*       dst_verts = &verts[vertex_idx];
             uint16_t*                 dst_indices = &indices[index_idx];
 
-            for (int i = 0, c = aspr->num_verts; i < c; i++) {
-                dst_verts[i].pos = sx_vec2_mul(sx_vec2_sub(src_verts[i].pos, origin), size);
-                dst_verts[i].uv = src_verts[i].uv;
-                dst_verts[i].color = color;
+            for (int ii = 0, c = aspr->num_verts; ii < c; ii++) {
+                dst_verts[ii].pos = sx_vec2_mul(sx_vec2_sub(src_verts[ii].pos, origin), size);
+                dst_verts[ii].uv = src_verts[ii].uv;
+                dst_verts[ii].color = color;
             }
 
-            for (int i = 0, c = aspr->num_indices; i < c; i += 3) {
-                dst_indices[i] = src_indices[i] + vertex_start;
-                dst_indices[i + 1] = src_indices[i + 1] + vertex_start;
-                dst_indices[i + 2] = src_indices[i + 2] + vertex_start;
+            for (int ii = 0, c = aspr->num_indices; ii < c; ii += 3) {
+                dst_indices[ii] = src_indices[ii] + vertex_start;
+                dst_indices[ii + 1] = src_indices[ii + 1] + vertex_start;
+                dst_indices[ii + 2] = src_indices[ii + 2] + vertex_start;
             }
 
             vertex_idx += aspr->num_verts;

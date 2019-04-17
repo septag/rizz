@@ -1001,7 +1001,7 @@ static rizz_shader_lang rizz__shader_fourcc_to_lang(uint32_t fourcc) {
         return _RIZZ_SHADER_LANG_COUNT;
 }
 
-static sg_vertex_format rizz__shader_str_to_vertex_format(const char* s, const char* semantic) {
+static sg_vertex_format rizz__shader_str_to_vertex_format(const char* s) {
     if (sx_strequal(s, "float"))
         return SG_VERTEXFORMAT_FLOAT;
     else if (sx_strequal(s, "float2"))
@@ -1225,8 +1225,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
             sx_strcpy(input->semantic, sizeof(input->semantic),
                       sjson_get_string(jinput, "semantic", ""));
             input->semantic_index = sjson_get_int(jinput, "semantic_index", 0);
-            input->type = rizz__shader_str_to_vertex_format(sjson_get_string(jinput, "type", ""),
-                                                            input->semantic);
+            input->type = rizz__shader_str_to_vertex_format(sjson_get_string(jinput, "type", ""));
             ++input;
         }
         refl->num_inputs = num_inputs;
@@ -1346,6 +1345,9 @@ static rizz_shader rizz__shader_make_with_data(const sx_alloc* alloc, uint32_t v
                                                const uint32_t* vs_refl_json, uint32_t fs_data_size,
                                                const uint32_t* fs_data, uint32_t fs_refl_size,
                                                const uint32_t* fs_refl_json) {
+    sx_unused(fs_refl_size);
+    sx_unused(vs_refl_size);
+
     sjson_context* jctx = sjson_create_context(0, 0, (void*)alloc);
     if (!jctx) {
         return (rizz_shader){ 0 };
