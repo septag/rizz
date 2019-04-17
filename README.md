@@ -58,7 +58,7 @@ But as the engine is in it's early age, the current platforms are built and test
 #### CMake options
 - **BUNDLE** (default=0, android/ios=1):  
   `BUNDLE=0` indicates that _rizz_ is built as an executable host which runs the game 
-  by `rizz --run game.dll`. Recommended for development, where you need reduce binary sizes and live-reload game code.  
+  by `rizz --run game.dll` (on linux it's `rizz --run ./game.so`). Recommended for development, where you need reduce binary sizes and live-reload game code.  
   `BUNDLE=1` Builds _rizz_ as static library. To link and bundle _rizz_ and other plugins with the 
   stand-alone executable, you should call `bundle_plugins(game_project "plugins_list")` in your _cmake_ script 
   (see `examples/CMakeLists.txt`).
@@ -69,10 +69,6 @@ But as the engine is in it's early age, the current platforms are built and test
 - **MSVC_COMPILE_SUMMARY** (default=0, windows/msvc=1)
   On msvc compiler, enables `/d2cgsummary` flag for detailed compile stats. Read more about this 
   [here](https://aras-p.info/blog/2017/10/23/Best-unknown-MSVC-flag-d2cgsummary/)
-
-To run the demo on Linux, `cd bin` and run:
-
-   `./riz --run ./libhello.so`
 
 ## Usage
 To build a compatible game/app module for _rizz_ you should do the following steps:
