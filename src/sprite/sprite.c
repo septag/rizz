@@ -903,6 +903,9 @@ static void sprite__drawdata_free(rizz_sprite_drawdata* data, const sx_alloc* al
 
 static void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp, 
                                const sx_mat3* mats, const sx_color* tints, const sx_alloc* alloc) {
+    sx_unused(tints);   // TODO
+    sx_unused(alloc);   // TODO
+
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
     rizz_sprite_drawdata* dd =
@@ -970,6 +973,9 @@ static void sprite__draw(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat,
 static void sprite__draw_wireframe_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp, 
                                          const sx_mat3* mats, const sx_color* tints, 
                                          const sx_alloc* alloc) {
+    sx_unused(tints);   // TODO
+    sx_unused(alloc);   // TODO
+
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
     rizz_sprite_drawdata* dd =
