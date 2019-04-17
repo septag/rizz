@@ -66,9 +66,13 @@ But as the engine is in it's early age, the current platforms are built and test
   Enables hot reloading of assets and monitoring the assets directories. Doesn't work on mobile OSes.
 - **BUILD_EXAMPLES** (default=1, android/ios=0):
   Build example projects in `/examples` directory. 
-- **RIZZ_CONFIG_HOT_LOADING** (default=0, windows/msvc=1)
+- **MSVC_COMPILE_SUMMARY** (default=0, windows/msvc=1)
   On msvc compiler, enables `/d2cgsummary` flag for detailed compile stats. Read more about this 
   [here](https://aras-p.info/blog/2017/10/23/Best-unknown-MSVC-flag-d2cgsummary/)
+
+To run the demo on Linux, `cd bin` and run:
+
+   `./riz --run ./libhello.so`
 
 ## Usage
 To build a compatible game/app module for _rizz_ you should do the following steps:
@@ -81,6 +85,9 @@ To build a compatible game/app module for _rizz_ you should do the following ste
   initialization.
 - To Receive windows events, Add `rizz_plugin_decl_event_handler(proj_name, event) {}` to your source file.
   _rizz_ will fill `rizz_app_event` struct and pass window messages to your application.
+- The low-level graphics api is almost as same as [sokol_gfx](https://github.com/floooh/sokol/blob/master/sokol_gfx.h).
+  So all documentation and examples of *sokol_gfx* also applies here, except the little concept called _stages_ that is 
+  explained in [graphics.h](https://github.com/septag/rizz/blob/master/include/rizz/graphics.h) in more detail.
 
 Currently, the documentation is lacking. But you can check out the `/examples` directory and figure out 
 how to get started.
