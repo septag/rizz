@@ -34,7 +34,7 @@ This is not a game engine, it's a relatively low-level framework for programmers
 - *Portable shaders*: Write shaders once in GLSL, toolset will translate the shader to other platform APIs.
 - *Multi-threaded GPU command-buffer*: Draw commands can be submitted by multiple threads.
 
-### Plugins
+#### Plugins
 - [imgui](src/imgui): Dead-imgui plugin with some utility API
 - [sprite](src/sprite): 2D Sprite system
 
