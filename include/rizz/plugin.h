@@ -123,7 +123,8 @@ typedef struct rizz_plugin_info {
 enum rizz_plugin_flags_ {
     RIZZ_PLUGIN_FLAG_MANUAL_RELOAD = 0x01,
     RIZZ_PLUGIN_FLAG_UPDATE_LAST = 0x02,
-    RIZZ_PLUGIN_FLAG_UPDATE_FIRST = 0x04
+    RIZZ_PLUGIN_FLAG_UPDATE_FIRST = 0x04,
+    _RIZZ_PLUGIN_FLAG_ENTRY = 0x08
 };
 typedef uint32_t rizz_plugin_flags;
 

@@ -6,6 +6,11 @@ add_library(sprite ${PLUGIN_TYPE} sprite.c
 target_link_libraries(sprite PRIVATE cimgui imguizmo sx)
 target_include_directories(sprite PRIVATE ../../3rdparty)
 
-#set(files sprite.vert sprite.frag)
-#set_source_files_properties(${files} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "shaders_h")
-#glslcc_target_compile_shaders_h(sprite "${files}")
+set(shaders sprite.vert sprite.frag)
+set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "shaders_h")
+glslcc_target_compile_shaders_h(sprite "${shaders}")
+
+# recompile sprite shaders with WIREFRAME flag
+set_source_files_properties(${shaders} PROPERTIES COMPILE_DEFINITIONS "WIREFRAME" 
+                                                  GLSLCC_OUTPUT_FILENAME "sprite_wire")
+glslcc_target_compile_shaders_h(sprite "${shaders}")

@@ -38,6 +38,7 @@ typedef struct {
     rizz_asset_obj        async_obj;
     uint8_t*              params_buff;      // sx_array (byte-array, item-size: params_size)
     uint8_t*              metadata_buff;    // sx_array (byte-array, item-size: metadata_size)
+    rizz_asset_load_flags forced_flags;     // these flags are foced upon every load-call
     bool                  unreg;
 } rizz__asset_mgr;
 
@@ -67,6 +68,7 @@ typedef struct {
     char     real_path[RIZZ_MAX_PATH];    // real path on disk, resolved by asset-db and variation
     uint32_t path_hash;                   // hash of 'real_path'
     uint32_t metadata_id;                 // id-to: rizz__asset_mgr.metadata_buff
+    uint64_t last_modified;               // last-modified time-stamp
     int      asset_mgr_id;                // index-to: rizz__asset_lib.asset_mgrs
     bool     used;
 } rizz__asset_resource;
@@ -293,9 +295,11 @@ static void rizz__asset_on_modified(const char* path) {
     // search in resources
     for (int i = 0, c = sx_array_count(g_asset.resources); i < c; i++) {
         if (g_asset.resources[i].path_hash == path_hash) {
+            g_asset.resources[i].last_modified = the__vfs.last_modified(path);
+
             uint32_t resource_id = rizz_to_id(i);
             // find any asset that have this resource and reload it
-            for (int k = 1, kc = g_asset.asset_handles->count; k < kc; k++) {
+            for (int k = 0, kc = g_asset.asset_handles->count; k < kc; k++) {
                 sx_handle_t  handle = sx_handle_at(g_asset.asset_handles, k);
                 rizz__asset* a = &g_asset.assets[sx_handle_index(handle)];
                 if (a->resource_id == resource_id) {
@@ -423,7 +427,7 @@ static void rizz__asset_meta_write_item(const rizz_refl_field* field, sjson_cont
     }
 }
 
-bool rizz__asset_load_db() {
+bool rizz__asset_load_meta_cache() {
     sx_mem_block* db = the__vfs.read(g_asset.asset_db_file, RIZZ_VFS_FLAG_TEXT_FILE, g_asset.alloc);
     if (!db) {
         return false;
@@ -444,6 +448,19 @@ bool rizz__asset_load_db() {
         const char* name = sjson_get_string(jitem, "name", "");
         if (name[0]) {
             rizz__asset_resource rs = { .path = { 0 } };
+
+            // TODO: on mobile, we still don't have any solution
+            // check last-modified date of the actual file
+            uint64_t cur_lastmod = the__vfs.last_modified(name);
+            if (cur_lastmod == 0)
+                continue;       // file isn't valid are does not exist
+            // if last-modified date is changed, remove it from database
+            uint64_t lastmod = (uint64_t)sjson_get_double(jitem, "last_modified", 0);
+            if (lastmod == 0 || cur_lastmod != lastmod)
+                continue;
+
+            rs.last_modified = cur_lastmod;
+            
             sx_strcpy(rs.path, sizeof(rs.path), name);
             sx_strcpy(rs.real_path, sizeof(rs.real_path), sjson_get_string(jitem, "path", name));
             rs.path_hash = sx_hash_fnv32_str(rs.real_path);
@@ -481,7 +498,7 @@ bool rizz__asset_load_db() {
     return true;
 }
 
-bool rizz__asset_save_db() {
+bool rizz__asset_save_meta_cache() {
     sjson_context* jctx = sjson_create_context(0, 0, (void*)g_asset.alloc);
     if (!jctx)
         return false;
@@ -493,6 +510,7 @@ bool rizz__asset_save_db() {
         const rizz__asset_resource* rs = &g_asset.resources[i];
         sjson_node*                 jitem = sjson_mkobject(jctx);
         sjson_put_string(jctx, jitem, "name", rs->path);
+        sjson_put_double(jctx, jitem, "last_modified", (double)the__vfs.last_modified(rs->path));
         if (!sx_strequal(rs->path, rs->real_path))
             sjson_put_string(jctx, jitem, "path", rs->real_path);
 
@@ -573,6 +591,7 @@ static rizz_asset rizz__asset_create_new(const char* path, const void* params, r
         sx_strcpy(res.real_path, sizeof(res.real_path), path);
         res.path_hash = path_hash;
         res.asset_mgr_id = amgr_id;
+        res.last_modified = the__vfs.last_modified(res.real_path);
 
         res_idx = sx_array_count(g_asset.resources);
         sx_array_push(g_asset.alloc, g_asset.resources, res);
@@ -702,6 +721,7 @@ static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, 
     int amgr_id = rizz__asset_find_asset_mgr(name_hash);
     sx_assert(amgr_id != -1 && "asset type is not registered");
     rizz__asset_mgr* amgr = &g_asset.asset_mgrs[amgr_id];
+    flags |= amgr->forced_flags;    
 
     // find if asset is already loaded
     rizz_asset asset = (rizz_asset){ sx_hashtbl_find_get(
@@ -775,6 +795,10 @@ static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, 
             bool                 success = false;
             rizz_asset_load_data load_data = amgr->callbacks.on_prepare(
                 &aparams, &amgr->metadata_buff[rizz_to_index(res->metadata_id)]);
+
+            // revive pointer to asset, because during `on_prepare` some resource dependencies
+            // may be loaded and `assets` array may be resized
+            a = &g_asset.assets[sx_handle_index(asset.id)]; 
             if (load_data.obj.id) {
                 if (amgr->callbacks.on_load(&load_data, &aparams, mem)) {
                     amgr->callbacks.on_finalize(&load_data, &aparams, mem);
@@ -976,6 +1000,7 @@ static rizz_asset rizz__asset_load_from_mem(const char* name, const char* path_a
     int amgr_id = rizz__asset_find_asset_mgr(name_hash);
     sx_assert(amgr_id != -1 && "asset type is not registered");
     rizz__asset_mgr* amgr = &g_asset.asset_mgrs[amgr_id];
+    flags |= amgr->forced_flags;
 
     // find if asset is already loaded
     rizz_asset asset = (rizz_asset){ sx_hashtbl_find_get(
@@ -1109,7 +1134,8 @@ static void rizz__asset_unload(rizz_asset asset) {
 static void rizz__register_asset_type(const char* name, rizz_asset_callbacks callbacks,
                                       const char* params_type_name, int params_size,
                                       const char* metadata_type_name, int metadata_size,
-                                      rizz_asset_obj failed_obj, rizz_asset_obj async_obj) {
+                                      rizz_asset_obj failed_obj, rizz_asset_obj async_obj,
+                                      rizz_asset_load_flags forced_flags) {
     uint32_t name_hash = sx_hash_fnv32_str(name);
     for (int i = 0; i < sx_array_count(g_asset.asset_name_hashes); i++) {
         if (name_hash == g_asset.asset_name_hashes[i]) {
@@ -1123,7 +1149,8 @@ static void rizz__register_asset_type(const char* name, rizz_asset_callbacks cal
                              .params_size = params_size,
                              .metadata_size = metadata_size,
                              .failed_obj = failed_obj,
-                             .async_obj = async_obj };
+                             .async_obj = async_obj,
+                             .forced_flags = forced_flags };
     sx_strcpy(amgr.name, sizeof(amgr.name), name);
     sx_strcpy(amgr.params_type_name, sizeof(amgr.params_type_name), params_type_name ? params_type_name : "");
     sx_strcpy(amgr.metadata_type_name, sizeof(amgr.metadata_type_name), metadata_type_name ? metadata_type_name : "");
@@ -1433,6 +1460,7 @@ rizz_api_asset the__asset = { .register_asset_type = rizz__register_asset_type,
                               .load = rizz__asset_load,
                               .load_from_mem = rizz__asset_load_from_mem,
                               .unload = rizz__asset_unload,
+                              .load_meta_cache = rizz__asset_load_meta_cache,
                               .state = rizz__asset_state,
                               .path = rizz__asset_path,
                               .type_name = rizz__asset_typename,

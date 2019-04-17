@@ -28,17 +28,17 @@ typedef struct rizz_camera_fps {
 
 typedef struct rizz_api_camera {
     void (*init)(rizz_camera* cam, float fov_deg, const sx_rect viewport, float fnear, float ffar);
-    void (*lookat)(rizz_camera* cam, const sx_vec3 pos, const sx_vec3 target);
+    void (*lookat)(rizz_camera* cam, const sx_vec3 pos, const sx_vec3 target, const sx_vec3 up);
     sx_mat4 (*ortho_mat)(const rizz_camera* cam);
     sx_mat4 (*perspective_mat)(const rizz_camera* cam);
-    sx_mat4 (*view_mat)(const rizz_camera* cam);
+    sx_mat4 (*view_mat)(const rizz_camera* cam, const sx_vec3 up);
     void (*calc_frustum_points)(const rizz_camera* cam, sx_vec3 frustum[8]);
     void (*calc_frustum_points_range)(const rizz_camera* cam, sx_vec3 frustum[8], float fnear,
                                       float ffar);
 
     void (*fps_init)(rizz_camera_fps* cam, float fov_deg, const sx_rect viewport, float fnear,
                      float ffar);
-    void (*fps_lookat)(rizz_camera_fps* cam, const sx_vec3 pos, const sx_vec3 target);
+    void (*fps_lookat)(rizz_camera_fps* cam, const sx_vec3 pos, const sx_vec3 target, const sx_vec3 up);
     void (*fps_pitch)(rizz_camera_fps* cam, float pitch);
     void (*fps_pitch_range)(rizz_camera_fps* cam, float pitch, float _min, float _max);
     void (*fps_yaw)(rizz_camera_fps* cam, float yaw);

@@ -97,7 +97,7 @@ static void rizz__app_init(void) {
     }
 
     // add and start game plugin
-    if (!rizz__plugin_load_abs(g_app.game_filepath, 0)) {
+    if (!rizz__plugin_load_abs(g_app.game_filepath, _RIZZ_PLUGIN_FLAG_ENTRY)) {
         rizz_log_error("loading game plugin failed: %s", g_app.game_filepath);
         exit(-1);
     }
@@ -244,13 +244,13 @@ sapp_desc sokol_main(int argc, char* argv[]) {
     sx_os_path_basename(default_name, sizeof(default_name), game_filepath);
     sx_os_path_splitext(ext, sizeof(ext), default_name, sizeof(default_name), default_name);
     sx_strcpy(default_title, sizeof(default_title), default_name);
-    
+
     // default cache path:
     //      - win/linux/osx: executable-dir/.cache
     sx_os_path_exepath(default_cache_path, sizeof(default_cache_path));
     sx_os_path_dirname(default_cache_path, sizeof(default_cache_path), default_cache_path);
     sx_os_path_join(default_cache_path, sizeof(default_cache_path), default_cache_path, ".cache");
-    
+
     // Create default config
     rizz_config conf = { .app_name = default_name,
                          .app_title = default_name,

@@ -33,7 +33,10 @@ This is not a game engine, it's a relatively low-level framework for programmers
 - *Draw call submission using multiple threads*: Draw calls can be queued within multiple threads for final submission
 - *Portable shaders*: Write shaders once in GLSL, toolset will translate the shader to other platform APIs.
 - *Multi-threaded GPU command-buffer*: Draw commands can be submitted by multiple threads.
-- *ImGui*: Dear-ImGui plugin is present for efficient and fast toolset UI development.
+
+### Plugins
+- [imgui](src/imgui): Dead-imgui plugin with some utility API
+- [sprite](src/sprite): 2D Sprite system
 
 #### Debugging and Profiling
 - *Remote Profiler*: Integrated *Remotery* for remote debugger/command console and log viewer.
@@ -88,6 +91,7 @@ how to get started.
 - [glslcc](https://github.com/septag/glslcc): GLSL cross-compiler
 - [dds-ktx](https://github.com/septag/dds-ktx): Single header KTX/DDS reader
 - [sjson](https://github.com/septag/sjson): Fast and portable single-header C file Json encoder/decoder
+- [atlasc](https://github.com/septag/atlasc): Command-line tool that builds atlas texture from a bunch of input images.
 
 #### 3rdparties
 - [sokol](https://github.com/floooh/sokol): minimal cross-platform standalone C headers
@@ -99,6 +103,7 @@ how to get started.
 - [http](https://github.com/mattiasgustavsson/libs/blob/master/http.h): Basic HTTP protocol implementation over sockets
 - [stb](https://github.com/nothings/stb): stb single-file public domain libraries for C/C++
 - [sort](https://github.com/swenson/sort): Sorting routine implementations in "template" C
+- [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo): 3D gizmo for imgui
 
 [TODO](TODO.md)
 ----

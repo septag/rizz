@@ -219,6 +219,14 @@ typedef struct {
     sx_color color;
 } rizz__debug_vertex;
 
+static rizz_vertex_layout k__debug_vertex = {
+    .attrs[0] = { .semantic = "POSITION", .offset = offsetof(rizz__debug_vertex, pos) },
+    .attrs[1] = { .semantic = "TEXCOORD", .offset = offsetof(rizz__debug_vertex, uv) },
+    .attrs[2] = { .semantic = "COLOR",
+                  .offset = offsetof(rizz__debug_vertex, color),
+                  .format = SG_VERTEXFORMAT_UBYTE4N },
+};
+
 typedef struct {
     sx_mat4 model;
     sx_mat4 vp;
@@ -859,7 +867,7 @@ static void rizz__texture_init() {
                                 .on_read_metadata = rizz__texture_on_read_metadata },
         "rizz_texture_load_params", sizeof(rizz_texture_load_params), "rizz_texture_info",
         sizeof(rizz_texture_info), (rizz_asset_obj){ .ptr = &g_gfx.tex_mgr.white_tex },
-        (rizz_asset_obj){ .ptr = &g_gfx.tex_mgr.white_tex });
+        (rizz_asset_obj){ .ptr = &g_gfx.tex_mgr.white_tex }, 0);
 }
 
 static void rizz__texture_release() {
@@ -1000,8 +1008,6 @@ static sg_vertex_format rizz__shader_str_to_vertex_format(const char* s, const c
         return SG_VERTEXFORMAT_FLOAT2;
     else if (sx_strequal(s, "float3"))
         return SG_VERTEXFORMAT_FLOAT3;
-    else if (sx_strequal(s, "float4") && sx_strequal(semantic, "COLOR"))
-        return SG_VERTEXFORMAT_UBYTE4N;
     else if (sx_strequal(s, "float4"))
         return SG_VERTEXFORMAT_FLOAT4;
     else if (sx_strequal(s, "byte4"))
@@ -1335,17 +1341,84 @@ static sg_shader_desc* rizz__shader_setup_desc(sg_shader_desc*         desc,
     return desc;
 }
 
-static sg_pipeline_desc* rizz__pipeline_setup_layout_desc(sg_pipeline_desc*             desc,
-                                                          const rizz_shader_refl_input* inputs,
-                                                          int num_inputs) {
-    for (int i = 0; i < num_inputs; i++) {
-        const rizz_shader_refl_input* in = &inputs[i];
-        desc->layout.attrs[i].name = in->name;
-        desc->layout.attrs[i].sem_name = in->semantic;
-        desc->layout.attrs[i].sem_index = in->semantic_index;
-        desc->layout.attrs[i].format = in->type;
+static rizz_shader rizz__shader_make_with_data(const sx_alloc* alloc, uint32_t vs_data_size,
+                                               const uint32_t* vs_data, uint32_t vs_refl_size,
+                                               const uint32_t* vs_refl_json, uint32_t fs_data_size,
+                                               const uint32_t* fs_data, uint32_t fs_refl_size,
+                                               const uint32_t* fs_refl_json) {
+    sjson_context* jctx = sjson_create_context(0, 0, (void*)alloc);
+    if (!jctx) {
+        return (rizz_shader){ 0 };
     }
+
+    sg_shader_desc    shader_desc = { 0 };
+    rizz_shader_refl* vs_refl =
+        rizz__shader_parse_reflect_json(alloc, (const char*)vs_refl_json, jctx);
+    sjson_reset_context(jctx);
+    rizz_shader_refl* fs_refl =
+        rizz__shader_parse_reflect_json(alloc, (const char*)fs_refl_json, jctx);
+    sjson_destroy_context(jctx);
+
+    rizz_shader s = { .shd = the__gfx.imm.make_shader(
+                          rizz__shader_setup_desc(&shader_desc, vs_refl, vs_data, (int)vs_data_size,
+                                                  fs_refl, fs_data, (int)fs_data_size)) };
+
+    s.info.num_inputs = sx_min(vs_refl->num_inputs, SG_MAX_VERTEX_ATTRIBUTES);
+    for (int i = 0; i < s.info.num_inputs; i++) {
+        s.info.inputs[i] = vs_refl->inputs[i];
+    }
+    rizz__shader_free_reflect(vs_refl, alloc);
+    rizz__shader_free_reflect(fs_refl, alloc);
+    return s;
+}
+
+static sg_pipeline_desc* rizz__shader_bindto_pipeline_sg(sg_shader                     shd,
+                                                         const rizz_shader_refl_input* inputs,
+                                                         int num_inputs, sg_pipeline_desc* desc,
+                                                         const rizz_vertex_layout* vl) {
+    sx_assert(vl);
+    desc->shader = shd;
+
+    // map offsets in the `vl` to shader inputs
+    int                     index = 0;
+    const rizz_vertex_attr* attr = &vl->attrs[index];
+
+    while (attr->semantic && index < num_inputs) {
+        bool found = false;
+        for (int i = 0; i < num_inputs; i++) {
+            if (sx_strequal(attr->semantic, inputs[i].semantic) &&
+                attr->semantic_idx == inputs[i].semantic_index) {
+                found = true;
+
+                desc->layout.attrs[index].name = inputs[i].name;
+                desc->layout.attrs[index].sem_name = inputs[i].semantic;
+                desc->layout.attrs[index].sem_index = inputs[i].semantic_index;
+                desc->layout.attrs[index].offset = attr->offset;
+                desc->layout.attrs[index].format =
+                    attr->format != SG_VERTEXFORMAT_INVALID ? attr->format : inputs[i].type;
+                desc->layout.attrs[index].buffer_index = attr->buffer_index;
+                break;
+            }
+        }
+
+        if (!found) {
+            rizz_log_error("vertex attribute '%s%d' does not exist in actual shader inputs",
+                           attr->semantic, attr->semantic_idx);
+            sx_assert(0);
+        }
+
+        ++attr;
+        ++index;
+    }
+
     return desc;
+}
+
+
+static sg_pipeline_desc* rizz__shader_bindto_pipeline(rizz_shader* shd, sg_pipeline_desc* desc,
+                                                      const rizz_vertex_layout* vl) {
+    return rizz__shader_bindto_pipeline_sg(shd->shd, shd->info.inputs, shd->info.num_inputs, desc,
+                                           vl);
 }
 
 static rizz_asset_load_data rizz__shader_on_prepare(const rizz_asset_load_params* params,
@@ -1539,6 +1612,7 @@ static void rizz__shader_on_read_metadata(void* metadata, const rizz_asset_load_
 }
 
 static void rizz__shader_init() {
+    // NOTE: shaders are always forced to load in blocking mode
     the__asset.register_asset_type(
         "shader",
         (rizz_asset_callbacks){ .on_prepare = rizz__shader_on_prepare,
@@ -1548,7 +1622,7 @@ static void rizz__shader_init() {
                                 .on_release = rizz__shader_on_release,
                                 .on_read_metadata = rizz__shader_on_read_metadata },
         NULL, 0, "rizz_shader_info", sizeof(rizz_shader_info), (rizz_asset_obj){ .ptr = NULL },
-        (rizz_asset_obj){ .ptr = NULL });
+        (rizz_asset_obj){ .ptr = NULL }, RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD);
     rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT);
     rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT2);
     rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT3);
@@ -2226,7 +2300,7 @@ static void rizz__font_init() {
                                 .on_release = rizz__font_on_release,
                                 .on_read_metadata = rizz__font_on_read_metadata },
         NULL, 0, "rizz__font_metadata", sizeof(rizz__font_metadata),
-        (rizz_asset_obj){ .ptr = NULL }, (rizz_asset_obj){ .ptr = NULL });
+        (rizz_asset_obj){ .ptr = NULL }, (rizz_asset_obj){ .ptr = NULL }, 0);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2474,32 +2548,24 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
             .usage = SG_USAGE_STREAM,
             .size = sizeof(rizz__debug_vertex) * RIZZ_CONFIG_MAX_DEBUG_INDICES });
 
-        rizz_shader_refl* vs_refl =
-            the__gfx.shader_parse_reflection(alloc, (const char*)k_debug_vs_refl_data, NULL);
-        rizz_shader_refl* fs_refl =
-            the__gfx.shader_parse_reflection(alloc, (const char*)k_debug_fs_refl_data, NULL);
-        sg_shader_desc shader_desc = { 0 };
-        g_gfx.dbg.shader = the__gfx.imm.make_shader(
-            the__gfx.shader_setup_desc(&shader_desc, vs_refl, k_debug_vs_data, k_debug_vs_size,
-                                       fs_refl, k_debug_fs_data, k_debug_fs_size));
+        const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
+        rizz_shader     shader = the__gfx.shader_make_with_data(
+            tmp_alloc, k_debug_vs_size, k_debug_vs_data, k_debug_vs_refl_size, k_debug_vs_refl_data,
+            k_debug_fs_size, k_debug_fs_data, k_debug_fs_refl_size, k_debug_fs_refl_data);
 
-        sg_pipeline_desc pip_desc_wire = {
-            .layout.buffers[0].stride = sizeof(rizz__debug_vertex),
-            .layout.attrs[0] = { .offset = offsetof(rizz__debug_vertex, pos) },
-            .layout.attrs[1] = { .offset = offsetof(rizz__debug_vertex, uv) },
-            .layout.attrs[2] = { .offset = offsetof(rizz__debug_vertex, color) },
-            .shader = g_gfx.dbg.shader,
-            .index_type = SG_INDEXTYPE_NONE,
-            .rasterizer = { .sample_count = 4 },
-            .primitive_type = SG_PRIMITIVETYPE_LINES,
-            .depth_stencil = { .depth_compare_func = SG_COMPAREFUNC_LESS_EQUAL }
-        };
-        the__gfx.pipeline_setup_layout_desc(&pip_desc_wire, vs_refl->inputs, vs_refl->num_inputs);
+        g_gfx.dbg.shader = shader.shd;
+
+        sg_pipeline_desc pip_desc_wire = { .layout.buffers[0].stride = sizeof(rizz__debug_vertex),
+                                           .shader = g_gfx.dbg.shader,
+                                           .index_type = SG_INDEXTYPE_NONE,
+                                           .rasterizer = { .sample_count = 4 },
+                                           .primitive_type = SG_PRIMITIVETYPE_LINES,
+                                           .depth_stencil = { .depth_compare_func =
+                                                                  SG_COMPAREFUNC_LESS_EQUAL } };
+        the__gfx.shader_bindto_pipeline(&shader, &pip_desc_wire, &k__debug_vertex);
 
         g_gfx.dbg.pip_wire = the__gfx.imm.make_pipeline(&pip_desc_wire);
-
-        the__gfx.shader_free_reflection(vs_refl, alloc);
-        the__gfx.shader_free_reflection(fs_refl, alloc);
+        the__core.tmp_alloc_pop();
     }
 
     return true;
@@ -2989,7 +3055,7 @@ static int rizz__cb_append_buffer(sg_buffer buf, const void* data_ptr, int data_
 
     int      offset;
     uint8_t* buff =
-        rizz__cb_alloc_params_buff(cb, data_size + sizeof(int) * 2 + sizeof(sg_buffer), &offset);
+        rizz__cb_alloc_params_buff(cb, data_size + sizeof(int) * 3 + sizeof(sg_buffer), &offset);
     sx_assert(buff);
 
     rizz__gfx_cmdbuffer_ref ref = { .key =
@@ -3710,7 +3776,9 @@ rizz_api_gfx the__gfx = {
     .shader_parse_reflection    = rizz__shader_parse_reflect_json,
     .shader_free_reflection     = rizz__shader_free_reflect,
     .shader_setup_desc          = rizz__shader_setup_desc,
-    .pipeline_setup_layout_desc = rizz__pipeline_setup_layout_desc,
+    .shader_make_with_data      = rizz__shader_make_with_data,
+    .shader_bindto_pipeline     = rizz__shader_bindto_pipeline,
+    .shader_bindto_pipeline_sg  = rizz__shader_bindto_pipeline_sg,
     .texture_white              = rizz__texture_white,
     .texture_black              = rizz__texture_black,
     .texture_checker            = rizz__texture_checker,

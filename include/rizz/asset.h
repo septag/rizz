@@ -2,25 +2,28 @@
 // Copyright 2019 Sepehr Taghdisian (septag@github). All rights reserved.
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
+// clang-format off
 // Threading rules:
 //      Internally, the asset system is offloading some work to worker threads, but the API is not
-//      thread-safe 1) Have to load all your assets on the main thread 2) You can only use
-//      `rizz_api_asset.obj_threadsafe()` in worker threads
-//         So you have to load the assets, and pass them to workers, and they can only fetch the
-//         object pointer
-//      3) Loading can be performed in the main thread while working threads are using the API (rule
-//      #2). And without RIZZ_ASSET_LOAD_FLAG_RELOAD flag 4) Unloading can NOT be performed while
-//      working threads are using the API 5) Never use asset objects across multiple frames in
-//      worker-threads, because they may be invalidated
+//      thread-safe 
+//          1) Have to load all your assets on the main thread 
+//          2) You can only use `rizz_api_asset.obj_threadsafe()` in worker threads.
+//              So basically, you have to load the assets, and pass handles to threads, 
+//              and they can only fetch the object pointer
+//          3) Loading can be performed in the main thread while working threads are using the API 
+//             (rule #2) but without RIZZ_ASSET_LOAD_FLAG_RELOAD flag 
+//          4) Unloading can NOT be performed while working threads are using the API 
+//          5) Never use asset objects across multiple frames inside worker-threads, 
+//             because they may be invalidated
 //
 // So basically the multi-threading usage pattern is:
-//      - Always Load your stuff in main update (main thread) before running tasks that use those
-//      assets
+//      - Always Load your stuff in main update (main-thread) before running tasks that use those
+//        assets
 //      - in game-update function: spawn jobs and use `rizz_api_asset.obj_threadsafe()` to access
-//      asset objects
-//      - always wait/end these kind of tasks before game-update functions ends
+//        asset objects
+//      - always wait/end these tasks before game-update functions ends
 //      - unload assets only when the scene is not updated or no game-update tasks is running
-//
+// clang-format on
 #pragma once
 
 #include "sx/io.h"
@@ -96,7 +99,8 @@ typedef struct rizz_api_asset {
     void (*register_asset_type)(const char* name, rizz_asset_callbacks callbacks,
                                 const char* params_type_name, int params_size,
                                 const char* metadata_type_name, int metadata_size,
-                                rizz_asset_obj failed_obj, rizz_asset_obj async_obj);
+                                rizz_asset_obj failed_obj, rizz_asset_obj async_obj,
+                                rizz_asset_load_flags forced_flags);
     void (*unregister_asset_type)(const char* name);
 
     rizz_asset (*load)(const char* name, const char* path, const void* params,
@@ -105,6 +109,8 @@ typedef struct rizz_api_asset {
                                 const void* params, rizz_asset_load_flags flags,
                                 const sx_alloc* alloc, uint32_t tags);
     void (*unload)(rizz_asset handle);
+
+    bool (*load_meta_cache)();
 
     rizz_asset_state (*state)(rizz_asset handle);
     const char* (*path)(rizz_asset handle);
@@ -135,8 +141,7 @@ typedef struct rizz_api_asset {
 
 #ifdef RIZZ_INTERNAL_API
 bool rizz__asset_init(const sx_alloc* alloc, const char* dbfile, const char* variation);
-bool rizz__asset_load_db();
-bool rizz__asset_save_db();
+bool rizz__asset_save_meta_cache();
 bool rizz__asset_dump_unused(const char* filepath);
 void rizz__asset_release();
 void rizz__asset_update();

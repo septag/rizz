@@ -742,6 +742,7 @@ bool rizz__core_init(const rizz_config* conf) {
     }
 
     // asset system
+    // TODO: set asset-db from assets directory instead of cache directory on mobile
     if (!rizz__asset_init(rizz__alloc(RIZZ_MEMID_CORE), "/cache/asset-db.json", "")) {
         rizz_log_error("initializing asset system failed");
         return false;
@@ -863,7 +864,6 @@ bool rizz__core_init(const rizz_config* conf) {
     the__vfs.mount(conf->cache_path, "/cache");
     if (!the__vfs.is_dir(conf->cache_path))
         the__vfs.mkdir(conf->cache_path);
-    rizz__asset_load_db();
     return true;
 }
 
@@ -905,7 +905,7 @@ void rizz__core_release() {
     }
     sx_free(alloc, g_core.gfx_cmdbuffers);
 
-    rizz__asset_save_db();
+    rizz__asset_save_meta_cache();
     if (g_core.flags & RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS)
         rizz__asset_dump_unused("unused-assets.json");
 

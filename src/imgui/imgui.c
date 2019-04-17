@@ -41,7 +41,7 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 #define MAX_INDICES 98304    // 96k
 
 typedef struct rizz_api_gfx rizz_api_gfx;
-static void                imgui__render(void);
+static void                 imgui__render(void);
 
 static rizz_api_core*   the_core;
 static rizz_api_plugin* the_plugin;
@@ -580,6 +580,14 @@ typedef struct imgui__shader_uniforms {
     float   padd[2];
 } imgui__shader_uniforms;
 
+static rizz_vertex_layout k__imgui_vertex = {
+    .attrs[0] = { .semantic = "POSITION", .offset = offsetof(ImDrawVert, pos) },
+    .attrs[1] = { .semantic = "TEXCOORD", .offset = offsetof(ImDrawVert, uv) },
+    .attrs[2] = { .semantic = "COLOR",
+                  .offset = offsetof(ImDrawVert, col),
+                  .format = SG_VERTEXFORMAT_UBYTE4N }
+};
+
 static imgui__context g_imgui;
 
 static void* imgui__malloc(size_t sz, void* user_data) {
@@ -675,30 +683,13 @@ static bool imgui__setup() {
 
     conf->Fonts->TexID = (ImTextureID)(uintptr_t)g_imgui.font_tex.id;
 
-    const sx_alloc*  tmp_alloc = the_core->tmp_alloc_push();
-    rizz_shader_refl* vs_refl =
-        the_gfx->shader_parse_reflection(tmp_alloc, (const char*)k_imgui_vs_refl_data, NULL);
-    rizz_shader_refl* fs_refl =
-        the_gfx->shader_parse_reflection(tmp_alloc, (const char*)k_imgui_fs_refl_data, NULL);
-
-    sg_shader_desc shader_desc = { 0 };
-    g_imgui.shader = the_gfx->imm.make_shader(
-        the_gfx->shader_setup_desc(&shader_desc, vs_refl, k_imgui_vs_data, k_imgui_vs_size, fs_refl,
-                                   k_imgui_fs_data, k_imgui_fs_size));
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_shader     shader = the_gfx->shader_make_with_data(
+        tmp_alloc, k_imgui_vs_size, k_imgui_vs_data, k_imgui_vs_refl_size, k_imgui_vs_refl_data,
+        k_imgui_fs_size, k_imgui_fs_data, k_imgui_fs_refl_size, k_imgui_fs_refl_data);
+    g_imgui.shader = shader.shd;
 
     sg_pipeline_desc pip_desc = { .layout.buffers[0].stride = sizeof(ImDrawVert),
-                                  .layout.attrs[0] =
-                                      {
-                                          .offset = offsetof(ImDrawVert, pos),
-                                      },
-                                  .layout.attrs[1] =
-                                      {
-                                          .offset = offsetof(ImDrawVert, uv),
-                                      },
-                                  .layout.attrs[2] =
-                                      {
-                                          .offset = offsetof(ImDrawVert, col),
-                                      },
                                   .shader = g_imgui.shader,
                                   .index_type = SG_INDEXTYPE_UINT16,
                                   .rasterizer = { .sample_count = 4 },
@@ -707,14 +698,12 @@ static bool imgui__setup() {
                                              .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
                                              .color_write_mask = SG_COLORMASK_RGB } };
     g_imgui.pip = the_gfx->imm.make_pipeline(
-        the_gfx->pipeline_setup_layout_desc(&pip_desc, vs_refl->inputs, vs_refl->num_inputs));
+        the_gfx->shader_bindto_pipeline(&shader, &pip_desc, &k__imgui_vertex));
 
     g_imgui.pass_action = (sg_pass_action){ .colors[0] = { .action = SG_ACTION_DONTCARE },
                                             .depth = { .action = SG_ACTION_DONTCARE },
                                             .stencil = { .action = SG_ACTION_DONTCARE } };
 
-    the_gfx->shader_free_reflection(vs_refl, tmp_alloc);
-    the_gfx->shader_free_reflection(fs_refl, tmp_alloc);
     the_core->tmp_alloc_pop();
 
     return true;
@@ -1141,6 +1130,7 @@ static void imgui__dual_progress_bar(float fraction1, float fraction2, const sx_
 }
 
 static void imgui__graphics_debugger(const rizz_gfx_trace_info* info, bool* p_open) {
+    sx_assert(info);
     the__imgui.SetNextWindowSizeConstraints(sx_vec2f(400.0f, 300.0f), sx_vec2f(FLT_MAX, FLT_MAX),
                                             NULL, NULL);
     if (the__imgui.Begin("Graphics Debugger", p_open, 0)) {
@@ -1277,10 +1267,10 @@ static void imgui__memory_debugger(const rizz_mem_info* info, bool* p_open) {
             }
 
             if (selected_heap != -1) {
-                char                       text[32];
+                char                        text[32];
                 const rizz_trackalloc_info* t = &info->trackers[selected_heap];
-                ImGuiListClipper           clipper;
-                int                        num_items = t->num_items;
+                ImGuiListClipper            clipper;
+                int                         num_items = t->num_items;
 
                 if (num_items) {
                     the__imgui.Separator();

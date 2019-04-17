@@ -3,8 +3,8 @@
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
 
-#include "config.h"
 #include "rizz/plugin.h"
+#include "config.h"
 #include "rizz/core.h"
 
 #include "sx/allocator.h"
@@ -54,12 +54,13 @@ struct rizz__plugin_injected_api {
 };
 
 struct rizz__plugin_item {
-    cr_plugin        p;
-    rizz_plugin_info info;
-    int              order;
-    char             filename[32];
-    float            update_tm;
-    bool             manual_reload;
+    cr_plugin         p;
+    rizz_plugin_info  info;
+    int               order;
+    rizz_plugin_flags flags;
+    char              filename[32];
+    float             update_tm;
+    bool              manual_reload;
 };
 
 struct rizz__plugin_mgr {
@@ -68,9 +69,10 @@ struct rizz__plugin_mgr {
     int*                       plugin_update_order = nullptr;    // indices to 'plugins' for updates
     char                       plugin_path[256] = { 0 };
     rizz__plugin_injected_api* injected = nullptr;
+    uint32_t                   entry_plugin_id;
 };
 
-static rizz__plugin_mgr g_plugin{};
+static rizz__plugin_mgr g_plugin;
 
 #define SORT_NAME rizz__plugin
 #define SORT_TYPE int
@@ -129,14 +131,30 @@ void rizz__plugin_release() {
         return;
 
     if (g_plugin.plugins) {
+        // release entry (game) plugin first
+        if (g_plugin.entry_plugin_id) {
+            int index = rizz_to_index(g_plugin.entry_plugin_id);
 #ifndef RIZZ_BUNDLE
-        for (int i = 0; i < sx_array_count(g_plugin.plugins); i++)
-            cr_plugin_close(g_plugin.plugins[i].p);
+            cr_plugin_close(g_plugin.plugins[index].p);
+#else
+            sx_assert(g_plugin.plugins[index].info.main_cb);
+            g_plugin.plugins[index].info.main_cb((rizz_plugin*)&g_plugin.plugins[index].p,
+                                                 RIZZ_PLUGIN_EVENT_SHUTDOWN);
+#endif
+        }
+
+#ifndef RIZZ_BUNDLE
+        for (int i = 0; i < sx_array_count(g_plugin.plugins); i++) {
+            if (!(g_plugin.plugins[i].flags & _RIZZ_PLUGIN_FLAG_ENTRY))
+                cr_plugin_close(g_plugin.plugins[i].p);
+        }
 #else
         for (int i = 0; i < sx_array_count(g_plugin.plugins); i++) {
-            sx_assert(g_plugin.plugins[i].info.main_cb);
-            g_plugin.plugins[i].info.main_cb((rizz_plugin*)&g_plugin.plugins[i].p,
-                                             RIZZ_PLUGIN_EVENT_SHUTDOWN);
+            if (!(g_plugin.plugins[i].flags & _RIZZ_PLUGIN_FLAG_ENTRY)) {
+                sx_assert(g_plugin.plugins[i].info.main_cb);
+                g_plugin.plugins[i].info.main_cb((rizz_plugin*)&g_plugin.plugins[i].p,
+                                                RIZZ_PLUGIN_EVENT_SHUTDOWN);
+            }
         }
 #endif
         sx_array_free(g_plugin.alloc, g_plugin.plugins);
@@ -175,6 +193,11 @@ static bool rizz__plugin_load(const char* plugin_name, rizz_plugin_flags plugin_
 
     if (plugin_id != -1) {
         rizz__plugin_item* item = &g_plugin.plugins[plugin_id];
+        item->flags = plugin_flags;
+        if (plugin_flags & _RIZZ_PLUGIN_FLAG_ENTRY) {
+            sx_assert(!g_plugin.entry_plugin_id && "entry plugin already loaded");
+            g_plugin.entry_plugin_id = rizz_to_id(plugin_id);
+        }
 
         // load the plugin
         int r;
@@ -206,7 +229,7 @@ bool rizz__plugin_load_abs(const char* filepath, rizz_plugin_flags plugin_flags)
     sx_unused(plugin_flags);
     sx_assert(sx_strstr(filepath, GAME_PLUGIN_NAME) &&
               "only game plugin should be loaded by 'load_abs' in BUNDLE build");
-    return rizz__plugin_load(GAME_PLUGIN_NAME, 0);
+    return rizz__plugin_load(GAME_PLUGIN_NAME, _RIZZ_PLUGIN_FLAG_ENTRY);
 }
 
 static void rizz__plugin_unload(const char* plugin_name) {
@@ -275,6 +298,7 @@ bool rizz__plugin_load_abs(const char* filepath, rizz_plugin_flags plugin_flags)
     rizz__plugin_item item;
     sx_memset(&item, 0x0, sizeof(item));
     item.p.userdata = &the__plugin;
+    item.flags = plugin_flags;
 
     char plugin_file[128];
     sx_os_path_basename(plugin_file, sizeof(plugin_file), filepath);
@@ -309,10 +333,15 @@ bool rizz__plugin_load_abs(const char* filepath, rizz_plugin_flags plugin_flags)
     rizz__plugin_binary_insertion_sort(g_plugin.plugin_update_order,
                                        sx_array_count(g_plugin.plugin_update_order));
 
-    int version = item.info.version;
-    rizz_log_info("(init) plugin: %s (%s) - %s - v%d.%d.%d", item.info.name, item.filename,
-                  item.info.desc, rizz_version_major(version), rizz_version_minor(version),
-                  rizz_version_bugfix(version));
+    if (plugin_flags & _RIZZ_PLUGIN_FLAG_ENTRY) {
+        sx_assert(!g_plugin.entry_plugin_id && "entry plugin already loaded");
+        g_plugin.entry_plugin_id = sx_array_count(g_plugin.plugins);
+    } else {
+        int version = item.info.version;
+        rizz_log_info("(init) plugin: %s (%s) - %s - v%d.%d.%d", item.info.name, item.filename,
+                    item.info.desc, rizz_version_major(version), rizz_version_minor(version),
+                    rizz_version_bugfix(version));
+    }
     return true;
 }
 

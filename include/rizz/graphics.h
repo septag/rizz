@@ -11,6 +11,11 @@
 #define _rizz_concat_path_3(s1, s2, s3) sx_stringize(s1/s2/s3)
 #define _rizz_shader_path_lang(_basepath, _lang, _filename) \
     _rizz_concat_path_3(_basepath, _lang, _filename)
+
+// HELP: this macro can be used as a helper in including cross-platform shaders from source
+//       appends _api_ (hlsl/glsl/gles/msl) between `_basepath` and `_filename`
+//       only use this in including header shaders. example:
+//       #include rizz_shader_path(shaders/include, myshader.h)
 #define rizz_shader_path(_basepath, _filename) \
     _rizz_shader_path_lang(_basepath, RIZZ_GRAPHICS_SHADER_LANG, _filename)
 // clang-format on
@@ -89,6 +94,18 @@ typedef struct rizz_shader_info {
     rizz_shader_refl_input inputs[SG_MAX_VERTEX_ATTRIBUTES];
     int                    num_inputs;
 } rizz_shader_info;
+
+typedef struct rizz_vertex_attr {
+    const char*      semantic;
+    int              semantic_idx;
+    int              offset;
+    sg_vertex_format format;
+    int              buffer_index;
+} rizz_vertex_attr;
+
+typedef struct rizz_vertex_layout {
+    rizz_vertex_attr attrs[SG_MAX_VERTEX_ATTRIBUTES];
+} rizz_vertex_layout;
 
 typedef struct rizz_shader {
     sg_shader        shd;
@@ -383,10 +400,17 @@ typedef struct rizz_api_gfx {
                                          const void* vs, int vs_size,
                                          const rizz_shader_refl* fs_refl, const void* fs,
                                          int fs_size);
-    sg_pipeline_desc* (*pipeline_setup_layout_desc)(sg_pipeline_desc*             desc,
-                                                    const rizz_shader_refl_input* inputs,
-                                                    int                           num_inputs);
-
+    rizz_shader (*shader_make_with_data)(const sx_alloc* alloc, uint32_t vs_data_size,
+                                         const uint32_t* vs_data, uint32_t vs_refl_size,
+                                         const uint32_t* vs_refl_json, uint32_t fs_data_size,
+                                         const uint32_t* fs_data, uint32_t fs_refl_size,
+                                         const uint32_t* fs_refl_json);
+    sg_pipeline_desc* (*shader_bindto_pipeline)(rizz_shader* shd, sg_pipeline_desc* pip_desc,
+                                                const rizz_vertex_layout* vl);
+    sg_pipeline_desc* (*shader_bindto_pipeline_sg)(sg_shader                     shd,
+                                                   const rizz_shader_refl_input* inputs,
+                                                   int num_inputs, sg_pipeline_desc* pip_desc,
+                                                   const rizz_vertex_layout* vl);
     // texture
     sg_image (*texture_white)();
     sg_image (*texture_black)();
@@ -398,6 +422,12 @@ typedef struct rizz_api_gfx {
                                const sx_vec3 frustum[8]);
     void (*debug_grid_xyplane)(float spacing, float spacing_bold, const sx_mat4* vp,
                                const sx_vec3 frustum[8]);
+    void (*debug_frames)(const sx_rect* rects, int num_rects, const sx_color* colors,
+                         const sx_mat4* vp);
+    void (*debug_rects)(const sx_rect* rects, int num_rects, const sx_color* colors,
+                        const sx_mat4* vp);
+    void (*debug_points)(const sx_vec2* points, int num_pts, const sx_color* colors,
+                         const float* sizes, const sx_mat4* vp);
 
     // info
     const rizz_gfx_trace_info* (*trace_info)();

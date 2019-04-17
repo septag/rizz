@@ -141,15 +141,23 @@ function(glslcc__target_compile_shaders target_name file_type source_files)
         # determine the file from the extension
         get_filename_component(file_ext ${source_file} EXT)
         get_filename_component(file_name ${source_file} NAME_WE)
-        if (NOT ${output_filename})
+        if (${output_filename} STREQUAL "NOTFOUND")
             if (NOT file_type)
                 set(output_filename "${file_name}${file_ext}.${shader_lang}")
             else()
                 set(output_filename "${file_name}${file_ext}.${file_type}")
             endif()
+        else()
+            set(file_name "${output_filename}")
+            if (NOT file_type)
+                set(output_filename "${output_filename}${file_ext}.${shader_lang}")
+            else()
+                set(output_filename "${output_filename}${file_ext}.${file_type}")
+            endif()  
         endif()
 
         set(output_filepath "${output_dir}/${output_filename}")
+        
 
         # make the final args
         set(args)

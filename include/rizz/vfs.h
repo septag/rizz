@@ -37,6 +37,7 @@ typedef struct rizz_api_vfs {
     bool (*mkdir)(const char* path);
     bool (*is_dir)(const char* path);
     bool (*is_file)(const char* path);
+    uint64_t (*last_modified)(const char* path);
 } rizz_api_vfs;
 
 #ifdef RIZZ_INTERNAL_API

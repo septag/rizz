@@ -458,20 +458,34 @@ static rizz_vfs_async_callbacks rizz__vfs_set_async_callbacks(const rizz_vfs_asy
 
 static bool rizz__vfs_mkdir(const char* path) {
     char resolved_path[RIZZ_MAX_PATH];
-    rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, 0);
-    return sx_os_mkdir(resolved_path);
+    if (rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, 0))
+        return sx_os_mkdir(resolved_path);
+    else
+        return false;
 }
 
 static bool rizz__vfs_is_dir(const char* path) {
     char resolved_path[RIZZ_MAX_PATH];
-    rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, 0);
-    return sx_os_path_isdir(resolved_path);
+    if (rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, 0))
+        return sx_os_path_isdir(resolved_path);
+    else
+        return false;
 }
 
 static bool rizz__vfs_is_file(const char* path) {
     char resolved_path[RIZZ_MAX_PATH];
-    rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, 0);
-    return sx_os_path_isfile(resolved_path);
+    if (rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, 0)) 
+        return sx_os_path_isfile(resolved_path);
+    else
+        return false;
+}
+
+static uint64_t rizz__vfs_last_modified(const char* path) {
+    char resolved_path[RIZZ_MAX_PATH];
+    if (rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, 0))
+        return sx_os_stat(resolved_path).last_modified;
+    else
+        return 0;
 }
 
 #if RIZZ_CONFIG_HOT_LOADING
@@ -492,12 +506,17 @@ static void efsw__fileaction_cb(efsw_watcher watcher, efsw_watchid watchid, cons
             for (int i = 0, c = sx_array_count(g_vfs.mounts); i < c; i++) {
                 const rizz__vfs_mount_point* mp = &g_vfs.mounts[i];
                 if (sx_strstr(r.path, mp->efsw_root_dir) == r.path) {
-                    sx_os_path_relpath(r.path, sizeof(r.path), r.path, mp->efsw_root_dir);
+                    char relpath[RIZZ_MAX_PATH];
+                    sx_os_path_relpath(relpath, sizeof(relpath), r.path, mp->efsw_root_dir);
+                    sx_os_path_join(r.path, sizeof(r.path), mp->alias, relpath);
+                    if (SX_PLATFORM_WINDOWS)
+                        sx_os_path_unixpath(r.path, sizeof(r.path), r.path);
                     break;
                 }
             }
 
-            sx_queue_spsc_produce_and_grow(g_vfs.efsw_queue, &r, g_vfs.alloc);
+            if (r.path[0])
+                sx_queue_spsc_produce_and_grow(g_vfs.efsw_queue, &r, g_vfs.alloc);
         }
         break;
     }
@@ -519,4 +538,5 @@ rizz_api_vfs the__vfs = { .set_async_callbacks = rizz__vfs_set_async_callbacks,
                           .write = rizz__vfs_write,
                           .mkdir = rizz__vfs_mkdir,
                           .is_dir = rizz__vfs_is_dir,
-                          .is_file = rizz__vfs_is_file };
+                          .is_file = rizz__vfs_is_file,
+                          .last_modified = rizz__vfs_last_modified };

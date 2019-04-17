@@ -3,12 +3,12 @@
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
 
-#include "config.h"
 #include "rizz/camera.h"
+#include "config.h"
 #include "rizz/graphics.h"
 
 static void rizz__cam_init(rizz_camera* cam, float fov_deg, const sx_rect viewport, float fnear,
-                          float ffar) {
+                           float ffar) {
     cam->right = SX_VEC3_UNITX;
     cam->up = SX_VEC3_UNITZ;
     cam->forward = SX_VEC3_UNITY;
@@ -21,9 +21,10 @@ static void rizz__cam_init(rizz_camera* cam, float fov_deg, const sx_rect viewpo
     cam->viewport = viewport;
 }
 
-static void rizz__cam_lookat(rizz_camera* cam, const sx_vec3 pos, const sx_vec3 target) {
+static void rizz__cam_lookat(rizz_camera* cam, const sx_vec3 pos, const sx_vec3 target,
+                             const sx_vec3 up) {
     cam->forward = sx_vec3_norm(sx_vec3_sub(target, pos));
-    cam->right = sx_vec3_norm(sx_vec3_cross(cam->forward, SX_VEC3_UNITZ));
+    cam->right = sx_vec3_norm(sx_vec3_cross(cam->forward, up));
     cam->up = sx_vec3_cross(cam->forward, cam->right);
     cam->pos = pos;
 
@@ -46,18 +47,21 @@ static sx_mat4 rizz__cam_ortho_mat(const rizz_camera* cam) {
                          the__gfx.imm.gl_family());
 }
 
-static sx_mat4 rizz__cam_view_mat(const rizz_camera* cam) {
+static sx_mat4 rizz__cam_view_mat(const rizz_camera* cam, const sx_vec3 up) {
     sx_vec3 zaxis = cam->forward;
-    sx_vec3 xaxis = sx_vec3_norm(sx_vec3_cross(zaxis, SX_VEC3_UNITZ));
+    sx_vec3 xaxis = sx_vec3_norm(sx_vec3_cross(zaxis, up));
     sx_vec3 yaxis = sx_vec3_cross(xaxis, zaxis);
-    return sx_mat4f(xaxis.x, xaxis.y, xaxis.z, -sx_vec3_dot(xaxis, cam->pos),
-                    yaxis.x, yaxis.y, yaxis.z, -sx_vec3_dot(yaxis, cam->pos),
-                    -zaxis.x, -zaxis.y, -zaxis.z, sx_vec3_dot(zaxis, cam->pos),
+
+    // clang-format off
+    return sx_mat4f(xaxis.x, xaxis.y, xaxis.z, -sx_vec3_dot(xaxis, cam->pos), 
+                    yaxis.x, yaxis.y, yaxis.z, -sx_vec3_dot(yaxis, cam->pos), 
+                    -zaxis.x, -zaxis.y, -zaxis.z, sx_vec3_dot(zaxis, cam->pos), 
                     0.0f, 0.0f, 0.0f, 1.0f);
+    // clang-format on
 }
 
 static void rizz__calc_frustum_points_range(const rizz_camera* cam, sx_vec3 frustum[8], float fnear,
-                                           float ffar) {
+                                            float ffar) {
     const float fov = sx_torad(cam->fov);
     const float w = cam->viewport.xmax - cam->viewport.xmin;
     const float h = cam->viewport.ymax - cam->viewport.ymin;
@@ -102,13 +106,14 @@ static void rizz__calc_frustum_points(const rizz_camera* cam, sx_vec3 frustum[8]
 
 
 static void rizz__cam_fps_init(rizz_camera_fps* cam, float fov_deg, const sx_rect viewport,
-                              float fnear, float ffar) {
+                               float fnear, float ffar) {
     rizz__cam_init(&cam->cam, fov_deg, viewport, fnear, ffar);
     cam->pitch = cam->yaw = 0;
 }
 
-static void rizz__cam_fps_lookat(rizz_camera_fps* cam, const sx_vec3 pos, const sx_vec3 target) {
-    rizz__cam_lookat(&cam->cam, pos, target);
+static void rizz__cam_fps_lookat(rizz_camera_fps* cam, const sx_vec3 pos, const sx_vec3 target,
+                                 const sx_vec3 up) {
+    rizz__cam_lookat(&cam->cam, pos, target, up);
 
     sx_vec3 euler = sx_quat_toeuler(cam->cam.quat);
     cam->pitch = euler.x;
@@ -152,16 +157,16 @@ static void rizz__cam_fps_strafe(rizz_camera_fps* fps, float strafe) {
 }
 
 rizz_api_camera the__camera = { .init = rizz__cam_init,
-                               .lookat = rizz__cam_lookat,
-                               .perspective_mat = rizz__cam_perspective_mat,
-                               .ortho_mat = rizz__cam_ortho_mat,
-                               .view_mat = rizz__cam_view_mat,
-                               .calc_frustum_points = rizz__calc_frustum_points,
-                               .calc_frustum_points_range = rizz__calc_frustum_points_range,
-                               .fps_init = rizz__cam_fps_init,
-                               .fps_lookat = rizz__cam_fps_lookat,
-                               .fps_pitch = rizz__cam_fps_pitch,
-                               .fps_pitch_range = rizz__cam_fps_pitch_range,
-                               .fps_yaw = rizz__cam_fps_yaw,
-                               .fps_forward = rizz__cam_fps_forward,
-                               .fps_strafe = rizz__cam_fps_strafe };
+                                .lookat = rizz__cam_lookat,
+                                .perspective_mat = rizz__cam_perspective_mat,
+                                .ortho_mat = rizz__cam_ortho_mat,
+                                .view_mat = rizz__cam_view_mat,
+                                .calc_frustum_points = rizz__calc_frustum_points,
+                                .calc_frustum_points_range = rizz__calc_frustum_points_range,
+                                .fps_init = rizz__cam_fps_init,
+                                .fps_lookat = rizz__cam_fps_lookat,
+                                .fps_pitch = rizz__cam_fps_pitch,
+                                .fps_pitch_range = rizz__cam_fps_pitch_range,
+                                .fps_yaw = rizz__cam_fps_yaw,
+                                .fps_forward = rizz__cam_fps_forward,
+                                .fps_strafe = rizz__cam_fps_strafe };

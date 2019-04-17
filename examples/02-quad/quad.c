@@ -16,6 +16,8 @@
 #include "imgui/imgui-extra.h"
 #include "imgui/imgui.h"
 
+#include "../common.h"
+
 RIZZ_STATE static rizz_api_core*        the_core;
 RIZZ_STATE static rizz_api_gfx*         the_gfx;
 RIZZ_STATE static rizz_api_app*         the_app;
@@ -40,13 +42,17 @@ typedef struct {
     rizz_camera_fps cam;
 } quad_state;
 
-RIZZ_STATE quad_state g_quad;
+RIZZ_STATE static quad_state g_quad;
 
 static bool init() {
     // mount `/asset` directory
     char asset_dir[RIZZ_MAX_PATH];
     sx_os_path_join(asset_dir, sizeof(asset_dir), EXAMPLES_ROOT, "assets");    // "/examples/assets"
     the_vfs->mount(asset_dir, "/assets");
+
+    // load assets metadata cache to speedup asset loading
+    // always do this after you have mounted all virtual directories
+    the_asset->load_meta_cache();
 
     // register main graphics stage.
     // at least one stage should be registered if you want to draw anything
@@ -57,12 +63,18 @@ static bool init() {
     //      pos: float[3]
     //      uv: float[2]
     // clang-format off
-    float vertices[] = { 
+    static float vertices[] = { 
         -1.0f, 0.0f, -1.0f,      0.0f, 1.0f, 
          1.0f, 0.0f, -1.0f,      1.0f, 1.0f,
          1.0f, 0.0f,  1.0f,      1.0f, 0.0f, 
         -1.0f, 0.0f,  1.0f,      0.0f, 0.0f };
     // clang-format on
+
+    static rizz_vertex_layout k_vertex_layout = {
+        .attrs[0] = { .semantic = "POSITION" },
+        .attrs[1] = { .semantic = "TEXCOORD", .offset = 12 },
+    };
+
 
     uint16_t indices[] = { 0, 2, 1, 3, 0, 2 };
 
@@ -80,10 +92,10 @@ static bool init() {
     // shader
     // this shader is built with `glslcc` that reside in `/tools` directory.
     // see `glslcc --help` for details
-    g_quad.shader = the_asset->load("shader", rizz_shader_path(/assets/shaders, quad.sgs), NULL,
-                                    RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD, NULL, 0);
-
-    rizz_shader_info* shader_info = &((rizz_shader*)the_asset->obj(g_quad.shader).ptr)->info;
+    char shader_path[RIZZ_MAX_PATH];
+    g_quad.shader = the_asset->load(
+        "shader", ex_shader_path(shader_path, sizeof(shader_path), "/assets/shaders", "quad.sgs"),
+        NULL, 0, NULL, 0);
 
     // pipeline
     sg_pipeline_desc pip_desc = {
@@ -92,8 +104,8 @@ static bool init() {
         .index_type = SG_INDEXTYPE_UINT16,
         .rasterizer = { .cull_mode = SG_CULLMODE_NONE, .sample_count = 4 }
     };
-    the_gfx->pipeline_setup_layout_desc(&pip_desc, shader_info->inputs, shader_info->num_inputs);
-    g_quad.pip = the_gfx->imm.make_pipeline(&pip_desc);
+    g_quad.pip = the_gfx->imm.make_pipeline(the_gfx->shader_bindto_pipeline(
+        the_asset->obj(g_quad.shader).ptr, &pip_desc, &k_vertex_layout));
 
     // bindings
     g_quad.bindings =
@@ -111,7 +123,7 @@ static bool init() {
     the_camera->fps_init(&g_quad.cam, 50.0f,
                          sx_rectwh(-view_width, -view_height, view_width, view_height), 0.1f,
                          100.0f);
-    the_camera->fps_lookat(&g_quad.cam, sx_vec3f(0, -4.0f, 0.0), SX_VEC3_ZERO);
+    the_camera->fps_lookat(&g_quad.cam, sx_vec3f(0, -4.0f, 0.0), SX_VEC3_ZERO, SX_VEC3_UNITZ);
 
     return true;
 }
@@ -143,7 +155,7 @@ static void render() {
     {
         // sx_mat4 proj = the_camera->perspective_mat(&g_quad.cam.cam);
         sx_mat4 proj = the_camera->ortho_mat(&g_quad.cam.cam);
-        sx_mat4 view = the_camera->view_mat(&g_quad.cam.cam);
+        sx_mat4 view = the_camera->view_mat(&g_quad.cam.cam, SX_VEC3_UNITZ);
 
         quad_matrices mats = { .mvp = sx_mat4_mul(&proj, &view) };
 

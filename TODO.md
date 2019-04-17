@@ -2,44 +2,32 @@
 
 ### v0.2:
 - [ ] Entity/component system
-- [ ] Sprites
+- [x] Sprites
+- [x] DrawSprite example
 - [ ] Sprite animation/controller
+- [ ] AnimSprite example
 - [ ] Sprite debugger
 - [ ] Verbose logging
-- [ ] Sprite demo
 - [ ] Input system 
+- [ ] CR update
 - [ ] Gamepad support
 - [ ] Gamepad demo
+- [ ] Plugin dependencies
+- [ ] Plugin APIs by name
 - [ ] Cleanup and add something for examples cmake
 - [ ] Add Readme to plugins (imgui, sprite)
 - [ ] Better graphics debugging (stages)
 - [ ] iOS build
 - [ ] Android build
 - [ ] Raspberry build
-
-### v0.1:
-- [x] Asset manager
-- [x] Texture loader
-- [x] Graphics command-buffer with multi-threading support
-- [x] Shader hot-reload
-- [x] Texture hot-reload
-- [x] C/C++ hot-reload
-- [x] Plugin system
-- [x] ImGui integration
-- [x] Remotery profiler integration
-- [x] Basic Memory debugger
-- [x] Basic 2D debug primitives
-- [x] Customize ImGui font
-- [x] Assets runtime database (json)
-- [x] Tween
-- [x] Tiny FSM
-- [x] Tiny event queue
-- [x] Update imgui and incorporate tabs
-- [x] Graphics debugger (sokol)
-- [x] Demo project
+  
+- [x] sprite bounds (implement in example)
+- [x] examples: shader paths get resolved 
+- [x] new CPU->GPU vertex layout mapping API: `shader_bindto_pipeline` and `shader_bindto_pipeline_sg`. See examples.
 
 #### Fixes
-- [ ] asset manager should ignore loading meta db when we are in development mode
+- [x] asset metadata fix: file hash checking for asset-manager in _debug/_development builds. 
 - [ ] cr find_symbol doesn't need to warn about event function
+- [x] hot-loading paths not working correctly
 
   

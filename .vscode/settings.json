@@ -54,7 +54,8 @@
         "glext.h": "c",
         "sprite.h": "c",
         "strpool.h": "c",
-        "json.h": "c"
+        "json.h": "c",
+        "xlocale": "c"
     },
     "files.exclude": {
         "**/.git": true,
