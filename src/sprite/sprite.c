@@ -13,6 +13,7 @@
 #include "rizz/json.h"
 #include "rizz/plugin.h"
 #include "rizz/reflect.h"
+#include "rizz/util.h"
 
 #include <alloca.h>
 
@@ -90,6 +91,73 @@ typedef struct {
     sx_vec3 t2;
     sx_vec3 bc;
 } sprite__vertex_transform;
+
+typedef struct {
+    rizz_asset atlas;
+    int        atlas_sprite_id;
+    rizz_asset texture;
+} sprite__anim_frame;
+
+typedef struct {
+    char                name[32];
+    sprite__anim_frame* frames;
+    int                 num_frames;
+    int                 frame;
+} sprite__anim_clip;
+
+typedef enum {
+    ANIMCTRL_PARAMTYPE_INT, 
+    ANIMCTRL_PARAMTYPE_FLOAT, 
+    ANIMCTRL_PARAMTYPE_BOOL
+} sprite__anim_ctrl_param_type;
+
+typedef enum {
+    ANIMCTRL_COMPAREFUNC_NONE,
+    ANIMCTRL_COMPAREFUNC_LESS,
+    ANIMCTRL_COMPAREFUNC_EQUAL,
+    ANIMCTRL_COMPAREFUNC_GREATER,
+    ANIMCTRL_COMPAREFUNC_NOT_EQUAL,
+    ANIMCTRL_COMPAREFUNC_GREATER_EQUAL,
+    ANIMCTRL_COMPAREFUNC_LESS_EQUAL,
+} sprite__anim_ctrl_compare_func;
+
+#define TRIGGER_ON_ANIM_END 0xffffffff
+
+typedef struct {
+    uint32_t param_id;
+    sprite__anim_ctrl_compare_func func;
+    union {
+        int i;
+        float f;
+        bool b;
+    } value;
+} sprite__anim_ctrl_trigger;
+
+typedef struct {
+    uint32_t                 clip_id;
+    sprite__anim_ctrl_state* in;
+    sprite__anim_ctrl_state* out;
+    sprite__anim_ctrl_trigger in_trigger;
+    sprite__anim_ctrl_trigger out_trigger;
+} sprite__anim_ctrl_state;
+
+typedef struct {
+    uint32_t                     name_hash;
+    sprite__anim_ctrl_param_type type;
+    union {
+        int   i;
+        float f;
+        bool  b;
+    } value;
+} sprite__anim_ctrl_param;
+
+typedef struct {
+    sprite__anim_ctrl_state* start_state;
+    sprite__anim_ctrl_state* cur_state;
+    sprite__anim_ctrl_param  params[RIZZ_SPRITE_ANIM_MAX_PARAMS];
+    rizz_sprite              sprite;
+    rizz_event_queue         equeue;
+} sprite__anim_ctrl;
 
 static rizz_vertex_layout k_sprite_vertex_layout = {
     .attrs[0] = { .semantic = "POSITION", .offset = offsetof(rizz_sprite_vertex, pos) },
@@ -241,7 +309,7 @@ static rizz_asset_load_data atlas__on_prepare(const rizz_asset_load_params* para
     buff += sizeof(uint16_t) * meta->num_indices;
 
     const rizz_atlas_load_params* aparams = params->params;
-    rizz_texture_load_params tparams = { .min_filter = aparams->min_filter,
+    rizz_texture_load_params      tparams = { .min_filter = aparams->min_filter,
                                          .mag_filter = aparams->mag_filter,
                                          .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
                                          .wrap_v = SG_WRAP_CLAMP_TO_EDGE };
@@ -385,8 +453,6 @@ static void atlas__on_reload(rizz_asset handle, rizz_asset_obj prev_obj, const s
     sx_unused(handle);
     sx_unused(prev_obj);
     sx_unused(alloc);
-
-
 }
 
 static void atlas__on_release(rizz_asset_obj obj, const sx_alloc* alloc) {

@@ -5,9 +5,15 @@
 
 typedef struct sx_alloc sx_alloc;
 
-typedef struct {
-    uint32_t id;
-} rizz_sprite;
+#ifndef RIZZ_SPRITE_ANIM_MAX_PARAMS
+#   define RIZZ_SPRITE_ANIM_MAX_PARAMS 16
+#endif
+
+// clang-format off
+typedef struct { uint32_t id; } rizz_sprite;
+typedef struct { uint32_t id; } rizz_sprite_animclip;
+typedef struct { uint32_t id; } rizz_sprite_animctrl;
+//clang-format on
 
 typedef enum {
     RIZZ_SPRITE_FLIP_NONE = 0,
