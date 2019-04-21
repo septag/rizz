@@ -62,6 +62,8 @@
 //      0.9.0       Initial release, ktx is incomplete
 //      1.0.0       Api change: ddsktx_sub_data
 //                  Added KTX support
+//      1.0.1       Fixed major bugs in KTX parsing
+//
 // TODO
 //      Write KTX/DDS
 //      Read KTX metadata. currently it just stores the offset/size to the metadata block
@@ -184,12 +186,12 @@ typedef struct ddsktx_error
 } ddsktx_error;
 
 #ifdef __cplusplus
-#   define stc_default(_v) =_v
+#   define ddsktx_default(_v) =_v
 #else
-#   define stc_default(_v)
+#   define ddsktx_default(_v)
 #endif
 
-DDSKTX_API bool ddsktx_parse(ddsktx_texture_info* tc, const void* file_data, int size, ddsktx_error* err stc_default(NULL));
+DDSKTX_API bool ddsktx_parse(ddsktx_texture_info* tc, const void* file_data, int size, ddsktx_error* err ddsktx_default(NULL));
 DDSKTX_API void ddsktx_get_sub(const ddsktx_texture_info* tex, ddsktx_sub_data* buff, 
                          const void* file_data, int size,
                          int array_idx, int slice_face_idx, int mip_idx);
@@ -896,9 +898,9 @@ static bool ddsktx__parse_ktx(ddsktx_texture_info* tc, const void* file_data, in
         ddsktx__err(err, "ktx: invalid file header");
     }
 
-    // TODO: support little endian
-    if (header.endianess == 0x04030201) {
-        ddsktx__err(err, "ktx: little-endian format is not supported");
+    // TODO: support big endian
+    if (header.endianess != 0x04030201) {
+        ddsktx__err(err, "ktx: big-endian format is not supported");
     }
 
     tc->metadata_offset = r.offset;
@@ -948,7 +950,7 @@ static bool ddsktx__parse_ktx(ddsktx_texture_info* tc, const void* file_data, in
     tc->flags |= k__formats_info[format].has_alpha ? DDSKTX_TEXTURE_FLAG_ALPHA : 0;
     tc->flags |= DDSKTX_TEXTURE_FLAG_KTX;
 
-    return false;
+    return true;
 }
 
 static bool ddsktx__parse_dds(ddsktx_texture_info* tc, const void* file_data, int size, ddsktx_error* err)

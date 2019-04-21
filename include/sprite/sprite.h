@@ -1,13 +1,24 @@
 #pragma once
 
 #include "rizz/_sg-types.h"
+#include "rizz/util.h"
+
 #include "sx/math.h"
 
 typedef struct sx_alloc sx_alloc;
 
-#ifndef RIZZ_SPRITE_ANIM_MAX_PARAMS
-#   define RIZZ_SPRITE_ANIM_MAX_PARAMS 16
+// config
+// change this value to increase number of input parameters for anim controller
+#ifndef RIZZ_SPRITE_ANIMCTRL_MAX_PARAMS
+#   define RIZZ_SPRITE_ANIMCTRL_MAX_PARAMS 8
 #endif
+
+// if = 0, max_frames will be unlimited (heap allocated)
+#ifndef RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES
+#   define RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES 16
+#endif
+
+#define RIZZ_SPRITE_ANIMCLIP_EVENT_END -1
 
 // clang-format off
 typedef struct { uint32_t id; } rizz_sprite;
@@ -35,6 +46,7 @@ typedef struct rizz_sprite_desc {
                        // (0.5f, 0.5f) is the top-right of the sprite
     sx_color         color;
     rizz_sprite_flip flip;
+    rizz_sprite_animclip clip;
 } rizz_sprite_desc;
 
 typedef struct rizz_sprite_vertex {
@@ -50,7 +62,7 @@ typedef struct rizz_sprite_drawbatch {
 } rizz_sprite_drawbatch;
 
 typedef struct rizz_sprite_drawsprite {
-    int index;    // index to input sprite array (see `sprite_drawdata_make_batch`)
+    int index;          // index to input (original) sprite array (see `sprite_drawdata_make_batch`)
     int start_vertex;
     int start_index;
     int num_verts;
@@ -85,9 +97,28 @@ typedef struct rizz_atlas_load_params {
     sg_filter mag_filter;
 } rizz_atlas_load_params;
 
+typedef struct rizz_sprite_animclip_frame_desc {
+    const char* name;   // name reference in atlas
+    rizz_event  event;
+    bool        trigger_event;
+} rizz_sprite_animclip_frame_desc;
+
+typedef struct rizz_sprite_animclip_desc {
+    rizz_asset                             atlas;
+    int                                    num_frames;
+    const rizz_sprite_animclip_frame_desc* frames;
+    float                                  fps;
+    float                                  length;
+    bool                                   trigger_end_event;
+    rizz_event                             end_event;
+} rizz_sprite_animclip_desc;
+
 typedef struct rizz_api_sprite {
     rizz_sprite (*create)(const rizz_sprite_desc* desc);
     void (*destroy)(rizz_sprite spr);
+
+    // if clip = {0}, it uses the source sprite clip handle
+    rizz_sprite (*clone)(rizz_sprite spr, rizz_sprite_animclip clip);
 
     // property accessors
     sx_vec2 (*size)(rizz_sprite spr);
@@ -120,6 +151,20 @@ typedef struct rizz_api_sprite {
     void (*draw_wireframe)(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat, sx_color tint, 
                            const sx_alloc* alloc);
     bool (*resize_draw_limits)(int max_verts, int max_indices);
+
+    // anim-clip
+    rizz_sprite_animclip (*animclip_create)(const rizz_sprite_animclip_desc* desc);
+    void (*animclip_destroy)(rizz_sprite_animclip clip);
+    rizz_sprite_animclip (*animclip_clone)(rizz_sprite_animclip clip);
+    
+    void (*animclip_update)(rizz_sprite_animclip clip, float dt);
+    void (*animclip_update_batch)(rizz_sprite_animclip* clips, int num_clips, float dt);
+
+    float (*animclip_fps)(rizz_sprite_animclip clip);
+    float (*animclip_len)(rizz_sprite_animclip clip);
+    rizz_event_queue* (*animclip_events)(rizz_sprite_animclip clip);
+    void (*animclip_set_fps)(rizz_sprite_animclip clip, float fps);
+    void (*animclip_set_len)(rizz_sprite_animclip clip, float len); 
 
     // debugging
     void (*debug_enable)(rizz_sprite spr);

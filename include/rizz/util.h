@@ -63,14 +63,16 @@ typedef struct rizz_event_queue {
 static inline void rizz_event_push(rizz_event_queue* eq, int event, void* user) {
     if (eq->count < RIZZ_EVENTQUEUE_MAX_EVENTS) {
         int index = (eq->first + eq->count) % RIZZ_EVENTQUEUE_MAX_EVENTS;
-        eq->events[index] = { event, user };
+        eq->events[index].e = event;
+        eq->events[index].user = user;
         ++eq->count;
     } else {
         // overwrite previous events !!!
         int first = eq->first;
         first = ((first + 1) < RIZZ_EVENTQUEUE_MAX_EVENTS) ? (first + 1) : 0;
         int index = (first + eq->count) % RIZZ_EVENTQUEUE_MAX_EVENTS;
-        eq->events[index] = { event, user };
+        eq->events[index].e = event;
+        eq->events[index].user = user;
         eq->first = first;
     }
 }
@@ -87,12 +89,12 @@ static inline bool rizz_event_poll(rizz_event_queue* eq, rizz_event* e) {
     }
 }
 
-static inline rizz_event rizz_event_peek(rizz_event_queue* eq) {
+static inline rizz_event rizz_event_peek(const rizz_event_queue* eq) {
     sx_assert(eq->count > 0);
     return eq->events[eq->first];
 }
 
-static inline bool rizz_event_empty(rizz_event_queue* eq) {
+static inline bool rizz_event_empty(const rizz_event_queue* eq) {
     return eq->count == 0;
 }
 

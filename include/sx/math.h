@@ -423,7 +423,7 @@ static inline SX_CONSTFN float sx_fract(float _a) {
     return _a - sx_trunc(_a);
 }
 
-// Returns the floating-point remainder of the division operation _a/_b.
+// Returns the floating-point remainder of the division operation _a/_b (rounded towards 0).
 static inline SX_CONSTFN float sx_mod(float _a, float _b) {
     return _a - _b * sx_floor(_a / _b);
 }
@@ -453,6 +453,17 @@ static inline SX_CONSTFN float sx_wrap(float _a, float _wrap) {
     const float tmp0 = sx_mod(_a, _wrap);
     const float result = tmp0 < 0.0f ? _wrap + tmp0 : tmp0;
     return result;
+}
+
+static inline SX_CONSTFN float sx_wrap_range(float x, float fmin, float fmax) {
+    return sx_mod(x, fmax - fmin) + fmin;
+}
+
+static inline SX_CONSTFN int sx_iwrap_range(int x, int imin, int imax) {
+    int range = imax - imin + 1;
+    if (x < imin) 
+        x += range * ((imin - x) / range + 1);
+    return imin + (x - imin) % range;
 }
 
 // Returns 0 if _a < _edge, else 1

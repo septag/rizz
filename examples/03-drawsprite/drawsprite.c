@@ -329,7 +329,7 @@ static void render() {
     the_imgui->End();
 }
 
-rizz_plugin_decl_main(hello, plugin, e) {
+rizz_plugin_decl_main(drawsprite, plugin, e) {
     switch (e) {
     case RIZZ_PLUGIN_EVENT_STEP:
         update((float)sx_tm_sec(the_core->delta_tick()));
@@ -366,7 +366,7 @@ rizz_plugin_decl_main(hello, plugin, e) {
     return 0;
 }
 
-rizz_plugin_decl_event_handler(hello, e) {
+rizz_plugin_decl_event_handler(drawsprite, e) {
     switch (e->type) {
     case RIZZ_APP_EVENTTYPE_SUSPENDED:
         break;

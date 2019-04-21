@@ -33,6 +33,17 @@ endif()
 target_link_libraries(drawsprite PRIVATE sx)
 add_dependencies(drawsprite rizz)
 
+# animsprite
+set(ANIMSPRITE_SOURCES 04-animsprite/animsprite.c)
+if (BUNDLE)
+    add_executable(animsprite ${EXEC_TYPE} ${ANIMSPRITE_SOURCES})
+else()
+    add_library(animsprite SHARED ${ANIMSPRITE_SOURCES})
+endif()
+
+target_link_libraries(animsprite PRIVATE sx)
+add_dependencies(animsprite rizz)
+
 
 # set any stand-alone project you want to build here (BUNDLE=1)
-bundle_plugins(quad "")
+bundle_plugins(drawsprite "")

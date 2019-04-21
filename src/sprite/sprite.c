@@ -13,7 +13,6 @@
 #include "rizz/json.h"
 #include "rizz/plugin.h"
 #include "rizz/reflect.h"
-#include "rizz/util.h"
 
 #include <alloca.h>
 
@@ -32,16 +31,17 @@ static rizz_api_refl*   the_refl;
 static rizz_api_gfx*    the_gfx;
 
 typedef struct {
-    sx_str_t         name;
-    rizz_asset       atlas;
-    int              atlas_sprite_id;
-    rizz_asset       texture;
-    sx_vec2          size;    // size set by API (x or y can be <= 0)
-    sx_vec2          origin;
-    sx_color         color;
-    rizz_sprite_flip flip;
-    sx_rect          draw_bounds;    // cropped
-    sx_rect          bounds;
+    sx_str_t             name;
+    rizz_asset           atlas;
+    int                  atlas_sprite_id;
+    rizz_asset           texture;
+    sx_vec2              size;    // size set by API (x or y can be <= 0)
+    sx_vec2              origin;
+    sx_color             color;
+    rizz_sprite_flip     flip;
+    rizz_sprite_animclip clip;
+    sx_rect              draw_bounds;    // cropped
+    sx_rect              bounds;
 } sprite__data;
 
 typedef struct {
@@ -70,12 +70,37 @@ typedef struct {
 } atlas__metadata;
 
 typedef struct {
+    int16_t    atlas_id;
+    int16_t    trigger;
+    rizz_event e;
+} sprite__animclip_frame;
+
+typedef struct {
+    rizz_asset       atlas;
+    int              num_frames;
+    float            tm;
+    float            fps;
+    float            len;
+    float            speed;    // (0: pause), (1.0: normal)
+    int              frame_id;
+    bool             trigger_end_event;
+    rizz_event_queue equeue;
+
+#if RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES > 0
+    sprite__animclip_frame frames[RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES];
+#else
+    sprite__animclip_frame* frames;
+#endif
+} sprite__animclip;
+
+typedef struct {
     sg_buffer   vbuff[2];
     sg_buffer   ibuff;
     sg_shader   shader;
     sg_shader   shader_wire;
     sg_pipeline pip;
     sg_pipeline pip_wire;
+
 } sprite__draw_context;
 
 typedef struct {
@@ -84,6 +109,8 @@ typedef struct {
     sx_handle_pool*      sprite_handles;
     sprite__data*        sprites;
     sprite__draw_context drawctx;
+    sx_handle_pool*      animclip_handles;
+    sprite__animclip*    animclips;
 } sprite__context;
 
 typedef struct {
@@ -92,22 +119,9 @@ typedef struct {
     sx_vec3 bc;
 } sprite__vertex_transform;
 
-typedef struct {
-    rizz_asset atlas;
-    int        atlas_sprite_id;
-    rizz_asset texture;
-} sprite__anim_frame;
-
-typedef struct {
-    char                name[32];
-    sprite__anim_frame* frames;
-    int                 num_frames;
-    int                 frame;
-} sprite__anim_clip;
-
 typedef enum {
-    ANIMCTRL_PARAMTYPE_INT, 
-    ANIMCTRL_PARAMTYPE_FLOAT, 
+    ANIMCTRL_PARAMTYPE_INT,
+    ANIMCTRL_PARAMTYPE_FLOAT,
     ANIMCTRL_PARAMTYPE_BOOL
 } sprite__anim_ctrl_param_type;
 
@@ -124,21 +138,21 @@ typedef enum {
 #define TRIGGER_ON_ANIM_END 0xffffffff
 
 typedef struct {
-    uint32_t param_id;
+    uint32_t                       param_id;
     sprite__anim_ctrl_compare_func func;
     union {
-        int i;
+        int   i;
         float f;
-        bool b;
+        bool  b;
     } value;
 } sprite__anim_ctrl_trigger;
 
-typedef struct {
-    uint32_t                 clip_id;
-    sprite__anim_ctrl_state* in;
-    sprite__anim_ctrl_state* out;
-    sprite__anim_ctrl_trigger in_trigger;
-    sprite__anim_ctrl_trigger out_trigger;
+typedef struct sprite__anim_ctrl_state {
+    rizz_sprite_animclip            clip;
+    struct sprite__anim_ctrl_state* in;
+    struct sprite__anim_ctrl_state* out;
+    sprite__anim_ctrl_trigger       in_trigger;
+    sprite__anim_ctrl_trigger       out_trigger;
 } sprite__anim_ctrl_state;
 
 typedef struct {
@@ -154,7 +168,7 @@ typedef struct {
 typedef struct {
     sprite__anim_ctrl_state* start_state;
     sprite__anim_ctrl_state* cur_state;
-    sprite__anim_ctrl_param  params[RIZZ_SPRITE_ANIM_MAX_PARAMS];
+    sprite__anim_ctrl_param  params[RIZZ_SPRITE_ANIMCTRL_MAX_PARAMS];
     rizz_sprite              sprite;
     rizz_event_queue         equeue;
 } sprite__anim_ctrl;
@@ -208,6 +222,212 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 
 static sprite__context g_spr;
 
+static inline sprite__animclip_frame* sprite__animclip_get_frame(sprite__animclip* clip, int idx) {
+    sx_assert(idx < clip->num_frames);
+
+#if RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES == 0
+    return &clip->frames[idx];
+#else
+    return &clip->frames[idx];
+#endif
+}
+
+static rizz_sprite_animclip sprite__animclip_create(const rizz_sprite_animclip_desc* desc) {
+    sx_handle_t handle = sx_handle_new_and_grow(g_spr.animclip_handles, g_spr.alloc);
+    sx_assert(handle);
+    sx_assert(desc->num_frames > 0);
+
+    sprite__animclip clip = { .atlas = desc->atlas,
+                              .num_frames =
+                                  RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES > 0
+                                      ? sx_min(RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES, desc->num_frames)
+                                      : desc->num_frames,
+                              .fps = desc->fps,
+                              .len = desc->length,
+                              .trigger_end_event = desc->trigger_end_event };
+    if (clip.num_frames < desc->num_frames) {
+        rizz_log_warn(the_core, "num_frames exceeded maximum amount (%d) for sprite-animclip: 0x%x",
+                      RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES, handle);
+    }
+
+    if (clip.fps > 0) {
+        clip.len = (float)clip.num_frames / clip.fps;
+    } else if (clip.len > 0) {
+        clip.fps = (float)clip.num_frames / clip.len;
+    } else {
+        sx_assert(0 && "must define either 'fps' or 'length'");
+    }
+
+    the_asset->ref_add(desc->atlas);
+    atlas__data* atlas = the_asset->obj(desc->atlas).ptr;
+
+#if RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES > 0
+    sprite__animclip_frame* frames = clip.frames;
+#else
+    sprite__animclip_frame* frames =
+        sx_malloc(g_spr.alloc, sizeof(sprite__animclip_frame) * clip.num_frames);
+    if (!frames) {
+        sx_out_of_memory();
+        return (rizz_sprite_animclip){ 0 };
+    }
+    clip.frames = frames;
+#endif
+
+    for (int i = 0; i < clip.num_frames; i++) {
+        const rizz_sprite_animclip_frame_desc* frame_desc = &desc->frames[i];
+        sprite__animclip_frame*                frame = sprite__animclip_get_frame(&clip, i);
+
+        int sidx = sx_hashtbl_find(&atlas->sprite_tbl,
+                                   sx_hash_fnv32(frame_desc->name, sx_strlen(frame_desc->name)));
+        if (sidx != -1) {
+            frame->atlas_id = sx_hashtbl_get(&atlas->sprite_tbl, sidx);
+        } else {
+            rizz_log_warn(the_core, "sprite not found: '%s' in '%s'", frame_desc->name,
+                          the_asset->path(desc->atlas));
+        }
+    }
+
+    int index = sx_handle_index(handle);
+    if (index >= sx_array_count(g_spr.animclips)) {
+        sx_array_push(g_spr.alloc, g_spr.animclips, clip);
+    } else {
+        g_spr.animclips[index] = clip;
+    }
+
+    return (rizz_sprite_animclip){ handle };
+}
+
+static rizz_sprite_animclip sprite__animclip_clone(rizz_sprite_animclip src_handle) {
+    sx_assert(sx_handle_valid(g_spr.animclip_handles, src_handle.id));
+    sprite__animclip* src = &g_spr.animclips[sx_handle_index(src_handle.id)];
+
+    sx_handle_t handle = sx_handle_new_and_grow(g_spr.animclip_handles, g_spr.alloc);
+    sx_assert(handle);    
+
+    sx_assert(src->atlas.id);
+    sprite__animclip clip = { .atlas = src->atlas,
+                              .num_frames = src->num_frames,
+                              .fps = src->fps,
+                              .len = src->len,
+                              .trigger_end_event = src->trigger_end_event };
+
+#if RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES == 0
+    sprite__animclip_frame* frames =
+        sx_malloc(g_spr.alloc, sizeof(sprite__animclip_frame) * clip.num_frames);
+    if (!frames) {
+        sx_out_of_memory();
+        return (rizz_sprite_animclip){ 0 };
+    }
+    clip.frames = frames;
+#endif
+
+    sx_memcpy(clip.frames, src->frames, sizeof(sprite__animclip_frame)*clip.num_frames);
+    the_asset->ref_add(clip.atlas);
+
+    int index = sx_handle_index(handle);
+    if (index >= sx_array_count(g_spr.animclips)) {
+        sx_array_push(g_spr.alloc, g_spr.animclips, clip);
+    } else {
+        g_spr.animclips[index] = clip;
+    }
+
+    return (rizz_sprite_animclip){ handle };
+}
+
+static void sprite__animclip_destroy(rizz_sprite_animclip handle) {
+    sx_assert(sx_handle_valid(g_spr.animclip_handles, handle.id));
+    sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handle.id)];
+
+    if (clip->atlas.id)
+        the_asset->unload(clip->atlas);
+
+#if RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES == 0
+    sx_free(g_spr.alloc, clip->frames);
+#endif
+
+    sx_handle_del(g_spr.animclip_handles, handle.id);
+}
+
+static void sprite__animclip_update_batch(const rizz_sprite_animclip* handles, int num_clips,
+                                          float dt) {
+    for (int i = 0; i < num_clips; i++) {
+        sx_assert(sx_handle_valid(g_spr.animclip_handles, handles[i].id));
+
+        sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handles[i].id)];
+        float             tadvance = clip->tm + dt;
+        float t = sx_mod(tadvance, clip->len);    // progress time and wrap it onto time length
+
+        // detect timeline end
+        if (clip->trigger_end_event && t < (tadvance - 0.0001f)) {
+            rizz_event_push(&clip->equeue, RIZZ_SPRITE_ANIMCLIP_EVENT_END, NULL);
+        }
+
+        int frame_id = (int)(clip->fps * t);
+        frame_id = sx_min(frame_id, clip->num_frames - 1);
+
+        const sprite__animclip_frame* frame = sprite__animclip_get_frame(clip, frame_id);
+        if (frame->trigger && frame_id != clip->frame_id) {
+            rizz_event_push(&clip->equeue, frame->e.e, frame->e.user);
+        }
+
+        clip->frame_id = frame_id;
+        clip->tm = t;
+    }
+}
+
+static void sprite__animclip_update(rizz_sprite_animclip clip, float dt) {
+    sprite__animclip_update_batch(&clip, 1, dt);
+}
+
+static float sprite__animclip_fps(rizz_sprite_animclip handle) {
+    sx_assert(sx_handle_valid(g_spr.animclip_handles, handle.id));
+    sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handle.id)];
+    return clip->fps;
+}
+
+static float sprite__animclip_len(rizz_sprite_animclip handle) {
+    sx_assert(sx_handle_valid(g_spr.animclip_handles, handle.id));
+    sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handle.id)];
+    return clip->len;
+}
+
+static rizz_event_queue* sprite__animclip_events(rizz_sprite_animclip handle) {
+    sx_assert(sx_handle_valid(g_spr.animclip_handles, handle.id));
+    sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handle.id)];
+    return &clip->equeue;
+}
+
+static void sprite__animclip_set_fps(rizz_sprite_animclip handle, float fps) {
+    sx_assert(sx_handle_valid(g_spr.animclip_handles, handle.id));
+    sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handle.id)];
+    sx_assert(clip->num_frames > 0);
+    sx_assert(fps > 0);
+    clip->len = (float)clip->num_frames / fps;
+    clip->fps = fps;
+}
+
+static void sprite__animclip_set_len(rizz_sprite_animclip handle, float length) {
+    sx_assert(sx_handle_valid(g_spr.animclip_handles, handle.id));
+    sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handle.id)];
+    sx_assert(clip->num_frames > 0);
+    sx_assert(length > 0);
+    clip->fps = (float)clip->num_frames / length;
+    clip->len = length;
+}
+
+static void sprite__sync_with_animclip(sprite__data* spr) {
+    rizz_sprite_animclip clip_handle = spr->clip;
+    if (sx_handle_valid(g_spr.animclip_handles, clip_handle.id)) {
+        sprite__animclip* clip = &g_spr.animclips[sx_handle_index(clip_handle.id)];
+        spr->atlas_sprite_id = (int)sprite__animclip_get_frame(clip, clip->frame_id)->atlas_id;
+    } else {
+        rizz_log_warn(
+            the_core, "sprite_animclip 'handle: 0x%x' binded to sprite '%s' has become invalid",
+            clip_handle.id, spr->name ? sx_strpool_cstr(g_spr.name_pool, spr->name) : "[noname]");
+        spr->clip = (rizz_sprite_animclip){ 0 };
+    }
+}
+
 static sx_vec2 sprite__calc_size(const sx_vec2 size, const sx_vec2 base_size,
                                  rizz_sprite_flip flip) {
     sx_assert(size.x > 0 || size.y > 0);
@@ -248,6 +468,9 @@ static inline void sprite__calc_coords(sx_vec2* points, int num_points, const sx
 }
 
 static void sprite__update_bounds(sprite__data* spr) {
+    if (spr->clip.id)
+        sprite__sync_with_animclip(spr);
+
     sx_rect rect = sx_rectf(-0.5f, -0.5f, 0.5f, 0.5f);
     if (spr->atlas.id && spr->atlas_sprite_id >= 0) {
         const atlas__data*   atlas = (atlas__data*)the_asset->obj_threadsafe(spr->atlas).ptr;
@@ -567,6 +790,9 @@ static bool sprite__init() {
     g_spr.sprite_handles = sx_handle_create_pool(g_spr.alloc, 256);
     sx_assert(g_spr.sprite_handles);
 
+    g_spr.animclip_handles = sx_handle_create_pool(g_spr.alloc, 256);
+    sx_assert(g_spr.animclip_handles);
+
     // register "atlas" asset type and metadata
     rizz_refl_field(the_refl, atlas__metadata, char[RIZZ_MAX_PATH], img_filepath, "img_filepath");
     rizz_refl_field(the_refl, atlas__metadata, int, num_sprites, "num_sprites");
@@ -624,9 +850,8 @@ static bool sprite__init() {
 }
 
 static void sprite__release() {
-    if (!g_spr.alloc) {
+    if (!g_spr.alloc)
         return;
-    }
 
     // draw context
     {
@@ -647,13 +872,14 @@ static void sprite__release() {
             the_gfx->imm.destroy_pipeline(dc->pip_wire);
     }
 
-    if (g_spr.sprite_handles) {
+    if (g_spr.sprite_handles)
         sx_handle_destroy_pool(g_spr.sprite_handles, g_spr.alloc);
-    }
 
-    if (g_spr.name_pool) {
+    if (g_spr.animclip_handles)
+        sx_handle_destroy_pool(g_spr.animclip_handles, g_spr.alloc);
+
+    if (g_spr.name_pool)
         sx_strpool_destroy(g_spr.name_pool, g_spr.alloc);
-    }
 
     sx_array_free(g_spr.alloc, g_spr.sprites);
 
@@ -661,7 +887,8 @@ static void sprite__release() {
 }
 
 static rizz_sprite sprite__create(const rizz_sprite_desc* desc) {
-    sx_assert(desc->texture.id);
+    sx_assert(desc->texture.id || desc->clip.id);
+    sx_assert(desc->size.x > 0 || desc->size.y > 0);
 
     sx_handle_t handle = sx_handle_new_and_grow(g_spr.sprite_handles, g_spr.alloc);
     sx_assert(handle);
@@ -670,35 +897,95 @@ static rizz_sprite sprite__create(const rizz_sprite_desc* desc) {
                              desc->name ? sx_strpool_add(g_spr.name_pool, desc->name, name_len) : 0,
                          .size = desc->size,
                          .origin = desc->origin,
-                         .color = desc->color,
-                         .flip = desc->flip };
+                         .color = desc->color.n != 0 ? desc->color : sx_colorn(0xffffffff),
+                         .flip = desc->flip,
+                         .clip = desc->clip };
 
-    const char* img_type = the_asset->type_name(desc->texture);
-    if (sx_strequal(img_type, "texture")) {
-        spr.texture = desc->texture;
-        the_asset->ref_add(spr.texture);
-
-        spr.atlas_sprite_id = -1;
-    } else if (sx_strequal(img_type, "atlas")) {
-        sx_assert(desc->name && "for atlases, desc->name should be set");
-        spr.atlas = desc->atlas;
-        the_asset->ref_add(desc->atlas);
-
-        atlas__data* atlas = the_asset->obj(desc->atlas).ptr;
+    if (desc->clip.id) {
+        sx_assert(sx_handle_valid(g_spr.animclip_handles, desc->clip.id));
+        sprite__animclip* clip = &g_spr.animclips[sx_handle_index(desc->clip.id)];
+        sx_assert(clip->num_frames > 0);
+        spr.atlas = clip->atlas;
+        spr.atlas_sprite_id = (int)sprite__animclip_get_frame(clip, clip->frame_id)->atlas_id;
+        atlas__data* atlas = the_asset->obj(clip->atlas).ptr;
         spr.texture = atlas->a.texture;
-        int sidx = sx_hashtbl_find(&atlas->sprite_tbl, sx_hash_fnv32(desc->name, name_len));
-        if (sidx != -1) {
-            spr.atlas_sprite_id = sx_hashtbl_get(&atlas->sprite_tbl, sidx);
+        the_asset->ref_add(spr.atlas);
+    } else if (desc->texture.id) {
+        const char* img_type = the_asset->type_name(desc->texture);
+        if (sx_strequal(img_type, "texture")) {
+            spr.texture = desc->texture;
+            the_asset->ref_add(spr.texture);
+
+            spr.atlas_sprite_id = -1;
+        } else if (sx_strequal(img_type, "atlas")) {
+            sx_assert(desc->name && "for atlases, desc->name should be set");
+            spr.atlas = desc->atlas;
+            the_asset->ref_add(desc->atlas);
+
+            atlas__data* atlas = the_asset->obj(desc->atlas).ptr;
+            spr.texture = atlas->a.texture;
+            int sidx = sx_hashtbl_find(&atlas->sprite_tbl, sx_hash_fnv32(desc->name, name_len));
+            if (sidx != -1) {
+                spr.atlas_sprite_id = sx_hashtbl_get(&atlas->sprite_tbl, sidx);
+            } else {
+                rizz_log_warn(the_core, "sprite not found: '%s' in '%s'", desc->name,
+                              the_asset->path(desc->atlas));
+            }
         } else {
-            rizz_log_warn(the_core, "sprite not found: '%s' in '%s'", desc->name,
-                          the_asset->path(desc->atlas));
+            sx_assert(0 && "desc->atlas != atlas or desc->texture != texture");
+            return (rizz_sprite){ 0 };
         }
+    }
+    sprite__update_bounds(&spr);
+
+    int index = sx_handle_index(handle);
+    if (index >= sx_array_count(g_spr.sprites)) {
+        sx_array_push(g_spr.alloc, g_spr.sprites, spr);
     } else {
-        sx_assert(0 && "desc->atlas != atlas or desc->texture != texture");
-        return (rizz_sprite){ 0 };
+        g_spr.sprites[index] = spr;
     }
 
-    sprite__update_bounds(&spr);
+    return (rizz_sprite){ handle };
+}
+
+rizz_sprite sprite__clone(rizz_sprite src_handle, rizz_sprite_animclip clip_handle) {
+    sx_assert(sx_handle_valid(g_spr.sprite_handles, src_handle.id));
+    sprite__data* src = &g_spr.sprites[sx_handle_index(src_handle.id)];
+
+    sx_handle_t handle = sx_handle_new_and_grow(g_spr.sprite_handles, g_spr.alloc);
+    sx_assert(handle);
+
+    const char*  name = src->name ? sx_strpool_cstr(g_spr.name_pool, src->name) : NULL;
+    int          name_len = name ? sx_strlen(name) : 0;
+    sprite__data spr = { .name = name ? sx_strpool_add(g_spr.name_pool, name, name_len) : 0,
+                         .size = src->size,
+                         .origin = src->origin,
+                         .color = src->color,
+                         .flip = src->flip,
+                         .clip = src->clip,
+                         .atlas = src->atlas,
+                         .atlas_sprite_id = src->atlas_sprite_id,
+                         .texture = src->texture,
+                         .draw_bounds = src->draw_bounds,
+                         .bounds = src->bounds };
+
+    // if new clip is set, override the previous one
+    if (clip_handle.id) {
+        sx_assert(sx_handle_valid(g_spr.animclip_handles, clip_handle.id));
+        sprite__animclip* clip = &g_spr.animclips[sx_handle_index(clip_handle.id)];
+        sx_assert(clip->num_frames > 0);
+        spr.atlas = clip->atlas;
+        spr.atlas_sprite_id = (int)sprite__animclip_get_frame(clip, clip->frame_id)->atlas_id;
+        atlas__data* atlas = the_asset->obj(clip->atlas).ptr;
+        spr.texture = atlas->a.texture;
+    }
+
+    if (spr.atlas.id) {
+        the_asset->ref_add(spr.atlas);
+    } else {
+        sx_assert(spr.texture.id);
+        the_asset->ref_add(spr.texture);
+    }
 
     int index = sx_handle_index(handle);
     if (index >= sx_array_count(g_spr.sprites)) {
@@ -811,13 +1098,20 @@ static rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs
     for (int i = 0; i < num_sprites; i++) {
         sx_assert(sx_handle_valid(g_spr.sprite_handles, sprs[i].id));
 
-        int                 index = sx_handle_index(sprs[i].id);
-        const sprite__data* spr = &g_spr.sprites[index];
+        int           index = sx_handle_index(sprs[i].id);
+        sprite__data* spr = &g_spr.sprites[index];
 
         keys[i] = ((uint64_t)spr->texture.id << 32) | (uint64_t)index;
 
+        // check clip/controller handle validity and fetch rendering frame
+        if (spr->clip.id) {
+            sprite__sync_with_animclip(spr);
+        }
+
         if (spr->atlas.id && spr->atlas_sprite_id >= 0) {
-            const atlas__data*   atlas = (atlas__data*)the_asset->obj_threadsafe(spr->atlas).ptr;
+            const atlas__data* atlas = (atlas__data*)the_asset->obj_threadsafe(spr->atlas).ptr;
+            sx_assert(spr->atlas_sprite_id < atlas->a.info.num_sprites);
+
             const atlas__sprite* aspr = &atlas->sprites[spr->atlas_sprite_id];
             num_verts += aspr->num_verts;
             num_indices += aspr->num_indices;
@@ -870,7 +1164,9 @@ static rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs
         int                 index_start = index_idx;
         int                 vertex_start = vertex_idx;
 
-        // atlas
+        // there are two types of sprites :
+        //  - atlas sprites
+        //  - single texture sprites
         if (spr->atlas.id && spr->atlas_sprite_id >= 0) {
             // extract sprite rectangle and uv from atlas
             const atlas__data*   atlas = (atlas__data*)the_asset->obj_threadsafe(spr->atlas).ptr;
@@ -1111,10 +1407,10 @@ void sprite__draw_wireframe(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* m
     sprite__draw_wireframe_batch(&spr, 1, vp, mat, &tint, alloc);
 }
 
-
 static rizz_api_sprite the__sprite = {
     .create = sprite__create,
     .destroy = sprite__destroy,
+    .clone = sprite__clone,
     .size = sprite__size,
     .origin = sprite__origin,
     .bounds = sprite__bounds,
@@ -1129,7 +1425,17 @@ static rizz_api_sprite the__sprite = {
     .draw = sprite__draw,
     .draw_batch = sprite__draw_batch,
     .draw_wireframe_batch = sprite__draw_wireframe_batch,
-    .resize_draw_limits = sprite__resize_draw_limits
+    .resize_draw_limits = sprite__resize_draw_limits,
+    .animclip_create = sprite__animclip_create,
+    .animclip_destroy = sprite__animclip_destroy,
+    .animclip_clone = sprite__animclip_clone,
+    .animclip_update = sprite__animclip_update,
+    .animclip_update_batch = sprite__animclip_update_batch,
+    .animclip_fps = sprite__animclip_fps,
+    .animclip_len = sprite__animclip_len,
+    .animclip_events = sprite__animclip_events,
+    .animclip_set_fps = sprite__animclip_set_fps,
+    .animclip_set_len = sprite__animclip_set_len
 };
 
 rizz_plugin_decl_main(sprite, plugin, e) {

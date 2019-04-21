@@ -55,7 +55,8 @@
         "sprite.h": "c",
         "strpool.h": "c",
         "json.h": "c",
-        "xlocale": "c"
+        "xlocale": "c",
+        "xiosbase": "cpp"
     },
     "files.exclude": {
         "**/.git": true,
