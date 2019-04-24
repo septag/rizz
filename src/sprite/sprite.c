@@ -18,6 +18,7 @@
 #include "rizz/reflect.h"
 
 #include <float.h>
+#include <limits.h>
 
 #include <alloca.h>
 
