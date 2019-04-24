@@ -3,6 +3,13 @@
 Sprite plugin. Loads sprite atlases, renders/animates 2D sprites. The low-level API gives 
 the ability to extend it and make 3D billboards or any other specific rendering by the user.
 
+### Features
+- Atlas support
+- Alpha cropping
+- Mesh sprites
+- Animation clips
+- Animation controller (state machine)
+
 ### Usage
 
 #### Atlas
@@ -35,7 +42,7 @@ But `create` and `destroy` are not thread-safe, so make sure you don't add or de
 - [ ] Add dummy atlases in case if atlas loading fails to prevent crashes on load errors
 - [ ] Dummy sprites for atlases/textures that are loading in async mode
 - [ ] Hot-reload support
-- [ ] Sprite debugger (imgui)
-- [ ] Sprite animation clips
-- [ ] sprite animation controller
+- [x] Sprite debugger (imgui)
+- [x] Sprite animation clips
+- [x] sprite animation controller
 

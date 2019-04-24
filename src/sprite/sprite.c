@@ -5,14 +5,19 @@
 #include "sx/handle.h"
 #include "sx/hash.h"
 #include "sx/os.h"
+#include "sx/pool.h"
 #include "sx/string.h"
 
+#include "imgui/imgui-extra.h"
+#include "imgui/imgui.h"
 #include "rizz/asset.h"
 #include "rizz/core.h"
 #include "rizz/graphics.h"
 #include "rizz/json.h"
 #include "rizz/plugin.h"
 #include "rizz/reflect.h"
+
+#include <float.h>
 
 #include <alloca.h>
 
@@ -23,12 +28,15 @@
 
 #define MAX_VERTICES 2000
 #define MAX_INDICES 6000
+#define ANIMCTRL_PARAM_ID_END 0xffffffff
 
-static rizz_api_core*   the_core;
-static rizz_api_plugin* the_plugin;
-static rizz_api_asset*  the_asset;
-static rizz_api_refl*   the_refl;
-static rizz_api_gfx*    the_gfx;
+static rizz_api_core*        the_core;
+static rizz_api_plugin*      the_plugin;
+static rizz_api_asset*       the_asset;
+static rizz_api_refl*        the_refl;
+static rizz_api_gfx*         the_gfx;
+static rizz_api_imgui*       the_imgui;
+static rizz_api_imgui_extra* the_imguix;
 
 typedef struct {
     sx_str_t             name;
@@ -40,6 +48,7 @@ typedef struct {
     sx_color             color;
     rizz_sprite_flip     flip;
     rizz_sprite_animclip clip;
+    rizz_sprite_animctrl ctrl;
     sx_rect              draw_bounds;    // cropped
     sx_rect              bounds;
 } sprite__data;
@@ -81,10 +90,11 @@ typedef struct {
     float            tm;
     float            fps;
     float            len;
-    float            speed;    // (0: pause), (1.0: normal)
     int              frame_id;
     bool             trigger_end_event;
+    bool             end_triggered;
     rizz_event_queue equeue;
+    const sx_alloc*  alloc;
 
 #if RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES > 0
     sprite__animclip_frame frames[RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES];
@@ -93,6 +103,50 @@ typedef struct {
 #endif
 } sprite__animclip;
 
+typedef struct sprite__animctrl_transition sprite__animctrl_transition;
+
+typedef struct {
+    char                         name[32];
+    rizz_sprite_animclip         clip;
+    int                          num_transitions;
+    sprite__animctrl_transition* transitions;
+} sprite__animctrl_state;
+
+typedef union {
+    int   i;
+    float f;
+    bool  b;
+} sprite__animctrl_value;
+
+typedef struct {
+    int                               param_id;
+    rizz_sprite_animctrl_compare_func func;
+    sprite__animctrl_value            value;
+} sprite__animctrl_trigger;
+
+typedef struct sprite__animctrl_transition {
+    sprite__animctrl_state*  target;
+    sprite__animctrl_trigger trigger;
+    bool                     trigger_event;
+    rizz_event               event;
+} sprite__animctrl_transition;
+
+typedef struct {
+    char                            name[32];
+    uint32_t                        name_hash;
+    rizz_sprite_animctrl_param_type type;
+    sprite__animctrl_value          value;
+} sprite__animctrl_param;
+
+typedef struct {
+    const sx_alloc*         alloc;
+    sprite__animctrl_state* state;
+    sprite__animctrl_state* start_state;
+    sprite__animctrl_param  params[RIZZ_SPRITE_ANIMCTRL_MAX_PARAMS];
+    rizz_event_queue        equeue;
+    void*                   buff;
+} sprite__animctrl;
+
 typedef struct {
     sg_buffer   vbuff[2];
     sg_buffer   ibuff;
@@ -100,7 +154,6 @@ typedef struct {
     sg_shader   shader_wire;
     sg_pipeline pip;
     sg_pipeline pip_wire;
-
 } sprite__draw_context;
 
 typedef struct {
@@ -111,6 +164,8 @@ typedef struct {
     sprite__draw_context drawctx;
     sx_handle_pool*      animclip_handles;
     sprite__animclip*    animclips;
+    sx_handle_pool*      animctrl_handles;
+    sprite__animctrl*    animctrls;
 } sprite__context;
 
 typedef struct {
@@ -118,60 +173,6 @@ typedef struct {
     sx_vec3 t2;
     sx_vec3 bc;
 } sprite__vertex_transform;
-
-typedef enum {
-    ANIMCTRL_PARAMTYPE_INT,
-    ANIMCTRL_PARAMTYPE_FLOAT,
-    ANIMCTRL_PARAMTYPE_BOOL
-} sprite__anim_ctrl_param_type;
-
-typedef enum {
-    ANIMCTRL_COMPAREFUNC_NONE,
-    ANIMCTRL_COMPAREFUNC_LESS,
-    ANIMCTRL_COMPAREFUNC_EQUAL,
-    ANIMCTRL_COMPAREFUNC_GREATER,
-    ANIMCTRL_COMPAREFUNC_NOT_EQUAL,
-    ANIMCTRL_COMPAREFUNC_GREATER_EQUAL,
-    ANIMCTRL_COMPAREFUNC_LESS_EQUAL,
-} sprite__anim_ctrl_compare_func;
-
-#define TRIGGER_ON_ANIM_END 0xffffffff
-
-typedef struct {
-    uint32_t                       param_id;
-    sprite__anim_ctrl_compare_func func;
-    union {
-        int   i;
-        float f;
-        bool  b;
-    } value;
-} sprite__anim_ctrl_trigger;
-
-typedef struct sprite__anim_ctrl_state {
-    rizz_sprite_animclip            clip;
-    struct sprite__anim_ctrl_state* in;
-    struct sprite__anim_ctrl_state* out;
-    sprite__anim_ctrl_trigger       in_trigger;
-    sprite__anim_ctrl_trigger       out_trigger;
-} sprite__anim_ctrl_state;
-
-typedef struct {
-    uint32_t                     name_hash;
-    sprite__anim_ctrl_param_type type;
-    union {
-        int   i;
-        float f;
-        bool  b;
-    } value;
-} sprite__anim_ctrl_param;
-
-typedef struct {
-    sprite__anim_ctrl_state* start_state;
-    sprite__anim_ctrl_state* cur_state;
-    sprite__anim_ctrl_param  params[RIZZ_SPRITE_ANIMCTRL_MAX_PARAMS];
-    rizz_sprite              sprite;
-    rizz_event_queue         equeue;
-} sprite__anim_ctrl;
 
 static rizz_vertex_layout k_sprite_vertex_layout = {
     .attrs[0] = { .semantic = "POSITION", .offset = offsetof(rizz_sprite_vertex, pos) },
@@ -222,20 +223,21 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 
 static sprite__context g_spr;
 
-static inline sprite__animclip_frame* sprite__animclip_get_frame(sprite__animclip* clip, int idx) {
-    sx_assert(idx < clip->num_frames);
-
-#if RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES == 0
-    return &clip->frames[idx];
-#else
-    return &clip->frames[idx];
-#endif
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// anim-clip
+static void sprite__animclip_restart(rizz_sprite_animclip handle) {
+    sx_assert_rel(sx_handle_valid(g_spr.animclip_handles, handle.id));
+    sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handle.id)];
+    clip->frame_id = 0;
+    clip->tm = 0;
 }
 
 static rizz_sprite_animclip sprite__animclip_create(const rizz_sprite_animclip_desc* desc) {
     sx_handle_t handle = sx_handle_new_and_grow(g_spr.animclip_handles, g_spr.alloc);
     sx_assert(handle);
     sx_assert(desc->num_frames > 0);
+
+    const sx_alloc* alloc = desc->alloc ? desc->alloc : g_spr.alloc;
 
     sprite__animclip clip = { .atlas = desc->atlas,
                               .num_frames =
@@ -244,7 +246,8 @@ static rizz_sprite_animclip sprite__animclip_create(const rizz_sprite_animclip_d
                                       : desc->num_frames,
                               .fps = desc->fps,
                               .len = desc->length,
-                              .trigger_end_event = desc->trigger_end_event };
+                              .trigger_end_event = desc->trigger_end_event,
+                              .alloc = alloc };
     if (clip.num_frames < desc->num_frames) {
         rizz_log_warn(the_core, "num_frames exceeded maximum amount (%d) for sprite-animclip: 0x%x",
                       RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES, handle);
@@ -265,7 +268,7 @@ static rizz_sprite_animclip sprite__animclip_create(const rizz_sprite_animclip_d
     sprite__animclip_frame* frames = clip.frames;
 #else
     sprite__animclip_frame* frames =
-        sx_malloc(g_spr.alloc, sizeof(sprite__animclip_frame) * clip.num_frames);
+        sx_malloc(alloc, sizeof(sprite__animclip_frame) * clip.num_frames);
     if (!frames) {
         sx_out_of_memory();
         return (rizz_sprite_animclip){ 0 };
@@ -275,7 +278,7 @@ static rizz_sprite_animclip sprite__animclip_create(const rizz_sprite_animclip_d
 
     for (int i = 0; i < clip.num_frames; i++) {
         const rizz_sprite_animclip_frame_desc* frame_desc = &desc->frames[i];
-        sprite__animclip_frame*                frame = sprite__animclip_get_frame(&clip, i);
+        sprite__animclip_frame*                frame = &clip.frames[i];
 
         int sidx = sx_hashtbl_find(&atlas->sprite_tbl,
                                    sx_hash_fnv32(frame_desc->name, sx_strlen(frame_desc->name)));
@@ -298,22 +301,24 @@ static rizz_sprite_animclip sprite__animclip_create(const rizz_sprite_animclip_d
 }
 
 static rizz_sprite_animclip sprite__animclip_clone(rizz_sprite_animclip src_handle) {
-    sx_assert(sx_handle_valid(g_spr.animclip_handles, src_handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.animclip_handles, src_handle.id));
     sprite__animclip* src = &g_spr.animclips[sx_handle_index(src_handle.id)];
 
     sx_handle_t handle = sx_handle_new_and_grow(g_spr.animclip_handles, g_spr.alloc);
-    sx_assert(handle);    
+    sx_assert(handle);
 
     sx_assert(src->atlas.id);
     sprite__animclip clip = { .atlas = src->atlas,
                               .num_frames = src->num_frames,
                               .fps = src->fps,
                               .len = src->len,
-                              .trigger_end_event = src->trigger_end_event };
+                              .trigger_end_event = src->trigger_end_event,
+                              .alloc = src->alloc };
 
 #if RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES == 0
+    sx_assert(clip.alloc);
     sprite__animclip_frame* frames =
-        sx_malloc(g_spr.alloc, sizeof(sprite__animclip_frame) * clip.num_frames);
+        sx_malloc(clip.alloc, sizeof(sprite__animclip_frame) * clip.num_frames);
     if (!frames) {
         sx_out_of_memory();
         return (rizz_sprite_animclip){ 0 };
@@ -321,7 +326,7 @@ static rizz_sprite_animclip sprite__animclip_clone(rizz_sprite_animclip src_hand
     clip.frames = frames;
 #endif
 
-    sx_memcpy(clip.frames, src->frames, sizeof(sprite__animclip_frame)*clip.num_frames);
+    sx_memcpy(clip.frames, src->frames, sizeof(sprite__animclip_frame) * clip.num_frames);
     the_asset->ref_add(clip.atlas);
 
     int index = sx_handle_index(handle);
@@ -335,14 +340,15 @@ static rizz_sprite_animclip sprite__animclip_clone(rizz_sprite_animclip src_hand
 }
 
 static void sprite__animclip_destroy(rizz_sprite_animclip handle) {
-    sx_assert(sx_handle_valid(g_spr.animclip_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.animclip_handles, handle.id));
     sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handle.id)];
 
     if (clip->atlas.id)
         the_asset->unload(clip->atlas);
 
 #if RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES == 0
-    sx_free(g_spr.alloc, clip->frames);
+    sx_assert(clip->alloc);
+    sx_free(clip->alloc, clip->frames);
 #endif
 
     sx_handle_del(g_spr.animclip_handles, handle.id);
@@ -351,21 +357,25 @@ static void sprite__animclip_destroy(rizz_sprite_animclip handle) {
 static void sprite__animclip_update_batch(const rizz_sprite_animclip* handles, int num_clips,
                                           float dt) {
     for (int i = 0; i < num_clips; i++) {
-        sx_assert(sx_handle_valid(g_spr.animclip_handles, handles[i].id));
+        sx_assert_rel(sx_handle_valid(g_spr.animclip_handles, handles[i].id));
 
         sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handles[i].id)];
-        float             tadvance = clip->tm + dt;
+        clip->end_triggered = false;
+        float tadvance = clip->tm + dt;
         float t = sx_mod(tadvance, clip->len);    // progress time and wrap it onto time length
 
         // detect timeline end
-        if (clip->trigger_end_event && t < (tadvance - 0.0001f)) {
-            rizz_event_push(&clip->equeue, RIZZ_SPRITE_ANIMCLIP_EVENT_END, NULL);
+        if (t < (tadvance - 0.0001f)) {
+            if (clip->trigger_end_event) {
+                rizz_event_push(&clip->equeue, RIZZ_SPRITE_ANIMCLIP_EVENT_END, NULL);
+            }
+            clip->end_triggered = true;
         }
 
         int frame_id = (int)(clip->fps * t);
         frame_id = sx_min(frame_id, clip->num_frames - 1);
 
-        const sprite__animclip_frame* frame = sprite__animclip_get_frame(clip, frame_id);
+        const sprite__animclip_frame* frame = &clip->frames[frame_id];
         if (frame->trigger && frame_id != clip->frame_id) {
             rizz_event_push(&clip->equeue, frame->e.e, frame->e.user);
         }
@@ -380,25 +390,25 @@ static void sprite__animclip_update(rizz_sprite_animclip clip, float dt) {
 }
 
 static float sprite__animclip_fps(rizz_sprite_animclip handle) {
-    sx_assert(sx_handle_valid(g_spr.animclip_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.animclip_handles, handle.id));
     sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handle.id)];
     return clip->fps;
 }
 
 static float sprite__animclip_len(rizz_sprite_animclip handle) {
-    sx_assert(sx_handle_valid(g_spr.animclip_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.animclip_handles, handle.id));
     sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handle.id)];
     return clip->len;
 }
 
 static rizz_event_queue* sprite__animclip_events(rizz_sprite_animclip handle) {
-    sx_assert(sx_handle_valid(g_spr.animclip_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.animclip_handles, handle.id));
     sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handle.id)];
     return &clip->equeue;
 }
 
 static void sprite__animclip_set_fps(rizz_sprite_animclip handle, float fps) {
-    sx_assert(sx_handle_valid(g_spr.animclip_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.animclip_handles, handle.id));
     sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handle.id)];
     sx_assert(clip->num_frames > 0);
     sx_assert(fps > 0);
@@ -407,7 +417,7 @@ static void sprite__animclip_set_fps(rizz_sprite_animclip handle, float fps) {
 }
 
 static void sprite__animclip_set_len(rizz_sprite_animclip handle, float length) {
-    sx_assert(sx_handle_valid(g_spr.animclip_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.animclip_handles, handle.id));
     sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handle.id)];
     sx_assert(clip->num_frames > 0);
     sx_assert(length > 0);
@@ -415,11 +425,395 @@ static void sprite__animclip_set_len(rizz_sprite_animclip handle, float length) 
     clip->len = length;
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// anim-ctrl
+static int sprite__animctrl_find_param_indesc(const char*                            name,
+                                              const rizz_sprite_animctrl_param_desc* params) {
+    int index = 0;
+    for (const rizz_sprite_animctrl_param_desc* p = &params[0]; p->name; ++p, ++index) {
+        if (sx_strequal(name, p->name)) {
+            return index;
+        }
+    }
+    rizz_log_warn(the_core, "sprite animctrl param '%s' not found", name);
+    sx_assert(0);
+    return -1;
+}
+
+static sprite__animctrl_param* sprite__animctrl_find_param(const char*       name,
+                                                           sprite__animctrl* ctrl) {
+    uint32_t name_hash = sx_hash_fnv32_str(name);
+    for (sprite__animctrl_param* p = &ctrl->params[0]; p->name_hash; ++p) {
+        if (p->name_hash == name_hash) {
+            return p;
+        }
+    }
+    rizz_log_warn(the_core, "sprite animctrl param '%s' not found", name);
+    sx_assert(0);
+    return NULL;
+}
+
+static void sprite__animctrl_set_paramb(rizz_sprite_animctrl handle, const char* name, bool b) {
+    sx_assert_rel(sx_handle_valid(g_spr.animctrl_handles, handle.id));
+    sprite__animctrl*       ctrl = &g_spr.animctrls[sx_handle_index(handle.id)];
+    sprite__animctrl_param* p = sprite__animctrl_find_param(name, ctrl);
+    sx_assert(p->type == RIZZ_SPRITE_PARAMTYPE_BOOL || p->type == RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO);
+    p->value.b = b;
+}
+
+static void sprite__animctrl_set_parami(rizz_sprite_animctrl handle, const char* name, int i) {
+    sx_assert_rel(sx_handle_valid(g_spr.animctrl_handles, handle.id));
+    sprite__animctrl*       ctrl = &g_spr.animctrls[sx_handle_index(handle.id)];
+    sprite__animctrl_param* p = sprite__animctrl_find_param(name, ctrl);
+    sx_assert(p->type == RIZZ_SPRITE_PARAMTYPE_INT);
+    p->value.i = i;
+}
+
+static void sprite__animctrl_set_paramf(rizz_sprite_animctrl handle, const char* name, float f) {
+    sx_assert_rel(sx_handle_valid(g_spr.animctrl_handles, handle.id));
+    sprite__animctrl*       ctrl = &g_spr.animctrls[sx_handle_index(handle.id)];
+    sprite__animctrl_param* p = sprite__animctrl_find_param(name, ctrl);
+    sx_assert(p->type == RIZZ_SPRITE_PARAMTYPE_FLOAT);
+    p->value.f = f;
+}
+
+static bool sprite__animctrl_param_valueb(rizz_sprite_animctrl handle, const char* name) {
+    sx_assert_rel(sx_handle_valid(g_spr.animctrl_handles, handle.id));
+    sprite__animctrl*       ctrl = &g_spr.animctrls[sx_handle_index(handle.id)];
+    sprite__animctrl_param* p = sprite__animctrl_find_param(name, ctrl);
+    sx_assert(p->type == RIZZ_SPRITE_PARAMTYPE_BOOL || p->type == RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO);
+    return p->value.b;
+}
+
+static float sprite__animctrl_param_valuef(rizz_sprite_animctrl handle, const char* name) {
+    sx_assert_rel(sx_handle_valid(g_spr.animctrl_handles, handle.id));
+    sprite__animctrl*       ctrl = &g_spr.animctrls[sx_handle_index(handle.id)];
+    sprite__animctrl_param* p = sprite__animctrl_find_param(name, ctrl);
+    sx_assert(p->type == RIZZ_SPRITE_PARAMTYPE_FLOAT);
+    return p->value.f;
+}
+
+static int sprite__animctrl_param_valuei(rizz_sprite_animctrl handle, const char* name) {
+    sx_assert_rel(sx_handle_valid(g_spr.animctrl_handles, handle.id));
+    sprite__animctrl*       ctrl = &g_spr.animctrls[sx_handle_index(handle.id)];
+    sprite__animctrl_param* p = sprite__animctrl_find_param(name, ctrl);
+    sx_assert(p->type == RIZZ_SPRITE_PARAMTYPE_INT);
+    return p->value.i;
+}
+
+static rizz_sprite_animclip sprite__animctrl_clip(rizz_sprite_animctrl handle) {
+    sx_assert_rel(sx_handle_valid(g_spr.animctrl_handles, handle.id));
+    sprite__animctrl* ctrl = &g_spr.animctrls[sx_handle_index(handle.id)];
+    sx_assert(ctrl->state);
+    return ctrl->state->clip;
+}
+
+static int sprite__animctrl_find_state(const char* name, const uint32_t* hashes, int num_states) {
+    uint32_t hash = sx_hash_fnv32_str(name);
+    for (int i = 0; i < num_states; i++) {
+        if (hash == hashes[i])
+            return i;
+    }
+    rizz_log_warn(the_core, "sprite animctrl state '%s' not found", name);
+    sx_assert(0);
+    return 0;
+}
+
+static void sprite__animctrl_restart(rizz_sprite_animctrl handle) {
+    sx_assert_rel(sx_handle_valid(g_spr.animctrl_handles, handle.id));
+    sprite__animctrl* ctrl = &g_spr.animctrls[sx_handle_index(handle.id)];
+    ctrl->state = ctrl->start_state;
+    sprite__animclip_restart(ctrl->state->clip);
+}
+
+static rizz_sprite_animctrl sprite__animctrl_create(const rizz_sprite_animctrl_desc* desc) {
+    sx_assert(desc->num_states > 1);
+    sx_assert(desc->num_transitions > 0);
+    sx_assert(desc->start_state);
+
+    const sx_alloc* alloc = desc->alloc ? desc->alloc : g_spr.alloc;
+
+    sx_handle_t handle = sx_handle_new_and_grow(g_spr.animctrl_handles, g_spr.alloc);
+    sx_assert(handle);
+    int num_states = desc->num_states;
+    int num_transitions = desc->num_transitions;
+
+    uint32_t* hashes = alloca(sizeof(uint32_t) * num_states);
+    sx_assert(hashes);
+    for (int i = 0; i < num_states; i++) hashes[i] = sx_hash_fnv32_str(desc->states[i].name);
+
+    // each element is count of transitions for each state
+    int* transition_counts = alloca(sizeof(int) * num_states);
+    sx_assert(transition_counts);
+    sx_memset(transition_counts, 0x0, sizeof(int) * num_states);
+
+    // each element is index to states array
+    int* transition_map = alloca(sizeof(int) * num_transitions);
+    sx_assert(transition_map);
+
+    int total_sz = sizeof(sprite__animctrl_state) * num_states +
+                   sizeof(sprite__animctrl_transition) * num_transitions;
+    uint8_t* buff = sx_malloc(alloc, total_sz);
+    if (!buff) {
+        sx_out_of_memory();
+        return (rizz_sprite_animctrl){ 0 };
+    }
+    void* _buff = buff;
+
+    // populate remap and count arrays
+    for (int i = 0; i < num_transitions; i++) {
+        sx_assert(desc->transitions[i].state);
+        sx_assert(desc->transitions[i].target_state);
+
+        int state_id = sprite__animctrl_find_state(desc->transitions[i].state, hashes, num_states);
+        transition_map[i] = state_id;
+        ++transition_counts[state_id];
+    }
+
+    // allocate states
+    sprite__animctrl_state** states = alloca(sizeof(sprite__animctrl_state) * num_states);
+    sx_assert(states);
+
+    for (int i = 0; i < num_states; i++) {
+        sprite__animctrl_state* state = (sprite__animctrl_state*)buff;
+        states[i] = state;
+
+        sx_strcpy(state->name, sizeof(state->name), desc->states[i].name);
+        state->clip = desc->states[i].clip;
+        sx_assert_rel(sx_handle_valid(g_spr.animclip_handles, state->clip.id));
+        state->num_transitions = transition_counts[i];
+
+        buff += sizeof(sprite__animctrl_state);
+
+        // transition array for each state
+        sprite__animctrl_transition* transitions = (sprite__animctrl_transition*)buff;
+        state->transitions = transitions;
+
+        for (int t = 0, tidx = 0; t < num_transitions; t++) {
+            if (transition_map[t] == i) {
+                const char* param_name = desc->transitions[t].trigger.param_name;
+                // save index instead of pointer, later we will resolve it to valid pointers
+                transitions[tidx].target = (void*)(intptr_t)sprite__animctrl_find_state(
+                    desc->transitions[t].target_state, hashes, num_states);
+                transitions[tidx].trigger = (sprite__animctrl_trigger){
+                    .param_id = param_name
+                                    ? sprite__animctrl_find_param_indesc(param_name, desc->params)
+                                    : ANIMCTRL_PARAM_ID_END,
+                    .func = desc->transitions[t].trigger.func,
+                    .value.i = desc->transitions[t].trigger.value.i
+                };
+                transitions[tidx].trigger_event = desc->transitions[t].trigger_event;
+                transitions[tidx].event = desc->transitions[t].event;
+                tidx++;
+            }
+        }
+        buff += transition_counts[i] * sizeof(sprite__animctrl_transition);
+    }
+
+    // resolve pointers to states inside transitions
+    for (int i = 0; i < num_states; i++) {
+        sprite__animctrl_state* state = states[i];
+        for (int t = 0; t < state->num_transitions; t++) {
+            state->transitions[t].target = states[(intptr_t)(void*)state->transitions[t].target];
+        }
+    }
+
+    //
+    sprite__animctrl ctrl = (sprite__animctrl){
+        .alloc = alloc,
+        .start_state = states[sprite__animctrl_find_state(desc->start_state, hashes, num_states)],
+        .buff = _buff
+    };
+
+    ctrl.state = ctrl.start_state;
+    int param_idx = 0;
+    for (const rizz_sprite_animctrl_param_desc* p = &desc->params[0]; p->name; ++p, ++param_idx) {
+        sx_strcpy(ctrl.params[param_idx].name, sizeof(ctrl.params[param_idx].name), p->name);
+        ctrl.params[param_idx].name_hash = sx_hash_fnv32_str(p->name);
+        ctrl.params[param_idx].type = p->type;
+        ctrl.params[param_idx].value.i = 0;
+    }
+
+    int index = sx_handle_index(handle);
+    if (index >= sx_array_count(g_spr.animctrls)) {
+        sx_array_push(g_spr.alloc, g_spr.animctrls, ctrl);
+    } else {
+        g_spr.animctrls[index] = ctrl;
+    }
+
+    return (rizz_sprite_animctrl){ handle };
+}
+
+static void sprite__animctrl_destroy(rizz_sprite_animctrl handle) {
+    sx_assert_rel(sx_handle_valid(g_spr.animctrl_handles, handle.id));
+    sprite__animctrl* ctrl = &g_spr.animctrls[sx_handle_index(handle.id)];
+    sx_assert(ctrl->alloc);
+
+    sx_free(ctrl->alloc, ctrl->buff);
+    sx_handle_del(g_spr.animctrl_handles, handle.id);
+}
+
+// callbacks for compare functions
+static bool sprite__animctrl_cmp_none(sprite__animctrl_value v, const sprite__animctrl_param* p) {
+    return false;
+}
+static bool sprite__animctrl_cmp_less(sprite__animctrl_value v, const sprite__animctrl_param* p) {
+    switch (p->type) {
+    case RIZZ_SPRITE_PARAMTYPE_BOOL:
+    case RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO:
+        return p->value.b != v.b;
+    case RIZZ_SPRITE_PARAMTYPE_INT:
+        return p->value.i < v.i;
+    case RIZZ_SPRITE_PARAMTYPE_FLOAT:
+        return p->value.f < v.f;
+    default:
+        return false;
+    }
+}
+static bool sprite__animctrl_cmp_eq(sprite__animctrl_value v, const sprite__animctrl_param* p) {
+    switch (p->type) {
+    case RIZZ_SPRITE_PARAMTYPE_BOOL:
+    case RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO:
+        return p->value.b == v.b;
+    case RIZZ_SPRITE_PARAMTYPE_INT:
+        return p->value.i == v.i;
+    case RIZZ_SPRITE_PARAMTYPE_FLOAT:
+        return sx_equal(p->value.f, v.f, 0.00001f);
+    default:
+        return false;
+    }
+}
+static bool sprite__animctrl_cmp_gt(sprite__animctrl_value v, const sprite__animctrl_param* p) {
+    switch (p->type) {
+    case RIZZ_SPRITE_PARAMTYPE_BOOL:
+    case RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO:
+        return p->value.b != v.b;
+    case RIZZ_SPRITE_PARAMTYPE_INT:
+        return p->value.i > v.i;
+    case RIZZ_SPRITE_PARAMTYPE_FLOAT:
+        return p->value.f > v.f;
+    default:
+        return false;
+    }
+}
+static bool sprite__animctrl_cmp_neq(sprite__animctrl_value v, const sprite__animctrl_param* p) {
+    switch (p->type) {
+    case RIZZ_SPRITE_PARAMTYPE_BOOL:
+    case RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO:
+        return p->value.b != v.b;
+    case RIZZ_SPRITE_PARAMTYPE_INT:
+        return p->value.i != v.i;
+    case RIZZ_SPRITE_PARAMTYPE_FLOAT:
+        return !sx_equal(p->value.f, v.f, 0.00001f);
+    default:
+        return false;
+    }
+}
+static bool sprite__animctrl_cmp_gte(sprite__animctrl_value v, const sprite__animctrl_param* p) {
+    switch (p->type) {
+    case RIZZ_SPRITE_PARAMTYPE_BOOL:
+    case RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO:
+        return p->value.b == v.b;
+    case RIZZ_SPRITE_PARAMTYPE_INT:
+        return p->value.i >= v.i;
+    case RIZZ_SPRITE_PARAMTYPE_FLOAT:
+        return p->value.f >= v.f;
+    default:
+        return false;
+    }
+}
+static bool sprite__animctrl_cmp_lte(sprite__animctrl_value v, const sprite__animctrl_param* p) {
+    switch (p->type) {
+    case RIZZ_SPRITE_PARAMTYPE_BOOL:
+    case RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO:
+        return p->value.b == v.b;
+    case RIZZ_SPRITE_PARAMTYPE_INT:
+        return p->value.i <= v.i;
+    case RIZZ_SPRITE_PARAMTYPE_FLOAT:
+        return p->value.f <= v.f;
+    default:
+        return false;
+    }
+}
+
+typedef bool(sprite__animctrl_cmp_fn)(sprite__animctrl_value, const sprite__animctrl_param*);
+static sprite__animctrl_cmp_fn* k_compare_funcs[_RIZZ_SPRITE_COMPAREFUNC_COUNT] = {
+    sprite__animctrl_cmp_none, sprite__animctrl_cmp_less, sprite__animctrl_cmp_eq,
+    sprite__animctrl_cmp_gt,   sprite__animctrl_cmp_neq,  sprite__animctrl_cmp_gte,
+    sprite__animctrl_cmp_lte
+};
+
+static void sprite__animctrl_trigger_transition(sprite__animctrl* ctrl, int transition_id) {
+    sprite__animctrl_state*      state = ctrl->state;
+    sprite__animctrl_transition* transition = &state->transitions[transition_id];
+
+    ctrl->state = transition->target;
+    if (transition->trigger_event) {
+        rizz_event_push(&ctrl->equeue, transition->event.e, transition->event.user);
+    }
+}
+
+static void sprite__animctrl_update_batch(rizz_sprite_animctrl* handles, int num_ctrls, float dt) {
+    rizz_sprite_animclip* clips = alloca(sizeof(rizz_sprite_animclip) * num_ctrls);
+    sprite__animctrl**    ctrls = alloca(sizeof(sprite__animctrl*) * num_ctrls);
+    sx_assert(clips && ctrls);
+
+    for (int i = 0; i < num_ctrls; i++) {
+        sx_assert_rel(sx_handle_valid(g_spr.animctrl_handles, handles[i].id));
+        sprite__animctrl*       ctrl = &g_spr.animctrls[sx_handle_index(handles[i].id)];
+        sprite__animctrl_state* state = ctrl->state;
+
+        ctrls[i] = ctrl;
+        clips[i] = ctrl->state->clip;
+    }
+
+    // update clips
+    sprite__animclip_update_batch(clips, num_ctrls, dt);
+
+    // check on_end events on clips
+    for (int i = 0; i < num_ctrls; i++) {
+        sprite__animctrl*       ctrl = ctrls[i];
+        sprite__animctrl_state* state = ctrl->state;
+
+        // check parameterized transitions
+        for (int t = 0, c = state->num_transitions; t < c; t++) {
+            sprite__animctrl_transition* transition = &state->transitions[t];
+            if (transition->trigger.param_id != ANIMCTRL_PARAM_ID_END) {
+                bool r = k_compare_funcs[transition->trigger.func](
+                    (sprite__animctrl_value){ .i = transition->trigger.value.i },
+                    &ctrl->params[transition->trigger.param_id]);
+                if (r) {
+                    sprite__animctrl_trigger_transition(ctrl, t);
+                    break;
+                }
+            } else {
+                sx_assert(sx_handle_valid(g_spr.animclip_handles, state->clip.id));
+                sprite__animclip* clip = &g_spr.animclips[sx_handle_index(state->clip.id)];
+                if (clip->end_triggered) {
+                    sprite__animctrl_trigger_transition(ctrl, t);
+                    break;
+                }
+            }
+        }    // foreach: transition
+
+        for (sprite__animctrl_param* p = &ctrl->params[0]; p->name_hash; ++p) {
+            if (p->type == RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO && p->value.b)
+                p->value.b = false;
+        }
+    }
+}
+
+static void sprite__animctrl_update(rizz_sprite_animctrl handle, float dt) {
+    sprite__animctrl_update_batch(&handle, 1, dt);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// sprite
 static void sprite__sync_with_animclip(sprite__data* spr) {
     rizz_sprite_animclip clip_handle = spr->clip;
     if (sx_handle_valid(g_spr.animclip_handles, clip_handle.id)) {
         sprite__animclip* clip = &g_spr.animclips[sx_handle_index(clip_handle.id)];
-        spr->atlas_sprite_id = (int)sprite__animclip_get_frame(clip, clip->frame_id)->atlas_id;
+        spr->atlas_sprite_id = (int)clip->frames[clip->frame_id].atlas_id;
     } else {
         rizz_log_warn(
             the_core, "sprite_animclip 'handle: 0x%x' binded to sprite '%s' has become invalid",
@@ -793,6 +1187,9 @@ static bool sprite__init() {
     g_spr.animclip_handles = sx_handle_create_pool(g_spr.alloc, 256);
     sx_assert(g_spr.animclip_handles);
 
+    g_spr.animctrl_handles = sx_handle_create_pool(g_spr.alloc, 128);
+    sx_assert(g_spr.animctrl_handles);
+
     // register "atlas" asset type and metadata
     rizz_refl_field(the_refl, atlas__metadata, char[RIZZ_MAX_PATH], img_filepath, "img_filepath");
     rizz_refl_field(the_refl, atlas__metadata, int, num_sprites, "num_sprites");
@@ -887,7 +1284,7 @@ static void sprite__release() {
 }
 
 static rizz_sprite sprite__create(const rizz_sprite_desc* desc) {
-    sx_assert(desc->texture.id || desc->clip.id);
+    sx_assert(desc->texture.id || desc->clip.id || desc->ctrl.id);
     sx_assert(desc->size.x > 0 || desc->size.y > 0);
 
     sx_handle_t handle = sx_handle_new_and_grow(g_spr.sprite_handles, g_spr.alloc);
@@ -899,14 +1296,19 @@ static rizz_sprite sprite__create(const rizz_sprite_desc* desc) {
                          .origin = desc->origin,
                          .color = desc->color.n != 0 ? desc->color : sx_colorn(0xffffffff),
                          .flip = desc->flip,
-                         .clip = desc->clip };
+                         .clip = desc->clip,
+                         .ctrl = desc->ctrl };
 
-    if (desc->clip.id) {
-        sx_assert(sx_handle_valid(g_spr.animclip_handles, desc->clip.id));
-        sprite__animclip* clip = &g_spr.animclips[sx_handle_index(desc->clip.id)];
+    if (spr.ctrl.id) {
+        spr.clip = sprite__animctrl_clip(spr.ctrl);
+    }
+
+    if (spr.clip.id) {
+        sx_assert_rel(sx_handle_valid(g_spr.animclip_handles, spr.clip.id));
+        sprite__animclip* clip = &g_spr.animclips[sx_handle_index(spr.clip.id)];
         sx_assert(clip->num_frames > 0);
         spr.atlas = clip->atlas;
-        spr.atlas_sprite_id = (int)sprite__animclip_get_frame(clip, clip->frame_id)->atlas_id;
+        spr.atlas_sprite_id = (int)clip->frames[clip->frame_id].atlas_id;
         atlas__data* atlas = the_asset->obj(clip->atlas).ptr;
         spr.texture = atlas->a.texture;
         the_asset->ref_add(spr.atlas);
@@ -949,7 +1351,7 @@ static rizz_sprite sprite__create(const rizz_sprite_desc* desc) {
 }
 
 rizz_sprite sprite__clone(rizz_sprite src_handle, rizz_sprite_animclip clip_handle) {
-    sx_assert(sx_handle_valid(g_spr.sprite_handles, src_handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.sprite_handles, src_handle.id));
     sprite__data* src = &g_spr.sprites[sx_handle_index(src_handle.id)];
 
     sx_handle_t handle = sx_handle_new_and_grow(g_spr.sprite_handles, g_spr.alloc);
@@ -971,11 +1373,11 @@ rizz_sprite sprite__clone(rizz_sprite src_handle, rizz_sprite_animclip clip_hand
 
     // if new clip is set, override the previous one
     if (clip_handle.id) {
-        sx_assert(sx_handle_valid(g_spr.animclip_handles, clip_handle.id));
+        sx_assert_rel(sx_handle_valid(g_spr.animclip_handles, clip_handle.id));
         sprite__animclip* clip = &g_spr.animclips[sx_handle_index(clip_handle.id)];
         sx_assert(clip->num_frames > 0);
         spr.atlas = clip->atlas;
-        spr.atlas_sprite_id = (int)sprite__animclip_get_frame(clip, clip->frame_id)->atlas_id;
+        spr.atlas_sprite_id = (int)clip->frames[clip->frame_id].atlas_id;
         atlas__data* atlas = the_asset->obj(clip->atlas).ptr;
         spr.texture = atlas->a.texture;
     }
@@ -998,7 +1400,7 @@ rizz_sprite sprite__clone(rizz_sprite src_handle, rizz_sprite_animclip clip_hand
 }
 
 static void sprite__destroy(rizz_sprite handle) {
-    sx_assert(sx_handle_valid(g_spr.sprite_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.sprite_handles, handle.id));
 
     sprite__data* spr = &g_spr.sprites[sx_handle_index(handle.id)];
     if (spr->atlas.id) {
@@ -1015,69 +1417,69 @@ static void sprite__destroy(rizz_sprite handle) {
 }
 
 static sx_vec2 sprite__size(rizz_sprite handle) {
-    sx_assert(sx_handle_valid(g_spr.sprite_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.sprite_handles, handle.id));
     sprite__data* spr = &g_spr.sprites[sx_handle_index(handle.id)];
     return spr->size;
 }
 
 static sx_vec2 sprite__origin(rizz_sprite handle) {
-    sx_assert(sx_handle_valid(g_spr.sprite_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.sprite_handles, handle.id));
     sprite__data* spr = &g_spr.sprites[sx_handle_index(handle.id)];
     return spr->origin;
 }
 
 static sx_color sprite__color(rizz_sprite handle) {
-    sx_assert(sx_handle_valid(g_spr.sprite_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.sprite_handles, handle.id));
     sprite__data* spr = &g_spr.sprites[sx_handle_index(handle.id)];
     return spr->color;
 }
 
 static const char* sprite__name(rizz_sprite handle) {
-    sx_assert(sx_handle_valid(g_spr.sprite_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.sprite_handles, handle.id));
     sprite__data* spr = &g_spr.sprites[sx_handle_index(handle.id)];
     return sx_strpool_cstr(g_spr.name_pool, spr->name);
 }
 
 static sx_rect sprite__bounds(rizz_sprite handle) {
-    sx_assert(sx_handle_valid(g_spr.sprite_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.sprite_handles, handle.id));
     sprite__data* spr = &g_spr.sprites[sx_handle_index(handle.id)];
     return spr->bounds;
 }
 
 static sx_rect sprite__draw_bounds(rizz_sprite handle) {
-    sx_assert(sx_handle_valid(g_spr.sprite_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.sprite_handles, handle.id));
     sprite__data* spr = &g_spr.sprites[sx_handle_index(handle.id)];
     return spr->draw_bounds;
 }
 
 static rizz_sprite_flip sprite__flip(rizz_sprite handle) {
-    sx_assert(sx_handle_valid(g_spr.sprite_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.sprite_handles, handle.id));
     sprite__data* spr = &g_spr.sprites[sx_handle_index(handle.id)];
     return spr->flip;
 }
 
 static void sprite__set_size(rizz_sprite handle, const sx_vec2 size) {
-    sx_assert(sx_handle_valid(g_spr.sprite_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.sprite_handles, handle.id));
     sprite__data* spr = &g_spr.sprites[sx_handle_index(handle.id)];
     spr->size = size;
     sprite__update_bounds(spr);
 }
 
 static void sprite__set_origin(rizz_sprite handle, const sx_vec2 origin) {
-    sx_assert(sx_handle_valid(g_spr.sprite_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.sprite_handles, handle.id));
     sprite__data* spr = &g_spr.sprites[sx_handle_index(handle.id)];
     spr->origin = origin;
     sprite__update_bounds(spr);
 }
 
 static void sprite__set_color(rizz_sprite handle, const sx_color color) {
-    sx_assert(sx_handle_valid(g_spr.sprite_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.sprite_handles, handle.id));
     sprite__data* spr = &g_spr.sprites[sx_handle_index(handle.id)];
     spr->color = color;
 }
 
 static void sprite__set_flip(rizz_sprite handle, rizz_sprite_flip flip) {
-    sx_assert(sx_handle_valid(g_spr.sprite_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_spr.sprite_handles, handle.id));
     sprite__data* spr = &g_spr.sprites[sx_handle_index(handle.id)];
     spr->flip = flip;
     sprite__update_bounds(spr);
@@ -1096,7 +1498,7 @@ static rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs
     int num_verts = 0;
     int num_indices = 0;
     for (int i = 0; i < num_sprites; i++) {
-        sx_assert(sx_handle_valid(g_spr.sprite_handles, sprs[i].id));
+        sx_assert_rel(sx_handle_valid(g_spr.sprite_handles, sprs[i].id));
 
         int           index = sx_handle_index(sprs[i].id);
         sprite__data* spr = &g_spr.sprites[index];
@@ -1104,6 +1506,10 @@ static rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs
         keys[i] = ((uint64_t)spr->texture.id << 32) | (uint64_t)index;
 
         // check clip/controller handle validity and fetch rendering frame
+        if (spr->ctrl.id) {
+            spr->clip = sprite__animctrl_clip(spr->ctrl);
+        }
+
         if (spr->clip.id) {
             sprite__sync_with_animclip(spr);
         }
@@ -1401,42 +1807,371 @@ static void sprite__draw_wireframe_batch(const rizz_sprite* sprs, int num_sprite
     the_core->tmp_alloc_pop();
 }
 
-void sprite__draw_wireframe(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat, sx_color tint, 
+static void sprite__draw_wireframe(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat, sx_color tint, 
                             const sx_alloc* alloc)
 {
     sprite__draw_wireframe_batch(&spr, 1, vp, mat, &tint, alloc);
 }
 
-static rizz_api_sprite the__sprite = {
-    .create = sprite__create,
-    .destroy = sprite__destroy,
-    .clone = sprite__clone,
-    .size = sprite__size,
-    .origin = sprite__origin,
-    .bounds = sprite__bounds,
-    .flip = sprite__flip,
-    .set_size = sprite__set_size,
-    .set_origin = sprite__set_origin,
-    .set_color = sprite__set_color,
-    .set_flip = sprite__set_flip,
-    .make_drawdata = sprite__drawdata_make,
-    .make_drawdata_batch = sprite__drawdata_make_batch,
-    .free_drawdata = sprite__drawdata_free,
-    .draw = sprite__draw,
-    .draw_batch = sprite__draw_batch,
-    .draw_wireframe_batch = sprite__draw_wireframe_batch,
-    .resize_draw_limits = sprite__resize_draw_limits,
-    .animclip_create = sprite__animclip_create,
-    .animclip_destroy = sprite__animclip_destroy,
-    .animclip_clone = sprite__animclip_clone,
-    .animclip_update = sprite__animclip_update,
-    .animclip_update_batch = sprite__animclip_update_batch,
-    .animclip_fps = sprite__animclip_fps,
-    .animclip_len = sprite__animclip_len,
-    .animclip_events = sprite__animclip_events,
-    .animclip_set_fps = sprite__animclip_set_fps,
-    .animclip_set_len = sprite__animclip_set_len
-};
+static void sprite__show_sprite_preview(sprite__data* spr) {
+    the_imgui->BeginChild("sprite_preview", SX_VEC2_ZERO, false, 0);
+    {
+        ImDrawList* draw_list = the_imgui->GetWindowDrawList();
+        sx_vec2     wsize;
+        sx_vec2     wpos;
+        the_imgui->GetWindowSize_nonUDT(&wsize);
+        the_imgui->GetWindowPos_nonUDT(&wpos);
+        sx_vec2 padded_wsize = sx_vec2_mulf(wsize, 0.9f);
+        sx_rect sprite_rect;
+        sx_vec2 uv1, uv2;
+
+        if (spr->atlas.id) {
+            const atlas__data* atlas = (atlas__data*)the_asset->obj(spr->atlas).ptr;
+            sx_assert(spr->atlas_sprite_id < atlas->a.info.num_sprites);
+            const atlas__sprite* aspr = &atlas->sprites[spr->atlas_sprite_id];
+
+            sx_vec2 base_size = aspr->base_size;
+            sx_vec2 atlas_size_rcp =
+                sx_vec2f(1.0f / atlas->a.info.img_width, 1.0f / atlas->a.info.img_height);
+            uv1 = sx_vec2_mul(aspr->sheet_rect.vmin, atlas_size_rcp);
+            uv2 = sx_vec2_mul(aspr->sheet_rect.vmax, atlas_size_rcp);
+
+            // normalize sprite_rect
+            sx_vec2 base_size_rcp = sx_vec2f(1.0f / base_size.x, 1.0f / base_size.y);
+            sprite_rect = sx_rectv(sx_vec2_mul(aspr->sprite_rect.vmin, base_size_rcp),
+                                   sx_vec2_mul(aspr->sprite_rect.vmax, base_size_rcp));
+
+            // fit into padded_size
+            sx_vec2 s1 = sprite__calc_size(sx_vec2f(padded_wsize.x, 0), base_size, 0);
+            sx_vec2 s2 = sprite__calc_size(sx_vec2f(0, padded_wsize.y), base_size, 0);
+            if (s1.y <= padded_wsize.y)
+                padded_wsize = s1;
+            else if (s2.x <= padded_wsize.x)
+                padded_wsize = s2;
+        } else {
+            uv1 = sx_vec2f(0.0f, 0.0f);
+            uv2 = sx_vec2f(1.0f, 1.0f);
+            rizz_texture* tex = (rizz_texture*)the_asset->obj(spr->texture).ptr;
+            sx_vec2 base_size = sx_vec2f((float)tex->info.width, (float)tex->info.height);
+            sprite_rect = sx_rectf(0, 0, base_size.x, base_size.y);
+
+            // fit into padded_size
+            sx_vec2 s1 = sprite__calc_size(sx_vec2f(padded_wsize.x, 0), base_size, 0);
+            sx_vec2 s2 = sprite__calc_size(sx_vec2f(0, padded_wsize.y), base_size, 0);
+            if (s1.y <= padded_wsize.y)
+                padded_wsize = s1;
+            else if (s2.x <= padded_wsize.x)
+                padded_wsize = s2;
+        }
+
+        wpos = sx_vec2_add(wpos, sx_vec2_mulf(sx_vec2_sub(wsize, padded_wsize), 0.5f));
+        wsize = padded_wsize;
+
+        sx_vec2     vmin = sx_vec2_add(wpos, sx_vec2_mul(sprite_rect.vmin, wsize));
+        sx_vec2     vmax = sx_vec2_add(wpos, sx_vec2_mul(sprite_rect.vmax, wsize));
+        ImTextureID tex_id =
+            (ImTextureID)(uintptr_t)((rizz_texture*)the_asset->obj(spr->texture).ptr)->img.id;
+        the_imgui->ImDrawList_AddImage(draw_list, tex_id, vmin, vmax, uv1, uv2, 0xffffffff);
+
+        // base frame
+        the_imgui->ImDrawList_AddRect(draw_list, wpos, sx_vec2_add(wpos, wsize),
+                                      sx_color4u(255, 255, 0, 255).n, 0, 0, 1.0f);
+
+        // sprite frame
+        the_imgui->ImDrawList_AddRect(draw_list, vmin, vmax, sx_color4u(255, 0, 0, 255).n, 0, 0,
+                                      1.0f);
+
+        // origin
+        sx_vec2 origin = sx_vec2_add(
+            sx_vec2_mul(sx_vec2f(spr->origin.x + 0.5f, 0.5f - spr->origin.y), wsize), wpos);
+        the_imgui->ImDrawList_AddCircleFilled(draw_list, origin, 5.0f, sx_color4u(0, 255, 0, 255).n,
+                                              6);
+    }
+
+    the_imgui->EndChild();
+    
+}
+
+static void sprite__show_sprite_tab_contents(sprite__data* spr) {
+    sx_vec2 base_size;
+    if (spr->atlas.id) {
+        const atlas__data* atlas = (atlas__data*)the_asset->obj(spr->atlas).ptr;
+        sx_assert(spr->atlas_sprite_id < atlas->a.info.num_sprites);
+        const atlas__sprite* aspr = &atlas->sprites[spr->atlas_sprite_id];
+        base_size = aspr->base_size;
+    } else {
+        rizz_texture* tex = (rizz_texture*)the_asset->obj(spr->texture).ptr;
+        base_size = sx_vec2f((float)tex->info.width, (float)tex->info.height);
+    }
+
+    // 
+    the_imgui->Columns(2, "sprite_cols", true);
+    the_imgui->BeginChild("sprite_info", SX_VEC2_ZERO, false, 0);
+
+    the_imgui->Columns(2, "sprite_info_cols", false);
+    the_imgui->SetColumnWidth(0, 70.0f);
+    
+    // clang-format off
+    the_imgui->Text("atlas");   the_imgui->NextColumn();
+    the_imgui->Text("0x%x", spr->atlas.id); the_imgui->NextColumn();    
+    the_imgui->Text("atlas_id"); the_imgui->NextColumn();
+    the_imgui->Text("%d", spr->atlas_sprite_id); the_imgui->NextColumn();    
+    the_imgui->Text("texture"); the_imgui->NextColumn();
+    the_imgui->Text("0x%x", spr->texture.id); the_imgui->NextColumn();
+    the_imgui->Text("size"); the_imgui->NextColumn();
+    the_imgui->Text("(%.2f, %.2f)", spr->size.x, spr->size.y); the_imgui->NextColumn();    
+    the_imgui->Text("color"); the_imgui->NextColumn();
+    sx_vec4 color = sx_color_vec4(spr->color);
+    the_imgui->ColorButton("sprite_color", color, 0, SX_VEC2_ZERO); the_imgui->NextColumn();
+    the_imgui->Text("origin"); the_imgui->NextColumn();
+    the_imgui->DragFloat2("", spr->origin.f, 0.01f, -0.5f, 0.5f, "%.2f", 1.0);
+    the_imgui->NextColumn();
+    the_imgui->Text("dbounds"); the_imgui->NextColumn();
+    the_imgui->Text("(%.2f, %.2f, %.2f, %.2f)", spr->draw_bounds.xmin, spr->draw_bounds.ymin, 
+        spr->draw_bounds.xmax, spr->draw_bounds.ymax);  the_imgui->NextColumn();
+    the_imgui->Text("bounds"); the_imgui->NextColumn();
+    the_imgui->Text("(%.2f, %.2f, %.2f, %.2f)", spr->bounds.xmin, spr->bounds.ymin, 
+        spr->bounds.xmax, spr->bounds.ymax);  the_imgui->NextColumn();
+    the_imgui->Text("base_size"); the_imgui->NextColumn();
+    the_imgui->Text("(%.0f, %.0f)", base_size.x, base_size.y);  the_imgui->NextColumn();
+    // clang-format on
+    the_imgui->EndChild();
+    the_imgui->NextColumn();
+
+    sprite__show_sprite_preview(spr);
+    the_imgui->NextColumn();
+    the_imgui->Columns(1, NULL, false);
+}
+
+static void sprite__show_animclip_tab_contents(sprite__data* spr) {
+    sx_assert(spr->clip.id);
+    sx_assert(sx_handle_valid(g_spr.animclip_handles, spr->clip.id));
+
+    sprite__animclip* clip = &g_spr.animclips[sx_handle_index(spr->clip.id)];
+
+    the_imgui->Columns(2, "animclip_cols", true);
+
+    the_imgui->BeginChild("animclip_info", SX_VEC2_ZERO, false, 0);
+    the_imgui->Columns(2, "animclip_info_cols", false);
+    the_imgui->SetColumnWidth(0, 80.0f);
+
+    the_imgui->Text("num_frames");
+    the_imgui->NextColumn();
+    the_imgui->Text("%d", clip->num_frames);
+    the_imgui->NextColumn();
+    the_imgui->Text("time");
+    the_imgui->NextColumn();
+    the_imgui->Text("%.3f", clip->tm);
+    the_imgui->NextColumn();
+    the_imgui->Text("frame");
+    the_imgui->NextColumn();
+    the_imgui->Text("%d", clip->frame_id);
+    the_imgui->NextColumn();
+    the_imgui->Text("duration");
+    the_imgui->NextColumn();
+    the_imgui->Text("%.2f", clip->len);
+    the_imgui->NextColumn();
+    the_imgui->Text("fps");
+    the_imgui->NextColumn();
+    if (the_imgui->DragFloat("", &clip->fps, 0.1f, 0.1f, 200.0f, "%.1f", 1.0f)) {
+        clip->len = (float)clip->num_frames / clip->fps;
+    }
+    the_imgui->NextColumn();
+
+    the_imgui->EndChild();
+    the_imgui->NextColumn();
+
+    sprite__show_sprite_preview(spr);
+    the_imgui->NextColumn();
+    the_imgui->Columns(1, NULL, false);
+}
+
+static void sprite__show_animctrl_tab_contents(sprite__data* spr) {
+    sx_assert(spr->ctrl.id);
+    sx_assert(sx_handle_valid(g_spr.animclip_handles, spr->ctrl.id));
+
+    sprite__animctrl* ctrl = &g_spr.animctrls[sx_handle_index(spr->ctrl.id)];
+
+    the_imgui->Columns(2, "animctrl_cols", true);
+
+    the_imgui->BeginChild("animctrl_info", SX_VEC2_ZERO, false, 0);
+    the_imgui->Columns(2, "animctrl_info_cols", false);
+    the_imgui->SetColumnWidth(0, 80.0f);
+
+    the_imgui->Text("state");
+    the_imgui->NextColumn();
+    the_imgui->Text(ctrl->state->name);
+    the_imgui->NextColumn();
+    the_imgui->Columns(1, NULL, false);
+
+    if (the_imgui->CollapsingHeader("Params", ImGuiTreeNodeFlags_DefaultOpen)) {
+        the_imgui->BeginChild("params", SX_VEC2_ZERO, false, 0);
+        the_imgui->Columns(2, "params_cols", false);
+        the_imgui->SetColumnWidth(0, 80.0f);
+        for (sprite__animctrl_param* p = &ctrl->params[0]; p->name_hash; p++) {
+            the_imgui->Text(p->name);
+            the_imgui->NextColumn();
+
+            // check type
+            char id[32];
+            sx_snprintf(id, sizeof(id), "param_%s", p->name);
+            the_imgui->PushIDStr(id);
+            switch (p->type) {
+            case RIZZ_SPRITE_PARAMTYPE_BOOL:
+                the_imgui->Checkbox("", &p->value.b);
+                break;
+            case RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO:
+                the_imgui->Checkbox("(auto)", &p->value.b);
+                break;
+            case RIZZ_SPRITE_PARAMTYPE_FLOAT:
+                the_imgui->InputFloat("", &p->value.f, 1.0f, 10.0f, "%.2f", 0);
+                break;
+            case RIZZ_SPRITE_PARAMTYPE_INT:
+                the_imgui->InputInt("", &p->value.i, 1, 10, 0);
+                break;
+            }
+            the_imgui->PopID();
+            the_imgui->NextColumn();
+        }
+        the_imgui->EndChild();
+    }
+
+    the_imgui->EndChild();
+    the_imgui->NextColumn();
+
+    sprite__show_sprite_preview(spr);
+    the_imgui->NextColumn();
+    the_imgui->Columns(1, NULL, false);
+}
+
+static void sprite__show_debugger(bool* p_open) {
+    if (!the_imgui || g_spr.sprite_handles->count == 0) {
+        return;
+    }
+
+    static int selected_sprite = -1;
+
+    int num_items = g_spr.sprite_handles->count;
+    the_imgui->SetNextWindowSizeConstraints(sx_vec2f(350.0f, 500.0f), sx_vec2f(FLT_MAX, FLT_MAX),
+                                            NULL, NULL);
+    if (the_imgui->Begin("Sprite Debugger", p_open, 0)) {
+        the_imgui->Columns(3, NULL, false);
+        the_imgui->SetColumnWidth(0, 70.0f);
+        the_imgui->Text("Handle");
+        the_imgui->NextColumn();
+        the_imgui->SetColumnWidth(1, 200.0f);
+        the_imgui->Text("Name");
+        the_imgui->NextColumn();
+        the_imgui->Text("Image");
+        the_imgui->NextColumn();
+        the_imgui->Separator();
+
+        the_imgui->Columns(1, NULL, false);
+        the_imgui->BeginChild("sprite_list",
+                              sx_vec2f(the_imgui->GetWindowContentRegionWidth(), 100.0f), false, 0);
+        the_imgui->Columns(3, NULL, false);
+
+        ImGuiListClipper clipper;
+        the_imgui->ImGuiListClipper_Begin(&clipper, num_items, -1.0f);
+        char handle_str[32];
+
+        while (the_imgui->ImGuiListClipper_Step(&clipper)) {
+            int start = num_items - clipper.DisplayStart - 1;
+            int end = num_items - clipper.DisplayEnd;
+            for (int i = start; i >= end; i--) {
+                sx_handle_t   handle = sx_handle_at(g_spr.sprite_handles, i);
+                sprite__data* spr = &g_spr.sprites[sx_handle_index(handle)];
+                sx_snprintf(handle_str, sizeof(handle_str), "0x%x", handle);
+                the_imgui->SetColumnWidth(0, 70.0f);
+                if (the_imgui->Selectable(handle_str, selected_sprite == i,
+                                          ImGuiSelectableFlags_SpanAllColumns, SX_VEC2_ZERO)) {
+                    selected_sprite = i;
+                }
+                the_imgui->NextColumn();
+
+                the_imgui->SetColumnWidth(1, 200.0f);
+                the_imgui->Text(spr->name ? sx_strpool_cstr(g_spr.name_pool, spr->name)
+                                          : "[noname]");
+                the_imgui->NextColumn();
+
+                if (spr->texture.id) {
+                    the_imgui->Text(the_asset->path(spr->texture));
+                } else {
+                    the_imgui->Text("");
+                }
+
+                the_imgui->NextColumn();
+            }
+        }
+        the_imgui->ImGuiListClipper_End(&clipper);
+        the_imgui->EndChild();
+
+        if (selected_sprite != -1 && the_imgui->BeginTabBar("sprite_tab", 0)) {
+            sx_handle_t   handle = sx_handle_at(g_spr.sprite_handles, selected_sprite);
+            sprite__data* spr = &g_spr.sprites[sx_handle_index(handle)];
+
+            if (the_imgui->BeginTabItem("Sprite", NULL, 0)) {
+                sprite__show_sprite_tab_contents(spr);
+                the_imgui->EndTabItem();
+            }
+
+            if (spr->clip.id && the_imgui->BeginTabItem("AnimClip", NULL, 0)) {
+                sprite__show_animclip_tab_contents(spr);
+                the_imgui->EndTabItem();
+            }
+
+            if (spr->ctrl.id && the_imgui->BeginTabItem("AnimCtrl", NULL, 0)) {
+                sprite__show_animctrl_tab_contents(spr);
+                the_imgui->EndTabItem();
+            }
+
+            the_imgui->EndTabBar();
+        }
+    }
+    the_imgui->End();
+}
+
+static rizz_api_sprite the__sprite = { .create = sprite__create,
+                                       .destroy = sprite__destroy,
+                                       .clone = sprite__clone,
+                                       .size = sprite__size,
+                                       .origin = sprite__origin,
+                                       .bounds = sprite__bounds,
+                                       .flip = sprite__flip,
+                                       .set_size = sprite__set_size,
+                                       .set_origin = sprite__set_origin,
+                                       .set_color = sprite__set_color,
+                                       .set_flip = sprite__set_flip,
+                                       .make_drawdata = sprite__drawdata_make,
+                                       .make_drawdata_batch = sprite__drawdata_make_batch,
+                                       .free_drawdata = sprite__drawdata_free,
+                                       .draw = sprite__draw,
+                                       .draw_batch = sprite__draw_batch,
+                                       .draw_wireframe_batch = sprite__draw_wireframe_batch,
+                                       .resize_draw_limits = sprite__resize_draw_limits,
+                                       .animclip_create = sprite__animclip_create,
+                                       .animclip_destroy = sprite__animclip_destroy,
+                                       .animclip_clone = sprite__animclip_clone,
+                                       .animclip_update = sprite__animclip_update,
+                                       .animclip_update_batch = sprite__animclip_update_batch,
+                                       .animclip_fps = sprite__animclip_fps,
+                                       .animclip_len = sprite__animclip_len,
+                                       .animclip_events = sprite__animclip_events,
+                                       .animclip_set_fps = sprite__animclip_set_fps,
+                                       .animclip_set_len = sprite__animclip_set_len,
+                                       .animclip_restart = sprite__animclip_restart,
+                                       .animctrl_create = sprite__animctrl_create,
+                                       .animctrl_destroy = sprite__animctrl_destroy,
+                                       .animctrl_update = sprite__animctrl_update,
+                                       .animctrl_update_batch = sprite__animctrl_update_batch,
+                                       .animctrl_set_paramb = sprite__animctrl_set_paramb,
+                                       .animctrl_set_parami = sprite__animctrl_set_parami,
+                                       .animctrl_set_paramf = sprite__animctrl_set_paramf,
+                                       .animctrl_param_valueb = sprite__animctrl_param_valueb,
+                                       .animctrl_param_valuei = sprite__animctrl_param_valuei,
+                                       .animctrl_param_valuef = sprite__animctrl_param_valuef,
+                                       .animctrl_restart = sprite__animctrl_restart,
+                                       .show_debugger = sprite__show_debugger };
 
 rizz_plugin_decl_main(sprite, plugin, e) {
     switch (e) {
@@ -1449,6 +2184,8 @@ rizz_plugin_decl_main(sprite, plugin, e) {
         the_asset = the_plugin->get_api(RIZZ_API_ASSET, 0);
         the_refl = the_plugin->get_api(RIZZ_API_REFLECT, 0);
         the_gfx = the_plugin->get_api(RIZZ_API_GFX, 0);
+        the_imgui = the_plugin->get_api(RIZZ_API_IMGUI, 0);
+        the_imguix = the_plugin->get_api(RIZZ_API_IMGUI_EXTRA, 0);
         if (!sprite__init()) {
             return -1;
         }

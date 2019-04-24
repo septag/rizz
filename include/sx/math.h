@@ -643,6 +643,11 @@ static inline sx_color sx_colorn(unsigned int _n) {
 #endif
 }
 
+static inline sx_vec4 sx_color_vec4(sx_color c) {
+    float rcp = 1.0f / 255.0f;
+    return sx_vec4f((float)c.r*rcp, (float)c.g*rcp, (float)c.b*rcp, (float)c.a*rcp);
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Quaternion
 static inline sx_quat sx_quat4f(float _x, float _y, float _z, float _w) {

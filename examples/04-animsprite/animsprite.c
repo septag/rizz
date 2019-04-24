@@ -40,17 +40,11 @@ typedef struct {
     rizz_asset           atlas;
     rizz_camera_fps      cam;
     rizz_sprite          sprite;
-    rizz_sprite_animclip animclip;
+    rizz_sprite_animclip animclips[5];
+    rizz_sprite_animctrl animctrl;
 } animsprite_state;
 
 RIZZ_STATE static animsprite_state g_as;
-
-static const rizz_sprite_animclip_frame_desc k_frames[] = {
-    { .name = "test/boy_motion_idle_000.png" }, { .name = "test/boy_motion_idle_001.png" },
-    { .name = "test/boy_motion_idle_002.png" }, { .name = "test/boy_motion_idle_003.png" },
-    { .name = "test/boy_motion_idle_004.png" }, { .name = "test/boy_motion_idle_005.png" },
-    { .name = "test/boy_motion_idle_006.png" }, { .name = "test/boy_motion_idle_007.png" }
-};
 
 static bool init() {
     // mount `/asset` directory
@@ -76,22 +70,139 @@ static bool init() {
     const float view_height = screen_size.y * view_width / screen_size.x;
     the_camera->fps_init(&g_as.cam, 50.0f,
                          sx_rectf(-view_width, -view_height, view_width, view_height), -5.0f, 5.0f);
-    the_camera->fps_lookat(&g_as.cam, sx_vec3f(0, 0.0f, 1.0), SX_VEC3_ZERO, SX_VEC3_UNITY);
+    the_camera->fps_lookat(&g_as.cam, sx_vec3f(-3.0, 0.0f, 1.0), sx_vec3f(-3.0f, 0, 0), SX_VEC3_UNITY);
+
+    static const rizz_sprite_animclip_frame_desc k_idle_frames[] = {
+        { .name = "test/boy_motion_idle_000.png" }, { .name = "test/boy_motion_idle_001.png" },
+        { .name = "test/boy_motion_idle_002.png" }, { .name = "test/boy_motion_idle_003.png" },
+        { .name = "test/boy_motion_idle_004.png" }, { .name = "test/boy_motion_idle_005.png" },
+        { .name = "test/boy_motion_idle_006.png" }, { .name = "test/boy_motion_idle_007.png" }
+    };
+
+    static const rizz_sprite_animclip_frame_desc k_walk_frames[] = {
+        { .name = "test/boy_motion_walk_000.png" }, { .name = "test/boy_motion_walk_001.png" },
+        { .name = "test/boy_motion_walk_002.png" }, { .name = "test/boy_motion_walk_003.png" },
+        { .name = "test/boy_motion_walk_004.png" }, { .name = "test/boy_motion_walk_005.png" },
+        { .name = "test/boy_motion_walk_006.png" }
+    };
+
+    static const rizz_sprite_animclip_frame_desc k_jumpstart_frames[] = {
+        { .name = "test/boy_motion_jump_start_000.png" }, { .name = "test/boy_motion_jump_start_001.png" },
+        { .name = "test/boy_motion_jump_start_002.png" }, { .name = "test/boy_motion_jump_start_003.png" },
+        { .name = "test/boy_motion_jump_start_004.png" }, { .name = "test/boy_motion_jump_start_005.png" } 
+    };
+
+    static const rizz_sprite_animclip_frame_desc k_jumploop_frames[] = {
+        { .name = "test/boy_motion_jump_loop_000.png" }, { .name = "test/boy_motion_jump_loop_001.png" },
+        { .name = "test/boy_motion_jump_loop_002.png" }, { .name = "test/boy_motion_jump_loop_003.png" }
+    };
+
+    static const rizz_sprite_animclip_frame_desc k_jumpend_frames[] = {
+        { .name = "test/boy_motion_jump_end_000.png" }, { .name = "test/boy_motion_jump_end_001.png" },
+        { .name = "test/boy_motion_jump_end_002.png" }
+    };
 
     // sprites and atlases
     rizz_atlas_load_params aparams = { .min_filter = SG_FILTER_LINEAR,
                                        .mag_filter = SG_FILTER_LINEAR };
     g_as.atlas = the_asset->load("atlas", "/assets/textures/boy.json", &aparams,
                                  RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD, NULL, 0);
-    g_as.animclip = the_sprite->animclip_create(&(rizz_sprite_animclip_desc){
+    g_as.animclips[0] = the_sprite->animclip_create(&(rizz_sprite_animclip_desc){
         .atlas = g_as.atlas,
-        .frames = k_frames,
-        .num_frames = sizeof(k_frames) / sizeof(rizz_sprite_animclip_frame_desc),
+        .frames = k_idle_frames,
+        .num_frames = sizeof(k_idle_frames) / sizeof(rizz_sprite_animclip_frame_desc),
+        .fps = 8.0f });
+    g_as.animclips[1] = the_sprite->animclip_create(&(rizz_sprite_animclip_desc) {
+        .atlas = g_as.atlas,
+        .frames = k_walk_frames,
+        .num_frames = sizeof(k_walk_frames) / sizeof(rizz_sprite_animclip_frame_desc),
         .fps = 8.0f,
-        .trigger_end_event = true });
+    });
+    g_as.animclips[2] = the_sprite->animclip_create(&(rizz_sprite_animclip_desc) {
+        .atlas = g_as.atlas,
+        .frames = k_jumpstart_frames,
+        .num_frames = sizeof(k_jumpstart_frames) / sizeof(rizz_sprite_animclip_frame_desc),
+        .fps = 12.0f,
+    });
+    g_as.animclips[3] = the_sprite->animclip_create(&(rizz_sprite_animclip_desc) {
+        .atlas = g_as.atlas,
+        .frames = k_jumploop_frames,
+        .num_frames = sizeof(k_jumploop_frames) / sizeof(rizz_sprite_animclip_frame_desc),
+        .fps = 12.0f,
+    });
+    g_as.animclips[4] = the_sprite->animclip_create(&(rizz_sprite_animclip_desc) {
+        .atlas = g_as.atlas,
+        .frames = k_jumpend_frames,
+        .num_frames = sizeof(k_jumpend_frames) / sizeof(rizz_sprite_animclip_frame_desc),
+        .fps = 12.0f,
+    });            
+
+    const rizz_sprite_animctrl_state_desc k_states[] = {
+        {.name = "idle", .clip = g_as.animclips[0]},
+        {.name = "walk", .clip = g_as.animclips[1]},
+        {.name = "jump_start", .clip = g_as.animclips[2]},
+        {.name = "jump_loop", .clip = g_as.animclips[3]},
+        {.name = "jump_end", .clip = g_as.animclips[4]}
+    };
+
+    const rizz_sprite_animctrl_transition_desc k_transitions[] = {
+        {.state = "idle", .target_state = "walk", .trigger = {
+            .param_name = "walk",
+            .func = RIZZ_SPRITE_COMPAREFUNC_EQUAL,
+            .value.b = true
+        }},
+        {.state = "walk", .target_state = "idle", .trigger = {
+            .param_name = "idle",
+            .func = RIZZ_SPRITE_COMPAREFUNC_EQUAL,
+            .value.b = true
+        }},
+        // jump from walk or idle mode
+        {.state = "idle", .target_state = "jump_start", .trigger = {
+            .param_name = "jump",
+            .func = RIZZ_SPRITE_COMPAREFUNC_EQUAL,
+            .value.b = true
+        }},
+        {.state = "walk", .target_state = "jump_start", .trigger = {
+            .param_name = "jump",
+            .func = RIZZ_SPRITE_COMPAREFUNC_EQUAL,
+            .value.b = true
+        }},
+        // jump_start -> jump_loop
+        {.state = "jump_start", .target_state = "jump_loop"},
+        {.state = "jump_loop", .target_state = "jump_end", .trigger = {
+            .param_name = "land",
+            .func = RIZZ_SPRITE_COMPAREFUNC_EQUAL,
+            .value.b = true
+        }},
+        {.state = "jump_end", .target_state = "idle"},
+    };
+
+    g_as.animctrl = the_sprite->animctrl_create(&(rizz_sprite_animctrl_desc) {
+        .states = k_states,
+        .start_state = "idle",
+        .num_states = sizeof(k_states) / sizeof(rizz_sprite_animctrl_state_desc),
+        .transitions = k_transitions,
+        .num_transitions = sizeof(k_transitions) / sizeof(rizz_sprite_animctrl_transition_desc),
+        .params[0] = {
+            .name = "walk",
+            .type = RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO
+        },
+        .params[1] = {
+            .name = "idle",
+            .type = RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO
+        },
+        .params[2] = {
+            .name = "jump",
+            .type = RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO
+        },
+        .params[3] = {
+            .name = "land",
+            .type = RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO
+        }
+    });
 
     g_as.sprite = the_sprite->create(&(rizz_sprite_desc){ .name = "boy",
-                                                          .clip = g_as.animclip,
+                                                          .ctrl = g_as.animctrl,
                                                           .size = sx_vec2f(SPRITE_WIDTH, 0),
                                                           .color = sx_colorn(0xffffffff) });
     return true;
@@ -102,18 +213,16 @@ static void shutdown() {
         the_sprite->destroy(g_as.sprite);
     if (g_as.atlas.id)
         the_asset->unload(g_as.atlas);
-    if (g_as.animclip.id)
-        the_sprite->animclip_destroy(g_as.animclip);
+    if (g_as.animclips[0].id)
+        the_sprite->animclip_destroy(g_as.animclips[0]);
+    if (g_as.animclips[1].id)
+        the_sprite->animclip_destroy(g_as.animclips[1]);
+    if (g_as.animctrl.id) 
+        the_sprite->animctrl_destroy(g_as.animctrl);
 }
 
 static void update(float dt) {
-    the_sprite->animclip_update(g_as.animclip, dt);
-    rizz_event e;
-    if (rizz_event_poll(the_sprite->animclip_events(g_as.animclip), &e)) {
-        if (e.e == RIZZ_SPRITE_ANIMCLIP_EVENT_END) {
-            rizz_log_debug(the_core, "END");
-        }
-    }
+    the_sprite->animctrl_update(g_as.animctrl, dt);
 }
 
 static void render() {
@@ -135,11 +244,16 @@ static void render() {
     the_gfx->staged.end();
 
     // UI
+    static bool show_debugger = false;
     the_imgui->SetNextWindowContentSize(sx_vec2f(140.0f, 120.0f));
     if (the_imgui->Begin("animsprite", NULL, 0)) {
         the_imgui->LabelText("Fps", "%.3f", the_core->fps());
+        the_imgui->Checkbox("Show Debugger", &show_debugger);
     }
     the_imgui->End();
+
+    if (show_debugger) 
+        the_sprite->show_debugger(&show_debugger);
 }
 
 rizz_plugin_decl_main(animsprite, plugin, e) {

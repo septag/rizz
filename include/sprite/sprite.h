@@ -10,12 +10,12 @@ typedef struct sx_alloc sx_alloc;
 // config
 // change this value to increase number of input parameters for anim controller
 #ifndef RIZZ_SPRITE_ANIMCTRL_MAX_PARAMS
-#   define RIZZ_SPRITE_ANIMCTRL_MAX_PARAMS 8
+#    define RIZZ_SPRITE_ANIMCTRL_MAX_PARAMS 8
 #endif
 
-// if = 0, max_frames will be unlimited (heap allocated)
+// if = 0, max_frames will be only bounded by heap memory (heap allocated)
 #ifndef RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES
-#   define RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES 16
+#    define RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES 0
 #endif
 
 #define RIZZ_SPRITE_ANIMCLIP_EVENT_END -1
@@ -47,6 +47,7 @@ typedef struct rizz_sprite_desc {
     sx_color         color;
     rizz_sprite_flip flip;
     rizz_sprite_animclip clip;
+    rizz_sprite_animctrl ctrl;
 } rizz_sprite_desc;
 
 typedef struct rizz_sprite_vertex {
@@ -106,12 +107,69 @@ typedef struct rizz_sprite_animclip_frame_desc {
 typedef struct rizz_sprite_animclip_desc {
     rizz_asset                             atlas;
     int                                    num_frames;
+    const sx_alloc*                        alloc;
     const rizz_sprite_animclip_frame_desc* frames;
     float                                  fps;
     float                                  length;
     bool                                   trigger_end_event;
     rizz_event                             end_event;
 } rizz_sprite_animclip_desc;
+
+typedef struct rizz_sprite_animctrl_state_desc {
+    const char*          name;
+    rizz_sprite_animclip clip;
+} rizz_sprite_animctrl_state_desc;
+
+typedef enum rizz_sprite_animctrl_param_type {
+    RIZZ_SPRITE_PARAMTYPE_INT,
+    RIZZ_SPRITE_PARAMTYPE_FLOAT,
+    RIZZ_SPRITE_PARAMTYPE_BOOL,
+    RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO    // flips itself then the condition is met
+} rizz_sprite_animctrl_param_type;
+
+typedef enum rizz_sprite_animctrl_compare_func {
+    RIZZ_SPRITE_COMPAREFUNC_NONE,
+    RIZZ_SPRITE_COMPAREFUNC_LESS,
+    RIZZ_SPRITE_COMPAREFUNC_EQUAL,
+    RIZZ_SPRITE_COMPAREFUNC_GREATER,
+    RIZZ_SPRITE_COMPAREFUNC_NOT_EQUAL,
+    RIZZ_SPRITE_COMPAREFUNC_GREATER_EQUAL,
+    RIZZ_SPRITE_COMPAREFUNC_LESS_EQUAL,
+    _RIZZ_SPRITE_COMPAREFUNC_COUNT
+} rizz_sprite_animctrl_compare_func;
+
+typedef struct rizz_sprite_animctrl_trigger {
+    const char* param_name;     // NULL will set the trigger to "clip end" by default
+    rizz_sprite_animctrl_compare_func func;
+    union {
+        int   i;
+        float f;
+        bool  b;
+    } value;    
+} rizz_sprite_animctrl_trigger;
+
+typedef struct rizz_sprite_animctrl_transition_desc {
+    const char* state;
+    const char* target_state;
+    rizz_sprite_animctrl_trigger trigger;
+    bool                         trigger_event;
+    rizz_event                   event;
+} rizz_sprite_animctrl_transition_desc;
+
+typedef struct rizz_sprite_animctrl_param_desc {
+    const char*                 name;
+    rizz_sprite_animctrl_param_type type;
+} rizz_sprite_animctrl_param_desc;
+
+typedef struct rizz_sprite_animctrl_desc {
+    const sx_alloc*                             alloc;
+    const rizz_sprite_animctrl_state_desc*      states;
+    const rizz_sprite_animctrl_transition_desc* transitions;
+    const char*                                 start_state;
+    rizz_sprite_animctrl_param_desc             params[RIZZ_SPRITE_ANIMCTRL_MAX_PARAMS];
+    int                                         num_states;
+    int                                         num_transitions;
+} rizz_sprite_animctrl_desc;
 
 typedef struct rizz_api_sprite {
     rizz_sprite (*create)(const rizz_sprite_desc* desc);
@@ -165,10 +223,22 @@ typedef struct rizz_api_sprite {
     rizz_event_queue* (*animclip_events)(rizz_sprite_animclip clip);
     void (*animclip_set_fps)(rizz_sprite_animclip clip, float fps);
     void (*animclip_set_len)(rizz_sprite_animclip clip, float len); 
+    void (*animclip_restart)(rizz_sprite_animclip clip);
+
+    // anim-controller
+    rizz_sprite_animctrl (*animctrl_create)(const rizz_sprite_animctrl_desc* desc);
+    void (*animctrl_destroy)(rizz_sprite_animctrl ctrl);
+    void (*animctrl_update)(rizz_sprite_animctrl ctrl, float dt);
+    void (*animctrl_update_batch)(rizz_sprite_animctrl* ctrls, int num_ctrls, float dt);
+
+    void (*animctrl_set_paramb)(rizz_sprite_animctrl ctrl, const char* name, bool b);
+    void (*animctrl_set_parami)(rizz_sprite_animctrl ctrl, const char* name, int i);
+    void (*animctrl_set_paramf)(rizz_sprite_animctrl ctrl, const char* name, float f);
+    bool (*animctrl_param_valueb)(rizz_sprite_animctrl ctrl, const char* name);
+    float (*animctrl_param_valuef)(rizz_sprite_animctrl ctrl, const char* name);
+    int (*animctrl_param_valuei)(rizz_sprite_animctrl ctrl, const char* name);
+    void (*animctrl_restart)(rizz_sprite_animctrl ctrl);
 
     // debugging
-    void (*debug_enable)(rizz_sprite spr);
-    void (*debug_disable)(rizz_sprite spr);
-    void (*debug_show_window)(bool* p_open);
-    void (*debug_render)();
+    void (*show_debugger)(bool* p_open);
 } rizz_api_sprite;

@@ -422,12 +422,6 @@ typedef struct rizz_api_gfx {
                                const sx_vec3 frustum[8]);
     void (*debug_grid_xyplane)(float spacing, float spacing_bold, const sx_mat4* vp,
                                const sx_vec3 frustum[8]);
-    void (*debug_frames)(const sx_rect* rects, int num_rects, const sx_color* colors,
-                         const sx_mat4* vp);
-    void (*debug_rects)(const sx_rect* rects, int num_rects, const sx_color* colors,
-                        const sx_mat4* vp);
-    void (*debug_points)(const sx_vec2* points, int num_pts, const sx_color* colors,
-                         const float* sizes, const sx_mat4* vp);
 
     // info
     const rizz_gfx_trace_info* (*trace_info)();

@@ -320,13 +320,19 @@ static void render() {
     the_gfx->staged.end();
 
     // UI
+    static bool show_debugger = false;
     the_imgui->SetNextWindowContentSize(sx_vec2f(140.0f, 120.0f));
     if (the_imgui->Begin("drawsprite", NULL, 0)) {
         the_imgui->LabelText("Fps", "%.3f", the_core->fps());
+        the_imgui->Checkbox("Show Debugger", &show_debugger);
         the_imgui->Checkbox("Wireframe", &g_ds.wireframe);
         the_imgui->Checkbox("Custom Drawing", &g_ds.custom);
     }
     the_imgui->End();
+
+    if (show_debugger) {
+        the_sprite->show_debugger(&show_debugger);
+    }
 }
 
 rizz_plugin_decl_main(drawsprite, plugin, e) {

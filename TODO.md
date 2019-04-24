@@ -4,7 +4,7 @@
 - [ ] Entity/component system
 - [x] Sprites
 - [x] DrawSprite example
-- [ ] Sprite animation/controller
+- [x] Sprite animation/controller
 - [ ] AnimSprite example
 - [ ] Sprite debugger
 - [ ] Verbose logging
