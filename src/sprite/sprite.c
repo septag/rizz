@@ -28,7 +28,7 @@
 
 #define MAX_VERTICES 2000
 #define MAX_INDICES 6000
-#define ANIMCTRL_PARAM_ID_END 0xffffffff
+#define ANIMCTRL_PARAM_ID_END INT_MAX
 
 static rizz_api_core*        the_core;
 static rizz_api_plugin*      the_plugin;
@@ -655,6 +655,8 @@ static void sprite__animctrl_destroy(rizz_sprite_animctrl handle) {
 
 // callbacks for compare functions
 static bool sprite__animctrl_cmp_none(sprite__animctrl_value v, const sprite__animctrl_param* p) {
+    sx_unused(v);
+    sx_unused(p);
     return false;
 }
 static bool sprite__animctrl_cmp_less(sprite__animctrl_value v, const sprite__animctrl_param* p) {
@@ -753,7 +755,8 @@ static void sprite__animctrl_trigger_transition(sprite__animctrl* ctrl, int tran
     }
 }
 
-static void sprite__animctrl_update_batch(rizz_sprite_animctrl* handles, int num_ctrls, float dt) {
+static void sprite__animctrl_update_batch(const rizz_sprite_animctrl* handles, int num_ctrls,
+                                          float dt) {
     rizz_sprite_animclip* clips = alloca(sizeof(rizz_sprite_animclip) * num_ctrls);
     sprite__animctrl**    ctrls = alloca(sizeof(sprite__animctrl*) * num_ctrls);
     sx_assert(clips && ctrls);

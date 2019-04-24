@@ -216,7 +216,7 @@ typedef struct rizz_api_sprite {
     rizz_sprite_animclip (*animclip_clone)(rizz_sprite_animclip clip);
     
     void (*animclip_update)(rizz_sprite_animclip clip, float dt);
-    void (*animclip_update_batch)(rizz_sprite_animclip* clips, int num_clips, float dt);
+    void (*animclip_update_batch)(const rizz_sprite_animclip* clips, int num_clips, float dt);
 
     float (*animclip_fps)(rizz_sprite_animclip clip);
     float (*animclip_len)(rizz_sprite_animclip clip);
@@ -229,7 +229,7 @@ typedef struct rizz_api_sprite {
     rizz_sprite_animctrl (*animctrl_create)(const rizz_sprite_animctrl_desc* desc);
     void (*animctrl_destroy)(rizz_sprite_animctrl ctrl);
     void (*animctrl_update)(rizz_sprite_animctrl ctrl, float dt);
-    void (*animctrl_update_batch)(rizz_sprite_animctrl* ctrls, int num_ctrls, float dt);
+    void (*animctrl_update_batch)(const rizz_sprite_animctrl* ctrls, int num_ctrls, float dt);
 
     void (*animctrl_set_paramb)(rizz_sprite_animctrl ctrl, const char* name, bool b);
     void (*animctrl_set_parami)(rizz_sprite_animctrl ctrl, const char* name, int i);
