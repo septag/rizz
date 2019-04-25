@@ -147,4 +147,3 @@
 #else
 #    define sx_cppbool(_b) _b
 #endif
-

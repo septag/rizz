@@ -423,7 +423,7 @@ static inline SX_CONSTFN float sx_fract(float _a) {
     return _a - sx_trunc(_a);
 }
 
-// Returns the floating-point remainder of the division operation _a/_b (rounded towards 0).
+// Returns the floating-point remainder of the division operation _a/_b.
 static inline SX_CONSTFN float sx_mod(float _a, float _b) {
     return _a - _b * sx_floor(_a / _b);
 }

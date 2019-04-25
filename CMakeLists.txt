@@ -24,20 +24,32 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(glslcc)
 include(bundle)
 
+function(rizz__remove_compile_options dst_var compile_flags flags)
+    separate_arguments(flags)
+    foreach(flag ${flags})
+        string(REPLACE "${flag}" "" compile_flags "${compile_flags}")
+    endforeach()
+    set(${dst_var} ${compile_flags} PARENT_SCOPE)
+endfunction()
+
+function(rizz__add_example proj_name)
+    string(SUBSTRING ${proj_name} 3 -1 source_file)
+    if (BUNDLE) 
+        add_executable(${proj_name} ${EXEC_TYPE} examples/${proj_name}/${source_file}.c)
+    else()
+        add_library(${proj_name} SHARED examples/${proj_name}/${source_file}.c)
+    endif()
+    target_compile_definitions(${proj_name} PRIVATE COMPILE_DEFINITIONS -DEXAMPLES_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/examples")
+    target_link_libraries(${proj_name} PRIVATE sx)
+    add_dependencies(${proj_name} rizz)
+endfunction()
+
 if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 endif()
 if (NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
     set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 endif()
-
-function(rizz__remove_compile_options DEST_VAR COMPILER_FLAGS FLAGS)
-    separate_arguments(FLAGS)
-    foreach(FLAG ${FLAGS})
-        string(REPLACE "${FLAG}" "" COMPILER_FLAGS "${COMPILER_FLAGS}")
-    endforeach()
-    set(${DEST_VAR} ${COMPILER_FLAGS} PARENT_SCOPE)
-endfunction()
 
 add_definitions(-D__STDC_LIMIT_MACROS)
 add_definitions(-D__STDC_FORMAT_MACROS)
@@ -95,26 +107,39 @@ else()
     endif()
 endif()
 
+# include directory is for all projects
 include_directories(include)
-
-# 3rdparty
-add_subdirectory(3rdparty/utf)
-add_subdirectory(3rdparty/lz4)
-add_subdirectory(3rdparty/cimgui)
-add_subdirectory(3rdparty/imguizmo)
-add_subdirectory(3rdparty/remotery)
-if (ENABLE_HOT_LOADING)
-    add_subdirectory(3rdparty/efsw)
-endif()
-if (BUILD_EXAMPLES)
-    add_subdirectory(examples)
-endif()
 
 # native projects
 set(native_projects sx 
                     rizz
                     imgui
                     sprite)
+
+# 3rdparty projects
+set(3rdparty_projects utf 
+                      lz4
+                      cimgui
+                      imguizmo
+                      remotery
+                      efsw)
+
+if (NOT ENABLE_HOT_LOADING)
+    list(REMOVE_ITEM 3rdparty_projects efsw)
+endif()
+
+# examples
+set(example_projects 01-hello 
+                     02-quad 
+                     03-drawsprite 
+                     04-animsprite)
+
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+foreach (3rdparty_project ${3rdparty_projects}) 
+    add_subdirectory(3rdparty/${3rdparty_project})
+    set_target_properties(${3rdparty_project} PROPERTIES FOLDER 3rdparty)
+endforeach()
 
 foreach (native_project ${native_projects})
     add_subdirectory(src/${native_project})
@@ -137,3 +162,10 @@ foreach (native_project ${native_projects})
         endif()
     endif()
 endforeach()
+
+if (BUILD_EXAMPLES) 
+    foreach (example_project ${example_projects})
+        rizz__add_example(${example_project})
+        set_target_properties(${example_project} PROPERTIES FOLDER examples)
+    endforeach()
+endif()

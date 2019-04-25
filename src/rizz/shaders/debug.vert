@@ -19,5 +19,3 @@ void main() {
     f_uv = a_uv;
     f_color = a_color;
 }
-
-

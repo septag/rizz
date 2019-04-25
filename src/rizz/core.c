@@ -108,9 +108,9 @@ typedef struct {
     const sx_alloc*  heap_alloc;
     sx_alloc         heap_proxy_alloc;
     rizz__track_alloc track_allocs[_RIZZ_MEMID_COUNT];
+    sx_atomic_int    heap_count;
     sx_atomic_size   heap_size;
     sx_atomic_size   heap_max;
-    sx_atomic_int    heap_count;
 
     sx_rng           rng;
     sx_job_context*  jobs;
