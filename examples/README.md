@@ -18,9 +18,11 @@ Demonstrates basic application setup. Just clears the view with blue color.
 - Custom sprite drawing
 - Wireframe mode rendering
 
+![03-drawsprite](screenshots/03-drawsprite.png)
+
 #### [AnimSprite](04-animsprite/animsprite.c)
 - Animate sprites
 - Sprite animation controller
 - Sprite debugging
   
-![03-drawsprite](screenshots/03-drawsprite.png)
+![04-animsprite](screenshots/04-animsprite.png)
