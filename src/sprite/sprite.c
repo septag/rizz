@@ -193,19 +193,18 @@ static rizz_vertex_layout k_sprite_vertex_layout = {
 
 static rizz_vertex_layout k_sprite_wire_vertex_layout = {
     .attrs[0] = { .semantic = "POSITION", .offset = offsetof(rizz_sprite_vertex, pos) },
-    .attrs[1] = { .semantic = "TEXCOORD", .offset = offsetof(rizz_sprite_vertex, uv) },
-    .attrs[2] = { .semantic = "COLOR",
+    .attrs[1] = { .semantic = "COLOR",
                   .offset = offsetof(rizz_sprite_vertex, color),
                   .format = SG_VERTEXFORMAT_UBYTE4N },
-    .attrs[3] = { .semantic = "TEXCOORD",
+    .attrs[2] = { .semantic = "TEXCOORD",
                   .semantic_idx = 1,
                   .offset = offsetof(sprite__vertex_transform, t1),
                   .buffer_index = 1 },
-    .attrs[4] = { .semantic = "TEXCOORD",
+    .attrs[3] = { .semantic = "TEXCOORD",
                   .semantic_idx = 2,
                   .offset = offsetof(sprite__vertex_transform, t2),
                   .buffer_index = 1 },
-    .attrs[5] = { .semantic = "TEXCOORD",
+    .attrs[4] = { .semantic = "TEXCOORD",
                   .semantic_idx = 3,
                   .offset = offsetof(sprite__vertex_transform, bc),
                   .buffer_index = 1 }
@@ -1278,6 +1277,9 @@ static void sprite__release() {
 
     if (g_spr.animclip_handles)
         sx_handle_destroy_pool(g_spr.animclip_handles, g_spr.alloc);
+    
+    if (g_spr.animctrl_handles)
+        sx_handle_destroy_pool(g_spr.animctrl_handles, g_spr.alloc);
 
     if (g_spr.name_pool)
         sx_strpool_destroy(g_spr.name_pool, g_spr.alloc);

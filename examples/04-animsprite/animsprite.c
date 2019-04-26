@@ -70,7 +70,7 @@ static bool init() {
     const float view_height = screen_size.y * view_width / screen_size.x;
     the_camera->fps_init(&g_as.cam, 50.0f,
                          sx_rectf(-view_width, -view_height, view_width, view_height), -5.0f, 5.0f);
-    the_camera->fps_lookat(&g_as.cam, sx_vec3f(-3.0, 0.0f, 1.0), sx_vec3f(-3.0f, 0, 0), SX_VEC3_UNITY);
+    the_camera->fps_lookat(&g_as.cam, sx_vec3f(0, 0.0f, 1.0), SX_VEC3_ZERO, SX_VEC3_UNITY);
 
     static const rizz_sprite_animclip_frame_desc k_idle_frames[] = {
         { .name = "test/boy_motion_idle_000.png" }, { .name = "test/boy_motion_idle_001.png" },

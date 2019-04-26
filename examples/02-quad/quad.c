@@ -153,7 +153,6 @@ static void render() {
 
     // draw textured quad
     {
-        // sx_mat4 proj = the_camera->perspective_mat(&g_quad.cam.cam);
         sx_mat4 proj = the_camera->ortho_mat(&g_quad.cam.cam);
         sx_mat4 view = the_camera->view_mat(&g_quad.cam.cam, SX_VEC3_UNITZ);
 

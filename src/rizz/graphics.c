@@ -1158,7 +1158,6 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
         jctx = sjson_create_context(0, 0, (void*)alloc);
         sx_assert(jctx);
     }
-    puts(stage_refl_json);
     sjson_node* jroot = sjson_decode(jctx, stage_refl_json);
     if (!jroot) {
         rizz_log_error("loading shader reflection failed: invalid json");
