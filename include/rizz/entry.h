@@ -7,6 +7,10 @@
 #include "app.h"
 #include "plugin.h"
 
+#ifndef RIZZ_CONFIG_MAX_PLUGINS
+#    define RIZZ_CONFIG_MAX_PLUGINS 64
+#endif
+
 enum rizz_app_flags_ {
     RIZZ_APP_FLAG_HIGHDPI = 0x01,
     RIZZ_APP_FLAG_FULLSCREEN = 0x02,
@@ -38,6 +42,8 @@ typedef struct rizz_config {
     uint32_t        app_version;
     rizz_app_flags  app_flags;
     rizz_core_flags core_flags;
+    const char*     plugins[RIZZ_CONFIG_MAX_PLUGINS];
+    const char*     _dummy;
 
     int                window_width;
     int                window_height;

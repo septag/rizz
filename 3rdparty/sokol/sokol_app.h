@@ -938,6 +938,9 @@ _SOKOL_PRIVATE void _sapp_frame(void) {
 #import <Metal/Metal.h>
 #import <MetalKit/MetalKit.h>
 #elif defined(SOKOL_GLCORE33)
+#ifndef GL_SILENCE_DEPRECATION
+#define GL_SILENCE_DEPRECATION
+#endif
 #include <Cocoa/Cocoa.h>
 #include <OpenGL/gl3.h>
 #endif
@@ -1326,6 +1329,7 @@ _SOKOL_PRIVATE void _sapp_macos_app_event(sapp_event_type type) {
     [self setNeedsDisplay:YES];
 }
 - (void)prepareOpenGL {
+    [super prepareOpenGL];
     GLint swapInt = 1;
     NSOpenGLContext* ctx = [_sapp_view_obj openGLContext];
     [ctx setValues:&swapInt forParameter:NSOpenGLContextParameterSwapInterval];
@@ -2564,8 +2568,9 @@ _SOKOL_PRIVATE const _sapp_gl_fbconfig* _sapp_gl_choose_fbconfig(const _sapp_gl_
 #endif
 #endif
 
+/* see https://github.com/floooh/sokol/issues/138 */
 #ifndef WM_MOUSEHWHEEL
-#define WM_MOUSEHWHEEL                  0x020E
+#define WM_MOUSEHWHEEL (0x020E)
 #endif
 
 #ifndef DPI_ENUMS_DECLARED
@@ -6013,11 +6018,11 @@ _SOKOL_PRIVATE GLXFBConfig _sapp_glx_choosefbconfig() {
         _sapp_gl_init_fbconfig(u);
 
         /* Only consider RGBA GLXFBConfigs */
-        if (!_sapp_glx_attrib(n, GLX_RENDER_TYPE) & GLX_RGBA_BIT) {
+        if (0 == (_sapp_glx_attrib(n, GLX_RENDER_TYPE) & GLX_RGBA_BIT)) {
             continue;
         }
         /* Only consider window GLXFBConfigs */
-        if (!_sapp_glx_attrib(n, GLX_DRAWABLE_TYPE) & GLX_WINDOW_BIT) {
+        if (0 == (_sapp_glx_attrib(n, GLX_DRAWABLE_TYPE) & GLX_WINDOW_BIT)) {
             if (trust_window_bit) {
                 continue;
             }

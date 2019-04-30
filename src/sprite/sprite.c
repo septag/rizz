@@ -10,6 +10,7 @@
 
 #include "imgui/imgui-extra.h"
 #include "imgui/imgui.h"
+#include "rizz/app.h"
 #include "rizz/asset.h"
 #include "rizz/core.h"
 #include "rizz/graphics.h"
@@ -31,13 +32,13 @@
 #define MAX_INDICES 6000
 #define ANIMCTRL_PARAM_ID_END INT_MAX
 
-static rizz_api_core*        the_core;
-static rizz_api_plugin*      the_plugin;
-static rizz_api_asset*       the_asset;
-static rizz_api_refl*        the_refl;
-static rizz_api_gfx*         the_gfx;
-static rizz_api_imgui*       the_imgui;
-static rizz_api_imgui_extra* the_imguix;
+RIZZ_STATE static rizz_api_core*        the_core;
+RIZZ_STATE static rizz_api_plugin*      the_plugin;
+RIZZ_STATE static rizz_api_asset*       the_asset;
+RIZZ_STATE static rizz_api_refl*        the_refl;
+RIZZ_STATE static rizz_api_gfx*         the_gfx;
+RIZZ_STATE static rizz_api_imgui*       the_imgui;
+RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
 
 typedef struct {
     sx_str_t             name;
@@ -92,6 +93,7 @@ typedef struct {
     float            fps;
     float            len;
     int              frame_id;
+    rizz_sprite_flip flip;
     bool             trigger_end_event;
     bool             end_triggered;
     rizz_event_queue equeue;
@@ -170,9 +172,10 @@ typedef struct {
 } sprite__context;
 
 typedef struct {
-    sx_vec3 t1;
-    sx_vec3 t2;
-    sx_vec3 bc;
+    sx_vec3  t1;
+    sx_vec3  t2;
+    sx_vec3  bc;
+    uint32_t color;
 } sprite__vertex_transform;
 
 static rizz_vertex_layout k_sprite_vertex_layout = {
@@ -188,7 +191,12 @@ static rizz_vertex_layout k_sprite_vertex_layout = {
     .attrs[4] = { .semantic = "TEXCOORD",
                   .semantic_idx = 2,
                   .offset = offsetof(sprite__vertex_transform, t2),
-                  .buffer_index = 1 }
+                  .buffer_index = 1 },
+    .attrs[5] = { .semantic = "COLOR",
+                  .semantic_idx = 1,
+                  .offset = offsetof(sprite__vertex_transform, color),
+                  .buffer_index = 1,
+                  .format = SG_VERTEXFORMAT_UBYTE4N }
 };
 
 static rizz_vertex_layout k_sprite_wire_vertex_layout = {
@@ -221,7 +229,7 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
 #include "sort/sort.h"
 SX_PRAGMA_DIAGNOSTIC_POP()
 
-static sprite__context g_spr;
+RIZZ_STATE static sprite__context g_spr;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // anim-clip
@@ -401,6 +409,12 @@ static float sprite__animclip_len(rizz_sprite_animclip handle) {
     return clip->len;
 }
 
+static rizz_sprite_flip sprite__animclip_flip(rizz_sprite_animclip handle) {
+    sx_assert_rel(sx_handle_valid(g_spr.animclip_handles, handle.id));
+    sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handle.id)];
+    return clip->flip;
+}
+
 static rizz_event_queue* sprite__animclip_events(rizz_sprite_animclip handle) {
     sx_assert_rel(sx_handle_valid(g_spr.animclip_handles, handle.id));
     sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handle.id)];
@@ -423,6 +437,12 @@ static void sprite__animclip_set_len(rizz_sprite_animclip handle, float length) 
     sx_assert(length > 0);
     clip->fps = (float)clip->num_frames / length;
     clip->len = length;
+}
+
+void animclip_set_flip(rizz_sprite_animclip handle, rizz_sprite_flip flip) {
+    sx_assert_rel(sx_handle_valid(g_spr.animclip_handles, handle.id));
+    sprite__animclip* clip = &g_spr.animclips[sx_handle_index(handle.id)];
+    clip->flip = flip;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -524,6 +544,12 @@ static void sprite__animctrl_restart(rizz_sprite_animctrl handle) {
     sprite__animctrl* ctrl = &g_spr.animctrls[sx_handle_index(handle.id)];
     ctrl->state = ctrl->start_state;
     sprite__animclip_restart(ctrl->state->clip);
+}
+
+static rizz_event_queue* sprite__animctrl_events(rizz_sprite_animctrl handle) {
+    sx_assert_rel(sx_handle_valid(g_spr.animctrl_handles, handle.id));
+    sprite__animctrl* ctrl = &g_spr.animctrls[sx_handle_index(handle.id)];
+    return &ctrl->equeue;
 }
 
 static rizz_sprite_animctrl sprite__animctrl_create(const rizz_sprite_animctrl_desc* desc) {
@@ -817,6 +843,7 @@ static void sprite__sync_with_animclip(sprite__data* spr) {
     if (sx_handle_valid(g_spr.animclip_handles, clip_handle.id)) {
         sprite__animclip* clip = &g_spr.animclips[sx_handle_index(clip_handle.id)];
         spr->atlas_sprite_id = (int)clip->frames[clip->frame_id].atlas_id;
+        spr->flip = clip->flip;
     } else {
         rizz_log_warn(
             the_core, "sprite_animclip 'handle: 0x%x' binded to sprite '%s' has become invalid",
@@ -1277,7 +1304,7 @@ static void sprite__release() {
 
     if (g_spr.animclip_handles)
         sx_handle_destroy_pool(g_spr.animclip_handles, g_spr.alloc);
-    
+
     if (g_spr.animctrl_handles)
         sx_handle_destroy_pool(g_spr.animctrl_handles, g_spr.alloc);
 
@@ -1285,6 +1312,8 @@ static void sprite__release() {
         sx_strpool_destroy(g_spr.name_pool, g_spr.alloc);
 
     sx_array_free(g_spr.alloc, g_spr.sprites);
+    sx_array_free(g_spr.alloc, g_spr.animctrls);
+    sx_array_free(g_spr.alloc, g_spr.animclips);
 
     the_asset->unregister_asset_type("atlas");
 }
@@ -1676,17 +1705,26 @@ static void sprite__drawdata_free(rizz_sprite_drawdata* data, const sx_alloc* al
 }
 
 static void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp, 
-                               const sx_mat3* mats, const sx_color* tints, const sx_alloc* alloc) {
+                               const sx_mat3* mats, sx_color* tints) {
     sx_unused(tints);   // TODO
-    sx_unused(alloc);   // TODO
 
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
     rizz_sprite_drawdata* dd =
         sprite__drawdata_make_batch(sprs, num_sprites, tmp_alloc);
     if (!dd) {
-        sx_assert(0);
+        sx_assert(0 && "out of memory");
         return;
+    }
+    
+    if (!tints) {
+        tints = sx_malloc(tmp_alloc, sizeof(sx_color)*num_sprites);
+        if (!tints) {
+            sx_assert(0 && "out of memory");
+            return;
+        }
+        for (int i = 0; i < num_sprites; i++) 
+            tints[i] = sx_colorn(0xffffffff);
     }
 
     const sprite__draw_context* dc = &g_spr.drawctx;
@@ -1712,6 +1750,7 @@ static void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const s
         for (int v = dspr->start_vertex; v < end_vertex; v++) {
             tverts[v].t1 = t1;
             tverts[v].t2 = t2;
+            tverts[v].color = tints[i].n;
         }
     }
     int vb_offset2 = the_gfx->staged.append_buffer(dc->vbuff[1], tverts, 
@@ -1740,16 +1779,12 @@ static void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const s
     the_core->tmp_alloc_pop();
 }
 
-static void sprite__draw(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat, sx_color tint, const sx_alloc* alloc) {
-    sprite__draw_batch(&spr, 1, vp, mat, &tint, alloc);
+static void sprite__draw(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat, sx_color tint) {
+    sprite__draw_batch(&spr, 1, vp, mat, &tint);
 }
 
 static void sprite__draw_wireframe_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp, 
-                                         const sx_mat3* mats, const sx_color* tints, 
-                                         const sx_alloc* alloc) {
-    sx_unused(tints);   // TODO
-    sx_unused(alloc);   // TODO
-
+                                         const sx_mat3* mats) {
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
     rizz_sprite_drawdata* dd =
@@ -1813,10 +1848,9 @@ static void sprite__draw_wireframe_batch(const rizz_sprite* sprs, int num_sprite
     the_core->tmp_alloc_pop();
 }
 
-static void sprite__draw_wireframe(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat, sx_color tint, 
-                            const sx_alloc* alloc)
+static void sprite__draw_wireframe(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat)
 {
-    sprite__draw_wireframe_batch(&spr, 1, vp, mat, &tint, alloc);
+    sprite__draw_wireframe_batch(&spr, 1, vp, mat);
 }
 
 static void sprite__show_sprite_preview(sprite__data* spr) {
@@ -2190,21 +2224,23 @@ rizz_plugin_decl_main(sprite, plugin, e) {
         the_asset = the_plugin->get_api(RIZZ_API_ASSET, 0);
         the_refl = the_plugin->get_api(RIZZ_API_REFLECT, 0);
         the_gfx = the_plugin->get_api(RIZZ_API_GFX, 0);
-        the_imgui = the_plugin->get_api(RIZZ_API_IMGUI, 0);
-        the_imguix = the_plugin->get_api(RIZZ_API_IMGUI_EXTRA, 0);
+        the_imgui = the_plugin->get_api_byname("imgui", 0);
+        the_imguix = the_plugin->get_api_byname("imgui_extra", 0);
         if (!sprite__init()) {
             return -1;
         }
-        the_plugin->inject_api(RIZZ_API_SPRITE, 0, &the__sprite);
+        the_plugin->inject_api("sprite", 0, &the__sprite);
         break;
 
     case RIZZ_PLUGIN_EVENT_LOAD:
+        the_plugin->inject_api("sprite", 0, &the__sprite);
         break;
 
     case RIZZ_PLUGIN_EVENT_UNLOAD:
         break;
 
     case RIZZ_PLUGIN_EVENT_SHUTDOWN:
+        the_plugin->remove_api("sprite", 0);
         sprite__release();
         break;
     }
@@ -2213,7 +2249,11 @@ rizz_plugin_decl_main(sprite, plugin, e) {
 }
 
 rizz_plugin_decl_event_handler(sprite, e) {
-    sx_unused(e);
+    if (e->type == RIZZ_APP_EVENTTYPE_UPDATE_APIS) {
+        the_imgui = the_plugin->get_api_byname("imgui", 0);
+        the_imguix = the_plugin->get_api_byname("imgui_extra", 0);
+    }
 }
 
-rizz_plugin_implement_info(sprite, 1000, "sprite plugin", 0);
+static const char* sprite__deps[] = { "imgui" };
+rizz_plugin_implement_info(sprite, 1000, "sprite plugin", sprite__deps, 1);

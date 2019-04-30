@@ -37,6 +37,10 @@
 #    define SOKOL_GLCORE33
 #endif
 
+#ifdef RIZZ_BUNDLE
+#    include "plugin_bundle.h"
+#endif
+
 typedef struct {
     rizz_config     conf;
     const sx_alloc* alloc;
@@ -85,7 +89,7 @@ SX_PRAGMA_DIAGNOSTIC_POP();
         _str = _cache_str;                               \
     }
 
-#if RIZZ_BUNDLE
+#ifdef RIZZ_BUNDLE
 RIZZ_PLUGIN_EXPORT void rizz_game_config(rizz_config*, int argc, char* argv[]);
 #endif
 
@@ -96,9 +100,34 @@ static void rizz__app_init(void) {
         exit(-1);
     }
 
-    // add and start game plugin
-    if (!rizz__plugin_load_abs(g_app.game_filepath, _RIZZ_PLUGIN_FLAG_ENTRY)) {
+    // add game plugins
+    int num_plugins = 0;
+    for (int i = 0; i < RIZZ_CONFIG_MAX_PLUGINS; i++) {
+        if (!g_app.conf.plugins[i] || !g_app.conf.plugins[i][0])
+            break;
+
+        if (!the__plugin.load(g_app.conf.plugins[i])) {
+            exit(-1);
+        }
+        ++num_plugins;
+    }
+
+    // add game
+#ifndef RIZZ_BUNDLE
+    if (!rizz__plugin_load_abs(g_app.game_filepath, true, g_app.conf.plugins, num_plugins)) {
         rizz_log_error("loading game plugin failed: %s", g_app.game_filepath);
+        exit(-1);
+    }
+#else
+    if (!rizz__plugin_load_abs(ENTRY_NAME, true, g_app.conf.plugins, num_plugins)) {
+        rizz_log_error("loading game plugin failed: %s", g_app.game_filepath);
+        exit(-1);
+    }
+#endif
+
+    // initialize all plugins
+    if (!rizz__plugin_init_plugins()) {
+        rizz_log_error("initializing plugins failed");
         exit(-1);
     }
 }
@@ -239,6 +268,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
     static char default_version[64] = { 0 };
     static char default_plugin_path[256] = { 0 };
     static char default_cache_path[256] = { 0 };
+    static char default_plugins[32][RIZZ_CONFIG_MAX_PLUGINS] = { 0 };
 
     char ext[16];
     sx_os_path_basename(default_name, sizeof(default_name), game_filepath);
@@ -277,12 +307,20 @@ sapp_desc sokol_main(int argc, char* argv[]) {
 
     game_config_fn(&conf, argc, argv);
 
+    // create .cache directory if it doesn't exist
+    if (!conf.cache_path && !sx_os_path_isdir(default_cache_path))
+        sx_os_mkdir(default_cache_path);
+
     // Before closing the dll, save the strings into static variables
     rizz__app_save_config_str(default_name, conf.app_name);
     rizz__app_save_config_str(default_title, conf.app_title);
     rizz__app_save_config_str(default_html5_canvas, conf.html5_canvas_name);
     rizz__app_save_config_str(default_plugin_path, conf.plugin_path);
     rizz__app_save_config_str(default_cache_path, conf.cache_path);
+    for (int i = 0; i < RIZZ_CONFIG_MAX_PLUGINS; i++) {
+        if (conf.plugins[i])
+            rizz__app_save_config_str(default_plugins[i], conf.plugins[i]);
+    }
 
 #ifndef RIZZ_BUNDLE
     sx_os_dlclose(game_dll);

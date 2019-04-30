@@ -27,6 +27,9 @@ set(INCLUDE_FILES "../../include/rizz/types.h"
                   "../../include/rizz/vfs.h"
                   "../../include/rizz/json.h")
 
+set(TEXT_FILES     "../../README.md"
+                   "../../TODO.md")
+
 set(EXTERNAL_INCLUDES ../../3rdparty/sokol/sokol_app.h 
                       ../../3rdparty/sokol/sokol_gfx.h
                       ../../3rdparty/sokol/sokol_audio.h
@@ -45,9 +48,9 @@ endif()
 # bundle: make static lib to link it to the game.exe later
 # no-bundle: make rizz.exe and run the game.dll as a plugin
 if (BUNDLE)
-    add_library(rizz STATIC ${SOURCE_FILES} ${EXTERNAL_INCLUDES} ${INCLUDE_FILES})
+    add_library(rizz STATIC ${SOURCE_FILES} ${EXTERNAL_INCLUDES} ${INCLUDE_FILES} ${TEXT_FILES})
 else()
-    add_executable(rizz ${EXEC_TYPE} ${SOURCE_FILES} ${EXTERNAL_INCLUDES} ${INCLUDE_FILES})
+    add_executable(rizz ${EXEC_TYPE} ${SOURCE_FILES} ${EXTERNAL_INCLUDES} ${INCLUDE_FILES} ${TEXT_FILES})
 endif()
 
 target_include_directories(rizz PRIVATE ../../3rdparty)
@@ -69,7 +72,7 @@ elseif (WIN32)
     target_link_libraries(rizz PRIVATE dxgi d3d11)
 endif()
 
-bundle_plugins_internal(rizz imgui)
+# bundle_plugins_internal(rizz imgui)
 
 # shaders
 set(shaders shaders/debug.vert 

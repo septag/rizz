@@ -25,6 +25,7 @@
 #define NUM_SPRITES 6
 #define SPRITE_WIDTH 3.5f
 
+RIZZ_STATE static rizz_api_plugin*      the_plugin;
 RIZZ_STATE static rizz_api_core*        the_core;
 RIZZ_STATE static rizz_api_gfx*         the_gfx;
 RIZZ_STATE static rizz_api_app*         the_app;
@@ -213,10 +214,8 @@ static void shutdown() {
         the_sprite->destroy(g_as.sprite);
     if (g_as.atlas.id)
         the_asset->unload(g_as.atlas);
-    if (g_as.animclips[0].id)
-        the_sprite->animclip_destroy(g_as.animclips[0]);
-    if (g_as.animclips[1].id)
-        the_sprite->animclip_destroy(g_as.animclips[1]);
+    for (int i = 0; i < 5; i++)
+        the_sprite->animclip_destroy(g_as.animclips[i]);
     if (g_as.animctrl.id) 
         the_sprite->animctrl_destroy(g_as.animctrl);
 }
@@ -238,7 +237,7 @@ static void render() {
     sx_mat4 vp = sx_mat4_mul(&proj, &view);
 
     sx_mat3 mat = sx_mat3_ident();
-    the_sprite->draw(g_as.sprite, &vp, &mat, SX_COLOR_WHITE, NULL);
+    the_sprite->draw(g_as.sprite, &vp, &mat, SX_COLOR_WHITE);
 
     the_gfx->staged.end_pass();
     the_gfx->staged.end();
@@ -265,15 +264,17 @@ rizz_plugin_decl_main(animsprite, plugin, e) {
 
     case RIZZ_PLUGIN_EVENT_INIT:
         // runs only once for application. Retreive needed APIs
-        the_core = plugin->api->get_api(RIZZ_API_CORE, 0);
-        the_gfx = plugin->api->get_api(RIZZ_API_GFX, 0);
-        the_app = plugin->api->get_api(RIZZ_API_APP, 0);
-        the_imgui = plugin->api->get_api(RIZZ_API_IMGUI, 0);
-        the_vfs = plugin->api->get_api(RIZZ_API_VFS, 0);
-        the_asset = plugin->api->get_api(RIZZ_API_ASSET, 0);
-        the_sprite = plugin->api->get_api(RIZZ_API_SPRITE, 0);
-        the_camera = plugin->api->get_api(RIZZ_API_CAMERA, 0);
-        the_imguix = plugin->api->get_api(RIZZ_API_IMGUI_EXTRA, 0);
+        the_plugin = plugin->api;
+        the_core = the_plugin->get_api(RIZZ_API_CORE, 0);
+        the_gfx = the_plugin->get_api(RIZZ_API_GFX, 0);
+        the_app = the_plugin->get_api(RIZZ_API_APP, 0);
+        the_vfs = the_plugin->get_api(RIZZ_API_VFS, 0);
+        the_asset = the_plugin->get_api(RIZZ_API_ASSET, 0);
+        the_camera = the_plugin->get_api(RIZZ_API_CAMERA, 0);
+
+        the_imgui = the_plugin->get_api_byname("imgui", 0);
+        the_imguix = the_plugin->get_api_byname("imgui_extra", 0);
+        the_sprite = the_plugin->get_api_byname("sprite", 0);
         sx_assert(the_sprite && "sprite plugin is not loaded!");
 
         init();
@@ -295,22 +296,15 @@ rizz_plugin_decl_main(animsprite, plugin, e) {
 
 rizz_plugin_decl_event_handler(animsprite, e) {
     switch (e->type) {
-    case RIZZ_APP_EVENTTYPE_SUSPENDED:
-        break;
-    case RIZZ_APP_EVENTTYPE_RESTORED:
-        break;
-    case RIZZ_APP_EVENTTYPE_MOUSE_DOWN:
-        break;
-    case RIZZ_APP_EVENTTYPE_MOUSE_UP:
-        break;
-    case RIZZ_APP_EVENTTYPE_MOUSE_MOVE:
+    case RIZZ_APP_EVENTTYPE_UPDATE_APIS:
+        the_imgui = the_plugin->get_api_byname("imgui", 0);
+        the_imguix = the_plugin->get_api_byname("imgui_extra", 0);
+        the_sprite = the_plugin->get_api_byname("sprite", 0);
         break;
     default:
         break;
     }
 }
-
-rizz_plugin_implement_info(animsprite, 1000, "animsprite", 0);
 
 rizz_game_decl_config(conf) {
     conf->app_name = "animsprite";
@@ -321,4 +315,7 @@ rizz_game_decl_config(conf) {
     conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;
     conf->multisample_count = 4;
     conf->swap_interval = 2;
+    conf->plugins[0] = "imgui";
+    conf->plugins[1] = "sprite";
 }
+

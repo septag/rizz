@@ -35,6 +35,7 @@ typedef enum rizz_app_event_type {
     RIZZ_APP_EVENTTYPE_RESUMED,
     RIZZ_APP_EVENTTYPE_UPDATE_CURSOR,
     _RIZZ_APP_EVENTTYPE_NUM,
+    RIZZ_APP_EVENTTYPE_UPDATE_APIS,     // happens when a plugin updates it's API
     _RIZZ_APP_EVENTTYPE_FORCE_U32 = 0x7FFFFFF
 } rizz_app_event_type;
 
@@ -190,7 +191,7 @@ typedef struct rizz_app_event {
     uint32_t            frame_count;
     rizz_keycode        key_code;
     uint32_t            char_code;
-    rizz_modifier_keys   modkeys;
+    rizz_modifier_keys  modkeys;
     rizz_mouse_btn      mouse_button;
     float               mouse_x;
     float               mouse_y;

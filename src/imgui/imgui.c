@@ -43,10 +43,10 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 typedef struct rizz_api_gfx rizz_api_gfx;
 static void                 imgui__render(void);
 
-static rizz_api_core*   the_core;
-static rizz_api_plugin* the_plugin;
-static rizz_api_gfx*    the_gfx;
-static rizz_api_app*    the_app;
+RIZZ_STATE static rizz_api_core*   the_core;
+RIZZ_STATE static rizz_api_plugin* the_plugin;
+RIZZ_STATE static rizz_api_gfx*    the_gfx;
+RIZZ_STATE static rizz_api_app*    the_app;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // API
@@ -539,7 +539,7 @@ static rizz_api_imgui the__imgui = {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // sokol impl with dummy-backend for imgui
-const sx_alloc* g_sg_imgui_alloc;
+RIZZ_STATE const sx_alloc* g_sg_imgui_alloc;
 
 #define SOKOL_MALLOC(s) sx_malloc(g_sg_imgui_alloc, s)
 #define SOKOL_FREE(p) sx_free(g_sg_imgui_alloc, p)
@@ -583,12 +583,12 @@ typedef struct imgui__shader_uniforms {
 static rizz_vertex_layout k__imgui_vertex = {
     .attrs[0] = { .semantic = "POSITION", .offset = offsetof(ImDrawVert, pos) },
     .attrs[1] = { .semantic = "TEXCOORD", .offset = offsetof(ImDrawVert, uv) },
-    .attrs[2] = { .semantic = "COLOR",
+    .attrs[2] = { .semantic = "COLOR", 
                   .offset = offsetof(ImDrawVert, col),
                   .format = SG_VERTEXFORMAT_UBYTE4N }
 };
 
-static imgui__context g_imgui;
+RIZZ_STATE static imgui__context g_imgui;
 
 static void* imgui__malloc(size_t sz, void* user_data) {
     return sx_malloc((const sx_alloc*)user_data, sz);
@@ -1503,10 +1503,10 @@ rizz_plugin_decl_main(imgui, plugin, e) {
         }
 
         sx_assert(the_plugin);
-        the_plugin->inject_api(RIZZ_API_IMGUI, 0, &the__imgui);
-        the_plugin->inject_api(RIZZ_API_IMGUI_EXTRA, 0, &the__imgui_debug_tools);
+        the_plugin->inject_api("imgui", 0, &the__imgui);
+        the_plugin->inject_api("imgui_extra", 0, &the__imgui_debug_tools);
 
-        void* make_cmdbuff;
+        void* make_cmdbuff; 
         int   make_cmdbuff_sz;
         the_gfx->imm._get_internal_state(&make_cmdbuff, &make_cmdbuff_sz);
 
@@ -1520,21 +1520,27 @@ rizz_plugin_decl_main(imgui, plugin, e) {
         break;
     }
 
-    case RIZZ_PLUGIN_EVENT_LOAD:
-        break;
+    case RIZZ_PLUGIN_EVENT_LOAD: {
+        the__imgui.SetCurrentContext(g_imgui.ctx);
+        the__imgui.SetAllocatorFunctions(imgui__malloc, imgui__free, (void*)g_sg_imgui_alloc);
+        the_plugin->inject_api("imgui", 0, &the__imgui);
+        the_plugin->inject_api("imgui_extra", 0, &the__imgui_debug_tools);
+        break; 
+    }
 
     case RIZZ_PLUGIN_EVENT_UNLOAD:
         break;
 
     case RIZZ_PLUGIN_EVENT_SHUTDOWN:
         sx_assert(the_plugin);
-        sg_imgui_discard(&g_imgui.sg_imgui);
+        sg_imgui_discard(&g_imgui.sg_imgui); 
         imgui__release();
-        the_plugin->remove_api(RIZZ_API_IMGUI, 0);
+        the_plugin->remove_api("imgui", 0);
+        the_plugin->remove_api("imgui_extra", 0);
         break;
     }
 
     return 0;
 }
 
-rizz_plugin_implement_info(imgui, 1690, "dear-imgui plugin", RIZZ_PLUGIN_INFO_EVENT_HANDLER);
+rizz_plugin_implement_info(imgui, 1690, "dear-imgui plugin", NULL, 0);

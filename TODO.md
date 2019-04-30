@@ -5,17 +5,19 @@
 - [x] Sprites
 - [x] DrawSprite example
 - [x] Sprite animation/controller
-- [ ] AnimSprite example
-- [ ] Sprite debugger
+- [x] AnimSprite example
+- [x] Sprite debugger
 - [ ] Verbose logging
 - [ ] Input system 
-- [ ] CR update
+- [x] CR update
+- [x] sokol update
+- [ ] Initiate sound plugin
 - [ ] Gamepad support
 - [ ] Gamepad demo
 - [ ] Plugin dependencies
 - [ ] Plugin APIs by name
-- [ ] Cleanup and add something for examples cmake
-- [ ] Add Readme to plugins (imgui, sprite)
+- [x] Cleanup and add something for examples cmake
+- [x] Add Readme to plugins (imgui, sprite)
 - [ ] Better graphics debugging (stages)
 - [ ] iOS build
 - [ ] Android build

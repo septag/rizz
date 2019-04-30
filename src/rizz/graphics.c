@@ -1313,6 +1313,15 @@ static sg_shader_desc* rizz__shader_setup_desc(sg_shader_desc*         desc,
             stage_desc->source = (const char*)stage->code;
         }
 
+        // attributes
+        if (stage->refl->stage == RIZZ_SHADER_STAGE_VS) {
+            for (int a = 0; a < vs_refl->num_inputs; a++) {
+                desc->attrs[a].name = vs_refl->inputs[a].name;
+                desc->attrs[a].sem_name = vs_refl->inputs[a].semantic;
+                desc->attrs[a].sem_index = vs_refl->inputs[a].semantic_index;
+            }
+        }
+
         // uniform blocks
         for (int iub = 0; iub < stage->refl->num_uniform_buffers; iub++) {
             rizz_shader_refl_uniform_buffer* rub = &stage->refl->uniform_buffers[iub];
@@ -1382,7 +1391,8 @@ static sg_pipeline_desc* rizz__shader_bindto_pipeline_sg(sg_shader              
 
     // map offsets in the `vl` to shader inputs
     int                     index = 0;
-    const rizz_vertex_attr* attr = &vl->attrs[index];
+    const rizz_vertex_attr* attr = &vl->attrs[0];
+    sx_memset(desc->layout.attrs, 0x0, sizeof(sg_vertex_attr_desc) * SG_MAX_VERTEX_ATTRIBUTES);
 
     while (attr->semantic && index < num_inputs) {
         bool found = false;
@@ -1391,13 +1401,10 @@ static sg_pipeline_desc* rizz__shader_bindto_pipeline_sg(sg_shader              
                 attr->semantic_idx == inputs[i].semantic_index) {
                 found = true;
 
-                desc->layout.attrs[index].name = inputs[i].name;
-                desc->layout.attrs[index].sem_name = inputs[i].semantic;
-                desc->layout.attrs[index].sem_index = inputs[i].semantic_index;
-                desc->layout.attrs[index].offset = attr->offset;
-                desc->layout.attrs[index].format =
+                desc->layout.attrs[i].offset = attr->offset;
+                desc->layout.attrs[i].format =
                     attr->format != SG_VERTEXFORMAT_INVALID ? attr->format : inputs[i].type;
-                desc->layout.attrs[index].buffer_index = attr->buffer_index;
+                desc->layout.attrs[i].buffer_index = attr->buffer_index;
                 break;
             }
         }

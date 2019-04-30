@@ -62,10 +62,6 @@ typedef enum rizz_api_type {
     RIZZ_API_ASSET,
     RIZZ_API_CAMERA,
     RIZZ_API_HTTP,
-    _RIZZ_API_NATIVE_COUNT,
-    RIZZ_API_IMGUI,
-    RIZZ_API_IMGUI_EXTRA,
-    RIZZ_API_SPRITE,
     _RIZZ_API_COUNT
 } rizz_api_type;
 
@@ -108,7 +104,8 @@ typedef void(rizz_plugin_event_handler_cb)(const rizz_app_event* ev);
 
 typedef struct rizz_plugin_info {
     uint32_t               version;
-    rizz_plugin_info_flags flags;
+    const char**           deps;    // array: name of dependency plugins
+    int                    num_deps;
     char                   name[32];
     char                   desc[256];
 
@@ -120,20 +117,12 @@ typedef struct rizz_plugin_info {
 #endif
 } rizz_plugin_info;
 
-enum rizz_plugin_flags_ {
-    RIZZ_PLUGIN_FLAG_MANUAL_RELOAD = 0x01,
-    RIZZ_PLUGIN_FLAG_UPDATE_LAST = 0x02,
-    RIZZ_PLUGIN_FLAG_UPDATE_FIRST = 0x04,
-    _RIZZ_PLUGIN_FLAG_ENTRY = 0x08
-};
-typedef uint32_t rizz_plugin_flags;
-
 typedef struct rizz_api_plugin {
-    bool (*load)(const char* plugin_name, rizz_plugin_flags flags);
-    void (*unload)(const char* plugin_name);
-    void (*inject_api)(rizz_api_type type, uint32_t version, void* api);
-    void (*remove_api)(rizz_api_type type, uint32_t version);
+    bool (*load)(const char* name);
+    void (*inject_api)(const char* name, uint32_t version, void* api);
+    void (*remove_api)(const char* name, uint32_t version);
     void* (*get_api)(rizz_api_type api, uint32_t version);
+    void* (*get_api_byname)(const char* name, uint32_t version);
     const char* (*crash_reason)(rizz_plugin_crash crash);
 } rizz_api_plugin;
 
@@ -156,12 +145,13 @@ typedef struct rizz_app_event rizz_app_event;
 #    define rizz_plugin_decl_event_handler(_name, __event_param_name) \
         RIZZ_PLUGIN_EXPORT void rizz_plugin_event_handler(const rizz_app_event* __event_param_name)
 
-#    define rizz_plugin_implement_info(_name, _version, _desc, _flags)             \
-        RIZZ_PLUGIN_EXPORT void rizz_plugin_get_info(rizz_plugin_info* out_info) { \
-            out_info->version = (_version);                                        \
-            out_info->flags = (_flags);                                            \
-            sx_strcpy(out_info->name, sizeof(out_info->name), #_name);             \
-            sx_strcpy(out_info->desc, sizeof(out_info->desc), (_desc));            \
+#    define rizz_plugin_implement_info(_name, _version, _desc, _deps, _num_deps) \
+        RIZZ_PLUGIN_EXPORT void rizz_plugin_get_info(rizz_plugin_info* out_info) {       \
+            out_info->version = (_version);                                              \
+            out_info->deps = (_deps);                                                    \
+            out_info->num_deps = (_num_deps);                                            \
+            sx_strcpy(out_info->name, sizeof(out_info->name), #_name);                   \
+            sx_strcpy(out_info->desc, sizeof(out_info->desc), (_desc));                  \
         }
 #else
 #    define rizz_plugin_decl_main(_name, _plugin_param_name, _event_param_name)               \
@@ -171,10 +161,11 @@ typedef struct rizz_app_event rizz_app_event;
         RIZZ_PLUGIN_EXPORT void rizz_plugin_event_handler_##_name(    \
             const rizz_app_event* __event_param_name)
 
-#    define rizz_plugin_implement_info(_name, _version, _desc, _flags)                     \
+#    define rizz_plugin_implement_info(_name, _version, _desc, _deps, _num_deps)                     \
         RIZZ_PLUGIN_EXPORT void rizz_plugin_get_info_##_name(rizz_plugin_info* out_info) { \
             out_info->version = (_version);                                                \
-            out_info->flags = (_flags);                                                    \
+            out_info->deps = (_deps);                                                      \
+            out_info->num_deps = (_num_deps);                                              \
             sx_strcpy(out_info->name, sizeof(out_info->name), #_name);                     \
             sx_strcpy(out_info->desc, sizeof(out_info->desc), (_desc));                    \
         }
@@ -189,7 +180,8 @@ bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path);
 void rizz__plugin_release();
 void rizz__plugin_broadcast_event(const rizz_app_event* e);
 void rizz__plugin_update(float dt);
-bool rizz__plugin_load_abs(const char* filepath, rizz_plugin_flags plugin_flags);
+bool rizz__plugin_load_abs(const char* filepath, bool entry, const char** deps, int num_deps);
+bool rizz__plugin_init_plugins();
 #endif
 
 RIZZ_API rizz_api_plugin the__plugin;

@@ -111,6 +111,7 @@ typedef struct rizz_sprite_animclip_desc {
     const rizz_sprite_animclip_frame_desc* frames;
     float                                  fps;
     float                                  length;
+    rizz_sprite_flip                       flip;
     bool                                   trigger_end_event;
     rizz_event                             end_event;
 } rizz_sprite_animclip_desc;
@@ -200,14 +201,12 @@ typedef struct rizz_api_sprite {
 
     // high-level draw calls, normal sprite drawing
     // internally calls `make_drawdata` and draws with internal shader and buffers
-    void (*draw)(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat, sx_color tint,
-                 const sx_alloc* alloc);
+    void (*draw)(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat, sx_color tint);
     void (*draw_batch)(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp,
-                       const sx_mat3* mats, const sx_color* tints, const sx_alloc* alloc);
+                       const sx_mat3* mats, sx_color* tints);
     void (*draw_wireframe_batch)(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp,
-                                 const sx_mat3* mats, const sx_color* tints, const sx_alloc* alloc);                       
-    void (*draw_wireframe)(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat, sx_color tint, 
-                           const sx_alloc* alloc);
+                                 const sx_mat3* mats);                       
+    void (*draw_wireframe)(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat);
     bool (*resize_draw_limits)(int max_verts, int max_indices);
 
     // anim-clip
@@ -220,11 +219,13 @@ typedef struct rizz_api_sprite {
 
     float (*animclip_fps)(rizz_sprite_animclip clip);
     float (*animclip_len)(rizz_sprite_animclip clip);
+    rizz_sprite_flip (*animclip_flip)(rizz_sprite_animclip clip);
     rizz_event_queue* (*animclip_events)(rizz_sprite_animclip clip);
     void (*animclip_set_fps)(rizz_sprite_animclip clip, float fps);
     void (*animclip_set_len)(rizz_sprite_animclip clip, float len); 
+    void (*animclip_set_flip)(rizz_sprite_animclip clip, rizz_sprite_flip flip);
     void (*animclip_restart)(rizz_sprite_animclip clip);
-
+    
     // anim-controller
     rizz_sprite_animctrl (*animctrl_create)(const rizz_sprite_animctrl_desc* desc);
     void (*animctrl_destroy)(rizz_sprite_animctrl ctrl);
@@ -238,6 +239,7 @@ typedef struct rizz_api_sprite {
     float (*animctrl_param_valuef)(rizz_sprite_animctrl ctrl, const char* name);
     int (*animctrl_param_valuei)(rizz_sprite_animctrl ctrl, const char* name);
     void (*animctrl_restart)(rizz_sprite_animctrl ctrl);
+    rizz_event_queue* (*animctrl_events)(rizz_sprite_animctrl ctrl);
 
     // debugging
     void (*show_debugger)(bool* p_open);

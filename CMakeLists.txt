@@ -163,9 +163,12 @@ foreach (native_project ${native_projects})
     endif()
 endforeach()
 
-if (BUILD_EXAMPLES) 
+if (BUILD_EXAMPLES AND NOT BUNDLE) 
     foreach (example_project ${example_projects})
         rizz__add_example(${example_project})
         set_target_properties(${example_project} PROPERTIES FOLDER examples)
     endforeach()
 endif()
+
+# Use this command to assign executable in BUNDLE mode
+# rizz_set_executable(04-animsprite PLUGINS sprite imgui NAME animsprite)

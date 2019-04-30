@@ -28,8 +28,8 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
 #    include "../../3rdparty/cr/cr.h"
 SX_PRAGMA_DIAGNOSTIC_POP()
 #else
+#    define PLUGIN_SOURCE
 #    include "plugin_bundle.h"
-#    include "plugin_bundle_native.h"
 
 typedef rizz_plugin cr_plugin;
 #    define CR_OTHER RIZZ_PLUGIN_CRASH_OTHER
@@ -43,33 +43,37 @@ typedef rizz_plugin cr_plugin;
 #include "rizz/http.h"
 #include "rizz/reflect.h"
 #include "rizz/vfs.h"
-static void* g_native_apis[_RIZZ_API_NATIVE_COUNT] = { &the__core,  &the__plugin, &the__app,
-                                                       &the__gfx,   &the__refl,   &the__vfs,
-                                                       &the__asset, &the__camera, &the__http };
+static void* g_native_apis[_RIZZ_API_COUNT] = { &the__core,  &the__plugin, &the__app,
+                                                &the__gfx,   &the__refl,   &the__vfs,
+                                                &the__asset, &the__camera, &the__http };
 
 struct rizz__plugin_injected_api {
-    rizz_api_type type;
-    uint32_t      version;
-    void*         api;
+    char     name[32];
+    uint32_t version;
+    void*    api;
 };
 
+typedef struct rizz__plugin_dependency {
+    char name[32];
+} rizz__plugin_dependency;
+
 struct rizz__plugin_item {
-    cr_plugin         p;
-    rizz_plugin_info  info;
-    int               order;
-    rizz_plugin_flags flags;
-    char              filename[32];
-    float             update_tm;
-    bool              manual_reload;
+    cr_plugin                p;
+    rizz_plugin_info         info;
+    int                      order;
+    char                     filepath[RIZZ_MAX_PATH];
+    float                    update_tm;
+    rizz__plugin_dependency* deps;
+    int                      num_deps;
 };
 
 struct rizz__plugin_mgr {
     const sx_alloc*            alloc = nullptr;
     rizz__plugin_item*         plugins = nullptr;
-    int*                       plugin_update_order = nullptr;    // indices to 'plugins' for updates
+    int*                       plugin_update_order = nullptr;    // indices to 'plugins' array
     char                       plugin_path[256] = { 0 };
     rizz__plugin_injected_api* injected = nullptr;
-    uint32_t                   entry_plugin_id;
+    bool                       loaded;
 };
 
 static rizz__plugin_mgr g_plugin;
@@ -83,7 +87,6 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4244)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4146)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
 #include "sort/sort.h"
-SX_PRAGMA_DIAGNOSTIC_POP()
 
 bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path) {
     static_assert(RIZZ_PLUGIN_CRASH_OTHER == (rizz_plugin_crash)CR_OTHER, "crash enum mismatch");
@@ -104,7 +107,6 @@ bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path) {
     }
 
 #if RIZZ_BUNDLE
-    rizz__plugin_bundle_native();
     rizz__plugin_bundle();
 #endif
 
@@ -113,17 +115,22 @@ bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path) {
 
 void* rizz__plugin_get_api(rizz_api_type api, uint32_t version) {
     sx_unused(version);
+    sx_assert(api < _RIZZ_API_COUNT);
 
-    if (api < _RIZZ_API_NATIVE_COUNT) {
-        return g_native_apis[api];
-    } else {
-        sx_assert(api > _RIZZ_API_NATIVE_COUNT && api < _RIZZ_API_COUNT);
-        for (int i = 0, c = sx_array_count(g_plugin.injected); i < c; i++) {
-            if (g_plugin.injected[i].type == api)
-                return g_plugin.injected[i].api;
+    return g_native_apis[api];
+}
+
+void* rizz__plugin_get_api_byname(const char* name, uint32_t version) {
+    sx_unused(version);
+    for (int i = 0, c = sx_array_count(g_plugin.injected); i < c; i++) {
+        if (sx_strequal(name, g_plugin.injected[i].name) &&
+            g_plugin.injected[i].version == version) {
+            return g_plugin.injected[i].api;
         }
-        return nullptr;    // plugin not found/injected
     }
+
+    rizz_log_warn("API '%s' version '%d' not found", name, version);
+    return NULL;
 }
 
 void rizz__plugin_release() {
@@ -131,32 +138,25 @@ void rizz__plugin_release() {
         return;
 
     if (g_plugin.plugins) {
-        // release entry (game) plugin first
-        if (g_plugin.entry_plugin_id) {
-            int index = rizz_to_index(g_plugin.entry_plugin_id);
+        // unload plugins in reverse order of loading
+        // so game module will be unloaded first
 #ifndef RIZZ_BUNDLE
+        for (int i = sx_array_count(g_plugin.plugin_update_order) - 1; i >= 0; i--) {
+            int index = g_plugin.plugin_update_order[i];
             cr_plugin_close(g_plugin.plugins[index].p);
+        }
 #else
+        for (int i = sx_array_count(g_plugin.plugin_update_order) - 1; i >= 0; i--) {
+            int index = g_plugin.plugin_update_order[i];
             sx_assert(g_plugin.plugins[index].info.main_cb);
             g_plugin.plugins[index].info.main_cb((rizz_plugin*)&g_plugin.plugins[index].p,
                                                  RIZZ_PLUGIN_EVENT_SHUTDOWN);
-#endif
         }
+#endif
 
-#ifndef RIZZ_BUNDLE
         for (int i = 0; i < sx_array_count(g_plugin.plugins); i++) {
-            if (!(g_plugin.plugins[i].flags & _RIZZ_PLUGIN_FLAG_ENTRY))
-                cr_plugin_close(g_plugin.plugins[i].p);
+            sx_free(g_plugin.alloc, g_plugin.plugins[i].deps);
         }
-#else
-        for (int i = 0; i < sx_array_count(g_plugin.plugins); i++) {
-            if (!(g_plugin.plugins[i].flags & _RIZZ_PLUGIN_FLAG_ENTRY)) {
-                sx_assert(g_plugin.plugins[i].info.main_cb);
-                g_plugin.plugins[i].info.main_cb((rizz_plugin*)&g_plugin.plugins[i].p,
-                                                RIZZ_PLUGIN_EVENT_SHUTDOWN);
-            }
-        }
-#endif
         sx_array_free(g_plugin.alloc, g_plugin.plugins);
     }
 
@@ -166,26 +166,104 @@ void rizz__plugin_release() {
     sx_memset(&g_plugin, 0x0, sizeof(g_plugin));
 }
 
+static bool rizz__plugin_order_dependencies() {
+    int num_plugins = sx_array_count(g_plugin.plugins);
+    if (num_plugins == 0)
+        return true;
+
+    int level = 0;
+    int count = 0;
+    while (count < num_plugins) {
+        int init_count = count;
+        for (int i = 0; i < num_plugins; i++) {
+            rizz__plugin_item* item = &g_plugin.plugins[i];
+            if (item->order == -1) {
+                if (item->num_deps > 0) {
+                    int num_deps_met = 0;
+                    for (int d = 0; d < item->num_deps; d++) {
+                        for (int j = 0; j < num_plugins; j++) {
+                            rizz__plugin_item* parent_item = &g_plugin.plugins[j];
+                            if (i != j && parent_item->order != -1 &&
+                                parent_item->order <= (level - 1) &&
+                                sx_strequal(parent_item->info.name, item->deps[d].name)) {
+                                num_deps_met++;
+                                break;
+                            }
+                        }
+                    }    // foreach dep
+                    if (num_deps_met == item->num_deps) {
+                        item->order = level;
+                        count++;
+                    }
+                } else {
+                    item->order = 0;
+                    count++;
+                }
+            }
+        }    // foreach: plugin
+
+        if (init_count == count) {
+            break;    // count is not changed, so nothing could be resolved. quit the loop
+        }
+
+        level++;
+    }
+
+    // check for errors
+    if (count != num_plugins) {
+        rizz_log_error("the following plugins' dependencies didn't met:");
+        for (int i = 0; i < num_plugins; i++) {
+            rizz__plugin_item* item = &g_plugin.plugins[i];
+            if (item->order == -1) {
+                char dep_str[512];
+                sx_strcpy(dep_str, sizeof(dep_str), "[");
+                for (int d = 0; d < item->num_deps; d++) {
+                    if (d != item->num_deps - 1)
+                        sx_strcat(dep_str, sizeof(dep_str), item->deps[d].name);
+                    else
+                        sx_strcat(dep_str, sizeof(dep_str), "]");
+                }
+                rizz_log_error("\t%s -(depends)-> %s",
+                               item->info.name[0] ? item->info.name : "[entry]", dep_str);
+            }
+        }
+
+        return false;
+    }
+
+    // sort them by their order and load
+    rizz__plugin_tim_sort(g_plugin.plugin_update_order,
+                          sx_array_count(g_plugin.plugin_update_order));
+
+    return true;
+}
+
 #ifdef RIZZ_BUNDLE
 static void rizz__plugin_register(const rizz_plugin_info* info) {
     rizz__plugin_item item;
     sx_memset(&item, 0x0, sizeof(item));
     item.p.api = &the__plugin;
     item.p.iteration = 1;
-    item.manual_reload = true;
     sx_memcpy(&item.info, info, sizeof(*info));
-    sx_strcpy(item.filename, sizeof(item.filename), info->name);
+    sx_strcpy(item.filepath, sizeof(item.filepath), info->name);
+    item.order = -1;
 
     sx_array_push(g_plugin.alloc, g_plugin.plugins, item);
     sx_array_push(g_plugin.alloc, g_plugin.plugin_update_order,
                   sx_array_count(g_plugin.plugins) - 1);
 }
 
-static bool rizz__plugin_load(const char* plugin_name, rizz_plugin_flags plugin_flags) {
+static bool rizz__plugin_load(const char* name) {
+    sx_assert(!g_plugin.loaded && "cannot load anymore plugins after `init_plugins` is called");
+
+    return rizz__plugin_load_abs(name, false, NULL, 0);
+}
+
+bool rizz__plugin_load_abs(const char* name, bool entry, const char** edeps, int enum_deps) {
     // find the plugin and save it's flags, the list is already populated
     int plugin_id = -1;
     for (int i = 0; i < sx_array_count(g_plugin.plugins); i++) {
-        if (sx_strequal(g_plugin.plugins[i].filename, plugin_name)) {
+        if (sx_strequal(g_plugin.plugins[i].filepath, name)) {
             plugin_id = i;
             break;
         }
@@ -193,11 +271,37 @@ static bool rizz__plugin_load(const char* plugin_name, rizz_plugin_flags plugin_
 
     if (plugin_id != -1) {
         rizz__plugin_item* item = &g_plugin.plugins[plugin_id];
-        item->flags = plugin_flags;
-        if (plugin_flags & _RIZZ_PLUGIN_FLAG_ENTRY) {
-            sx_assert(!g_plugin.entry_plugin_id && "entry plugin already loaded");
-            g_plugin.entry_plugin_id = rizz_to_id(plugin_id);
+
+        // We got the info, the plugin seems to be valid
+        int          num_deps = entry ? enum_deps : item->info.num_deps;
+        const char** deps = entry ? edeps : item->info.deps;
+        if (num_deps > 0 && deps) {
+            item->deps = (rizz__plugin_dependency*)sx_malloc(
+                g_plugin.alloc, sizeof(rizz__plugin_dependency) * num_deps);
+            if (!item->deps) {
+                sx_out_of_memory();
+                return false;
+            }
+            item->num_deps = num_deps;
+            for (int i = 0; i < num_deps; i++)
+                sx_strcpy(item->deps[i].name, sizeof(item->deps[i].name), deps[i]);
         }
+
+        return true;
+    } else {
+        rizz_log_error("plugin load failed: %s", name);
+        return false;
+    }
+}
+
+bool rizz__plugin_init_plugins() {
+    if (!rizz__plugin_order_dependencies()) {
+        return false;
+    }
+
+    for (int i = 0; i < sx_array_count(g_plugin.plugin_update_order); i++) {
+        int                index = g_plugin.plugin_update_order[i];
+        rizz__plugin_item* item = &g_plugin.plugins[index];
 
         // load the plugin
         int r;
@@ -206,53 +310,30 @@ static bool rizz__plugin_load(const char* plugin_name, rizz_plugin_flags plugin_
             return false;
         }
 
-        if (plugin_flags & RIZZ_PLUGIN_FLAG_UPDATE_FIRST)
-            item->order = -1;
-        else if (plugin_flags & RIZZ_PLUGIN_FLAG_UPDATE_LAST)
-            item->order = 1;
-        rizz__plugin_binary_insertion_sort(g_plugin.plugin_update_order,
-                                           sx_array_count(g_plugin.plugin_update_order));
-
-        int version = item->info.version;
-        rizz_log_info("(init) plugin: %s - %s - v%d.%d.%d", item->info.name, item->info.desc,
-                      (version / 100), (version / 10) % 10, version % 100);
-
         item->p._p = (void*)0x1;    // set it to something that indicates plugin is loaded
-        return true;
-    } else {
-        rizz_log_error("plugin load failed: %s", plugin_name);
-        return false;
-    }
-}
 
-bool rizz__plugin_load_abs(const char* filepath, rizz_plugin_flags plugin_flags) {
-    sx_unused(plugin_flags);
-    sx_assert(sx_strstr(filepath, GAME_PLUGIN_NAME) &&
-              "only game plugin should be loaded by 'load_abs' in BUNDLE build");
-    return rizz__plugin_load(GAME_PLUGIN_NAME, _RIZZ_PLUGIN_FLAG_ENTRY);
-}
-
-static void rizz__plugin_unload(const char* plugin_name) {
-    int index = -1;
-    for (int i = 0, c = sx_array_count(g_plugin.plugins); i < c; i++) {
-        if (sx_strequal(g_plugin.plugins[i].info.name, plugin_name)) {
-            index = i;
-            break;
+        if (item->info.name[0]) {
+            int  version = item->info.version;
+            char filename[32];
+            sx_os_path_basename(filename, sizeof(filename), item->filepath);
+            rizz_log_info("(init) plugin: %s (%s) - %s - v%d.%d.%d", item->info.name, filename,
+                          item->info.desc, rizz_version_major(version), rizz_version_minor(version),
+                          rizz_version_bugfix(version));
         }
     }
 
-    if (index != -1) {
-        rizz__plugin_item* item = &g_plugin.plugins[index];
-        sx_assert(item->info.main_cb);
-        item->info.main_cb((rizz_plugin*)&item->p, RIZZ_PLUGIN_EVENT_SHUTDOWN);
-        item->p._p = NULL;
-    }
+
+    g_plugin.loaded = true;
+    return true;
+
+    return true;
 }
 
 void rizz__plugin_update(float dt) {
     sx_unused(dt);
     for (int i = 0, c = sx_array_count(g_plugin.plugin_update_order); i < c; i++) {
-        rizz__plugin_item* item = &g_plugin.plugins[i];
+        int                index = g_plugin.plugin_update_order[i];
+        rizz__plugin_item* item = &g_plugin.plugins[index];
         if (item->p._p == (void*)0x1) {
             sx_assert(item->info.main_cb);
             item->info.main_cb((rizz_plugin*)&item->p, RIZZ_PLUGIN_EVENT_STEP);
@@ -262,10 +343,11 @@ void rizz__plugin_update(float dt) {
 
 void rizz__plugin_broadcast_event(const rizz_app_event* e) {
     for (int i = 0, c = sx_array_count(g_plugin.plugin_update_order); i < c; i++) {
-        rizz__plugin_item* item = &g_plugin.plugins[i];
-        if (item->p._p == (void*)0x1 && item->info.flags & RIZZ_PLUGIN_INFO_EVENT_HANDLER) {
-            sx_assert(item->info.event_cb);
-            item->info.event_cb(e);
+        int                index = g_plugin.plugin_update_order[i];
+        rizz__plugin_item* item = &g_plugin.plugins[index];
+        if (item->p._p == (void*)0x1) {
+            if (item->info.event_cb)
+                item->info.event_cb(e);
         }
     }
 }
@@ -281,102 +363,110 @@ static void rizz__plugin_reload_handler(cr_plugin* plugin, const char* filename,
     }
 }
 
-static bool rizz__plugin_load(const char* plugin_name, rizz_plugin_flags plugin_flags) {
+static bool rizz__plugin_load(const char* name) {
+    sx_assert(!g_plugin.loaded && "cannot load anymore plugins after `init_plugins` is called");
+
     // construct full filepath, by joining to root plugin path and adding extension
     char filepath[256];
 #    if SX_PLATFORM_LINUX || SX_PLATFORM_OSX
     sx_os_path_join(filepath, sizeof(filepath), g_plugin.plugin_path, "lib");
-    sx_strcat(filepath, sizeof(filepath), plugin_name);
+    sx_strcat(filepath, sizeof(filepath), desc->name);
 #    else
-    sx_os_path_join(filepath, sizeof(filepath), g_plugin.plugin_path, plugin_name);
+    sx_os_path_join(filepath, sizeof(filepath), g_plugin.plugin_path, name);
 #    endif
     sx_strcat(filepath, sizeof(filepath), SX_DLL_EXT);
-    return rizz__plugin_load_abs(filepath, plugin_flags);
+    return rizz__plugin_load_abs(filepath, false, NULL, 0);
 }
 
-bool rizz__plugin_load_abs(const char* filepath, rizz_plugin_flags plugin_flags) {
+bool rizz__plugin_load_abs(const char* filepath, bool entry, const char** edeps, int enum_deps) {
     rizz__plugin_item item;
     sx_memset(&item, 0x0, sizeof(item));
     item.p.userdata = &the__plugin;
-    item.flags = plugin_flags;
 
-    char plugin_file[128];
-    sx_os_path_basename(plugin_file, sizeof(plugin_file), filepath);
+    // get info from the plugin
+    void* dll = NULL;
+    if (!entry) {
+        dll = sx_os_dlopen(filepath);
+        if (!dll) {
+            rizz_log_error("plugin load failed: %s: %s", filepath, sx_os_dlerr());
+            return false;
+        }
 
-    // We got the info, the plugin seems to be valid, now load and run the plugin
-    item.manual_reload =
-        sx_cppbool(!RIZZ_CONFIG_HOT_LOADING || (plugin_flags & RIZZ_PLUGIN_FLAG_MANUAL_RELOAD));
-    if (!cr_plugin_load(item.p, filepath, rizz__plugin_reload_handler)) {
-        rizz_log_error("plugin load failed: %s", filepath);
-        return false;
-    }
+        rizz_plugin_get_info_cb* get_info =
+            (rizz_plugin_get_info_cb*)sx_os_dlsym(dll, "rizz_plugin_get_info");
+        if (!get_info) {
+            rizz_log_error("plugin missing rizz_plugin_get_info symbol: %s", filepath);
+            return false;
+        }
 
-    rizz_plugin_get_info_cb* get_info =
-        (rizz_plugin_get_info_cb*)cr_plugin_symbol(item.p, "rizz_plugin_get_info");
-    if (!get_info) {
-        rizz_log_warn("plugin missing rizz_plugin_get_info symbol: %s", filepath);
-        char ext[32];
-        sx_os_path_splitext(ext, sizeof(ext), item.info.name, sizeof(item.info.name), plugin_file);
-    } else {
         get_info(&item.info);
     }
 
-    sx_strcpy(item.filename, sizeof(item.filename), plugin_file);
-    if (plugin_flags & RIZZ_PLUGIN_FLAG_UPDATE_FIRST)
-        item.order = -1;
-    else if (plugin_flags & RIZZ_PLUGIN_FLAG_UPDATE_LAST)
-        item.order = 1;
+    sx_strcpy(item.filepath, sizeof(item.filepath), filepath);
+
+    // We got the info, the plugin seems to be valid
+    int          num_deps = entry ? enum_deps : item.info.num_deps;
+    const char** deps = entry ? edeps : item.info.deps;
+    if (num_deps > 0 && deps) {
+        item.deps = (rizz__plugin_dependency*)sx_malloc(g_plugin.alloc,
+                                                        sizeof(rizz__plugin_dependency) * num_deps);
+        if (!item.deps) {
+            sx_out_of_memory();
+            return false;
+        }
+        item.num_deps = num_deps;
+        for (int i = 0; i < num_deps; i++)
+            sx_strcpy(item.deps[i].name, sizeof(item.deps[i].name), deps[i]);
+    }
+
+    item.order = -1;
+
+    if (dll)
+        sx_os_dlclose(dll);
 
     sx_array_push(g_plugin.alloc, g_plugin.plugins, item);
     sx_array_push(g_plugin.alloc, g_plugin.plugin_update_order,
                   sx_array_count(g_plugin.plugins) - 1);
-    rizz__plugin_binary_insertion_sort(g_plugin.plugin_update_order,
-                                       sx_array_count(g_plugin.plugin_update_order));
 
-    if (plugin_flags & _RIZZ_PLUGIN_FLAG_ENTRY) {
-        sx_assert(!g_plugin.entry_plugin_id && "entry plugin already loaded");
-        g_plugin.entry_plugin_id = sx_array_count(g_plugin.plugins);
-    } else {
-        int version = item.info.version;
-        rizz_log_info("(init) plugin: %s (%s) - %s - v%d.%d.%d", item.info.name, item.filename,
-                    item.info.desc, rizz_version_major(version), rizz_version_minor(version),
-                    rizz_version_bugfix(version));
-    }
     return true;
 }
 
-static void rizz__plugin_unload(const char* plugin_name) {
-    int index = -1;
-    for (int i = 0, c = sx_array_count(g_plugin.plugins); i < c; i++) {
-        if (sx_strequal(g_plugin.plugins[i].info.name, plugin_name)) {
-            index = i;
-            break;
+bool rizz__plugin_init_plugins() {
+    if (!rizz__plugin_order_dependencies())
+        return false;
+
+    for (int i = 0; i < sx_array_count(g_plugin.plugin_update_order); i++) {
+        int                index = g_plugin.plugin_update_order[i];
+        rizz__plugin_item* item = &g_plugin.plugins[index];
+
+        if (!cr_plugin_load(item->p, item->filepath, rizz__plugin_reload_handler)) {
+            rizz_log_error("plugin init failed: %s", item->filepath);
+            return false;
+        }
+
+        if (item->info.name[0]) {
+            int  version = item->info.version;
+            char filename[32];
+            sx_os_path_basename(filename, sizeof(filename), item->filepath);
+            rizz_log_info("(init) plugin: %s (%s) - %s - v%d.%d.%d", item->info.name, filename,
+                          item->info.desc, rizz_version_major(version), rizz_version_minor(version),
+                          rizz_version_bugfix(version));
         }
     }
 
-    if (index != -1) {
-        cr_plugin_close(g_plugin.plugins[index].p);
-        sx_array_pop(g_plugin.plugins, index);
-        // reorder
-        sx_array_pop_last(g_plugin.plugin_update_order);
-        for (int i = 0; i < sx_array_count(g_plugin.plugin_update_order); i++) {
-            g_plugin.plugin_update_order[i] = i;
-        }
-        rizz__plugin_binary_insertion_sort(g_plugin.plugin_update_order,
-                                           sx_array_count(g_plugin.plugin_update_order));
-    }
+
+    g_plugin.loaded = true;
+    return true;
 }
 
 void rizz__plugin_update(float dt) {
     for (int i = 0, c = sx_array_count(g_plugin.plugin_update_order); i < c; i++) {
         rizz__plugin_item* plugin = &g_plugin.plugins[g_plugin.plugin_update_order[i]];
         bool               check_reload = false;
-        if (!plugin->manual_reload) {
-            plugin->update_tm += dt;
-            if (plugin->update_tm >= RIZZ_CONFIG_PLUGIN_UPDATE_INTERVAL) {
-                check_reload = true;
-                plugin->update_tm = 0;
-            }
+        plugin->update_tm += dt;
+        if (plugin->update_tm >= RIZZ_CONFIG_PLUGIN_UPDATE_INTERVAL) {
+            check_reload = true;
+            plugin->update_tm = 0;
         }
 
         int r = cr_plugin_update(plugin->p, check_reload);
@@ -394,34 +484,43 @@ void rizz__plugin_update(float dt) {
 
 void rizz__plugin_broadcast_event(const rizz_app_event* e) {
     for (int i = 0, c = sx_array_count(g_plugin.plugin_update_order); i < c; i++) {
-        if (g_plugin.plugins[i].info.flags & RIZZ_PLUGIN_INFO_EVENT_HANDLER)
-            cr_plugin_event(g_plugin.plugins[g_plugin.plugin_update_order[i]].p, e);
+        cr_plugin_event(g_plugin.plugins[g_plugin.plugin_update_order[i]].p, e);
     }
 }
 #endif    // RIZZ_BUNDLE
 
-void rizz__plugin_inject_api(rizz_api_type type, uint32_t version, void* api) {
-    // the plugin must not exist with the same attributes
+void rizz__plugin_inject_api(const char* name, uint32_t version, void* api) {
+    int api_idx = -1;
     for (int i = 0, c = sx_array_count(g_plugin.injected); i < c; i++) {
-        if (g_plugin.injected[i].type == type && g_plugin.injected[i].version == version) {
-            rizz_log_warn("plugin (type_id='%d', version=%d) already exists", type, version);
-            sx_assert(0);
-            return;
+        if (sx_strequal(g_plugin.injected[i].name, name) &&
+            g_plugin.injected[i].version == version) {
+            api_idx = i;
+            break;
         }
     }
 
-    rizz__plugin_injected_api item = { type, version, api };
-    sx_array_push(g_plugin.alloc, g_plugin.injected, item);
+    if (api_idx == -1) {
+        rizz__plugin_injected_api item = { { 0 }, version, api };
+        sx_strcpy(item.name, sizeof(item.name), name);
+        sx_array_push(g_plugin.alloc, g_plugin.injected, item);
+    } else {
+        g_plugin.injected[api_idx].api = api;
+
+        // broatcast API change event
+        rizz_app_event e = { RIZZ_APP_EVENTTYPE_UPDATE_APIS };
+        rizz__plugin_broadcast_event(&e);
+    }
 }
 
-void rizz__plugin_remove_api(rizz_api_type type, uint32_t version) {
+void rizz__plugin_remove_api(const char* name, uint32_t version) {
     for (int i = 0, c = sx_array_count(g_plugin.injected); i < c; i++) {
-        if (g_plugin.injected[i].type == type && g_plugin.injected[i].version == version) {
+        if (sx_strequal(g_plugin.injected[i].name, name) &&
+            g_plugin.injected[i].version == version) {
             sx_array_pop(g_plugin.injected, i);
             return;
         }
     }
-    rizz_log_warn("plugin (type_id='%d', version=%d) not found", type, version);
+    rizz_log_warn("API (name='%s', version=%d) not found", name, version);
 }
 
 const char* rizz__plugin_crash_reason(rizz_plugin_crash crash) {
@@ -442,6 +541,6 @@ const char* rizz__plugin_crash_reason(rizz_plugin_crash crash) {
     // clang-format on
 }
 
-rizz_api_plugin the__plugin = { rizz__plugin_load,       rizz__plugin_unload,
-                                rizz__plugin_inject_api, rizz__plugin_remove_api,
-                                rizz__plugin_get_api,    rizz__plugin_crash_reason };
+rizz_api_plugin the__plugin = { rizz__plugin_load,           rizz__plugin_inject_api,
+                                rizz__plugin_remove_api,     rizz__plugin_get_api,
+                                rizz__plugin_get_api_byname, rizz__plugin_crash_reason };

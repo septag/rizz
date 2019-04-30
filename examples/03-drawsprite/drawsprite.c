@@ -309,9 +309,9 @@ static void render() {
     }
 
     if (!g_ds.custom) {
-        the_sprite->draw_batch(g_ds.sprites, NUM_SPRITES, &vp, mats, NULL, NULL);
+        the_sprite->draw_batch(g_ds.sprites, NUM_SPRITES, &vp, mats, NULL);
         if (g_ds.wireframe)
-            the_sprite->draw_wireframe_batch(g_ds.sprites, NUM_SPRITES, &vp, mats, NULL, NULL);
+            the_sprite->draw_wireframe_batch(g_ds.sprites, NUM_SPRITES, &vp, mats);
     } else {
         draw_custom(&params);
     }
@@ -347,15 +347,17 @@ rizz_plugin_decl_main(drawsprite, plugin, e) {
         the_core = plugin->api->get_api(RIZZ_API_CORE, 0);
         the_gfx = plugin->api->get_api(RIZZ_API_GFX, 0);
         the_app = plugin->api->get_api(RIZZ_API_APP, 0);
-        the_imgui = plugin->api->get_api(RIZZ_API_IMGUI, 0);
         the_vfs = plugin->api->get_api(RIZZ_API_VFS, 0);
         the_asset = plugin->api->get_api(RIZZ_API_ASSET, 0);
-        the_sprite = plugin->api->get_api(RIZZ_API_SPRITE, 0);
         the_camera = plugin->api->get_api(RIZZ_API_CAMERA, 0);
-        the_imguix = plugin->api->get_api(RIZZ_API_IMGUI_EXTRA, 0);
+
+        the_imgui = plugin->api->get_api_byname("imgui", 0);
+        the_imguix = plugin->api->get_api_byname("imgui_extra", 0);
+        the_sprite = plugin->api->get_api_byname("sprite", 0);
         sx_assert(the_sprite && "sprite plugin is not loaded!");
 
-        init();
+        if (!init())
+            return -1;
         break;
 
     case RIZZ_PLUGIN_EVENT_LOAD:
@@ -389,8 +391,6 @@ rizz_plugin_decl_event_handler(drawsprite, e) {
     }
 }
 
-rizz_plugin_implement_info(drawsprite, 1000, "drawsprite", 0);
-
 rizz_game_decl_config(conf) {
     conf->app_name = "drawsprite";
     conf->app_version = 1000;
@@ -400,4 +400,6 @@ rizz_game_decl_config(conf) {
     conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;
     conf->multisample_count = 4;
     conf->swap_interval = 2;
+    conf->plugins[0] = "imgui";
+    conf->plugins[1] = "sprite";
 }

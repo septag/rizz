@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.1)
 project(sprite)
 
 add_library(sprite ${PLUGIN_TYPE} sprite.c 
-                                  ../../include/sprite/sprite.h)
+                                  ../../include/sprite/sprite.h
+                                  README.md)
 target_link_libraries(sprite PRIVATE cimgui imguizmo sx)
 target_include_directories(sprite PRIVATE ../../3rdparty)
 

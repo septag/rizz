@@ -188,10 +188,10 @@ rizz_plugin_decl_main(quad, plugin, e) {
         the_core = (rizz_api_core*)plugin->api->get_api(RIZZ_API_CORE, 0);
         the_gfx = (rizz_api_gfx*)plugin->api->get_api(RIZZ_API_GFX, 0);
         the_app = (rizz_api_app*)plugin->api->get_api(RIZZ_API_APP, 0);
-        the_imgui = (rizz_api_imgui*)plugin->api->get_api(RIZZ_API_IMGUI, 0);
         the_vfs = (rizz_api_vfs*)plugin->api->get_api(RIZZ_API_VFS, 0);
         the_asset = (rizz_api_asset*)plugin->api->get_api(RIZZ_API_ASSET, 0);
         the_camera = (rizz_api_camera*)plugin->api->get_api(RIZZ_API_CAMERA, 0);
+        the_imgui = (rizz_api_imgui*)plugin->api->get_api_byname("imgui", 0);
 
         init();
         break;
@@ -226,8 +226,6 @@ rizz_plugin_decl_event_handler(quad, e) {
         break;
     }
 }
-
-rizz_plugin_implement_info(quad, 1000, "quad", 0);
 
 rizz_game_decl_config(conf) {
     conf->app_name = "quad";

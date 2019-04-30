@@ -185,14 +185,14 @@ typedef struct {
     sg_imgui_str_t fs_entry;
     sg_imgui_str_t fs_image_name[SG_MAX_SHADERSTAGE_IMAGES];
     sg_imgui_str_t fs_uniform_name[SG_MAX_SHADERSTAGE_UBS][SG_MAX_UB_MEMBERS];
+    sg_imgui_str_t attr_name[SG_MAX_VERTEX_ATTRIBUTES];
+    sg_imgui_str_t attr_sem_name[SG_MAX_VERTEX_ATTRIBUTES];
     sg_shader_desc desc;
 } sg_imgui_shader_t;
 
 typedef struct {
     sg_pipeline res_id;
     sg_imgui_str_t label;
-    sg_imgui_str_t attr_name[SG_MAX_VERTEX_ATTRIBUTES];
-    sg_imgui_str_t attr_sem_name[SG_MAX_VERTEX_ATTRIBUTES];
     sg_pipeline_desc desc;
 } sg_imgui_pipeline_t;
 
@@ -1110,6 +1110,17 @@ _SOKOL_PRIVATE void _sg_imgui_shader_created(sg_imgui_t* ctx, sg_shader res_id, 
     if (shd->desc.fs.byte_code) {
         shd->desc.fs.byte_code = _sg_imgui_bin_dup(shd->desc.fs.byte_code, shd->desc.fs.byte_code_size);
     }
+    for (int i = 0; i < SG_MAX_VERTEX_ATTRIBUTES; i++) {
+        sg_shader_attr_desc* ad = &shd->desc.attrs[i];
+        if (ad->name) {
+            shd->attr_name[i] = _sg_imgui_make_str(ad->name);
+            ad->name = shd->attr_name[i].buf;
+        }
+        if (ad->sem_name) {
+            shd->attr_sem_name[i] = _sg_imgui_make_str(ad->sem_name);
+            ad->sem_name = shd->attr_sem_name[i].buf;
+        }
+    }
 }
 
 _SOKOL_PRIVATE void _sg_imgui_shader_destroyed(sg_imgui_t* ctx, int slot_index) {
@@ -1141,18 +1152,6 @@ _SOKOL_PRIVATE void _sg_imgui_pipeline_created(sg_imgui_t* ctx, sg_pipeline res_
     pip->label = _sg_imgui_make_str(desc->label);
     pip->desc = *desc;
 
-    /* copy strings in vertex layout to persistent location */
-    for (int i = 0; i < SG_MAX_VERTEX_ATTRIBUTES; i++) {
-        sg_vertex_attr_desc* ad = &pip->desc.layout.attrs[i];
-        if (ad->name) {
-            pip->attr_name[i] = _sg_imgui_make_str(ad->name);
-            ad->name = pip->attr_name[i].buf;
-        }
-        if (ad->sem_name) {
-            pip->attr_sem_name[i] = _sg_imgui_make_str(ad->sem_name);
-            ad->sem_name = pip->attr_sem_name[i].buf;
-        }
-    }
 }
 
 _SOKOL_PRIVATE void _sg_imgui_pipeline_destroyed(sg_imgui_t* ctx, int slot_index) {
@@ -2509,7 +2508,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_buffer_panel(sg_imgui_t* ctx, sg_buffer buf) 
     if (buf.id != SG_INVALID_ID) {
         the__imgui.BeginChild("buffer", sx_vec2f(0,0), false, 0);
         sg_buffer_info info = ctx->api->query_buffer_info(buf);
-        if (info.slot.res_id != SG_INVALID_ID) {
+        if (info.slot.state == SG_RESOURCESTATE_VALID) {
             const sg_imgui_buffer_t* buf_ui = &ctx->buffers.slots[_sg_imgui_slot_index(buf.id)];
             the__imgui.Text("Label: %s", buf_ui->label.buf[0] ? buf_ui->label.buf : "---");
             _sg_imgui_draw_resource_slot(&info.slot);
@@ -2530,7 +2529,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_buffer_panel(sg_imgui_t* ctx, sg_buffer buf) 
             }
         }
         else {
-            the__imgui.Text("Buffer 0x%08X no longer alive", buf.id);
+            the__imgui.Text("Buffer 0x%08X not valid.", buf.id);
         }
         the__imgui.EndChild();
     }
@@ -2566,7 +2565,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_image_panel(sg_imgui_t* ctx, sg_image img) {
     if (img.id != SG_INVALID_ID) {
         the__imgui.BeginChild("image", sx_vec2f(0,0), false, 0);
         sg_image_info info = ctx->api->query_image_info(img);
-        if (info.slot.state != SG_INVALID_ID) {
+        if (info.slot.state == SG_RESOURCESTATE_VALID) {
             sg_imgui_image_t* img_ui = &ctx->images.slots[_sg_imgui_slot_index(img.id)];
             const sg_image_desc* desc = &img_ui->desc;
             the__imgui.Text("Label: %s", img_ui->label.buf[0] ? img_ui->label.buf : "---");
@@ -2599,7 +2598,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_image_panel(sg_imgui_t* ctx, sg_image img) {
             }
         }
         else {
-            the__imgui.Text("Image 0x%08X not alive.", img.id);
+            the__imgui.Text("Image 0x%08X not valid.", img.id);
         }
         the__imgui.EndChild();
     }
@@ -2681,11 +2680,23 @@ _SOKOL_PRIVATE void _sg_imgui_draw_shader_panel(sg_imgui_t* ctx, sg_shader shd) 
     if (shd.id != SG_INVALID_ID) {
         the__imgui.BeginChild("shader", sx_vec2f(0,0), false, ImGuiWindowFlags_HorizontalScrollbar);
         sg_shader_info info = ctx->api->query_shader_info(shd);
-        if (info.slot.state != SG_INVALID_ID) {
+        if (info.slot.state == SG_RESOURCESTATE_VALID) {
             const sg_imgui_shader_t* shd_ui = &ctx->shaders.slots[_sg_imgui_slot_index(shd.id)];
             the__imgui.Text("Label: %s", shd_ui->label.buf[0] ? shd_ui->label.buf : "---");
             _sg_imgui_draw_resource_slot(&info.slot);
             the__imgui.Separator();
+            if (the__imgui.TreeNodeStr("Attrs")) {
+                for (int i = 0; i < SG_MAX_VERTEX_ATTRIBUTES; i++) {
+                    const sg_shader_attr_desc* a_desc = &shd_ui->desc.attrs[i];
+                    if (a_desc->name || a_desc->sem_index) {
+                        the__imgui.Text("#%d:", i);
+                        the__imgui.Text("  Name:         %s", a_desc->name ? a_desc->name : "---");
+                        the__imgui.Text("  Sem Name:     %s", a_desc->sem_name ? a_desc->sem_name : "---");
+                        the__imgui.Text("  Sem Index:    %d", a_desc->sem_index);
+                    }
+                }
+                the__imgui.TreePop();
+            }
             if (the__imgui.TreeNodeStr("Vertex Shader Stage")) {
                 _sg_imgui_draw_shader_stage(ctx, &shd_ui->desc.vs);
                 the__imgui.TreePop();
@@ -2696,7 +2707,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_shader_panel(sg_imgui_t* ctx, sg_shader shd) 
             }
         }
         else {
-            the__imgui.Text("Shader 0x%08X no longer alive", shd.id);
+            the__imgui.Text("Shader 0x%08X not valid!", shd.id);
         }
         the__imgui.EndChild();
     }
@@ -2721,9 +2732,6 @@ _SOKOL_PRIVATE void _sg_imgui_draw_vertex_layout(const sg_layout_desc* layout) {
             if (a_desc->format != SG_VERTEXFORMAT_INVALID) {
                 the__imgui.Text("#%d:", i);
                 the__imgui.Text("  Format:       %s", _sg_imgui_vertexformat_string(a_desc->format));
-                the__imgui.Text("  Name:         %s", a_desc->name ? a_desc->name : "---");
-                the__imgui.Text("  Sem Name:     %s", a_desc->sem_name ? a_desc->sem_name : "---");
-                the__imgui.Text("  Sem Index:    %d", a_desc->sem_index);
                 the__imgui.Text("  Offset:       %d", a_desc->offset);
                 the__imgui.Text("  Buffer Index: %d", a_desc->buffer_index);
             }
@@ -2785,7 +2793,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_pipeline_panel(sg_imgui_t* ctx, sg_pipeline p
     if (pip.id != SG_INVALID_ID) {
         the__imgui.BeginChild("pipeline", sx_vec2f(0,0), false, 0);
         sg_pipeline_info info = ctx->api->query_pipeline_info(pip);
-        if (info.slot.state != SG_INVALID_ID) {
+        if (info.slot.state == SG_RESOURCESTATE_VALID) {
             const sg_imgui_pipeline_t* pip_ui = &ctx->pipelines.slots[_sg_imgui_slot_index(pip.id)];
             the__imgui.Text("Label: %s", pip_ui->label.buf[0] ? pip_ui->label.buf : "---");
             _sg_imgui_draw_resource_slot(&info.slot);
@@ -2814,7 +2822,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_pipeline_panel(sg_imgui_t* ctx, sg_pipeline p
             }
         }
         else {
-            the__imgui.Text("Pipeline 0x%08X not alive.", pip.id);
+            the__imgui.Text("Pipeline 0x%08X not valid.", pip.id);
         }
         the__imgui.EndChild();
     }
@@ -2834,7 +2842,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_pass_panel(sg_imgui_t* ctx, sg_pass pass) {
     if (pass.id != SG_INVALID_ID) {
         the__imgui.BeginChild("pass", sx_vec2f(0,0), false, 0);
         sg_pass_info info = ctx->api->query_pass_info(pass);
-        if (info.slot.res_id != SG_INVALID_ID) {
+        if (info.slot.state == SG_RESOURCESTATE_VALID) {
             sg_imgui_pass_t* pass_ui = &ctx->passes.slots[_sg_imgui_slot_index(pass.id)];
             the__imgui.Text("Label: %s", pass_ui->label.buf[0] ? pass_ui->label.buf : "---");
             _sg_imgui_draw_resource_slot(&info.slot);
@@ -2853,7 +2861,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_pass_panel(sg_imgui_t* ctx, sg_pass pass) {
             }
         }
         else {
-            the__imgui.Text("Pass 0x%08X no longer alive.", pass.id);
+            the__imgui.Text("Pass 0x%08X not valid.", pass.id);
         }
         the__imgui.EndChild();
     }
@@ -2920,13 +2928,13 @@ _SOKOL_PRIVATE void _sg_imgui_draw_uniforms_panel(sg_imgui_t* ctx, const sg_imgu
     /* check if all the required information for drawing the structured uniform block content
         is available, otherwise just render a generic hexdump
     */
-    if (ctx->api->query_pipeline_state(args->pipeline) == SG_INVALID_ID) {
-        the__imgui.Text("Pipeline object no longer alive!");
+    if (ctx->api->query_pipeline_state(args->pipeline) != SG_RESOURCESTATE_VALID) {
+        the__imgui.Text("Pipeline object not valid!");
         return;
     }
     sg_imgui_pipeline_t* pip_ui = &ctx->pipelines.slots[_sg_imgui_slot_index(args->pipeline.id)];
-    if (ctx->api->query_shader_state(pip_ui->desc.shader) == SG_INVALID_ID) {
-        the__imgui.Text("Shader object no longer alive!");
+    if (ctx->api->query_shader_state(pip_ui->desc.shader) != SG_RESOURCESTATE_VALID) {
+        the__imgui.Text("Shader object not valid!");
         return;
     }
     sg_imgui_shader_t* shd_ui = &ctx->shaders.slots[_sg_imgui_slot_index(pip_ui->desc.shader.id)];

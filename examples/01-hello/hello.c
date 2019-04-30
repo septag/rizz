@@ -67,7 +67,7 @@ rizz_plugin_decl_main(hello, plugin, e) {
         the_core = plugin->api->get_api(RIZZ_API_CORE, 0);
         the_gfx = plugin->api->get_api(RIZZ_API_GFX, 0);
         the_app = plugin->api->get_api(RIZZ_API_APP, 0);
-        the_imgui = plugin->api->get_api(RIZZ_API_IMGUI, 0);
+        the_imgui = plugin->api->get_api_byname("imgui", 0);
 
         init();
         break;
@@ -102,8 +102,6 @@ rizz_plugin_decl_event_handler(hello, e) {
         break;
     }
 }
-
-rizz_plugin_implement_info(hello, 1000, "hello", 0);
 
 rizz_game_decl_config(conf) {
     conf->app_name = "hello";
