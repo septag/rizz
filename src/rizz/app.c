@@ -318,8 +318,9 @@ sapp_desc sokol_main(int argc, char* argv[]) {
     rizz__app_save_config_str(default_plugin_path, conf.plugin_path);
     rizz__app_save_config_str(default_cache_path, conf.cache_path);
     for (int i = 0; i < RIZZ_CONFIG_MAX_PLUGINS; i++) {
-        if (conf.plugins[i])
+        if (conf.plugins[i]) {
             rizz__app_save_config_str(default_plugins[i], conf.plugins[i]);
+        }
     }
 
 #ifndef RIZZ_BUNDLE

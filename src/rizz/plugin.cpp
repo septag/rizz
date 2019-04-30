@@ -370,7 +370,7 @@ static bool rizz__plugin_load(const char* name) {
     char filepath[256];
 #    if SX_PLATFORM_LINUX || SX_PLATFORM_OSX
     sx_os_path_join(filepath, sizeof(filepath), g_plugin.plugin_path, "lib");
-    sx_strcat(filepath, sizeof(filepath), desc->name);
+    sx_strcat(filepath, sizeof(filepath), name);
 #    else
     sx_os_path_join(filepath, sizeof(filepath), g_plugin.plugin_path, name);
 #    endif

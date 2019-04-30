@@ -57,11 +57,14 @@ But as the engine is in it's early age, the current platforms are built and test
 
 #### CMake options
 - **BUNDLE** (default=0, android/ios=1):  
-  `BUNDLE=0` indicates that _rizz_ is built as an executable host which runs the game 
-  by `rizz --run game.dll` (on linux it's `rizz --run ./game.so`). Recommended for development, where you need reduce binary sizes and live-reload game code.  
-  `BUNDLE=1` Builds _rizz_ as static library. To link and bundle _rizz_ and other plugins with the 
-  stand-alone executable, you should call `bundle_plugins(game_project "plugins_list")` in your _cmake_ script 
-  (see `examples/CMakeLists.txt`).
+    - `BUNDLE=0` indicates that _rizz_ is built as an executable host which runs the game 
+    by `rizz --run game.dll` (on linux it's `rizz --run ./game.so`). Recommended for development, 
+    where you need reduced binary sizes and live-reloading of game code and plugins.  
+    - `BUNDLE=1` Builds _rizz_ as static library. To link and bundle _rizz_ and other plugins with a 
+    single stand-alone executable, so there will be only one executable and bundles _rizz_ and all the
+    plugins you specify. to build the bundle properly, you should set it as _executable_ (*add_executable*) 
+    and call `rizz_set_executable` on the target. see the end of the main `CMakeLists.txt` file for an
+    example.
 - **ENABLE_HOT_LOADING** (default=1, android/ios=0):  
   Enables hot reloading of assets and monitoring the assets directories. Doesn't work on mobile OSes.
 - **BUILD_EXAMPLES** (default=1, android/ios=0):
