@@ -1406,6 +1406,8 @@ static bool cr_plugin_validate_sections(cr_plugin &ctx, so_handle handle,
                                         const std::string &imagefile,
                                         bool rollback) {
     CR_ASSERT(handle);
+    (void)(handle);
+
     cr_ld_data data;
     data.ctx = &ctx;
     auto pimpl = (cr_internal *)ctx.p;

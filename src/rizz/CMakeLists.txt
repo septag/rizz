@@ -32,7 +32,6 @@ set(TEXT_FILES     "../../README.md"
 
 set(EXTERNAL_INCLUDES ../../3rdparty/sokol/sokol_app.h 
                       ../../3rdparty/sokol/sokol_gfx.h
-                      ../../3rdparty/sokol/sokol_audio.h
                       ../../3rdparty/cr/cr.h
                       ../../include/sjson/sjson.h 
                       ../../include/dds-ktx/dds-ktx.h

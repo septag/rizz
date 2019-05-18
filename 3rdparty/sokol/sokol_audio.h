@@ -606,6 +606,7 @@ typedef struct {
     saudio_desc desc;
     _saudio_fifo_t fifo;
     _saudio_backend_t backend;
+    int               overrun;
 } _saudio_state_t;
 
 static _saudio_state_t _saudio;
@@ -1013,6 +1014,9 @@ _SOKOL_PRIVATE void _saudio_wasapi_fill_buffer(void) {
         if (0 == _saudio_fifo_read(&_saudio.fifo, (uint8_t*)_saudio.backend.thread.src_buffer, _saudio.backend.thread.src_buffer_byte_size)) {
             /* not enough read data available, fill the entire buffer with silence */
             memset(_saudio.backend.thread.src_buffer, 0, _saudio.backend.thread.src_buffer_byte_size);
+            _saudio.overrun = 1;
+        } else {
+            _saudio.overrun = 0;
         }
     }
 }

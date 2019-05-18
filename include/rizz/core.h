@@ -13,8 +13,7 @@ typedef struct sx_alloc    sx_alloc;
 
 #define RIZZ_MAX_TEMP_ALLOCS 32
 
-typedef struct rizz_config        rizz_config;           // #include "rizz/game.h"
-typedef struct rizz_gfx_cmdbuffer rizz_gfx_cmdbuffer;    // #include "rizz/graphics.h"
+typedef struct rizz_config rizz_config;    // #include "rizz/game.h"
 
 // custom console commands that can be registered (sent via profiler)
 // return >= 0 for success and -1 for failure
@@ -83,6 +82,17 @@ typedef struct rizz_api_core {
     const sx_alloc* (*tmp_alloc_push)();
     void (*tmp_alloc_pop)();
 
+    // TLS functions are used for setting TLS variables to worker threads by an external source
+    // register: use name to identify the variable (Id). (not thread-safe)
+    // tls_var: gets pointer to variable, (thread-safe)
+    //          `init_cb` will be called on the thread if it's the first time the variable is
+    //          is fetched. you should initialize the variable and return it's pointer
+    //          destroying tls variables are up to the user, after variable is destroyed, the return
+    //          value of tls_var may be invalid
+    void (*tls_register)(const char* name, void* user,
+                         void* (*init_cb)(int thread_idx, uint32_t thread_id, void* user));
+    void* (*tls_var)(const char* name);
+
     const sx_alloc* (*alloc)(rizz_mem_id id);
 
     void (*get_mem_info)(rizz_mem_info* info);
@@ -127,6 +137,8 @@ typedef struct rizz_api_core {
 } rizz_api_core;
 
 #ifdef RIZZ_INTERNAL_API
+typedef struct rizz_gfx_cmdbuffer rizz_gfx_cmdbuffer;    // #include "rizz/graphics.h"
+
 bool                rizz__core_init(const rizz_config* conf);
 void                rizz__core_release();
 void                rizz__core_frame();

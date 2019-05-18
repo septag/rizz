@@ -8,11 +8,10 @@
 #include "rizz/entry.h"
 #include "rizz/graphics.h"
 #include "rizz/http.h"
+#include "rizz/imgui.h"
 #include "rizz/plugin.h"
 #include "rizz/reflect.h"
 #include "rizz/vfs.h"
-
-#include "imgui/imgui.h"
 
 #include "sx/allocator.h"
 #include "sx/array.h"
@@ -78,23 +77,23 @@ static const char* k__memid_names[_RIZZ_MEMID_COUNT] = { "Core",  "Graphics",   
                                                          "Debug", "Toolset",    "Game" };
 
 
-typedef struct {
+typedef struct rizz__core_tmpalloc {
     sx_stackalloc stack_alloc;
     int*          offset_stack;    // sx_array - keep offsets in a stack for push()/pop()
 } rizz__core_tmpalloc;
 
-typedef struct {
+typedef struct rizz__core_cmd {
     char              name[32];
     rizz_core_cmd_cb* callback;
 } rizz__core_cmd;
 
-typedef struct {
+typedef struct rizz__proxy_alloc_header {
     intptr_t size;
     uint32_t ptr_offset;
     int      track_item_idx;
 } rizz__proxy_alloc_header;
 
-typedef struct {
+typedef struct rizz__track_alloc {
     sx_alloc               alloc;
     int                    mem_id;
     const char*            name;
@@ -104,7 +103,14 @@ typedef struct {
     rizz_track_alloc_item* items;    // sx_array
 } rizz__track_alloc;
 
-typedef struct {
+typedef struct rizz__tls_var {
+    uint32_t name_hash;
+    void*    user;
+    sx_tls   tls;
+    void* (*init_cb)(int thread_idx, uint32_t thread_id, void* user);
+} rizz__tls_var;
+
+typedef struct rizz__core {
     const sx_alloc*   heap_alloc;
     sx_alloc          heap_proxy_alloc;
     rizz__track_alloc track_allocs[_RIZZ_MEMID_COUNT];
@@ -137,6 +143,8 @@ typedef struct {
 
     Remotery*       rmt;
     rizz__core_cmd* console_cmds;    // sx_array
+
+    rizz__tls_var* tls_vars;
 } rizz__core;
 
 static rizz__core      g_core;
@@ -929,6 +937,13 @@ void rizz__core_release() {
         }
     }
 
+    for (int i = 0; i < sx_array_count(g_core.tls_vars); i++) {
+        if (g_core.tls_vars[i].tls) {
+            sx_tls_destroy(g_core.tls_vars[i].tls);
+        }
+    }
+    sx_array_free(&g_core.heap_proxy_alloc, g_core.tls_vars);
+
     rizz_log_info("shutdown");
 
 #ifdef _DEBUG
@@ -1096,10 +1111,49 @@ void rizz__core_fix_callback_ptrs(const void** ptrs, const void** new_ptrs, int 
     }
 }
 
+static void rizz__core_tls_register(const char* name, void* user,
+                                    void* (*init_cb)(int thread_idx, uint32_t thread_id,
+                                                     void* user)) {
+    sx_assert(name);
+    sx_assert(init_cb);
+
+    rizz__tls_var tvar = (rizz__tls_var){ .name_hash = sx_hash_fnv32_str(name),
+                                          .user = user,
+                                          .init_cb = init_cb,
+                                          .tls = sx_tls_create() };
+
+    sx_assert(tvar.tls);
+
+    sx_array_push(&g_core.heap_proxy_alloc, g_core.tls_vars, tvar);
+}
+
+static void* rizz__core_tls_var(const char* name) {
+    sx_assert(name);
+    uint32_t hash = sx_hash_fnv32_str(name);
+    for (int i = 0, c = sx_array_count(g_core.tls_vars); i < c; i++) {
+        rizz__tls_var* tvar = &g_core.tls_vars[i];
+
+        if (tvar->name_hash == hash) {
+            void* var = sx_tls_get(tvar->tls);
+            if (!var) {
+                var = tvar->init_cb(sx_job_thread_index(g_core.jobs), sx_job_thread_id(g_core.jobs),
+                                    tvar->user);
+                sx_tls_set(tvar->tls, var);
+            }
+            return var;
+        }
+    }
+
+    sx_assert(0 && "tls_var not registered");
+    return NULL;
+}
+
 // Core API
 rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .tmp_alloc_push = rizz__core_tmp_alloc_push,
                             .tmp_alloc_pop = rizz__core_tmp_alloc_pop,
+                            .tls_register = rizz__core_tls_register,
+                            .tls_var = rizz__core_tls_var,
                             .alloc = rizz__alloc,
                             .get_mem_info = rizz__get_mem_info,
                             .rand = rizz__rand,

@@ -114,7 +114,8 @@ include_directories(include)
 set(native_projects sx 
                     rizz
                     imgui
-                    sprite)
+                    sprite
+                    sound)
 
 # 3rdparty projects
 set(3rdparty_projects utf 
@@ -132,7 +133,8 @@ endif()
 set(example_projects 01-hello 
                      02-quad 
                      03-drawsprite 
-                     04-animsprite)
+                     04-animsprite
+                     05-playsound)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
@@ -143,10 +145,6 @@ endforeach()
 
 foreach (native_project ${native_projects})
     add_subdirectory(src/${native_project})
-    if (BUNDLE)
-        target_compile_definitions(${native_project} PRIVATE -DRIZZ_BUNDLE)
-    endif()
-
     if (MSVC)
         target_compile_options(${native_project} PRIVATE /WX)
     else()
@@ -170,5 +168,11 @@ if (BUILD_EXAMPLES AND NOT BUNDLE)
     endforeach()
 endif()
 
-# Use this command to assign executable in BUNDLE mode
-# rizz_set_executable(04-animsprite PLUGINS sprite imgui NAME animsprite)
+# enable bundle mode for `rizz` project if set
+if (BUNDLE)
+    target_compile_definitions(rizz PRIVATE -DRIZZ_BUNDLE)
+endif()
+
+# Use this command to assign executable in BUNDLE=1 mode
+# rizz__add_example(03-drawsprite)
+# rizz_set_executable(03-drawsprite PLUGINS sprite imgui NAME drawsprite)

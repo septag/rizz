@@ -1,10 +1,10 @@
 ## ImGUI plugin
 
 The plugin for [dear imgui](https://github.com/ocornut/imgui) UI system. 
-See [rizz_api_imgui](https://github.com/septag/rizz/blob/1833c4c716e9eba0fd8f774414f4a619f12b3999/include/imgui/imgui.h#L871) for API listing. 
+See [rizz_api_imgui](https://github.com/septag/rizz/blob/1833c4c716e9eba0fd8f774414f4a619f12b3999/include/rizz/imgui.h#L871) for API listing. 
 It's essentially same as imgui but with no default parameters.
 
-However, there are some other utility functions declared in [imgui-extra.h](https://github.com/septag/rizz/blob/master/include/imgui/imgui-extra.h):
+However, there are some other utility functions declared in [imgui-extra.h](https://github.com/septag/rizz/blob/master/include/rizz/imgui-extra.h):
 
 - `memory_debugger` shows internal engine memory stats.
 - `graphics_debugger` shows *sokol_gfx* API introspection and debugging information.

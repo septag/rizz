@@ -12,9 +12,8 @@
 #include "rizz/graphics.h"
 #include "rizz/plugin.h"
 #include "rizz/vfs.h"
-
-#include "imgui/imgui-extra.h"
-#include "imgui/imgui.h"
+#include "rizz/imgui-extra.h"
+#include "rizz/imgui.h"
 
 #include "../common.h"
 
@@ -236,4 +235,5 @@ rizz_game_decl_config(conf) {
     conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;
     conf->multisample_count = 4;
     conf->swap_interval = 2;
+    conf->plugins[0] = "imgui";
 }

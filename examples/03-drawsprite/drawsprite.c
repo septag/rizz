@@ -12,11 +12,9 @@
 #include "rizz/graphics.h"
 #include "rizz/plugin.h"
 #include "rizz/vfs.h"
-
-#include "sprite/sprite.h"
-
-#include "imgui/imgui-extra.h"
-#include "imgui/imgui.h"
+#include "rizz/sprite.h"
+#include "rizz/imgui-extra.h"
+#include "rizz/imgui.h"
 
 #include "../common.h"
 

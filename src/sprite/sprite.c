@@ -1,4 +1,4 @@
-#include "sprite/sprite.h"
+#include "rizz/sprite.h"
 
 #include "sx/allocator.h"
 #include "sx/array.h"
@@ -8,12 +8,12 @@
 #include "sx/pool.h"
 #include "sx/string.h"
 
-#include "imgui/imgui-extra.h"
-#include "imgui/imgui.h"
 #include "rizz/app.h"
 #include "rizz/asset.h"
 #include "rizz/core.h"
 #include "rizz/graphics.h"
+#include "rizz/imgui-extra.h"
+#include "rizz/imgui.h"
 #include "rizz/json.h"
 #include "rizz/plugin.h"
 #include "rizz/reflect.h"
@@ -40,7 +40,7 @@ RIZZ_STATE static rizz_api_gfx*         the_gfx;
 RIZZ_STATE static rizz_api_imgui*       the_imgui;
 RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
 
-typedef struct {
+typedef struct sprite__data {
     sx_str_t             name;
     rizz_asset           atlas;
     int                  atlas_sprite_id;
@@ -55,7 +55,7 @@ typedef struct {
     sx_rect              bounds;
 } sprite__data;
 
-typedef struct {
+typedef struct atlas__sprite {
     sx_vec2 base_size;
     sx_rect sprite_rect;
     sx_rect sheet_rect;
@@ -65,7 +65,7 @@ typedef struct {
     int     vb_index;
 } atlas__sprite;
 
-typedef struct {
+typedef struct atlas__data {
     rizz_atlas          a;
     atlas__sprite*      sprites;
     sx_hashtbl          sprite_tbl;    // key: name, value:index-to-sprites
@@ -73,20 +73,20 @@ typedef struct {
     uint16_t*           indices;
 } atlas__data;
 
-typedef struct {
+typedef struct atlas__metadata {
     char img_filepath[RIZZ_MAX_PATH];
     int  num_sprites;
     int  num_vertices;
     int  num_indices;
 } atlas__metadata;
 
-typedef struct {
+typedef struct sprite__animclip_frame {
     int16_t    atlas_id;
     int16_t    trigger;
     rizz_event e;
 } sprite__animclip_frame;
 
-typedef struct {
+typedef struct sprite__animclip {
     rizz_asset       atlas;
     int              num_frames;
     float            tm;
@@ -108,7 +108,7 @@ typedef struct {
 
 typedef struct sprite__animctrl_transition sprite__animctrl_transition;
 
-typedef struct {
+typedef struct sprite__animctrl_state {
     char                         name[32];
     rizz_sprite_animclip         clip;
     int                          num_transitions;
@@ -121,7 +121,7 @@ typedef union {
     bool  b;
 } sprite__animctrl_value;
 
-typedef struct {
+typedef struct sprite__animctrl_trigger {
     int                               param_id;
     rizz_sprite_animctrl_compare_func func;
     sprite__animctrl_value            value;
@@ -134,14 +134,14 @@ typedef struct sprite__animctrl_transition {
     rizz_event               event;
 } sprite__animctrl_transition;
 
-typedef struct {
+typedef struct sprite__animctrl_param {
     char                            name[32];
     uint32_t                        name_hash;
     rizz_sprite_animctrl_param_type type;
     sprite__animctrl_value          value;
 } sprite__animctrl_param;
 
-typedef struct {
+typedef struct sprite__animctrl {
     const sx_alloc*         alloc;
     sprite__animctrl_state* state;
     sprite__animctrl_state* start_state;
@@ -150,7 +150,7 @@ typedef struct {
     void*                   buff;
 } sprite__animctrl;
 
-typedef struct {
+typedef struct sprite__draw_context {
     sg_buffer   vbuff[2];
     sg_buffer   ibuff;
     sg_shader   shader;
@@ -159,7 +159,7 @@ typedef struct {
     sg_pipeline pip_wire;
 } sprite__draw_context;
 
-typedef struct {
+typedef struct sprite__context {
     const sx_alloc*      alloc;
     sx_strpool*          name_pool;
     sx_handle_pool*      sprite_handles;
@@ -171,7 +171,7 @@ typedef struct {
     sprite__animctrl*    animctrls;
 } sprite__context;
 
-typedef struct {
+typedef struct sprite__vertex_transform {
     sx_vec3  t1;
     sx_vec3  t2;
     sx_vec3  bc;
@@ -1299,14 +1299,30 @@ static void sprite__release() {
             the_gfx->imm.destroy_pipeline(dc->pip_wire);
     }
 
-    if (g_spr.sprite_handles)
+    if (g_spr.sprite_handles) {
+        if (g_spr.sprite_handles->count > 0) {
+            rizz_log_warn(the_core, "total %d sprites are not released",
+                          g_spr.sprite_handles->count);
+        }
         sx_handle_destroy_pool(g_spr.sprite_handles, g_spr.alloc);
+    }
 
-    if (g_spr.animclip_handles)
+    if (g_spr.animclip_handles) {
+        if (g_spr.animclip_handles->count > 0) {
+            rizz_log_warn(the_core, "total %d sprite_animclips are not released",
+                          g_spr.animclip_handles->count);
+        }
         sx_handle_destroy_pool(g_spr.animclip_handles, g_spr.alloc);
+    }
 
-    if (g_spr.animctrl_handles)
+    if (g_spr.animctrl_handles) {
+        if (g_spr.animctrl_handles->count > 0) {
+            rizz_log_warn(the_core, "total %d sprite_animctrls are not released",
+                          g_spr.animctrl_handles->count);
+        }
+
         sx_handle_destroy_pool(g_spr.animctrl_handles, g_spr.alloc);
+    }
 
     if (g_spr.name_pool)
         sx_strpool_destroy(g_spr.name_pool, g_spr.alloc);
