@@ -35,7 +35,7 @@ This is not a game engine, it's a relatively low-level framework for programmers
 - *Multi-threaded GPU command-buffer*: Draw commands can be submitted by multiple threads.
 
 #### Plugins
-- [imgui](src/imgui): Dead-imgui plugin with some utility API
+- [imgui](src/imgui): Dear-imgui plugin with some utility API
 - [sprite](src/sprite): 2D Sprite system
 
 #### Debugging and Profiling
