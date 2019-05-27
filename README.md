@@ -53,6 +53,7 @@ But as the engine is in it's early age, the current platforms are built and test
   - libx11-dev
   - libxrandr-dev
   - libxi-dev
+  - libasound2-dev (if you are planning to build `sound` plugin)
 - __MacOS__: Tested on MacOS High Sierra - AppleClang 9.1.0
 
 #### CMake options

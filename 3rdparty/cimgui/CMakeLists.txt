@@ -8,6 +8,7 @@ add_definitions("-DCIMGUI_NO_EXPORT")
 
 include_directories(.)
 set(IMGUI_SOURCES cimgui.cpp 
+                  imgui/imgui.h 
                   imgui/imgui.cpp 
                   imgui/imgui_draw.cpp 
                   imgui/imgui_widgets.cpp)

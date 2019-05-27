@@ -57,7 +57,8 @@
         "json.h": "c",
         "xlocale": "c",
         "xiosbase": "cpp",
-        "limits.h": "c"
+        "limits.h": "c",
+        "xutility": "c"
     },
     "files.exclude": {
         "**/.git": true,

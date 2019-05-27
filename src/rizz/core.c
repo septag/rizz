@@ -730,8 +730,7 @@ bool rizz__core_init(const rizz_config* conf) {
 
     for (int i = 0; i < g_core.num_workers; i++) {
         rizz__core_tmpalloc* t = &g_core.tmp_allocs[i];
-        void*                mem = sx_virtual_reserve(tmp_size);
-        mem = sx_virtual_commit(mem, tmp_size);
+        void*                mem = sx_virtual_commit(sx_virtual_reserve(tmp_size), tmp_size);
         if (!mem) {
             sx_out_of_memory();
             return false;

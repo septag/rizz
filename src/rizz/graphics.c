@@ -134,13 +134,13 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 
 // clang-format on
 
-typedef struct {
+typedef struct rizz__gfx_texture_mgr {
     rizz_texture white_tex;
     rizz_texture black_tex;
     rizz_texture checker_tex;
 } rizz__gfx_texture_mgr;
 
-typedef enum {
+typedef enum rizz__gfx_command {
     GFX_COMMAND_BEGIN_DEFAULT_PASS = 0,
     GFX_COMMAND_BEGIN_PASS,
     GFX_COMMAND_APPLY_VIEWPORT,
@@ -159,7 +159,7 @@ typedef enum {
     _GFX_COMMAND_ = INT32_MAX
 } rizz__gfx_command;
 
-typedef enum {
+typedef enum rizz__gfx_command_make {
     GFX_COMMAND_MAKE_BUFFER = 0,
     GFX_COMMAND_MAKE_IMAGE,
     GFX_COMMAND_MAKE_SHADER,
@@ -169,14 +169,14 @@ typedef enum {
     _GFX_COMMAND_MAKE_ = INT32_MAX
 } rizz__gfx_command_make;
 
-typedef enum {
+typedef enum rizz__gfx_stage_state {
     STAGE_STATE_NONE = 0,
     STAGE_STATE_SUBMITTING,
     STAGE_STATE_DONE,
     _STAGE_STATE_ = INT32_MAX
 } rizz__gfx_stage_state;
 
-typedef struct {
+typedef struct rizz__gfx_cmdbuffer_ref {
     uint32_t          key;    // sort key. higher bits: rizz__gfx_stage.order, lower bits: cmd_idx
     int               cmdbuffer_idx;
     rizz__gfx_command cmd;
@@ -194,13 +194,13 @@ typedef struct rizz__gfx_cmdbuffer {
 } rizz__gfx_cmdbuffer;
 
 // stream-buffers are used to emulate sg_append_buffer behaviour
-typedef struct {
+typedef struct rizz__gfx_stream_buffer {
     sg_buffer     buf;
     sx_atomic_int offset;
     int           size;
 } rizz__gfx_stream_buffer;
 
-typedef struct {
+typedef struct rizz__gfx_stage {
     char                  name[32];
     uint32_t              name_hash;
     rizz__gfx_stage_state state;
@@ -213,7 +213,7 @@ typedef struct {
     uint8_t               single_enabled;
 } rizz__gfx_stage;
 
-typedef struct {
+typedef struct rizz__debug_vertex {
     sx_vec3  pos;
     sx_vec2  uv;
     sx_color color;
@@ -227,12 +227,12 @@ static rizz_vertex_layout k__debug_vertex = {
                   .format = SG_VERTEXFORMAT_UBYTE4N },
 };
 
-typedef struct {
+typedef struct rizz__debug_uniforms {
     sx_mat4 model;
     sx_mat4 vp;
 } rizz__debug_uniforms;
 
-typedef struct {
+typedef struct rizz__gfx_debug {
     sg_buffer   vb;
     sg_buffer   ib;
     sg_pipeline pip_wire;
@@ -241,19 +241,19 @@ typedef struct {
 } rizz__gfx_debug;
 
 #ifdef SOKOL_METAL
-typedef struct {
+typedef struct rizz__pip_mtl {
     sg_pipeline      pip;
     sg_pipeline_desc desc;
 } rizz__pip_mtl;
 #endif
 
-typedef struct {
+typedef struct rizz__trace_gfx {
     rizz_gfx_trace_info t;
     sx_mem_writer       make_cmds_writer;
     sg_trace_hooks      hooks;
 } rizz__trace_gfx;
 
-typedef struct {
+typedef struct rizz__gfx {
     rizz_gfx_driver       driver;
     rizz__gfx_stage*      stages;         // sx_array
     rizz__gfx_cmdbuffer** cmd_buffers;    // sx_array

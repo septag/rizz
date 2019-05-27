@@ -1,7 +1,9 @@
 #include "rizz/sound.h"
 
+#include "rizz/app.h"
 #include "rizz/asset.h"
 #include "rizz/core.h"
+#include "rizz/imgui.h"
 #include "rizz/plugin.h"
 #include "rizz/reflect.h"
 
@@ -10,8 +12,16 @@
 #include "sx/atomic.h"
 #include "sx/handle.h"
 #include "sx/math.h"
+#include "sx/os.h"
+#include "sx/pool.h"
 #include "sx/string.h"
 #include "sx/timer.h"
+
+#include "beep.h"
+
+#include <float.h>
+
+#include "stb/stb_vorbis.h"
 
 #define FIXPOINT_FRAC_BITS 20
 #define FIXPOINT_FRAC_MUL (1 << FIXPOINT_FRAC_BITS)
@@ -21,6 +31,7 @@ RIZZ_STATE static rizz_api_plugin* the_plugin;
 RIZZ_STATE static rizz_api_core*   the_core;
 RIZZ_STATE static rizz_api_asset*  the_asset;
 RIZZ_STATE static rizz_api_refl*   the_refl;
+RIZZ_STATE static rizz_api_imgui*  the_imgui;
 
 RIZZ_STATE static const sx_alloc* g_snd_alloc;
 
@@ -31,7 +42,7 @@ RIZZ_STATE static const sx_alloc* g_snd_alloc;
 #define DRWAV_FREE(p) sx_free(g_snd_alloc, p)
 #define DRWAV_COPY_MEMORY(dst, src, sz) sx_memcpy(dst, src, sz)
 #define DRWAV_ZERO_MEMORY(p, sz) sx_memset(p, 0, sz)
-#define DR_WAV_NO_STDIO
+//#define DR_WAV_NO_STDIO
 #include "dr_libs/dr_wav.h"
 
 #define SOKOL_ASSERT(c) sx_assert(c)
@@ -41,7 +52,10 @@ RIZZ_STATE static const sx_alloc* g_snd_alloc;
 #define SOKOL_API_DECL static
 #define SOKOL_API_IMPL static
 #define SOKOL_IMPL
+SX_PRAGMA_DIAGNOSTIC_PUSH()
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-parameter")
 #include "sokol/sokol_audio.h"
+SX_PRAGMA_DIAGNOSTIC_POP()
 
 typedef enum snd__source_flags_ {
     SND_SOURCEFLAG_LOOPING = 0x1,
@@ -49,22 +63,43 @@ typedef enum snd__source_flags_ {
 } snd__source_flags_;
 typedef uint32_t snd__source_flags;
 
+typedef enum snd__instance_state {
+    SND_INSTANCESTATE_NONE = 0,
+    SND_INSTANCESTATE_PLAYING
+} snd__instance_state;
+
+typedef enum snd__source_format {
+    SND_SOURCEFORMAT_WAV = 0,
+    SND_SOURCEFORMAT_OGG
+} snd__source_format;
+
 typedef struct snd__metadata {
-    int num_frames;
-    int num_channels;
-    int bps;
+    snd__source_format fmt;
+    int                num_frames;
+    int                num_channels;
+    int                vorbis_buffer_size;
 } snd__metadata;
 
 typedef struct snd__source {
-    float*            samples;
-    int               num_frames;
-    int               sample_rate;
-    snd__source_flags flags;
+    void*              data;
+    float*             samples;
+    int                num_frames;
+    int                sample_rate;
+    snd__source_flags  flags;
+    snd__source_format fmt;
+    float              volume;
+    sx_str_t           name;    // for debugging purposes
+    int                num_plays;
 } snd__source;
 
 typedef struct snd__instance {
-    rizz_snd_source srchandle;
-    int             pos;    // unit: frame
+    int64_t             play_frame;
+    rizz_snd_source     srchandle;
+    int                 pos;    // unit: frame
+    float               volume;
+    float               pan;
+    int                 bus_id;
+    snd__instance_state state;
 } snd__instance;
 
 typedef struct snd__ringbuffer {
@@ -75,24 +110,53 @@ typedef struct snd__ringbuffer {
     sx_atomic_int size;
 } snd__ringbuffer;
 
+typedef struct snd__bus {
+    int max_lanes;
+    int num_lanes;
+} snd__bus;
+
+typedef struct snd__clocked {
+    struct snd__clocked* next;    // next item to be queued for play
+    rizz_snd_source      src;
+    rizz_snd_instance    inst;
+    int                  bus_id;
+    float                tm;
+    float                wait_tm;
+    bool                 first;
+} snd__clocked;
+
 typedef struct snd__context {
-    sx_handle_pool*    source_handles;
-    snd__source*       sources;
-    sx_handle_pool*    instance_handles;
-    snd__instance*     instances;
-    rizz_snd_instance* playlist;
-    snd__ringbuffer    mixer_buffer;
+    sx_handle_pool*   source_handles;
+    snd__source*      sources;
+    sx_handle_pool*   instance_handles;
+    snd__instance*    instances;
+    sx_strpool*       name_pool;
+    sx_pool*          clocked_pool;
+    snd__clocked**    clocked;
+    rizz_snd_instance playlist[RIZZ_SND_DEVICE_MAX_LANES];
+    int               num_plays;
+    snd__ringbuffer   mixer_buffer;
+    float             master_volume;
+    float             master_pan;
+    snd__ringbuffer   mixer_plot_buffer;
+    snd__bus          buses[RIZZ_SND_DEVICE_MAX_BUSES];
+    rizz_snd_source   silence_src;
+    rizz_snd_source   beep_src;
 } snd__context;
 
 RIZZ_STATE static snd__context g_snd;
+
+static char k__snd_silent[] = { 0, 0, 0, 0 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // SpSc thread-safe ring-buffer
 // NOTE: this ring-buffer shouldn't be atomic because two threads are writing and using `size`
 //       variable, but it should be 'safe', because consumer thread is always shrinking the size
-//       and producer thread is expanding. which doesn't make the ring-buffer to overflow.
-//       But again, more tests are needed, because obviously I'm not doing the right thing in terms
-//       of thread-safetly
+//       and producer thread is expanding it.
+//       Which doesn't make the ring-buffer to overflow due to 'size' being always sufficient (or
+//       more). It just may make it not very optimal.
+//       But again, more tests are needed, because obviously I'm not doing the right thing in
+//       terms of thread-safetly
 static bool snd__ringbuffer_init(snd__ringbuffer* rb, int size) {
     sx_memset(rb, 0x0, sizeof(*rb));
 
@@ -114,8 +178,7 @@ static void snd__ringbuffer_release(snd__ringbuffer* rb) {
 }
 
 static inline int snd__ringbuffer_expect(snd__ringbuffer* rb) {
-    int r = rb->capacity - rb->size;
-    return r;
+    return rb->capacity - rb->size;
 }
 
 static int snd__ringbuffer_consume(snd__ringbuffer* rb, float* samples, int count) {
@@ -132,7 +195,7 @@ static int snd__ringbuffer_consume(snd__ringbuffer* rb, float* samples, int coun
         sx_memcpy(samples, &rb->samples[rb->start], count * sizeof(float));
     } else {
         sx_memcpy(samples, &rb->samples[rb->start], remain * sizeof(float));
-        sx_memcpy(samples, rb->samples, (count - remain) * sizeof(float));
+        sx_memcpy(&samples[remain], rb->samples, (count - remain) * sizeof(float));
     }
 
     rb->start = (rb->start + count) % rb->capacity;
@@ -144,8 +207,6 @@ static void snd__ringbuffer_produce(snd__ringbuffer* rb, const float* samples, i
     sx_assert(count > 0);
     sx_assert(count <= snd__ringbuffer_expect(rb));
 
-    // sx_lock(&rb->lock);
-
     int remain = rb->capacity - rb->end;
     if (remain >= count) {
         sx_memcpy(&rb->samples[rb->end], samples, count * sizeof(float));
@@ -156,17 +217,70 @@ static void snd__ringbuffer_produce(snd__ringbuffer* rb, const float* samples, i
 
     rb->end = (rb->end + count) % rb->capacity;
     sx_atomic_fetch_add(&rb->size, count);
-
-    // sx_unlock(&rb->lock);
 }
 
+
 static void snd__destroy_source(rizz_snd_source handle, const sx_alloc* alloc) {
-    sx_assert(sx_handle_valid(g_snd.source_handles, handle.id));
+    sx_assert_rel(sx_handle_valid(g_snd.source_handles, handle.id));
 
     snd__source* src = &g_snd.sources[sx_handle_index(handle.id)];
-    sx_free(alloc, src->samples);
+
+    sx_free(alloc, src->data);
+
+    if (src->name) {
+        sx_strpool_del(g_snd.name_pool, src->name);
+    }
 
     sx_handle_del(g_snd.source_handles, handle.id);
+
+    // TODO: delete all instances with this source
+}
+
+static const char* snd__vorbis_get_error(int error) {
+    switch (error) {
+    case VORBIS_need_more_data:
+        return "need_more_data";
+    case VORBIS_invalid_api_mixing:
+        return "invalid_api_mixing";
+    case VORBIS_outofmem:
+        return "out_of_mem";
+    case VORBIS_feature_not_supported:
+        return "feature_not_supported";
+    case VORBIS_too_many_channels:
+        return "too_many_channels";
+    case VORBIS_file_open_failure:
+        return "file_open_failure";
+    case VORBIS_seek_without_length:
+        return "seek_without_length";
+    case VORBIS_unexpected_eof:
+        return "unexpected_eof";
+    case VORBIS_seek_invalid:
+        return "seek_invalid";
+    case VORBIS_invalid_setup:
+        return "invalid_setup";
+    case VORBIS_invalid_stream:
+        return "invalid_stream";
+    case VORBIS_missing_capture_pattern:
+        return "missing_capture_pattern";
+    case VORBIS_invalid_stream_structure_version:
+        return "invalid_stream_structure_version";
+    case VORBIS_continued_packet_flag_invalid:
+        return "continued_packet_flag_invalid";
+    case VORBIS_incorrect_stream_serial_number:
+        return "incorrect_stream_serial_number";
+    case VORBIS_invalid_first_page:
+        return "invaid_first_page";
+    case VORBIS_bad_packet_type:
+        return "bad_packet_type";
+    case VORBIS_cant_find_last_page:
+        return "cant_find_last_page";
+    case VORBIS_seek_failed:
+        return "seek_failed";
+    case VORBIS_ogg_skeleton_not_supported:
+        return "ogg_skeleton_not_supported";
+    default:
+        return "";
+    }
 }
 
 static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params,
@@ -175,88 +289,148 @@ static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params
     const sx_alloc*             alloc = params->alloc ? params->alloc : g_snd_alloc;
     const rizz_snd_load_params* sparams = params->params;
 
-    // create sound source and allocate buffer needed to be filled with sound data
-    sx_assert(meta->num_frames > 0);
-    float* samples = sx_malloc(alloc, meta->num_frames * sizeof(float));
-    if (!samples) {
-        sx_out_of_memory();
-        return (rizz_asset_load_data){ 0 };
-    }
-
     sx_handle_t handle = sx_handle_new_and_grow(g_snd.source_handles, g_snd_alloc);
     if (!handle) {
         sx_out_of_memory();
         return (rizz_asset_load_data){ 0 };
     }
 
-    snd__source src = { .samples = samples, .num_frames = meta->num_frames };
-    if (sparams->looping)
-        src.flags |= SND_SOURCEFLAG_LOOPING;
-    if (sparams->singleton)
-        src.flags |= SND_SOURCEFLAG_SINGLETON;
+    snd__source_flags flags = (sparams->looping ? SND_SOURCEFLAG_LOOPING : 0) |
+                              (sparams->singleton ? SND_SOURCEFLAG_SINGLETON : 0);
+    snd__source src = { .num_frames = meta->num_frames,
+                        .volume = 1.0f,
+                        .name =
+                            sx_strpool_add(g_snd.name_pool, params->path, sx_strlen(params->path)),
+                        .flags = flags,
+                        .fmt = meta->fmt };
 
-    int index = sx_handle_index(handle);
-    if (index >= sx_array_count(g_snd.sources)) {
-        sx_array_push(g_snd_alloc, g_snd.sources, src);
-    } else {
-        g_snd.sources[index] = src;
+    sx_array_push_byindex(g_snd_alloc, g_snd.sources, src, sx_handle_index(handle));
+
+    // allocate memory for source data + samples and extra int for vorbis_buffer_size
+    int samples_sz = src.num_frames * sizeof(float);    // channels=1
+    int total_sz = sizeof(int) + samples_sz + sizeof(snd__source) + 16;
+
+    void* data = sx_malloc(alloc, total_sz);
+    if (!data) {
+        sx_out_of_memory();
+        return (rizz_asset_load_data){ 0 };
+    }
+    src.data = data;
+    uint8_t* buff = (uint8_t*)data;
+    *((snd__source*)buff) = src;
+    buff += sizeof(snd__source);
+
+    if (meta->fmt == SND_SOURCEFORMAT_OGG) {
+        // pass temp vorbis_buffer_size to loader
+        *((int*)buff) = meta->vorbis_buffer_size;
+        buff += sizeof(int);
     }
 
-    return (rizz_asset_load_data){ .obj = { .id = handle } };
+    return (rizz_asset_load_data){ .obj = { .id = handle }, .user = data };
 }
 
 static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params,
                          const sx_mem_block* mem) {
     rizz_snd_source srchandle = { .id = (uint32_t)data->obj.id };
-    sx_assert(sx_handle_valid(g_snd.source_handles, srchandle.id));
+    sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
 
     const sx_alloc* alloc = params->alloc ? params->alloc : g_snd_alloc;
 
-    snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
-    drwav        wav;
+    uint8_t*     buff = (uint8_t*)data->user;
+    snd__source* src = (snd__source*)buff;
+    buff += sizeof(snd__source);
 
-    if (!drwav_init_memory(&wav, mem->data, mem->size)) {
-        rizz_log_warn(the_core, "loading sound '%s' failed: invalid WAV format", params->path);
-        snd__destroy_source(srchandle, alloc);
-        return false;
-    }
-
-    src->sample_rate = wav.sampleRate;
-    float* samples;
-    if (wav.channels == 1) {
-        samples = src->samples;
-    } else {
-        const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
-        samples = sx_malloc(tmp_alloc, sizeof(float) * wav.totalPCMFrameCount * wav.channels);
-        if (!samples) {
-            sx_out_of_memory();
+    if (src->fmt == SND_SOURCEFORMAT_WAV) {
+        drwav wav;
+        if (!drwav_init_memory(&wav, mem->data, mem->size)) {
+            rizz_log_warn(the_core, "loading sound '%s' failed: invalid WAV format", params->path);
+            snd__destroy_source(srchandle, alloc);
             return false;
         }
-    }
+        sx_assert(wav.totalPCMFrameCount < INT_MAX);    // big wav files are not supported
 
-    uint64_t num_frames = drwav_read_pcm_frames_f32(&wav, wav.totalPCMFrameCount, samples);
-    if (num_frames != wav.totalPCMFrameCount) {
-        rizz_log_warn(the_core, "loading sound '%s' failed: reached EOF");
-        snd__destroy_source(srchandle, alloc);
-        return false;
-    }
-
-    // downmix multiple channels to mono
-    if (wav.channels > 1) {
-        float  channels_rcp = 1.0f / (float)wav.channels;
-        float* dst_samples = src->samples;
-        for (int i = 0; i < wav.totalPCMFrameCount; i++) {
-            float sum = 0;
-            for (int ch = 0; ch < wav.channels; ch++) sum += samples[ch];
-
-            samples += wav.channels;
-            dst_samples[i] = sum * channels_rcp;
+        src->sample_rate = wav.sampleRate;
+        float* samples = sx_align_ptr(buff, 0, 16);
+        float* wav_samples = NULL;
+        if (wav.channels > 1) {
+            const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+            wav_samples =
+                sx_malloc(tmp_alloc, sizeof(float) * wav.totalPCMFrameCount * wav.channels);
+            if (!wav_samples) {
+                sx_out_of_memory();
+                return false;
+            }
         }
 
+        uint64_t num_frames = drwav_read_pcm_frames_f32(&wav, wav.totalPCMFrameCount, samples);
+        if (num_frames != wav.totalPCMFrameCount) {
+            rizz_log_warn(the_core, "loading sound '%s' failed: reached EOF", params->path);
+            snd__destroy_source(srchandle, alloc);
+            return false;
+        }
+
+        // down-mix multiple channels to mono
+        if (wav.channels > 1) {
+            sx_assert(wav_samples);
+            float channels_rcp = 1.0f / (float)wav.channels;
+            for (int i = 0, c = (int)wav.totalPCMFrameCount; i < c; i++) {
+                float sum = 0;
+                for (int ch = 0; ch < wav.channels; ch++) {
+                    sum += wav_samples[ch];
+                }
+
+                wav_samples += wav.channels;
+                samples[i] = sum * channels_rcp;
+            }
+
+            the_core->tmp_alloc_pop();
+        }
+
+        drwav_uninit(&wav);
+        src->samples = samples;
+    } else if (src->fmt == SND_SOURCEFORMAT_OGG) {
+        // TODO: possible bug with tmp_alloc or vorbis. I saw some random crashes, until I put
+        //       the tmp_buff = sx_malloc right next to vorbis_buff
+        int             vorbis_err;
+        const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+        int             vorbis_buffer_size = *((int*)buff);
+        buff += sizeof(int);
+
+        sx_assert(vorbis_buffer_size > 0);
+        void*  vorbis_buff = sx_malloc(tmp_alloc, vorbis_buffer_size);
+        float* tmp_buff = sx_malloc(tmp_alloc, sizeof(float) * 4096);
+
+        stb_vorbis* vorbis =
+            stb_vorbis_open_memory(mem->data, mem->size, &vorbis_err,
+                                   &(stb_vorbis_alloc){
+                                       .alloc_buffer = vorbis_buff,
+                                       .alloc_buffer_length_in_bytes = vorbis_buffer_size,
+                                   });
+        if (!vorbis) {
+            rizz_log_warn(the_core, "loading sound '%s' failed: %s", params->path,
+                          snd__vorbis_get_error(vorbis_err));
+            snd__destroy_source(srchandle, alloc);
+            return false;
+        }
+
+        float* samples = sx_align_ptr(buff, 0, 16);
+        float* dst_samples = samples;
+
+        while (1) {
+            int n = stb_vorbis_get_samples_float_interleaved(vorbis, 1, tmp_buff, 4096);
+            if (n == 0) {
+                break;
+            }
+            sx_memcpy(dst_samples, tmp_buff, n * sizeof(float));
+            dst_samples += n;
+        }
+        src->sample_rate = stb_vorbis_get_info(vorbis).sample_rate;
+        src->samples = samples;
+
+        stb_vorbis_close(vorbis);
         the_core->tmp_alloc_pop();
     }
 
-    drwav_uninit(&wav);
     return true;
 }
 
@@ -265,6 +439,11 @@ static void snd__on_finalize(rizz_asset_load_data* data, const rizz_asset_load_p
     sx_unused(data);
     sx_unused(params);
     sx_unused(mem);
+
+    uint8_t*     buff = (uint8_t*)data->user;
+    snd__source* src = (snd__source*)buff;
+    sx_handle_t  srchandle = (sx_handle_t)data->obj.id;
+    g_snd.sources[sx_handle_index(srchandle)] = *src;
 }
 
 static void snd__on_reload(rizz_asset handle, rizz_asset_obj prev_obj, const sx_alloc* alloc) {
@@ -282,17 +461,40 @@ static void snd__on_read_metadata(void* metadata, const rizz_asset_load_params* 
                                   const sx_mem_block* mem) {
     snd__metadata* meta = metadata;
     drwav          wav;
-    if (!drwav_init_memory(&wav, mem->data, mem->size)) {
-        rizz_log_warn(the_core, "loading sound '%s' failed", params->path);
-        return;
+    char           ext[32];
+
+    sx_os_path_ext(ext, sizeof(ext), params->path);
+    if (sx_strequalnocase(ext, ".wav")) {
+        if (!drwav_init_memory(&wav, mem->data, mem->size)) {
+            rizz_log_warn(the_core, "loading sound '%s' failed", params->path);
+            return;
+        }
+
+        sx_assert(wav.totalPCMFrameCount < INT_MAX);    // big wav files are not supported
+        meta->fmt = SND_SOURCEFORMAT_WAV;
+        meta->num_frames = (int)wav.totalPCMFrameCount;
+        meta->num_channels = wav.channels;
+        meta->vorbis_buffer_size = 0;
+
+        drwav_uninit(&wav);
+    } else if (sx_strequalnocase(ext, ".ogg")) {
+        int         error;
+        stb_vorbis* vorbis = stb_vorbis_open_memory(mem->data, mem->size, &error, NULL);
+        if (!vorbis) {
+            rizz_log_warn(the_core, "loading sound '%s' failed: %s", snd__vorbis_get_error(error));
+            return;
+        }
+        stb_vorbis_info info = stb_vorbis_get_info(vorbis);
+
+        meta->fmt = SND_SOURCEFORMAT_OGG;
+        meta->num_channels = info.channels;
+        meta->num_frames = stb_vorbis_stream_length_in_samples(vorbis) / info.channels;
+        meta->vorbis_buffer_size = info.setup_memory_required + info.setup_temp_memory_required +
+                                   info.temp_memory_required;
+        stb_vorbis_close(vorbis);
+    } else {
+        sx_assert(0 && "file format not supported");
     }
-
-    sx_assert(wav.totalPCMFrameCount < INT_MAX);
-    meta->num_frames = (int)wav.totalPCMFrameCount;
-    meta->num_channels = wav.channels;
-    meta->bps = wav.bitsPerSample;
-
-    drwav_uninit(&wav);
 }
 
 static void snd__stream_cb(float* buffer, int num_frames, int num_channels) {
@@ -302,9 +504,57 @@ static void snd__stream_cb(float* buffer, int num_frames, int num_channels) {
     if (r < num_frames) {
         sx_memset(buffer + r * num_channels, 0x0, (num_frames - r) * num_channels * sizeof(float));
     }
+
+    if (the_imgui) {
+        int num_expected = snd__ringbuffer_expect(&g_snd.mixer_plot_buffer);
+        int num_push_samples = sx_min(num_expected, num_frames * num_channels);
+        if (num_push_samples > 0) {
+            snd__ringbuffer_produce(&g_snd.mixer_plot_buffer, buffer, num_push_samples);
+        }
+    }
+}
+
+static rizz_snd_source snd__create_dummy_source(const char* samples, int num_samples,
+                                                const char* name) {
+    // convert to float
+    float* fsamples = sx_malloc(g_snd_alloc, sizeof(float) * num_samples);
+    if (!fsamples) {
+        sx_out_of_memory();
+        return (rizz_snd_source){ 0 };
+    }
+
+    for (int i = 0; i < num_samples; i++) {
+        fsamples[i] = (float)samples[i] / 128.0f;
+    }
+
+    snd__source src =
+        (snd__source){ .samples = fsamples,
+                       .num_frames = num_samples,
+                       .sample_rate = 22050,
+                       .volume = 1.0f,
+                       .name = sx_strpool_add(g_snd.name_pool, name, sx_strlen(name)) };
+    sx_handle_t handle = sx_handle_new_and_grow(g_snd.source_handles, g_snd_alloc);
+    if (!handle) {
+        sx_out_of_memory();
+        return (rizz_snd_source){ 0 };
+    }
+
+    sx_array_push_byindex(g_snd_alloc, g_snd.sources, src, sx_handle_index(handle));
+    return (rizz_snd_source){ handle };
+}
+
+static void snd__destroy_dummy_source(rizz_snd_source srchandle) {
+    sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
+    snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
+    if (src->samples) {
+        sx_free(g_snd_alloc, src->samples);
+    }
 }
 
 static bool snd__init() {
+    static_assert(RIZZ_SND_DEVICE_NUM_CHANNELS == 1 || RIZZ_SND_DEVICE_NUM_CHANNELS == 2,
+                  "only mono or stereo output channel is supported");
+
     g_snd_alloc = the_core->alloc(RIZZ_MEMID_AUDIO);
 
     g_snd.source_handles = sx_handle_create_pool(g_snd_alloc, 128);
@@ -321,17 +571,38 @@ static bool snd__init() {
         return false;
     }
 
+    if (the_imgui &&
+        !snd__ringbuffer_init(&g_snd.mixer_plot_buffer,
+                              RIZZ_SND_DEVICE_BUFFER_FRAMES * RIZZ_SND_DEVICE_NUM_CHANNELS)) {
+        sx_out_of_memory();
+        return false;
+    }
+
+    g_snd.name_pool = sx_strpool_create(g_snd_alloc, NULL);
+    g_snd.clocked_pool = sx_pool_create(g_snd_alloc, sizeof(snd__clocked), 128);
+    if (!g_snd.name_pool || !g_snd.clocked_pool) {
+        sx_out_of_memory();
+        return false;
+    }
+
     saudio_setup(&(saudio_desc){ .sample_rate = RIZZ_SND_DEVICE_SAMPLE_RATE,
                                  .num_channels = RIZZ_SND_DEVICE_NUM_CHANNELS,
                                  .stream_cb = snd__stream_cb,
                                  .buffer_frames = RIZZ_SND_DEVICE_BUFFER_FRAMES,
                                  .num_packets = 32 });
 
+    // silent/beep source sources
+    g_snd.beep_src =
+        snd__create_dummy_source((const char*)k__snd_beep, sizeof(k__snd_beep), "beep");
+    g_snd.silence_src = snd__create_dummy_source(k__snd_silent, sizeof(k__snd_silent), "silence");
 
     // register sound resources for asset loader
+    rizz_refl_enum(the_refl, snd__source_format, SND_SOURCEFORMAT_WAV);
+    rizz_refl_enum(the_refl, snd__source_format, SND_SOURCEFORMAT_OGG);
+    rizz_refl_field(the_refl, snd__metadata, snd__source_format, fmt, "file format");
     rizz_refl_field(the_refl, snd__metadata, int, num_frames, "num_frames");
     rizz_refl_field(the_refl, snd__metadata, int, num_channels, "num_channels");
-    rizz_refl_field(the_refl, snd__metadata, int, bps, "bits-per-sample");
+    rizz_refl_field(the_refl, snd__metadata, int, vorbis_buffer_size, "vorbis specific buff-size");
 
     the_asset->register_asset_type(
         "sound",
@@ -342,7 +613,13 @@ static bool snd__init() {
                                 .on_release = snd__on_release,
                                 .on_read_metadata = snd__on_read_metadata },
         "rizz_snd_load_params", sizeof(rizz_snd_load_params), "snd__metadata",
-        sizeof(snd__metadata), (rizz_asset_obj){ .id = 0 }, (rizz_asset_obj){ .id = 0 }, 0);
+        sizeof(snd__metadata), (rizz_asset_obj){ .id = g_snd.beep_src.id },
+        (rizz_asset_obj){ .id = g_snd.silence_src.id }, 0);
+
+    g_snd.master_volume = 1.0f;
+
+    // initialize first bus to use all lanes
+    g_snd.buses[0].max_lanes = RIZZ_SND_DEVICE_MAX_LANES;
 
     return true;
 }
@@ -350,17 +627,26 @@ static bool snd__init() {
 static void snd__release() {
     saudio_shutdown();
 
+    if (g_snd.beep_src.id) {
+        snd__destroy_dummy_source(g_snd.beep_src);
+    }
+
+    if (g_snd.silence_src.id) {
+        snd__destroy_dummy_source(g_snd.silence_src);
+    }
+
     if (g_snd.source_handles) {
-        if (g_snd.source_handles->count > 0) {
-            rizz_log_warn(the_core, "total %d sound_sources are not released",
-                          g_snd.source_handles->count);
+        // two of them are reserved for dummies
+        if (g_snd.source_handles->count > 2) {
+            rizz_log_warn(the_core, "sound: total %d sound_sources are not released",
+                          g_snd.source_handles->count - 2);
         }
         sx_handle_destroy_pool(g_snd.source_handles, g_snd_alloc);
     }
 
     if (g_snd.instance_handles) {
         if (g_snd.instance_handles->count > 0) {
-            rizz_log_warn(the_core, "total %d sound_instances are not released",
+            rizz_log_warn(the_core, "sound: total %d sound_instances are not released",
                           g_snd.instance_handles->count);
         }
         sx_handle_destroy_pool(g_snd.instance_handles, g_snd_alloc);
@@ -368,34 +654,205 @@ static void snd__release() {
 
     sx_array_free(g_snd_alloc, g_snd.sources);
     sx_array_free(g_snd_alloc, g_snd.instances);
+    sx_array_free(g_snd_alloc, g_snd.clocked);
 
     snd__ringbuffer_release(&g_snd.mixer_buffer);
+    snd__ringbuffer_release(&g_snd.mixer_plot_buffer);
+
+    if (g_snd.name_pool) {
+        sx_strpool_destroy(g_snd.name_pool, g_snd_alloc);
+    }
+    if (g_snd.clocked_pool) {
+        sx_pool_destroy(g_snd.clocked_pool, g_snd_alloc);
+    }
 
     the_asset->unregister_asset_type("sound");
 }
 
-static inline rizz_snd_instance snd__create_instance(rizz_snd_source srchandle) {
-    sx_assert(sx_handle_valid(g_snd.source_handles, srchandle.id));
+static inline rizz_snd_instance snd__create_instance(rizz_snd_source srchandle, int bus,
+                                                     float volume, float pan) {
+    sx_assert(bus >= 0 && bus < RIZZ_SND_DEVICE_MAX_BUSES);
+    sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
     sx_handle_t handle = sx_handle_new_and_grow(g_snd.instance_handles, g_snd_alloc);
 
-    snd__instance inst = (snd__instance){ .srchandle = srchandle };
+    snd__instance inst = (snd__instance){ .srchandle = srchandle,
+                                          .volume = volume,
+                                          .pan = sx_clamp(pan, -1.0f, 1.0f),
+                                          .bus_id = bus,
+                                          .play_frame = -1 };
 
-    int index = sx_handle_index(handle);
-    if (index >= sx_array_count(g_snd.instances)) {
-        sx_array_push(g_snd_alloc, g_snd.instances, inst);
-    } else {
-        g_snd.instances[index] = inst;
-    }
-
+    sx_array_push_byindex(g_snd_alloc, g_snd.instances, inst, sx_handle_index(handle));
     return (rizz_snd_instance){ handle };
 }
 
-static rizz_snd_instance snd__play(rizz_snd_source srchandle, float volume, float pan,
+static inline void snd__destroy_instance(rizz_snd_instance insthandle, bool remove_from_bus) {
+    sx_assert_rel(sx_handle_valid(g_snd.instance_handles, insthandle.id));
+    snd__instance* inst = &g_snd.instances[sx_handle_index(insthandle.id)];
+    if (remove_from_bus && inst->play_frame >= 0) {
+        // it means that the sound is already queued for play, so remove it from the bus
+        sx_assert(g_snd.buses[inst->bus_id].num_lanes > 0);
+        --g_snd.buses[inst->bus_id].num_lanes;
+    }
+
+    if (inst->state == SND_INSTANCESTATE_PLAYING) {
+        // decrement num_plays from the source
+        sx_assert_rel(sx_handle_valid(g_snd.source_handles, inst->srchandle.id));
+        snd__source* src = &g_snd.sources[sx_handle_index(inst->srchandle.id)];
+        sx_assert(src->num_plays > 0);
+        --src->num_plays;
+    }
+
+    sx_handle_del(g_snd.instance_handles, insthandle.id);
+}
+
+static void snd__queue_play(rizz_snd_instance insthandle) {
+    sx_assert_rel(sx_handle_valid(g_snd.instance_handles, insthandle.id));
+    snd__instance* inst = &g_snd.instances[sx_handle_index(insthandle.id)];
+    int            bus_id = inst->bus_id;
+    sx_assert_rel(g_snd.buses[bus_id].max_lanes >
+                  0);    // bus is not initialized. call `bus_set_max_lanes` on bus_id
+
+    sx_assert_rel(sx_handle_valid(g_snd.source_handles, inst->srchandle.id));
+
+    int          index = sx_handle_index(inst->srchandle.id);
+    snd__source* src = &g_snd.sources[sx_handle_index(inst->srchandle.id)];
+    sx_assert(src->samples);
+
+    inst->play_frame = the_core->frame_index();
+    inst->pos = 0;
+    inst->state = SND_INSTANCESTATE_PLAYING;
+
+    // for singleton sources, check all playing sounds and remove any with the same audio source
+    if (src->flags & SND_SOURCEFLAG_SINGLETON) {
+        rizz_snd_source srchandle = inst->srchandle;
+        for (int i = 0, c = g_snd.num_plays; i < c; i++) {
+            rizz_snd_instance playing_insthandle = g_snd.playlist[i];
+            snd__instance* playing_inst = &g_snd.instances[sx_handle_index(playing_insthandle.id)];
+            if (playing_inst->srchandle.id == srchandle.id) {
+                snd__destroy_instance(playing_insthandle, true);
+                sx_swap(g_snd.playlist[i], g_snd.playlist[c - 1], rizz_snd_instance);
+                --c;
+            }
+            g_snd.num_plays = c;
+        }
+    }
+
+    if (g_snd.buses[bus_id].max_lanes == g_snd.buses[bus_id].num_lanes) {
+        // remove one sound from the playlist and replace it with this one
+        int64_t min_play_frame = INT64_MAX;
+        int     replace_inst_index = -1;
+        for (int i = 0, c = g_snd.num_plays; i < c; i++) {
+            rizz_snd_instance check_handle = g_snd.playlist[i];
+            snd__instance*    check_inst = &g_snd.instances[sx_handle_index(check_handle.id)];
+            if (check_inst->bus_id == bus_id && check_inst->play_frame < min_play_frame) {
+                min_play_frame = check_inst->play_frame;
+                replace_inst_index = i;
+            }
+        }
+
+        sx_assert(replace_inst_index != -1);
+        snd__destroy_instance(g_snd.playlist[replace_inst_index], false);
+        g_snd.playlist[replace_inst_index] = insthandle;
+    } else {
+        ++g_snd.buses[bus_id].num_lanes;
+        g_snd.playlist[g_snd.num_plays++] = insthandle;
+    }
+    sx_assert(g_snd.num_plays <= RIZZ_SND_DEVICE_MAX_LANES);
+
+    ++src->num_plays;
+}
+
+static rizz_snd_instance snd__play(rizz_snd_source srchandle, int bus, float volume, float pan,
                                    bool paused) {
-    rizz_snd_instance insthandle = snd__create_instance(srchandle);
-    sx_array_push(g_snd_alloc, g_snd.playlist, insthandle);
+    rizz_snd_instance insthandle = snd__create_instance(srchandle, bus, volume, pan);
+    if (!paused) {
+        snd__queue_play(insthandle);
+    }
     return insthandle;
 }
+
+static rizz_snd_instance snd__play_clocked(rizz_snd_source src, float wait_tm, int bus,
+                                           float volume, float pan) {
+    snd__clocked* new_clocked = sx_pool_new(g_snd.clocked_pool);
+    if (!new_clocked) {
+        sx_out_of_memory();
+        return (rizz_snd_instance){ 0 };
+    }
+    sx_memset(new_clocked, 0x0, sizeof(*new_clocked));
+    new_clocked->src = src;
+    new_clocked->inst = snd__create_instance(src, bus, volume, pan);
+    new_clocked->bus_id = bus;
+    new_clocked->wait_tm = wait_tm;
+
+    // check current clocked items and see if already have the source playing
+    for (int i = 0, c = sx_array_count(g_snd.clocked); i < c; i++) {
+        snd__clocked* clocked = g_snd.clocked[i];
+        if (clocked->src.id == src.id && clocked->bus_id == bus) {
+            // add it to the end of the list
+            snd__clocked* last = clocked;
+            while (last->next) {
+                last = last->next;
+            }
+            last->next = new_clocked;
+            return new_clocked->inst;
+        }
+    }
+
+    // not found in the clocked list, create a new one
+    new_clocked->first = true;
+    sx_array_push(g_snd_alloc, g_snd.clocked, new_clocked);
+    return new_clocked->inst;
+}
+
+static void snd__stop(rizz_snd_instance insthandle) {
+    if (sx_handle_valid(g_snd.instance_handles, insthandle.id)) {
+        for (int i = 0, c = g_snd.num_plays; i < c; i++) {
+            if (g_snd.playlist[i].id == insthandle.id) {
+                sx_swap(g_snd.playlist[i], g_snd.playlist[c - 1], rizz_snd_instance);
+                --g_snd.num_plays;
+                break;
+            }
+        }
+        snd__destroy_instance(insthandle, true);
+    }
+}
+
+static void snd__stop_all() {
+    for (int i = 0, c = g_snd.num_plays; i < c; i++) {
+        snd__destroy_instance(g_snd.playlist[i], true);
+    }
+    g_snd.num_plays = 0;
+}
+
+static void snd__resume(rizz_snd_instance insthandle) {
+    if (sx_handle_valid(g_snd.instance_handles, insthandle.id)) {
+        snd__queue_play(insthandle);
+    }
+}
+
+static float snd__source_duration(rizz_snd_source srchandle) {
+    sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
+
+    snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
+    return (float)src->num_frames / (float)src->sample_rate;
+}
+
+static void snd__bus_stop(int bus) {
+    sx_assert(bus >= 0 && bus < RIZZ_SND_DEVICE_MAX_BUSES);
+
+    int num_plays = g_snd.num_plays;
+    for (int i = 0; i < num_plays; i++) {
+        rizz_snd_instance insthandle = g_snd.playlist[i];
+        snd__instance*    inst = &g_snd.instances[sx_handle_index(insthandle.id)];
+        if (inst->bus_id == bus) {
+            sx_swap(g_snd.playlist[i], g_snd.playlist[num_plays - 1], rizz_snd_instance);
+            --num_plays;
+            snd__destroy_instance(insthandle, true);
+        }
+    }
+    g_snd.num_plays = num_plays;
+}
+
 
 // TODO: research on fixed-point math, in order to implement linear sampling
 static int snd__resample_point(float* dst, int num_dst_samples, int sample_offset, const float* src,
@@ -416,14 +873,20 @@ static int snd__resample_point(float* dst, int num_dst_samples, int sample_offse
 static void snd__mix(float* dst, int dst_num_frames, int dst_num_channels, int dst_sample_rate) {
     float dst_sample_ratef = (float)dst_sample_rate;
     int   frames_written = 0;
+    float master_pan_ch1 = g_snd.master_pan > 0.0f ? (1.0f - g_snd.master_pan) : 1.0f;
+    float master_pan_ch2 = g_snd.master_pan < 0.0f ? (1.0f + g_snd.master_pan) : 1.0f;
+
+    int garbage[RIZZ_SND_DEVICE_MAX_LANES];    // indices to g_snd.playlist
+    int num_garbage = 0;
+    sx_assert(g_snd.num_plays <= RIZZ_SND_DEVICE_MAX_LANES);
 
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
-    for (int i = 0; i < sx_array_count(g_snd.playlist); i++) {
+    for (int i = 0, c = g_snd.num_plays; i < c; i++) {
         rizz_snd_instance insthandle = g_snd.playlist[i];
-        sx_assert(sx_handle_valid(g_snd.instance_handles, insthandle.id));
+        sx_assert_rel(sx_handle_valid(g_snd.instance_handles, insthandle.id));
         snd__instance*  inst = &g_snd.instances[sx_handle_index(insthandle.id)];
         rizz_snd_source srchandle = inst->srchandle;
-        sx_assert(sx_handle_valid(g_snd.source_handles, srchandle.id));
+        sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
         snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
 
         int    pos = inst->pos;
@@ -447,39 +910,93 @@ static void snd__mix(float* dst, int dst_num_frames, int dst_num_channels, int d
 
         // remove sound if EOF / loop
         if (inst->pos >= src->num_frames) {
-            inst->pos = 0;
 
             if (!(src->flags & SND_SOURCEFLAG_LOOPING)) {
-                sx_array_pop(g_snd.playlist, i);
-                --i;
+                garbage[num_garbage++] = i;
+            } else {
+                inst->pos = 0;
             }
         }
 
-        // add to destination buffer. upmix to device_channels if required
+        // add to destination buffer. upmix to device_channels if output is stereo
+        float vol = inst->volume * src->volume * g_snd.master_volume;
+
         int dst_num_samples = num_frames * dst_num_channels;
-        for (int s = 0, p = 0; s < dst_num_samples; s += dst_num_channels, p++) {
-            for (int ch = 0; ch < dst_num_channels; ch++) {
-                dst[s + ch] += frames[p];
+        if (dst_num_channels == 2) {
+            float pan = inst->pan;
+            float channel1 = master_pan_ch1 * (pan > 0 ? (1.0f - pan) : 1.0f) * vol;    // left
+            float channel2 = master_pan_ch2 * (pan < 0 ? (1.0f + pan) : 1.0f) * vol;    // right
+
+            for (int s = 0, p = 0; s < dst_num_samples; s += dst_num_channels, p++) {
+                dst[s] += frames[p] * channel1;
+                dst[s + 1] += frames[p] * channel2;
             }
+        } else if (dst_num_channels == 1) {
+            for (int s = 0, p = 0; s < dst_num_samples; s += dst_num_channels, p++) {
+                dst[s] += frames[p] * vol;
+            }
+        } else {
+            sx_assert(0 && "not implemented");
         }
 
         frames_written = sx_max(frames_written, num_frames);
     }
     the_core->tmp_alloc_pop();
 
-    // fill remaining frame with zeros
+    // A very naive clipping
+    int samples_written = frames_written * dst_num_channels;
+    for (int i = 0; i < samples_written; i++) {
+        dst[i] = sx_clamp(dst[i], -1.0f, 1.0f);
+    }
+
+    // fill remaining frames with zeros
     if (frames_written < dst_num_frames) {
         sx_memset(dst + frames_written * dst_num_channels, 0x0,
                   (dst_num_frames - frames_written) * dst_num_channels * sizeof(float));
     }
-}
 
-int g_frames_remain;
+    // delete garbage instances
+    for (int i = 0; i < num_garbage; i++) {
+        rizz_snd_instance insthandle = g_snd.playlist[garbage[i]];
+        sx_swap(g_snd.playlist[garbage[i]], g_snd.playlist[g_snd.num_plays - 1], rizz_snd_instance);
+        --g_snd.num_plays;
+        snd__destroy_instance(insthandle, true);
+    }
+}
 
 static void snd__update(float dt) {
     int device_channels = saudio_channels();
     int device_sample_rate = saudio_sample_rate();
 
+    // update clocked items
+    for (int i = 0, c = sx_array_count(g_snd.clocked); i < c; i++) {
+        snd__clocked* clocked = g_snd.clocked[i];
+        if (clocked->tm < clocked->wait_tm && !clocked->first) {
+            clocked->tm += dt;
+        } else {
+            if (clocked->inst.id) {
+                snd__queue_play(clocked->inst);
+            }
+
+            if (!clocked->first) {
+                if (clocked->next) {
+                    if (!clocked->inst.id) {
+                        clocked->next->wait_tm -= clocked->wait_tm;
+                    }
+                    g_snd.clocked[i] = clocked->next;
+                } else {
+                    sx_array_pop(g_snd.clocked, i);
+                    --c;
+                }
+                sx_pool_del(g_snd.clocked_pool, clocked);
+            } else {
+                clocked->first = false;
+                clocked->inst.id = 0;
+            }
+        }
+    }
+
+    // mix into main sound buffer
     int frames_remain = snd__ringbuffer_expect(&g_snd.mixer_buffer) / device_channels;
     int frames_needed = (int)(dt * (float)device_sample_rate * 1.5f);
     int s = (g_snd.mixer_buffer.capacity / device_channels) - frames_remain;
@@ -487,11 +1004,7 @@ static void snd__update(float dt) {
         frames_needed = RIZZ_SND_DEVICE_BUFFER_FRAMES;
     }
 
-    int tmp = frames_remain;
     frames_remain = frames_needed != 0 ? sx_min(frames_remain, frames_needed) : frames_remain;
-
-    g_frames_remain = frames_remain;
-
     if (frames_remain) {
         const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
@@ -508,18 +1021,352 @@ static void snd__update(float dt) {
     }
 }
 
-static bool snd__test_overrun() {
-    return _saudio.overrun == 1;
+static void snd__plot_samples_rms(const char* label, const float* samples, int num_samples,
+                                  int channel, int num_channels, int height, float scale) {
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+
+    int       width = (int)the_imgui->GetContentRegionAvailWidth();
+    int       num_values;
+    float*    values;
+    const int optimal_values = 50;
+
+    if (num_samples > 0) {
+        int    num_plot_samples = num_samples / num_channels;
+        float* plot_samples = sx_malloc(tmp_alloc, sizeof(float) * num_plot_samples);
+        sx_assert(plot_samples);
+
+        for (int i = 0, p = 0; i < num_samples; i += num_channels, p++) {
+            plot_samples[p] = samples[i + channel];
+        }
+
+        num_values = width * optimal_values / 250;
+        if (num_values < 20)
+            num_values = 20;
+        values = sx_malloc(tmp_alloc, sizeof(float) * num_values);
+        sx_assert(values);
+        int   block_sz = num_plot_samples / num_values;
+        float block_sz_rcp = 1.0f / (float)block_sz;
+        for (int i = 0; i < num_values; i++) {
+            float rms = 0;
+            for (int s = 0; s < block_sz; s++) {
+                rms += plot_samples[s] * plot_samples[s];
+            }
+            values[i] = sx_sqrt(rms * block_sz_rcp) * scale;
+            plot_samples += block_sz;
+        }
+    } else {
+        values = sx_malloc(tmp_alloc, sizeof(float) * optimal_values);
+        num_values = optimal_values;
+        sx_memset(values, 0x0, sizeof(float) * optimal_values);
+    }
+
+    the_imgui->PlotHistogramFloatPtr(label, values, num_values, 0, NULL, 0, 1.0f,
+                                     sx_vec2f((float)width, (float)height), sizeof(float));
+    the_core->tmp_alloc_pop();
 }
 
-static int snd__frames_remain() {
-    return g_frames_remain;
+static void snd__plot_samples_wav(const char* label, const float* samples, int num_samples,
+                                  int height) {
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_assert(num_samples > 0);
+
+    int       width = (int)the_imgui->GetContentRegionAvailWidth();
+    const int optimal_values = 50;
+
+    int num_values = width * optimal_values / 250;
+    if (num_values < 20)
+        num_values = 20;
+    float* values = sx_malloc(tmp_alloc, sizeof(float) * num_values * 2);
+    sx_assert(values);
+    int   block_sz = num_samples / num_values;
+    const float* plot_samples = samples;
+    float block_sz_rcp = 1.0f / (float)block_sz;
+    for (int i = 0; i < num_values; i++) {
+        float _max = -FLT_MAX;
+        float _min = FLT_MAX;
+        int   max_idx = -1;
+        int   min_idx = -1;
+
+        for (int s = 0; s < block_sz; s++) {
+            if (plot_samples[s] > _max) {
+                _max = plot_samples[s];
+                max_idx = s;
+            }
+            if (plot_samples[s] < _min) {
+                _min = plot_samples[s];
+                min_idx = s;
+            }
+        }
+        if (max_idx > min_idx) {
+            values[i * 2] = _min;
+            values[i * 2 + 1] = _max;
+        } else {
+            values[i * 2] = _max;
+            values[i * 2 + 1] = _min;
+        }
+        plot_samples += block_sz;
+    }
+
+    the_imgui->PlotLines(label, values, num_values * 2, 0, NULL, -1.0f, 1.0f,
+                         sx_vec2f((float)width, (float)height), sizeof(float));
+    the_core->tmp_alloc_pop();
 }
+
+static void snd__show_mixer_tab_contents() {
+    the_imgui->LabelText("sample_rate", "%d", saudio_sample_rate());
+    the_imgui->LabelText("channels", "%d", saudio_channels());
+    the_imgui->SliderFloat("master", &g_snd.master_volume, 0.0f, 1.2f, "%.1f", 1.0f);
+    the_imgui->SliderFloat("pan", &g_snd.master_pan, -1.0f, 1.0f, "%.1f", 1.0f);
+
+    // plot samples
+    static float    plot_scale = 1.0f;
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    int             num_channels = saudio_channels();
+    int             num_samples = RIZZ_SND_DEVICE_BUFFER_FRAMES * num_channels;
+    float*          samples = sx_malloc(tmp_alloc, sizeof(float) * num_samples);
+    if (!samples) {
+        sx_out_of_memory();
+        return;
+    }
+    num_samples =
+        snd__ringbuffer_consume(&g_snd.mixer_plot_buffer, samples, sx_min(512, num_samples));
+    float plot_width = (float)the_imgui->GetContentRegionAvailWidth();
+    the_imgui->Columns(num_channels + 1, "mixer_wav_cols", false);
+    the_imgui->SetColumnWidth(0, 25.0f);
+    plot_width -= 25.0f;
+    the_imgui->SetColumnWidth(1, plot_width * 0.5f);
+    the_imgui->SetColumnWidth(2, plot_width * 0.5f);
+    the_imgui->VSliderFloat("##plot_scale", sx_vec2f(12.0f, 50.0f), &plot_scale, 1.0f, 10.0f, "",
+                            1.0f);
+    the_imgui->NextColumn();
+    for (int ch = 0; ch < num_channels; ch++) {
+        char plot_str[32];
+        sx_snprintf(plot_str, sizeof(plot_str), "channel #%d", ch + 1);
+        snd__plot_samples_rms("##mixer_plot", samples, num_samples, ch, num_channels, 50,
+                              plot_scale);
+        the_imgui->NextColumn();
+    }
+
+    the_imgui->Columns(1, NULL, false);
+    the_imgui->Separator();
+
+    {
+        int num_sounds = g_snd.num_plays;
+
+        the_imgui->Columns(4, NULL, false);
+        the_imgui->SetColumnWidth(0, 30.0f);
+        the_imgui->SetColumnWidth(1, 30.0f);
+        the_imgui->SetColumnWidth(2, 100.0f);
+        the_imgui->Text("#");
+        the_imgui->NextColumn();
+        the_imgui->Text("Bus");
+        the_imgui->NextColumn();
+        the_imgui->Text("Progress");
+        the_imgui->NextColumn();
+        the_imgui->Text("Source");
+        the_imgui->NextColumn();
+        the_imgui->Separator();
+
+        the_imgui->Columns(1, NULL, false);
+        the_imgui->BeginChild("mixer_sound_list",
+                              sx_vec2f(the_imgui->GetWindowContentRegionWidth(), -1.0f), false, 0);
+        the_imgui->Columns(4, NULL, false);
+        the_imgui->SetColumnWidth(0, 30.0f);
+        the_imgui->SetColumnWidth(1, 30.0f);
+        the_imgui->SetColumnWidth(2, 100.0f);
+        ImGuiListClipper clipper;
+        the_imgui->ImGuiListClipper_Begin(&clipper, num_sounds, -1.0f);
+        while (the_imgui->ImGuiListClipper_Step(&clipper)) {
+            int start = num_sounds - clipper.DisplayStart - 1;
+            int end = num_sounds - clipper.DisplayEnd;
+            for (int i = start; i >= end; i--) {
+                rizz_snd_instance insthandle = g_snd.playlist[i];
+                sx_assert_rel(sx_handle_valid(g_snd.instance_handles, insthandle.id));
+
+                const snd__instance* inst = &g_snd.instances[sx_handle_index(insthandle.id)];
+                sx_assert_rel(sx_handle_valid(g_snd.source_handles, inst->srchandle.id));
+                const snd__source* src = &g_snd.sources[sx_handle_index(inst->srchandle.id)];
+
+                the_imgui->Text("%d", i + 1);
+                the_imgui->NextColumn();
+
+                the_imgui->Text("%d", inst->bus_id);
+                the_imgui->NextColumn();
+
+                float progress = (float)inst->pos / (float)src->num_frames;
+                the_imgui->ProgressBar(progress, sx_vec2f(-1.0f, 15.0f), NULL);
+                the_imgui->NextColumn();
+
+                sx_assert(src->name);
+                the_imgui->Text(sx_strpool_cstr(g_snd.name_pool, src->name));
+                the_imgui->NextColumn();
+            }
+        }
+        the_imgui->ImGuiListClipper_End(&clipper);
+        the_imgui->EndChild();
+        the_imgui->Columns(1, NULL, false);
+    }
+
+    the_core->tmp_alloc_pop();
+}
+
+static void snd__show_sources_tab_contents() {
+    static int selected_source = -1;
+    int        num_sources = g_snd.source_handles->count;
+
+    the_imgui->Columns(3, NULL, false);
+    the_imgui->SetColumnWidth(0, 30.0f);
+    the_imgui->SetColumnWidth(1, 30.0f);
+    the_imgui->Text("#");
+    the_imgui->NextColumn();
+    the_imgui->Text("Plays");
+    the_imgui->NextColumn();
+    the_imgui->Text("Name");
+    the_imgui->NextColumn();
+    the_imgui->Separator();
+    the_imgui->Columns(1, NULL, false);
+    the_imgui->BeginChild("source_list", sx_vec2f(the_imgui->GetWindowContentRegionWidth(), 200.0f),
+                          false, 0);
+    the_imgui->Columns(3, NULL, false);
+    the_imgui->SetColumnWidth(0, 30.0f);
+    the_imgui->SetColumnWidth(0, 30.0f);
+    ImGuiListClipper clipper;
+    the_imgui->ImGuiListClipper_Begin(&clipper, num_sources, -1.0f);
+    char row_str[32];
+    char pcount_str[32];
+    while (the_imgui->ImGuiListClipper_Step(&clipper)) {
+        int start = num_sources - clipper.DisplayStart - 1;
+        int end = num_sources - clipper.DisplayEnd;
+        for (int i = start; i >= end; i--) {
+            sx_handle_t handle = sx_handle_at(g_snd.source_handles, i);
+            sx_assert_rel(sx_handle_valid(g_snd.source_handles, handle));
+            const snd__source* src = &g_snd.sources[sx_handle_index(handle)];
+
+            sx_snprintf(row_str, sizeof(row_str), "%d", i + 1);
+            if (the_imgui->Selectable(row_str, selected_source == i,
+                                      ImGuiSelectableFlags_SpanAllColumns, SX_VEC2_ZERO)) {
+                selected_source = i;
+            }
+            the_imgui->NextColumn();
+
+            sx_snprintf(pcount_str, sizeof(pcount_str), "%d", src->num_plays);
+            the_imgui->ColorButton(pcount_str,
+                                   src->num_plays > 0 ? sx_vec4f(0.0f, 0.8f, 0.1f, 1.0f)
+                                                      : sx_vec4f(0.3f, 0.3f, 0.3f, 1.0f),
+                                   0, sx_vec2f(14.0f, 14.0f));
+            the_imgui->NextColumn();
+
+            the_imgui->Text(sx_strpool_cstr(g_snd.name_pool, src->name));
+            the_imgui->NextColumn();
+        }
+    }
+    the_imgui->ImGuiListClipper_End(&clipper);
+    the_imgui->EndChild();
+    the_imgui->Columns(1, NULL, false);
+    the_imgui->Separator();
+
+    if (selected_source != -1) {
+        sx_handle_t handle = sx_handle_at(g_snd.source_handles, selected_source);
+        sx_assert_rel(sx_handle_valid(g_snd.source_handles, handle));
+        const snd__source* src = &g_snd.sources[sx_handle_index(handle)];
+        snd__plot_samples_wav("##source_plot", src->samples, src->num_frames, 70);
+
+        the_imgui->Columns(2, "source_info_cols", true);
+        the_imgui->LabelText("sample_rate", "%d", src->sample_rate);
+        the_imgui->LabelText("channels", "%d", 1);
+        the_imgui->LabelText("volume", "%.1f", src->volume);
+        float duration = snd__source_duration((rizz_snd_source){ handle });
+        the_imgui->LabelText("duration", "%.3fs (%.2fms)", duration, duration * 1000.0f);
+        bool looping = (src->flags & SND_SOURCEFLAG_LOOPING) ? true : false;
+        bool singleton = (src->flags & SND_SOURCEFLAG_SINGLETON) ? true : false;
+        the_imgui->Checkbox("looping", &looping);
+        the_imgui->SameLine(0, -1.0f);
+        the_imgui->Checkbox("singleton", &singleton);
+
+        the_imgui->NextColumn();
+        static int bus_id = 0;
+        const int  bus_id_step = 1;
+        if (the_imgui->Button("Play", SX_VEC2_ZERO)) {
+            snd__play((rizz_snd_source){ handle }, bus_id, 1.0f, 0, false);
+        }
+        the_imgui->SameLine(0, -1.0f);
+        the_imgui->InputScalar("bus_id", ImGuiDataType_S32, &bus_id, &bus_id_step, NULL, "%u", 0);
+        bus_id = sx_clamp(bus_id, 0, (RIZZ_SND_DEVICE_MAX_BUSES - 1));
+    }
+}
+
+static void snd__show_debugger(bool* p_open) {
+    if (!the_imgui) {
+        return;
+    }
+
+    the_imgui->SetNextWindowSizeConstraints(sx_vec2f(250.0f, 500.0f), sx_vec2f(FLT_MAX, FLT_MAX),
+                                            NULL, NULL);
+    if (the_imgui->Begin("Sound Debugger", p_open, 0)) {
+        if (the_imgui->BeginTabBar("sound_tab", 0)) {
+
+            if (the_imgui->BeginTabItem("Mixer", NULL, 0)) {
+                snd__show_mixer_tab_contents();
+                the_imgui->EndTabItem();
+            }
+
+            if (the_imgui->BeginTabItem("Sources", NULL, 0)) {
+                snd__show_sources_tab_contents();
+                the_imgui->EndTabItem();
+            }
+            the_imgui->EndTabBar();
+        }
+    }
+    the_imgui->End();
+}
+
+static float snd__master_volume() {
+    return g_snd.master_volume;
+}
+
+static void snd__set_master_volume(float vol) {
+    g_snd.master_volume = sx_clamp(vol, 0.0f, 1.2f);
+}
+
+static float snd__master_pan() {
+    return g_snd.master_pan;
+}
+
+static void snd__set_master_pan(float pan) {
+    g_snd.master_pan = sx_clamp(pan, -1.0f, 1.0f);
+}
+
+static void snd__bus_set_max_lanes(int bus, int max_lanes) {
+    sx_assert(bus >= 0 && bus < RIZZ_SND_DEVICE_MAX_BUSES);
+
+    // count all lanes and check if we have to
+    int count = 0;
+    for (int i = 0; i < RIZZ_SND_DEVICE_MAX_BUSES; i++) {
+        count += i != bus ? g_snd.buses[i].max_lanes : 0;
+    }
+
+    int remain = RIZZ_SND_DEVICE_MAX_LANES - count;
+    if (max_lanes > remain) {
+        rizz_log_warn(
+            the_core,
+            "sound: maximum lanes for bus '%d' (%d truncated to %d) exceeds total maximum of %d",
+            bus, max_lanes, remain, RIZZ_SND_DEVICE_MAX_LANES);
+        sx_assert(0 && "wether increase RIZZ_SND_DEVICE_MAX_LANES or fix `max_lanes` parameter");
+        g_snd.buses[bus].max_lanes = remain;
+    } else {
+        g_snd.buses[bus].max_lanes = max_lanes;
+    }
+}
+
 
 static rizz_api_snd the__snd = { .play = snd__play,
-                                 .test_overrun = snd__test_overrun,
-                                 .frames_remain = snd__frames_remain,
-                                 .update = snd__update };
+                                 .play_clocked = snd__play_clocked,
+                                 .show_debugger = snd__show_debugger,
+                                 .master_volume = snd__master_volume,
+                                 .set_master_volume = snd__set_master_volume,
+                                 .master_pan = snd__master_pan,
+                                 .set_master_pan = snd__set_master_pan,
+                                 .bus_set_max_lanes = snd__bus_set_max_lanes };
 
 rizz_plugin_decl_main(sound, plugin, e) {
     switch (e) {
@@ -532,6 +1379,7 @@ rizz_plugin_decl_main(sound, plugin, e) {
         the_core = the_plugin->get_api(RIZZ_API_CORE, 0);
         the_asset = the_plugin->get_api(RIZZ_API_ASSET, 0);
         the_refl = the_plugin->get_api(RIZZ_API_REFLECT, 0);
+        the_imgui = the_plugin->get_api_byname("imgui", 0);
 
         if (!snd__init()) {
             return -1;
@@ -553,6 +1401,12 @@ rizz_plugin_decl_main(sound, plugin, e) {
     return 0;
 }
 
-rizz_plugin_decl_event_handler(sound, e) {}
+rizz_plugin_decl_event_handler(sound, e) {
+    if (e->type == RIZZ_APP_EVENTTYPE_UPDATE_APIS) {
+        the_imgui = the_plugin->get_api_byname("imgui", 0);
+    }
+}
 
-rizz_plugin_implement_info(sound, 1000, "sound plugin", NULL, 0);
+
+static const char* sound__deps[] = { "imgui" };
+rizz_plugin_implement_info(sound, 1000, "sound plugin", sound__deps, 1);

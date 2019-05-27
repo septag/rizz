@@ -298,12 +298,7 @@ static rizz_sprite_animclip sprite__animclip_create(const rizz_sprite_animclip_d
         }
     }
 
-    int index = sx_handle_index(handle);
-    if (index >= sx_array_count(g_spr.animclips)) {
-        sx_array_push(g_spr.alloc, g_spr.animclips, clip);
-    } else {
-        g_spr.animclips[index] = clip;
-    }
+    sx_array_push_byindex(g_spr.alloc, g_spr.animclips, clip, sx_handle_index(handle));
 
     return (rizz_sprite_animclip){ handle };
 }
@@ -337,12 +332,7 @@ static rizz_sprite_animclip sprite__animclip_clone(rizz_sprite_animclip src_hand
     sx_memcpy(clip.frames, src->frames, sizeof(sprite__animclip_frame) * clip.num_frames);
     the_asset->ref_add(clip.atlas);
 
-    int index = sx_handle_index(handle);
-    if (index >= sx_array_count(g_spr.animclips)) {
-        sx_array_push(g_spr.alloc, g_spr.animclips, clip);
-    } else {
-        g_spr.animclips[index] = clip;
-    }
+    sx_array_push_byindex(g_spr.alloc, g_spr.animclips, clip, sx_handle_index(handle));
 
     return (rizz_sprite_animclip){ handle };
 }
@@ -660,12 +650,7 @@ static rizz_sprite_animctrl sprite__animctrl_create(const rizz_sprite_animctrl_d
         ctrl.params[param_idx].value.i = 0;
     }
 
-    int index = sx_handle_index(handle);
-    if (index >= sx_array_count(g_spr.animctrls)) {
-        sx_array_push(g_spr.alloc, g_spr.animctrls, ctrl);
-    } else {
-        g_spr.animctrls[index] = ctrl;
-    }
+    sx_array_push_byindex(g_spr.alloc, g_spr.animctrls, ctrl, sx_handle_index(handle));
 
     return (rizz_sprite_animctrl){ handle };
 }
@@ -1391,12 +1376,7 @@ static rizz_sprite sprite__create(const rizz_sprite_desc* desc) {
     }
     sprite__update_bounds(&spr);
 
-    int index = sx_handle_index(handle);
-    if (index >= sx_array_count(g_spr.sprites)) {
-        sx_array_push(g_spr.alloc, g_spr.sprites, spr);
-    } else {
-        g_spr.sprites[index] = spr;
-    }
+    sx_array_push_byindex(g_spr.alloc, g_spr.sprites, spr, sx_handle_index(handle));
 
     return (rizz_sprite){ handle };
 }
@@ -1440,12 +1420,7 @@ rizz_sprite sprite__clone(rizz_sprite src_handle, rizz_sprite_animclip clip_hand
         the_asset->ref_add(spr.texture);
     }
 
-    int index = sx_handle_index(handle);
-    if (index >= sx_array_count(g_spr.sprites)) {
-        sx_array_push(g_spr.alloc, g_spr.sprites, spr);
-    } else {
-        g_spr.sprites[index] = spr;
-    }
+    sx_array_push_byindex(g_spr.alloc, g_spr.sprites, spr, sx_handle_index(handle));
 
     return (rizz_sprite){ handle };
 }

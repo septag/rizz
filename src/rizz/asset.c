@@ -630,11 +630,7 @@ static rizz_asset rizz__asset_create_new(const char* path, const void* params, r
     // because we may regrow the asset-array
     // asset-array may be accessed in worker-threads with `obj_threadsafe()` function
     sx_lock(&g_asset.assets_lk);
-    int index = sx_handle_index(handle);
-    if (index >= sx_array_count(g_asset.assets))
-        sx_array_push(g_asset.alloc, g_asset.assets, asset);
-    else
-        g_asset.assets[index] = asset;
+    sx_array_push_byindex(g_asset.alloc, g_asset.assets, asset, sx_handle_index(handle));
     sx_unlock(&g_asset.assets_lk);
 
     sx_hashtbl_add_and_grow(g_asset.asset_tbl, asset.hash, handle, g_asset.alloc);

@@ -45,43 +45,54 @@ static bool init() {
     g_stage = the_gfx->stage_register("main", (rizz_gfx_stage){ .id = 0 });
     sx_assert(g_stage.id);
 
-    rizz_snd_load_params sparams = { .volume = 1.0f };
+    rizz_snd_load_params sparams = { .volume = 1.0f, .singleton = true };
     for (int i = 0; i < 8; i++) {
         char file[128];
         sx_snprintf(file, sizeof(file), "/assets/sounds/fish_combo_%d.wav", i + 1);
         g_snd[i] =
-            the_asset->load("sound", file, &sparams, RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD, NULL, 0);
+            the_asset->load("sound", file, &sparams, 0, NULL, 0);
     }
 
     return true;
 }
 
-static void shutdown() {}
+static void shutdown() {
+    for (int i = 0; i < 8; i++) {
+        if (g_snd[i].id) {
+            the_asset->unload(g_snd[i]);
+        }
+    }
+}
 
 static void update(float dt) {
     // Use imgui UI
     the_imgui->SetNextWindowContentSize(sx_vec2f(100.0f, 50.0f));
     if (the_imgui->Begin("PlaySound", NULL, 0)) {
         the_imgui->LabelText("Fps", "%.3f", the_core->fps());
-        the_imgui->ColorButton("buffer_overrun",
-                               the_sound->test_overrun() ? sx_vec4f(1.0f, 0, 0, 1.0f)
-                                                         : sx_vec4f(1.0f, 1.0f, 1.0f, 1.0),
-                               0, SX_VEC2_ZERO);
-        the_imgui->LabelText("frames_remain", "%d", the_sound->frames_remain());
-
+        the_imgui->Separator();
+        the_imgui->Text("Click colored buttons to play sounds");
+        float hsv[3] = { 0.5f, 1.0f, 1.0f };
         for (int i = 0; i < 8; i++) {
             char btn_id[32];
             sx_snprintf(btn_id, sizeof(btn_id), "sound #%d", i + 1);
-            if (the_imgui->Button(btn_id, SX_VEC2_ZERO)) {
+
+            sx_vec4 color = sx_vec4f(0, 0, 0, 1.0f);
+            sx_color_HSVtoRGB(color.f, hsv);
+            
+            if (the_imgui->ColorButton(btn_id, color, ImGuiColorEditFlags_NoTooltip, sx_vec2f(30.0f, 30.0f))) {
                 rizz_snd_source s = (rizz_snd_source){ (uint32_t)the_asset->obj(g_snd[i]).id };
-                the_sound->play(s, 1.0f, 0, false);
+                the_sound->play(s, 0, 1.0f, 0, false);
             }
-            if (i % 4 != 0) {
+            if ((i + 1) % 4 != 0) {
                 the_imgui->SameLine(0, -1.0f);
             }
+
+            hsv[0] = sx_fract(hsv[0] + 0.618033988749895f);
         }
     }
     the_imgui->End();
+
+    the_sound->show_debugger(NULL);
 }
 
 static void render() {
@@ -152,7 +163,7 @@ rizz_game_decl_config(conf) {
     conf->window_height = 600;
     conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;
     conf->multisample_count = 4;
-    conf->swap_interval = 2;
+    conf->swap_interval = 1;
     conf->plugins[0] = "imgui";
     conf->plugins[1] = "sound";
 }
