@@ -5,7 +5,8 @@ add_library(sound ${PLUGIN_TYPE} sound.c
                                  stb_vorbis.c 
                                  ../../include/rizz/sound.h
                                  ../../3rdparty/sokol/sokol_audio.h
-                                 ../../3rdparty/dr_libs/dr_wav.h)
+                                 ../../3rdparty/dr_libs/dr_wav.h
+                                 README.md)
 
 if (CMAKE_C_COMPILER_ID MATCHES "GNU")
     set_source_files_properties(stb_vorbis.c PROPERTIES COMPILE_FLAGS "-Wno-shadow -Wno-maybe-uninitialized")
@@ -14,5 +15,11 @@ elseif (CMAKE_C_COMPILER_ID MATCHES "Clang")
 endif()
 
 target_link_libraries(sound PRIVATE sx)
+
+if (APPLE) 
+    find_library(coreaudio_lib CoreAudio)
+    target_link_libraries(sound PRIVATE ${coreaudio_lib})
+endif()
+
 target_include_directories(sound PRIVATE ../../3rdparty)
 target_compile_definitions(sound PRIVATE -DSTB_VORBIS_NO_PUSHDATA_API)

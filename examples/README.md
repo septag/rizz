@@ -26,3 +26,10 @@ Demonstrates basic application setup. Just clears the view with blue color.
 - Sprite debugging
   
 ![04-animsprite](screenshots/04-animsprite.png)
+
+### [PlaySound](05-playsound/playsound.c)
+- Loading sound files
+- Play sounds
+- Sound system debugger
+
+![05-playsound](screenshots/05-playsound.png)
