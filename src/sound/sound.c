@@ -1216,10 +1216,10 @@ static void snd__show_sources_tab_contents() {
 
     the_imgui->Columns(3, NULL, false);
     the_imgui->SetColumnWidth(0, 30.0f);
-    the_imgui->SetColumnWidth(1, 30.0f);
+    the_imgui->SetColumnWidth(1, 35.0f);
     the_imgui->Text("#");
     the_imgui->NextColumn();
-    the_imgui->Text("Plays");
+    the_imgui->Text("Play");
     the_imgui->NextColumn();
     the_imgui->Text("Name");
     the_imgui->NextColumn();
@@ -1229,7 +1229,7 @@ static void snd__show_sources_tab_contents() {
                           false, 0);
     the_imgui->Columns(3, NULL, false);
     the_imgui->SetColumnWidth(0, 30.0f);
-    the_imgui->SetColumnWidth(0, 30.0f);
+    the_imgui->SetColumnWidth(1, 35.0f);
     ImGuiListClipper clipper;
     the_imgui->ImGuiListClipper_Begin(&clipper, num_sources, -1.0f);
     char row_str[32];

@@ -45,7 +45,7 @@ static bool init() {
     g_stage = the_gfx->stage_register("main", (rizz_gfx_stage){ .id = 0 });
     sx_assert(g_stage.id);
 
-    rizz_snd_load_params sparams = { .volume = 1.0f, .singleton = true };
+    rizz_snd_load_params sparams = { .volume = 1.0f };
     for (int i = 0; i < 8; i++) {
         char file[128];
         sx_snprintf(file, sizeof(file), "/assets/sounds/fish_combo_%d.wav", i + 1);

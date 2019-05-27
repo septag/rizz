@@ -17,8 +17,7 @@ endif()
 target_link_libraries(sound PRIVATE sx)
 
 if (APPLE) 
-    find_library(coreaudio_lib CoreAudio)
-    target_link_libraries(sound PRIVATE ${coreaudio_lib})
+    target_link_libraries(sound PRIVATE "-framework CoreAudio")
 endif()
 
 target_include_directories(sound PRIVATE ../../3rdparty)
