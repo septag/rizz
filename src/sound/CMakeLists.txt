@@ -18,6 +18,8 @@ target_link_libraries(sound PRIVATE sx)
 
 if (APPLE) 
     target_link_libraries(sound PRIVATE "-framework CoreAudio")
+elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")    
+    target_link_libraries(sound PRIVATE -lasound)
 endif()
 
 target_include_directories(sound PRIVATE ../../3rdparty)
