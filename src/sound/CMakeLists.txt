@@ -18,6 +18,7 @@ target_link_libraries(sound PRIVATE sx)
 
 if (APPLE) 
     target_link_libraries(sound PRIVATE "-framework CoreAudio")
+    set_source_files_properties(sound.c PROPERTIES COMPILE_FLAGS "-fobjc-arc -fmodules -x objective-c")
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")    
     target_link_libraries(sound PRIVATE -lasound)
 endif()
