@@ -33,7 +33,22 @@ typedef struct rizz_snd_load_params {
     bool  singleton;
 } rizz_snd_load_params;
 
+// thread-safe queued API
+// this api is async and can be used in worker threads
+// all calls are queued for execution on sound-system update
+typedef struct rizz_api_snd_queue {
+    void (*play)(rizz_snd_source src, int bus, float volume, float pan, bool paused);
+    void (*play_clocked)(rizz_snd_source src, float wait_tm, int bus, float volume, float pan);
+    void (*bus_stop)(int bus);
+    void (*set_master_volume)(float volume);
+    void (*set_master_pan)(float pan);
+    void (*source_stop)(rizz_snd_source src);
+    void (*source_set_volume)(rizz_snd_source src, float vol);
+} rizz_api_snd_queue;
+
 typedef struct rizz_api_snd {
+    rizz_api_snd_queue queued;
+
     rizz_snd_instance (*play)(rizz_snd_source src, int bus, float volume, float pan, bool paused);
     rizz_snd_instance (*play_clocked)(rizz_snd_source src, float wait_tm, int bus, float volume,
                                       float pan);
@@ -52,9 +67,10 @@ typedef struct rizz_api_snd {
     float (*source_duration)(rizz_snd_source src);
     void (*source_stop)(rizz_snd_source src);
     bool (*source_looping)(rizz_snd_source src);
-    void (*source_set_looping)(rizz_snd_source src);
-    void (*source_set_singleton)(rizz_snd_source src);
-    void (*source_set_volume)(rizz_snd_source src);
+    float (*source_volume)(rizz_snd_source src);
+    void (*source_set_looping)(rizz_snd_source src, bool loop);
+    void (*source_set_singleton)(rizz_snd_source src, bool singleton);
+    void (*source_set_volume)(rizz_snd_source src, float vol);
 
     void (*show_debugger)(bool* p_open);
 } rizz_api_snd;

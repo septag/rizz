@@ -19,6 +19,7 @@ implements the following platform-specific backends:
 - Master volume/pan
 - Clocked/looping/singleton audio playback
 - Debugger view
+- Multi-threaded command-buffer
 
 ### Limitations
 

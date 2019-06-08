@@ -780,6 +780,10 @@ static void imgui__frame() {
 
     io->DisplaySize = the_app->sizef();
     io->DeltaTime = (float)sx_tm_sec(the_core->delta_tick());
+    if (io->DeltaTime == 0) {
+        io->DeltaTime = 0.033f;
+    }
+
     for (int i = 0; i < RIZZ_APP_MAX_MOUSEBUTTONS; i++) {
         if (g_imgui.mouse_btn_down[i]) {
             g_imgui.mouse_btn_down[i] = false;
@@ -1518,6 +1522,7 @@ rizz_plugin_decl_main(imgui, plugin, e) {
             imgui__submit_make_commands(make_cmdbuff, make_cmdbuff_sz);
         }
 
+        imgui__frame();
         break;
     }
 

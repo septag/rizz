@@ -125,7 +125,35 @@ typedef struct snd__clocked {
     bool                 first;
 } snd__clocked;
 
+typedef enum snd__command {
+    SND_COMMAND_PLAY = 0,
+    SND_COMMAND_PLAY_CLOCKED,
+    SND_COMMAND_BUS_STOP,
+    SND_COMMAND_SET_MASTER_VOLUME,
+    SND_COMMAND_SET_MASTER_PAN,
+    SND_COMMAND_SOURCE_STOP,
+    SND_COMMAND_SOURCE_SET_VOLUME,
+    _SND_COMMAND_COUNT,
+    _SND_COMMAND_ = INT32_MAX
+} snd__command;
+
+typedef struct snd__cmdheader {
+    snd__command cmd;
+    int          cmdbuffer_idx;
+    int          params_offset;
+} snd__cmdheader;
+
+typedef struct snd__cmdbuffer {
+    uint8_t*        params_buff;    // sx_array
+    snd__cmdheader* cmds;           // sx_array
+    int             index;
+    int             cmd_idx;
+} snd__cmdbuffer;
+
+typedef uint8_t* (*snd__run_command_cb)(uint8_t* buff);
+
 typedef struct snd__context {
+    snd__cmdbuffer**  cmd_buffers;
     sx_handle_pool*   source_handles;
     snd__source*      sources;
     sx_handle_pool*   instance_handles;
@@ -133,6 +161,7 @@ typedef struct snd__context {
     sx_strpool*       name_pool;
     sx_pool*          clocked_pool;
     snd__clocked**    clocked;
+    int               num_cmdbuffers;
     rizz_snd_instance playlist[RIZZ_SND_DEVICE_MAX_LANES];
     int               num_plays;
     snd__ringbuffer   mixer_buffer;
@@ -551,6 +580,23 @@ static void snd__destroy_dummy_source(rizz_snd_source srchandle) {
     }
 }
 
+static void* snd__cmdbuffer_init(int thread_index, uint32_t thread_id, void* user) {
+    sx_unused(thread_id);
+    sx_unused(user);
+    sx_assert(!g_snd.cmd_buffers[thread_index]);
+
+    snd__cmdbuffer* cb = sx_malloc(g_snd_alloc, sizeof(snd__cmdbuffer));
+    if (!cb) {
+        sx_out_of_memory();
+        return NULL;
+    }
+
+    *cb = (snd__cmdbuffer){ .index = thread_index };
+    g_snd.cmd_buffers[thread_index] = cb;
+
+    return cb;
+}
+
 static bool snd__init() {
     static_assert(RIZZ_SND_DEVICE_NUM_CHANNELS == 1 || RIZZ_SND_DEVICE_NUM_CHANNELS == 2,
                   "only mono or stereo output channel is supported");
@@ -621,11 +667,34 @@ static bool snd__init() {
     // initialize first bus to use all lanes
     g_snd.buses[0].max_lanes = RIZZ_SND_DEVICE_MAX_LANES;
 
+    // we have a command buffer for each worker thread
+    g_snd.cmd_buffers =
+        sx_malloc(g_snd_alloc, sizeof(snd__cmdbuffer*) * the_core->job_num_workers());
+    if (!g_snd.cmd_buffers) {
+        sx_out_of_memory();
+        return false;
+    }
+    g_snd.num_cmdbuffers = the_core->job_num_workers();
+    sx_memset(g_snd.cmd_buffers, 0x0, sizeof(snd__cmdbuffer*) * the_core->job_num_workers());
+    the_core->tls_register("snd_cmdbuffer", NULL, snd__cmdbuffer_init);
+
     return true;
 }
 
 static void snd__release() {
     saudio_shutdown();
+
+    if (g_snd.cmd_buffers) {
+        for (int i = 0; i < g_snd.num_cmdbuffers; i++) {
+            snd__cmdbuffer* cb = g_snd.cmd_buffers[i];
+            if (cb) {
+                sx_array_free(g_snd_alloc, cb->params_buff);
+                sx_array_free(g_snd_alloc, cb->cmds);
+                sx_free(g_snd_alloc, cb);
+            }
+        }
+        sx_free(g_snd_alloc, g_snd.cmd_buffers);
+    }
 
     if (g_snd.beep_src.id) {
         snd__destroy_dummy_source(g_snd.beep_src);
@@ -828,13 +897,6 @@ static void snd__resume(rizz_snd_instance insthandle) {
     if (sx_handle_valid(g_snd.instance_handles, insthandle.id)) {
         snd__queue_play(insthandle);
     }
-}
-
-static float snd__source_duration(rizz_snd_source srchandle) {
-    sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
-
-    snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
-    return (float)src->num_frames / (float)src->sample_rate;
 }
 
 static void snd__bus_stop(int bus) {
@@ -1078,9 +1140,9 @@ static void snd__plot_samples_wav(const char* label, const float* samples, int n
         num_values = 20;
     float* values = sx_malloc(tmp_alloc, sizeof(float) * num_values * 2);
     sx_assert(values);
-    int   block_sz = num_samples / num_values;
+    int          block_sz = num_samples / num_values;
     const float* plot_samples = samples;
-    float block_sz_rcp = 1.0f / (float)block_sz;
+    float        block_sz_rcp = 1.0f / (float)block_sz;
     for (int i = 0; i < num_values; i++) {
         float _max = -FLT_MAX;
         float _min = FLT_MAX;
@@ -1208,6 +1270,13 @@ static void snd__show_mixer_tab_contents() {
     }
 
     the_core->tmp_alloc_pop();
+}
+
+static float snd__source_duration(rizz_snd_source srchandle) {
+    sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
+
+    snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
+    return (float)src->num_frames / (float)src->sample_rate;
 }
 
 static void snd__show_sources_tab_contents() {
@@ -1358,19 +1427,320 @@ static void snd__bus_set_max_lanes(int bus, int max_lanes) {
     }
 }
 
+static float snd__source_volume(rizz_snd_source srchandle) {
+    sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
 
-static rizz_api_snd the__snd = { .play = snd__play,
+    snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
+    return src->volume;
+}
+
+static void snd__source_stop(rizz_snd_source srchandle) {
+    sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
+
+    snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
+
+    int c = g_snd.num_plays;
+    for (int i = 0; i < c; i++) {
+        rizz_snd_instance insthandle = g_snd.playlist[i];
+        sx_assert_rel(sx_handle_valid(g_snd.instance_handles, insthandle.id));
+        snd__instance* inst = &g_snd.instances[sx_handle_index(insthandle.id)];
+        if (inst->srchandle.id == srchandle.id) {
+            sx_swap(g_snd.playlist[i], g_snd.playlist[c - 1], rizz_snd_instance);
+            snd__destroy_instance(insthandle, true);
+            --c;
+            break;
+        }
+    }
+    g_snd.num_plays = c;
+}
+
+static bool snd__source_looping(rizz_snd_source srchandle) {
+    sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
+    snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
+    return src->flags & SND_SOURCEFLAG_LOOPING;
+}
+
+static void snd__source_set_looping(rizz_snd_source srchandle, bool loop) {
+    sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
+    snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
+    if (loop) {
+        src->flags |= SND_SOURCEFLAG_LOOPING;
+    } else {
+        src->flags &= ~SND_SOURCEFLAG_LOOPING;
+    }
+}
+
+static void snd__source_set_singleton(rizz_snd_source srchandle, bool singleton) {
+    sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
+    snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
+    if (singleton) {
+        src->flags |= SND_SOURCEFLAG_SINGLETON;
+    } else {
+        src->flags &= ~SND_SOURCEFLAG_SINGLETON;
+    }
+}
+
+static void snd__source_set_volume(rizz_snd_source srchandle, float vol) {
+    sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
+    snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
+    src->volume = sx_clamp(vol, 0.0f, 1.2f);
+}
+
+static inline uint8_t* snd__cb_alloc_params_buff(snd__cmdbuffer* cb, int size, int* offset) {
+    uint8_t* ptr = sx_array_add(g_snd_alloc, cb->params_buff,
+                                sx_align_mask(size, SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT - 1));
+    if (!ptr) {
+        sx_out_of_memory();
+        return NULL;
+    }
+
+    *offset = (int)(intptr_t)(ptr - cb->params_buff);
+    return ptr;
+}
+
+typedef struct snd__play_params {
+    rizz_snd_source src;
+    int             bus;
+    float           vol;
+    float           pan;
+    float           wait_tm;
+    bool            paused;
+} snd__play_params;
+
+static void snd__cb_play(rizz_snd_source src, int bus, float volume, float pan, bool paused) {
+    snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
+    sx_assert(cb->cmd_idx < INT_MAX);
+
+    int      offset;
+    uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(snd__play_params), &offset);
+    sx_assert(buff);
+
+    snd__cmdheader hdr = { .cmd = SND_COMMAND_PLAY,
+                           .cmdbuffer_idx = cb->index,
+                           .params_offset = offset };
+    sx_array_push(g_snd_alloc, cb->cmds, hdr);
+    ++cb->cmd_idx;
+
+    *((snd__play_params*)buff) =
+        (snd__play_params){ .src = src, .bus = bus, .vol = volume, .pan = pan, .paused = paused };
+}
+
+static uint8_t* snd__cb_run_play(uint8_t* buff) {
+    snd__play_params* p = (snd__play_params*)buff;
+    buff += sizeof(snd__play_params);
+    snd__play(p->src, p->bus, p->vol, p->pan, p->paused);
+    return buff;
+}
+
+static void snd__cb_play_clocked(rizz_snd_source src, float wait_tm, int bus, float volume,
+                                 float pan) {
+    snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
+    sx_assert(cb->cmd_idx < INT_MAX);
+
+    int      offset;
+    uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(snd__play_params), &offset);
+    sx_assert(buff);
+
+    snd__cmdheader hdr = { .cmd = SND_COMMAND_PLAY_CLOCKED,
+                           .cmdbuffer_idx = cb->index,
+                           .params_offset = offset };
+    sx_array_push(g_snd_alloc, cb->cmds, hdr);
+    ++cb->cmd_idx;
+
+    *((snd__play_params*)buff) =
+        (snd__play_params){ .src = src, .bus = bus, .vol = volume, .pan = pan, .wait_tm = wait_tm };
+}
+
+static uint8_t* snd__cb_run_play_clocked(uint8_t* buff) {
+    snd__play_params* p = (snd__play_params*)buff;
+    buff += sizeof(snd__play_params);
+    snd__play_clocked(p->src, p->wait_tm, p->bus, p->vol, p->pan);
+    return buff;
+}
+
+static void snd__cb_bus_stop(int bus) {
+    snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
+    sx_assert(cb->cmd_idx < INT_MAX);
+
+    int      offset;
+    uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(int), &offset);
+    sx_assert(buff);
+
+    snd__cmdheader hdr = { .cmd = SND_COMMAND_BUS_STOP,
+                           .cmdbuffer_idx = cb->index,
+                           .params_offset = offset };
+    sx_array_push(g_snd_alloc, cb->cmds, hdr);
+    ++cb->cmd_idx;
+
+    *((int*)buff) = bus;
+}
+
+static uint8_t* snd__cb_run_bus_stop(uint8_t* buff) {
+    int bus_id = *((int*)buff);
+    buff += sizeof(int);
+    snd__bus_stop(bus_id);
+    return buff;
+}
+
+static void snd__cb_set_master_volume(float volume) {
+    snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
+    sx_assert(cb->cmd_idx < INT_MAX);
+
+    int      offset;
+    uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(int), &offset);
+    sx_assert(buff);
+
+    snd__cmdheader hdr = { .cmd = SND_COMMAND_SET_MASTER_VOLUME,
+                           .cmdbuffer_idx = cb->index,
+                           .params_offset = offset };
+    sx_array_push(g_snd_alloc, cb->cmds, hdr);
+    ++cb->cmd_idx;
+
+    *((float*)buff) = volume;
+}
+
+static uint8_t* snd__cb_run_set_master_volume(uint8_t* buff) {
+    float vol = *((float*)buff);
+    buff += sizeof(float);
+    snd__set_master_volume(vol);
+    return buff;
+}
+
+static void snd__cb_set_master_pan(float pan) {
+    snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
+    sx_assert(cb->cmd_idx < INT_MAX);
+
+    int      offset;
+    uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(int), &offset);
+    sx_assert(buff);
+
+    snd__cmdheader hdr = { .cmd = SND_COMMAND_SET_MASTER_PAN,
+                           .cmdbuffer_idx = cb->index,
+                           .params_offset = offset };
+    sx_array_push(g_snd_alloc, cb->cmds, hdr);
+    ++cb->cmd_idx;
+
+    *((float*)buff) = pan;
+}
+
+static uint8_t* snd__cb_run_set_master_pan(uint8_t* buff) {
+    float pan = *((float*)buff);
+    buff += sizeof(float);
+    snd__set_master_pan(pan);
+    return buff;
+}
+
+static void snd__cb_source_stop(rizz_snd_source src) {
+    snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
+    sx_assert(cb->cmd_idx < INT_MAX);
+
+    int      offset;
+    uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(rizz_snd_source), &offset);
+    sx_assert(buff);
+
+    snd__cmdheader hdr = { .cmd = SND_COMMAND_SOURCE_STOP,
+                           .cmdbuffer_idx = cb->index,
+                           .params_offset = offset };
+    sx_array_push(g_snd_alloc, cb->cmds, hdr);
+    ++cb->cmd_idx;
+
+    *((rizz_snd_source*)buff) = src;
+}
+
+static uint8_t* snd__cb_run_source_stop(uint8_t* buff) {
+    rizz_snd_source src = *((rizz_snd_source*)buff);
+    buff += sizeof(rizz_snd_source);
+    snd__source_stop(src);
+    return buff;
+}
+
+static void snd__cb_source_set_volume(rizz_snd_source src, float vol) {
+    snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
+    sx_assert(cb->cmd_idx < INT_MAX);
+
+    int      offset;
+    uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(rizz_snd_source) + sizeof(float), &offset);
+    sx_assert(buff);
+
+    snd__cmdheader hdr = { .cmd = SND_COMMAND_SOURCE_SET_VOLUME,
+                           .cmdbuffer_idx = cb->index,
+                           .params_offset = offset };
+    sx_array_push(g_snd_alloc, cb->cmds, hdr);
+    ++cb->cmd_idx;
+
+    *((rizz_snd_source*)buff) = src;
+    buff += sizeof(rizz_snd_source);
+    *((float*)buff) = vol;
+}
+
+static uint8_t* snd__cb_run_source_set_volume(uint8_t* buff) {
+    rizz_snd_source src = *((rizz_snd_source*)buff);
+    buff += sizeof(rizz_snd_source);
+    float vol = *((float*)buff);
+    buff += sizeof(float);
+    snd__source_set_volume(src, vol);
+    return buff;
+}
+
+static const snd__run_command_cb k_snd_run_cbs[_SND_COMMAND_COUNT] = {
+    snd__cb_run_play,
+    snd__cb_run_play_clocked,
+    snd__cb_run_bus_stop,
+    snd__cb_run_set_master_volume,
+    snd__cb_run_set_master_pan,
+    snd__cb_run_source_stop,
+    snd__cb_run_source_set_volume
+};
+
+static void snd__execute_command_buffers() {
+    static_assert((sizeof(k_snd_run_cbs) / sizeof(snd__run_command_cb)) == _SND_COMMAND_COUNT,
+                  "k_snd_run_cbs must match snd__command");
+
+    for (int i = 0, c = g_snd.num_cmdbuffers; i < c; i++) {
+        snd__cmdbuffer* cb = g_snd.cmd_buffers[i];
+        if (!cb) {
+            continue;
+        }
+
+        for (int k = 0, kc = sx_array_count(cb->cmds); k < kc; k++) {
+            const snd__cmdheader* hdr = &cb->cmds[k];
+            k_snd_run_cbs[hdr->cmd](&cb->params_buff[hdr->params_offset]);
+        }
+
+        // reset
+        sx_array_clear(cb->params_buff);
+        sx_array_clear(cb->cmds);
+        cb->cmd_idx = 0;
+    }
+}
+
+static rizz_api_snd the__snd = { .queued = { .play = snd__cb_play,
+                                             .play_clocked = snd__cb_play_clocked,
+                                             .bus_stop = snd__cb_bus_stop,
+                                             .set_master_volume = snd__cb_set_master_volume,
+                                             .set_master_pan = snd__cb_set_master_pan,
+                                             .source_stop = snd__cb_source_stop,
+                                             .source_set_volume = snd__cb_source_set_volume },
+                                 .play = snd__play,
                                  .play_clocked = snd__play_clocked,
                                  .show_debugger = snd__show_debugger,
+                                 .bus_set_max_lanes = snd__bus_set_max_lanes,
                                  .master_volume = snd__master_volume,
                                  .set_master_volume = snd__set_master_volume,
                                  .master_pan = snd__master_pan,
                                  .set_master_pan = snd__set_master_pan,
-                                 .bus_set_max_lanes = snd__bus_set_max_lanes };
+                                 .source_duration = snd__source_duration,
+                                 .source_volume = snd__source_volume,
+                                 .source_stop = snd__source_stop,
+                                 .source_looping = snd__source_looping,
+                                 .source_set_looping = snd__source_set_looping,
+                                 .source_set_singleton = snd__source_set_singleton,
+                                 .source_set_volume = snd__source_set_volume };
 
 rizz_plugin_decl_main(sound, plugin, e) {
     switch (e) {
     case RIZZ_PLUGIN_EVENT_STEP: {
+        snd__execute_command_buffers();
         snd__update((float)sx_tm_sec(the_core->delta_tick()));
         break;
     }

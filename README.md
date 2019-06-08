@@ -30,7 +30,6 @@ This is not a game engine, it's a relatively low-level framework for programmers
 
 #### Graphics
 - *Multiple graphics API support*: Metal (iOS, MacOS). OpenGL-ES 2/3 (Android). Direct3D11 (Windows), OpenGL 3.3 (Linux)
-- *Draw call submission using multiple threads*: Draw calls can be queued within multiple threads for final submission
 - *Portable shaders*: Write shaders once in GLSL, toolset will translate the shader to other platform APIs.
 - *Multi-threaded GPU command-buffer*: Draw commands can be submitted by multiple threads.
 

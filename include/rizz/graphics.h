@@ -200,8 +200,7 @@ typedef struct rizz_gfx_trace_info {
 
 typedef struct sjson_context sjson_context;    // shader_parse_reflection
 
-// Immediate API: access directly to GPU graphics API. this is actually a thin wrapper over
-// sokol_gfx
+// Immediate API: access directly to GPU graphics API. this is actually a thin wrapper over backend
 //                Calls are executed immediately and sequentially, unlike deferred API (see below)
 // Note: this API is NOT multi-threaded
 //       Immediate mode is more of a lower-level graphics API
@@ -300,7 +299,7 @@ typedef struct rizz_api_gfx_immediate {
 //        rendering stages graph Stages must be registered and setup before using deferred
 //        functions. (see below)
 //
-// Rule #1: in a worker thread (dispatched jobs), always end_stage before spawning and waiting for
+// Rule #1: in a worker threads, always end_stage before spawning and waiting for
 //          another job because the command-buffer may change on thread-switch and drawing will be
 //          messed up
 //          Example:
@@ -339,6 +338,7 @@ typedef struct rizz_api_gfx_immediate {
 //
 // Here's multi-threaded command-queue work flow for clarification:
 //      engine:frame {
+//          execute_command_buffers();  // render data from previous frame
 //          update_input();
 //          update_plugins();
 //          update_game() {
@@ -346,11 +346,11 @@ typedef struct rizz_api_gfx_immediate {
 //              spawn_some_render_jobs();
 //              do_whatever();
 //          }
-//          execute_command_buffers();
 //      }
 //
-// As you can see in the pseudo-code above, execute_command_buffers() happens after user update and
-// render So it's your responsibility to not destroy graphics resources where they are used in the
+// As you can see in the pseudo-code above, execute_command_buffers() happens at the start of the
+// frame with the render-data submitted from the previous frame.
+// So it's your responsibility to not destroy graphics resources where they are used in the
 // current frame
 //
 typedef struct rizz_api_gfx_staged {

@@ -117,6 +117,7 @@ typedef struct rizz_api_core {
     sx_job_t (*job_dispatch_by_tags)(const sx_job_desc* descs, int count, uint32_t tags);
     void (*job_wait_and_del)(sx_job_t job);
     bool (*job_test_and_del)(sx_job_t job);
+    int (*job_num_workers)();
 
     void (*coro_invoke)(void (*coro_cb)(rizz__coro_entry), void* user);
     void (*coro_end)(void* pfrom);

@@ -968,29 +968,33 @@ void rizz__core_frame() {
         g_core.fps_frame = (float)fps;
     }
 
-    //
-    rizz__http_update();
-    rizz__vfs_async_update();
-    rizz__asset_update();
-    sx_coro_update(g_core.coro, dt);
-    rizz__plugin_update(dt);
+    // submit render commands to the gpu
+    // currently, we are submitting the calls from the previous frame
+    // because submitting commands
     rizz__gfx_trace_reset_frame_stats();
-
-    //
     rizz__gfx_execute_command_buffers();
     the_imgui = the__plugin.get_api_byname("imgui", 0);
     if (the_imgui)
         the_imgui->Render();
 
-    // commit render
+    // commit render (metal only)
     the__gfx.imm.commit();
-
-    ++g_core.frame_idx;
 
     // reset temp allocators
     for (int i = 0, c = g_core.num_workers; i < c; i++) {
         sx_stackalloc_reset(&g_core.tmp_allocs[i].stack_alloc);
     }
+
+    // update internal sub-systems
+    rizz__http_update();
+    rizz__vfs_async_update();
+    rizz__asset_update();
+    sx_coro_update(g_core.coro, dt);
+
+    // update plugins and application
+    rizz__plugin_update(dt);
+
+    ++g_core.frame_idx;
 }
 
 static const sx_alloc* rizz__core_tmp_alloc_push() {
@@ -1045,6 +1049,10 @@ static void rizz__job_wait_and_del(sx_job_t job) {
 static bool rizz__job_test_and_del(sx_job_t job) {
     sx_assert(g_core.jobs);
     return sx_job_test_and_del(g_core.jobs, job);
+}
+
+static int rizz__job_num_workers() {
+    return g_core.num_workers;
 }
 
 static void rizz__begin_profile_sample(const char* name, uint32_t flags, uint32_t* hash_cache) {
@@ -1170,6 +1178,7 @@ rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .job_dispatch_by_tags = rizz__job_dispatch_by_tags,
                             .job_wait_and_del = rizz__job_wait_and_del,
                             .job_test_and_del = rizz__job_test_and_del,
+                            .job_num_workers = rizz__job_num_workers,
                             .coro_invoke = rizz__coro_invoke,
                             .coro_end = rizz__coro_end,
                             .coro_wait = rizz__coro_wait,
