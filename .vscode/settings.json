@@ -66,9 +66,9 @@
         "**/.hg": true,
         "**/CVS": true,
         "**/.DS_Store": true,
-        ".vscode/ipch/**": true,
         "bin/**": true,
         "build/**": true,
+        "build-vc16/**": true,
         "scripts/generators/fake_libc_include*": true,
         "misc/**": true
     },

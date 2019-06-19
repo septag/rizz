@@ -115,7 +115,8 @@ set(native_projects sx
                     rizz
                     imgui
                     sprite
-                    sound)
+                    sound
+                    input)
 
 # 3rdparty projects
 set(3rdparty_projects utf 
@@ -123,7 +124,8 @@ set(3rdparty_projects utf
                       cimgui
                       imguizmo
                       remotery
-                      efsw)
+                      efsw
+                      gainput)
 
 if (NOT ENABLE_HOT_LOADING)
     list(REMOVE_ITEM 3rdparty_projects efsw)
