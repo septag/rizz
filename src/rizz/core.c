@@ -16,7 +16,6 @@
 #include "sx/allocator.h"
 #include "sx/array.h"
 #include "sx/atomic.h"
-#include "sx/fiber.h"
 #include "sx/hash.h"
 #include "sx/jobs.h"
 #include "sx/os.h"
@@ -1091,9 +1090,8 @@ static void rizz__get_mem_info(rizz_mem_info* info) {
     info->heap_count = g_core.heap_count;
 }
 
-static void rizz__coro_invoke(void (*coro_cb)(rizz__coro_entry), void* user) {
-    rizz_log_verbose("run coro: %p", coro_cb);
-    sx__coro_invoke(g_core.coro, (sx_fiber_cb*)coro_cb, user);
+static void rizz__coro_invoke(void (*coro_cb)(sx_fiber_transfer), void* user) {
+    sx__coro_invoke(g_core.coro, coro_cb, user);
 }
 
 static void rizz__coro_end(void* pfrom) {
