@@ -203,6 +203,7 @@ typedef struct rizz_app_event {
     int                 window_height;
     int                 framebuffer_width;
     int                 framebuffer_height;
+    void*               native_event;
 } rizz_app_event;
 
 typedef void(rizz_app_event_cb)(const rizz_app_event*);
@@ -217,6 +218,7 @@ typedef struct rizz_api_app {
     bool (*keyboard_shown)();
     bool (*key_pressed)(rizz_keycode key);
     const char* (*name)();
+    const void* (*window_handle)();
 } rizz_api_app;
 
 #ifdef RIZZ_INTERNAL_API

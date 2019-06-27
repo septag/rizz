@@ -70,8 +70,7 @@
         "build/**": true,
         "build-vc16/**": true,
         "scripts/generators/fake_libc_include*": true,
-        "misc/**": true
-    },
-    "C_Cpp.configurationWarnings": "Disabled",
-    "C_Cpp.clang_format_style": "file"
+        "misc/**": true,
+        "compile_commands.json": true
+    }
 }

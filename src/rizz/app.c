@@ -366,6 +366,12 @@ static bool rizz__app_key_pressed(rizz_keycode key) {
     return g_app.keys_pressed[key];
 }
 
+static const void* rizz__window_handle() {
+#if SX_PLATFORM_WINDOWS
+    return sapp_win32_get_hwnd();
+#endif
+}
+
 void rizz__app_init_gfx_desc(sg_desc* desc) {
     sx_assert(sapp_isvalid());
 
@@ -396,4 +402,5 @@ rizz_api_app the__app = { .width = sapp_width,
                           .show_keyboard = sapp_show_keyboard,
                           .keyboard_shown = sapp_keyboard_shown,
                           .name = rizz__app_name,
-                          .key_pressed = rizz__app_key_pressed };
+                          .key_pressed = rizz__app_key_pressed,
+                          .window_handle = rizz__window_handle };

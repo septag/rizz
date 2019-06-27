@@ -13,6 +13,7 @@
 #include "rizz/imgui.h"
 #include "rizz/plugin.h"
 #include "rizz/vfs.h"
+#include "rizz/input.h"
 
 RIZZ_STATE static rizz_api_core*        the_core;
 RIZZ_STATE static rizz_api_gfx*         the_gfx;
@@ -23,13 +24,23 @@ RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
 RIZZ_STATE static rizz_api_camera*      the_camera;
 RIZZ_STATE static rizz_api_vfs*         the_vfs;
 
+RIZZ_STATE static rizz_api_input* the_input;
+
 RIZZ_STATE rizz_gfx_stage g_stage;
+
+RIZZ_STATE rizz_input_device g_pad0;
+RIZZ_STATE rizz_input_device g_pad;
 
 static bool init() {
     // register main graphics stage.
     // at least one stage should be registered if you want to draw anything
     g_stage = the_gfx->stage_register("main", (rizz_gfx_stage){ .id = 0 });
     sx_assert(g_stage.id);
+
+	g_pad0 = the_input->create_device(RIZZ_INPUT_DEVICETYPE_PAD);
+	g_pad = the_input->create_device(RIZZ_INPUT_DEVICETYPE_PAD);
+    the_input->map_bool(g_pad, RIZZ_INPUT_PADBUTTON_A, 666);
+    the_input->map_float(g_pad, RIZZ_INPUT_PADBUTTON_LEFTSTICKX, 667, 0, 1.0f, NULL, NULL);
     return true;
 }
 
@@ -50,6 +61,13 @@ static void render() {
     the_imgui->SetNextWindowContentSize(sx_vec2f(100.0f, 50.0f));
     if (the_imgui->Begin("Hello", NULL, 0)) {
         the_imgui->LabelText("Fps", "%.3f", the_core->fps());
+
+		bool dev_avail = the_input->device_avail(g_pad);
+		the_imgui->Checkbox("avail?", &dev_avail);
+        bool button = the_input->get_bool(666);
+        the_imgui->Checkbox("A", &button);
+        float analogx = the_input->get_float(667);
+        the_imgui->SliderFloat("AnalogueX", &analogx, -1.0f, 1.0f, "%.2f", 1.0f);
     }
     the_imgui->End();
 }
@@ -67,6 +85,7 @@ rizz_plugin_decl_main(hello, plugin, e) {
         the_gfx = plugin->api->get_api(RIZZ_API_GFX, 0);
         the_app = plugin->api->get_api(RIZZ_API_APP, 0);
         the_imgui = plugin->api->get_api_byname("imgui", 0);
+        the_input = plugin->api->get_api_byname("input", 0);
 
         init();
         break;
@@ -112,4 +131,5 @@ rizz_game_decl_config(conf) {
     conf->multisample_count = 4;
     conf->swap_interval = 2;
     conf->plugins[0] = "imgui";
+    conf->plugins[1] = "input";
 }

@@ -178,3 +178,9 @@ endif()
 # Use this command to assign executable in BUNDLE=1 mode
 # rizz__add_example(03-drawsprite)
 # rizz_set_executable(03-drawsprite PLUGINS sprite imgui NAME drawsprite)
+
+# copy compile_commands.json from build/ to parent in order for clangd to work properly
+if (CMAKE_EXPORT_COMPILE_COMMANDS) 
+    add_custom_target(compile_commands COMMAND ${CMAKE_COMMAND} -E 
+        copy ${CMAKE_CURRENT_SOURCE_DIR}/build/compile_commands.json ${CMAKE_CURRENT_SOURCE_DIR})
+endif()

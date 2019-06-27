@@ -28,6 +28,7 @@ typedef enum rizz_mem_id {
     RIZZ_MEMID_OTHER,
     RIZZ_MEMID_DEBUG,
     RIZZ_MEMID_TOOLSET,
+	RIZZ_MEMID_INPUT,
     RIZZ_MEMID_GAME,
     _RIZZ_MEMID_COUNT
 } rizz_mem_id;

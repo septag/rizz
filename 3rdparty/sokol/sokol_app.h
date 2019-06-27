@@ -588,6 +588,7 @@ typedef struct sapp_event {
     int window_height;
     int framebuffer_width;
     int framebuffer_height;
+	void* native_event;
 } sapp_event;
 
 typedef struct sapp_desc {
@@ -799,6 +800,7 @@ typedef struct {
     sapp_event event;
     sapp_desc desc;
     sapp_keycode keycodes[SAPP_MAX_KEYCODES];
+	void* native_event;
 } _sapp_state;
 static _sapp_state _sapp;
 
@@ -902,6 +904,7 @@ _SOKOL_PRIVATE void _sapp_init_event(sapp_event_type type) {
     _sapp.event.window_height = _sapp.window_height;
     _sapp.event.framebuffer_width = _sapp.framebuffer_width;
     _sapp.event.framebuffer_height = _sapp.framebuffer_height;
+	_sapp.event.native_event = _sapp.native_event;
 }
 
 _SOKOL_PRIVATE bool _sapp_events_enabled(void) {
@@ -4077,6 +4080,8 @@ _SOKOL_PRIVATE void _sapp_run(const sapp_desc* desc) {
     bool done = false;
     while (!done) {
         MSG msg;
+        _sapp.native_event = &msg;
+
         while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
             if (WM_QUIT == msg.message) {
                 done = true;
