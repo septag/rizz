@@ -39,6 +39,7 @@ static bool init()
 
     the_input->create_device(RIZZ_INPUT_DEVICETYPE_MOUSE);
     rizz_input_device keyboard = the_input->create_device(RIZZ_INPUT_DEVICETYPE_KEYBOARD);
+    the_input->create_device(RIZZ_INPUT_DEVICETYPE_PAD);
     g_pad0 = the_input->create_device(RIZZ_INPUT_DEVICETYPE_PAD);
     // the_input->map_bool(g_pad0, RIZZ_INPUT_PADBUTTON_A, 666);
     // the_input->map_float(g_pad0, RIZZ_INPUT_PADBUTTON_LEFTSTICKX, 667, 0, 1.0f, NULL, NULL);

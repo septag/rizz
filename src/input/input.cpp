@@ -54,6 +54,7 @@ class ga_allocator : public Allocator
 {
     void* Allocate(size_t size, size_t align) override
     {
+        sx_unused(align);        
         sx_assert(g_input_alloc);
         if (!size) {
             return nullptr;
@@ -224,7 +225,6 @@ static rizz_input_device input__create_device(rizz_input_device_type type)
     case RIZZ_INPUT_DEVICETYPE_PAD:
         device_id = g_input.mgr->CreateDevice<InputDevicePad>();
         device_name = "gamepad";
-        g_input.mgr->GetDevice(device_id)->SetDebugRenderingEnabled(true);
         break;
 
     case RIZZ_INPUT_DEVICETYPE_TOUCH:

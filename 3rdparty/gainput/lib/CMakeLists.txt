@@ -22,7 +22,6 @@ endif()
 
 if(WIN32)
 	target_link_libraries(gainput PUBLIC ${XINPUT} ws2_32)
-	add_definitions(-DGAINPUT_LIB_DYNAMIC=1)
 elseif(ANDROID)
 	target_link_libraries(gainput PUBLIC native_app_glue log android)
 elseif(APPLE)

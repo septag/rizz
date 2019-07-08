@@ -219,7 +219,6 @@ typedef struct rizz_api_app {
     bool (*keyboard_shown)();
     bool (*key_pressed)(rizz_keycode key);
     const char* (*name)();
-    const void* (*window_handle)();
 } rizz_api_app;
 
 #ifdef RIZZ_INTERNAL_API
