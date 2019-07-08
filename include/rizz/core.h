@@ -6,6 +6,7 @@
 
 #include "types.h"
 
+#include "sx/fiber.h"
 #include "sx/jobs.h"
 
 #define RIZZ_MAX_TEMP_ALLOCS 32
@@ -63,12 +64,6 @@ typedef struct rizz_mem_info {
     int heap_count;
 } rizz_mem_info;
 
-// internal: same as sx_fiber_transfer
-typedef struct {
-    void* from;
-    void* user;
-} rizz__coro_entry;
-
 typedef struct rizz_api_core {
     // heap allocator: thread-safe, allocates dynamically from heap (libc->malloc)
     const sx_alloc* (*heap_alloc)();
@@ -118,7 +113,7 @@ typedef struct rizz_api_core {
     bool (*job_test_and_del)(sx_job_t job);
     int (*job_num_workers)();
 
-    void (*coro_invoke)(void (*coro_cb)(rizz__coro_entry), void* user);
+    void (*coro_invoke)(void (*coro_cb)(sx_fiber_transfer), void* user);
     void (*coro_end)(void* pfrom);
     void (*coro_wait)(void* pfrom, int msecs);
     void (*coro_yield)(void* pfrom, int nframes);

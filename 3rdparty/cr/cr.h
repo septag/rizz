@@ -1259,7 +1259,7 @@ bool cr_is_empty(const void *const buf, int64_t len) {
     }
 
     bool r = false;
-    auto c = (const char *const)buf;
+    auto c = (const char *)buf;
     for (int i = 0; i < len; ++i) {
         r |= c[i];
     }
