@@ -68,9 +68,10 @@
         "**/.DS_Store": true,
         "bin/**": true,
         "build/**": true,
-        "build-vc16/**": true,
+        "build-*/**": true,
         "scripts/generators/fake_libc_include*": true,
         "misc/**": true,
         "compile_commands.json": true
-    }
+    },
+    "cmake.configureOnOpen": true
 }

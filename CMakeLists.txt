@@ -78,6 +78,10 @@ else()
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu11")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fno-rtti -fno-exceptions")
     rizz__remove_compile_options(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" "-fexceptions -frtti")
+
+    if (CMAKE_C_COMPILER_ID MATCHES "GNU")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-format-truncation")
+    endif()    
 endif()
 
 get_directory_property(has_parent PARENT_DIRECTORY)
@@ -157,9 +161,6 @@ foreach (native_project ${native_projects})
             -Wstrict-aliasing 
             -Werror 
             -Wno-missing-field-initializers)
-        if (CMAKE_C_COMPILER_ID MATCHES "GNU")
-            target_compile_options(${native_project} PRIVATE -Wno-format-truncation)
-        endif()
     endif()
 endforeach()
 

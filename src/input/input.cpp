@@ -387,7 +387,7 @@ static void input__show_debugger(bool* p_open)
                                          sx_vec2f(item.params.x1, item.params.y1), invert_y),
                     convert_debug_coords(window_size, window_pos,
                                          sx_vec2f(item.params.x2, item.params.y2), invert_y),
-                    0xff00ffff, 1.0f);
+                    0xff00ffff, 4.0f);
                 break;
             case input__debug_item::Text:
                 the_imgui->ImDrawList_AddText(
