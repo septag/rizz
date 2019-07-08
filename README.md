@@ -112,6 +112,7 @@ how to get started.
 - [stb](https://github.com/nothings/stb): stb single-file public domain libraries for C/C++
 - [sort](https://github.com/swenson/sort): Sorting routine implementations in "template" C
 - [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo): 3D gizmo for imgui
+- [gainput](https://github.com/jkuhlmann/gainput): Input library for games
 
 [TODO](TODO.md)
 ----
