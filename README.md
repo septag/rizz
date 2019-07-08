@@ -37,6 +37,7 @@ This is not a game engine, it's a relatively low-level framework for programmers
 - [imgui](src/imgui): Dear-imgui plugin with some utility API
 - [sprite](src/sprite): 2D Sprite system
 - [sound](src/sound): Simple sound system 
+- [input](src/input): Input system with gamepad and touch support
 
 #### Debugging and Profiling
 - *Remote Profiler*: Integrated *Remotery* for remote debugger/command console and log viewer.
