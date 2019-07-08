@@ -554,6 +554,8 @@ static void input__dispatch_event(const rizz_app_event* e)
 #elif SX_PLATFORM_LINUX
     XEvent* ev = (XEvent*)e->native_event;
     g_input.mgr->HandleEvent(*ev);
+#else
+    sx_unused(e);
 #endif
 }
 

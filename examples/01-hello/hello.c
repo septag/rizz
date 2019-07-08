@@ -37,7 +37,7 @@ static bool init()
     g_stage = the_gfx->stage_register("main", (rizz_gfx_stage){ .id = 0 });
     sx_assert(g_stage.id);
 
-    the_input->create_device(RIZZ_INPUT_DEVICETYPE_MOUSE);
+    //the_input->create_device(RIZZ_INPUT_DEVICETYPE_MOUSE);
     rizz_input_device keyboard = the_input->create_device(RIZZ_INPUT_DEVICETYPE_KEYBOARD);
     the_input->create_device(RIZZ_INPUT_DEVICETYPE_PAD);
     g_pad0 = the_input->create_device(RIZZ_INPUT_DEVICETYPE_PAD);
