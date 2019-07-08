@@ -42,18 +42,19 @@
 #endif
 
 typedef struct {
-    rizz_config     conf;
+    rizz_config conf;
     const sx_alloc* alloc;
-    char            game_filepath[RIZZ_MAX_PATH];
-    sx_vec2         window_size;
-    bool            keys_pressed[RIZZ_APP_MAX_KEYCODES];
+    char game_filepath[RIZZ_MAX_PATH];
+    sx_vec2 window_size;
+    bool keys_pressed[RIZZ_APP_MAX_KEYCODES];
 } rizz__app;
 
 static rizz__app g_app;
 
 SX_PRAGMA_DIAGNOSTIC_PUSH();
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
-static void* rizz__calloc(const sx_alloc* alloc, size_t num, size_t size) {
+static void* rizz__calloc(const sx_alloc* alloc, size_t num, size_t size)
+{
     void* p = sx_malloc(alloc, num * size);
     if (p)
         sx_memset(p, 0x0, num * size);
@@ -93,7 +94,8 @@ SX_PRAGMA_DIAGNOSTIC_POP();
 RIZZ_PLUGIN_EXPORT void rizz_game_config(rizz_config*, int argc, char* argv[]);
 #endif
 
-static void rizz__app_init(void) {
+static void rizz__app_init(void)
+{
     // Initialize engine components
     if (!rizz__core_init(&g_app.conf)) {
         rizz_log_error("core init failed");
@@ -132,15 +134,18 @@ static void rizz__app_init(void) {
     }
 }
 
-static void rizz__app_frame(void) {
+static void rizz__app_frame(void)
+{
     rizz__core_frame();
 }
 
-static void rizz__app_cleanup(void) {
+static void rizz__app_cleanup(void)
+{
     rizz__core_release();
 }
 
-static void rizz__app_event(const sapp_event* e) {
+static void rizz__app_event(const sapp_event* e)
+{
     static_assert(sizeof(rizz_app_event) == sizeof(sapp_event),
                   "sapp_event is not identical to rizz_app_event");
     static_assert(_RIZZ_APP_EVENTTYPE_NUM == _SAPP_EVENTTYPE_NUM,
@@ -175,24 +180,27 @@ static void rizz__app_event(const sapp_event* e) {
     rizz__plugin_broadcast_event((const rizz_app_event*)e);
 }
 
-static void rizz__app_fail(const char* msg) {
+static void rizz__app_fail(const char* msg)
+{
     rizz_log_error(msg);
 }
 
-static void rizz__app_show_help(sx_cmdline_context* cmdline) {
+static void rizz__app_show_help(sx_cmdline_context* cmdline)
+{
     char buff[4096];
     sx_cmdline_create_help_string(cmdline, buff, sizeof(buff));
     puts(buff);
 }
 
 // Program's main entry point
-sapp_desc sokol_main(int argc, char* argv[]) {
+sapp_desc sokol_main(int argc, char* argv[])
+{
     g_app.alloc = sx_alloc_malloc();
 
     int profile_gpu = 0, dump_unused_assets = 0;
 
 #ifndef RIZZ_BUNDLE
-    int                  version = 0, show_help = 0;
+    int version = 0, show_help = 0;
     const sx_cmdline_opt opts[] = {
         { "version", 'V', SX_CMDLINE_OPTYPE_FLAG_SET, &version, 1, "Print version", 0x0 },
         { "run", 'r', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'r', "Game module to run", "filepath" },
@@ -206,7 +214,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
     sx_cmdline_context* cmdline =
         sx_cmdline_create_context(g_app.alloc, argc, (const char**)argv, opts);
 
-    int         opt;
+    int opt;
     const char* arg;
     const char* game_filepath = NULL;
 
@@ -258,7 +266,7 @@ sapp_desc sokol_main(int argc, char* argv[]) {
         exit(-1);
     }
 #else
-    const char*          game_filepath = argc > 0 ? argv[0] : "";
+    const char* game_filepath = argc > 0 ? argv[0] : "";
     rizz_game_config_cb* game_config_fn = rizz_game_config;
 #endif    // RIZZ_BUNDLE
 
@@ -354,25 +362,30 @@ sapp_desc sokol_main(int argc, char* argv[]) {
                     .gl_force_gles2 = (conf.app_flags & RIZZ_APP_FLAG_FORCE_GLES2) ? true : false };
 }
 
-static sx_vec2 rizz__app_sizef() {
+static sx_vec2 rizz__app_sizef()
+{
     return g_app.window_size;
 }
 
-static const char* rizz__app_name() {
+static const char* rizz__app_name()
+{
     return g_app.conf.app_name;
 }
 
-static bool rizz__app_key_pressed(rizz_keycode key) {
+static bool rizz__app_key_pressed(rizz_keycode key)
+{
     return g_app.keys_pressed[key];
 }
 
-static const void* rizz__window_handle() {
+static const void* rizz__window_handle()
+{
 #if SX_PLATFORM_WINDOWS
     return sapp_win32_get_hwnd();
 #endif
 }
 
-void rizz__app_init_gfx_desc(sg_desc* desc) {
+void rizz__app_init_gfx_desc(sg_desc* desc)
+{
     sx_assert(sapp_isvalid());
 
     sx_memset(desc, 0x0, sizeof(sg_desc));
@@ -386,11 +399,13 @@ void rizz__app_init_gfx_desc(sg_desc* desc) {
     desc->d3d11_depth_stencil_view_cb = sapp_d3d11_get_depth_stencil_view;
 }
 
-const void* rizz__app_d3d11_device() {
+const void* rizz__app_d3d11_device()
+{
     return sapp_d3d11_get_device();
 }
 
-const void* rizz__app_d3d11_device_context() {
+const void* rizz__app_d3d11_device_context()
+{
     return sapp_d3d11_get_device_context();
 }
 

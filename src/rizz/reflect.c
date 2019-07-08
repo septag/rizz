@@ -15,37 +15,38 @@
 
 #define DEFAULT_REG_SIZE 512
 
-typedef struct {
+typedef struct rizz__refl_struct {
     char type[32];
-    int  size;    // size of struct
-    int  num_fields;
+    int size;    // size of struct
+    int num_fields;
 } rizz__refl_struct;
 
-typedef struct {
+typedef struct rizz__refl_enum {
     char type[32];
     int* name_ids;    // index-to: rizz__reflect_context:regs
 } rizz__refl_enum;
 
-typedef struct {
+typedef struct rizz__refl_data {
     rizz_refl_info r;
-    int            base_id;
+    int base_id;
     char type[64];    // keep the raw type name, cuz pointer types have '*' in their type names
     char name[32];
     char base[32];
 } rizz__refl_data;
 
-typedef struct {
+typedef struct rizz__reflect_context {
     rizz__refl_struct* structs;
-    rizz__refl_enum*   enums;
-    rizz__refl_data*   regs;    // sx_array
-    const sx_alloc*    alloc;
-    sx_hashtbl*        reg_tbl;     // refl.name --> index(regs)
-    int                max_regs;    // =0 if unlimited
+    rizz__refl_enum* enums;
+    rizz__refl_data* regs;    // sx_array
+    const sx_alloc* alloc;
+    sx_hashtbl* reg_tbl;    // refl.name --> index(regs)
+    int max_regs;           // =0 if unlimited
 } rizz__reflect_context;
 
 static rizz__reflect_context g_reflect;
 
-bool rizz__refl_init(const sx_alloc* alloc, int max_regs) {
+bool rizz__refl_init(const sx_alloc* alloc, int max_regs)
+{
     g_reflect.max_regs = max_regs;
     g_reflect.alloc = alloc;
 
@@ -62,7 +63,8 @@ bool rizz__refl_init(const sx_alloc* alloc, int max_regs) {
     return true;
 }
 
-void rizz__refl_release() {
+void rizz__refl_release()
+{
     if (g_reflect.alloc) {
         const sx_alloc* alloc = g_reflect.alloc;
         if (g_reflect.reg_tbl)
@@ -97,17 +99,20 @@ static inline int rizz__refl_type_size(const char* type_name) {
 }
 // clang-format on
 
-static void* rizz__refl_get_func(const char* name) {
+static void* rizz__refl_get_func(const char* name)
+{
     int index = sx_hashtbl_find_get(g_reflect.reg_tbl, sx_hash_fnv32_str(name), -1);
     return (index != -1) ? (g_reflect.regs[index].r.any) : NULL;
 }
 
-static int rizz__refl_get_enum(const char* name, int not_found) {
+static int rizz__refl_get_enum(const char* name, int not_found)
+{
     int index = sx_hashtbl_find_get(g_reflect.reg_tbl, sx_hash_fnv32_str(name), -1);
     return (index != -1) ? (int)g_reflect.regs[index].r.offset : not_found;
 }
 
-static const char* rizz__refl_get_enum_name(const char* type, int val) {
+static const char* rizz__refl_get_enum_name(const char* type, int val)
+{
     for (int i = 0, c = sx_array_count(g_reflect.enums); i < c; i++) {
         if (sx_strequal(g_reflect.enums[i].type, type)) {
             int* name_ids = g_reflect.enums[i].name_ids;
@@ -122,8 +127,9 @@ static const char* rizz__refl_get_enum_name(const char* type, int val) {
     return "";
 }
 
-static void* rizz__refl_get_field(const char* base_type, void* obj, const char* name) {
-    int   len = sx_strlen(name) + sx_strlen(base_type) + 2;
+static void* rizz__refl_get_field(const char* base_type, void* obj, const char* name)
+{
+    int len = sx_strlen(name) + sx_strlen(base_type) + 2;
     char* base_name = (char*)alloca(len);
     sx_assert(base_name);
     sx_snprintf(base_name, len, "%s.%s", base_type, name);
@@ -133,7 +139,8 @@ static void* rizz__refl_get_field(const char* base_type, void* obj, const char* 
 
 static void rizz__refl_reg(rizz_refl_type internal_type, void* any, const char* type,
                            const char* name, const char* base, const char* desc, int size,
-                           int base_size) {
+                           int base_size)
+{
     if (g_reflect.max_regs > 0) {
         int count = sx_array_count(g_reflect.regs);
         sx_assert(g_reflect.max_regs > count);
@@ -149,7 +156,7 @@ static void rizz__refl_reg(rizz_refl_type internal_type, void* any, const char* 
     // for field types, we construct the name by "base.name"
     const char* key;
     if (internal_type == RIZZ_REFL_FIELD) {
-        int   len = sx_strlen(name) + sx_strlen(base) + 2;
+        int len = sx_strlen(name) + sx_strlen(base) + 2;
         char* base_name = (char*)alloca(len);
         sx_assert(base_name);
         sx_snprintf(base_name, len, "%s.%s", base, name);
@@ -293,7 +300,8 @@ static void rizz__refl_reg(rizz_refl_type internal_type, void* any, const char* 
     sx_hashtbl_add(g_reflect.reg_tbl, sx_hash_fnv32_str(key), id);
 }
 
-static int rizz__refl_size_of(const char* base_type) {
+static int rizz__refl_size_of(const char* base_type)
+{
     for (int i = 0, c = sx_array_count(g_reflect.structs); i < c; i++) {
         if (sx_strequal(g_reflect.structs[i].type, base_type))
             return g_reflect.structs[i].size;
@@ -303,7 +311,8 @@ static int rizz__refl_size_of(const char* base_type) {
 }
 
 static int rizz__refl_get_fields(const char* base_type, void* obj, rizz_refl_field* fields,
-                                 int max_fields) {
+                                 int max_fields)
+{
     int num_fields = 0;
     for (int i = 0, c = sx_array_count(g_reflect.regs); i < c; i++) {
         rizz__refl_data* r = &g_reflect.regs[i];
@@ -312,8 +321,8 @@ static int rizz__refl_get_fields(const char* base_type, void* obj, rizz_refl_fie
             rizz__refl_struct* s = &g_reflect.structs[r->base_id];
 
             if (fields && num_fields < max_fields) {
-                bool           value_nil = obj == NULL;
-                void*          value = (uint8_t*)obj + r->r.offset;
+                bool value_nil = obj == NULL;
+                void* value = (uint8_t*)obj + r->r.offset;
                 rizz_refl_info rinfo = { .any = r->r.any,
                                          .type = r->type,
                                          .name = r->name,
@@ -344,11 +353,13 @@ static int rizz__refl_get_fields(const char* base_type, void* obj, rizz_refl_fie
     return num_fields;
 }
 
-static int rizz__refl_reg_count() {
+static int rizz__refl_reg_count()
+{
     return sx_array_count(g_reflect.regs);
 }
 
-static bool rizz__refl_is_cstring(const rizz_refl_info* r) {
+static bool rizz__refl_is_cstring(const rizz_refl_info* r)
+{
     return sx_strequal(r->type, "char") && (r->flags & RIZZ_REFL_FLAG_IS_ARRAY);
 }
 

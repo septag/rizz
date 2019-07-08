@@ -42,12 +42,12 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 #define MAX_INDICES 98304    // 96k
 
 typedef struct rizz_api_gfx rizz_api_gfx;
-static void                 imgui__render(void);
+static void imgui__render(void);
 
-RIZZ_STATE static rizz_api_core*   the_core;
+RIZZ_STATE static rizz_api_core* the_core;
 RIZZ_STATE static rizz_api_plugin* the_plugin;
-RIZZ_STATE static rizz_api_gfx*    the_gfx;
-RIZZ_STATE static rizz_api_app*    the_app;
+RIZZ_STATE static rizz_api_gfx* the_gfx;
+RIZZ_STATE static rizz_api_app* the_app;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // API
@@ -562,44 +562,47 @@ SX_PRAGMA_DIAGNOSTIC_POP();
 #include rizz_shader_path(shaders_h, imgui.vert.h)
 
 typedef struct imgui__context {
-    ImGuiContext*    ctx;
-    ImDrawVert*      verts;
-    uint16_t*        indices;
-    sg_shader        shader;
-    sg_pipeline      pip;
-    sg_bindings      bind;
-    sg_pass_action   pass_action;
-    sg_image         font_tex;
-    bool             mouse_btn_down[RIZZ_APP_MAX_MOUSEBUTTONS];
-    bool             mouse_btn_up[RIZZ_APP_MAX_MOUSEBUTTONS];
+    ImGuiContext* ctx;
+    ImDrawVert* verts;
+    uint16_t* indices;
+    sg_shader shader;
+    sg_pipeline pip;
+    sg_bindings bind;
+    sg_pass_action pass_action;
+    sg_image font_tex;
+    bool mouse_btn_down[RIZZ_APP_MAX_MOUSEBUTTONS];
+    bool mouse_btn_up[RIZZ_APP_MAX_MOUSEBUTTONS];
     ImGuiMouseCursor last_cursor;
-    sg_imgui_t       sg_imgui;
+    sg_imgui_t sg_imgui;
 } imgui__context;
 
 typedef struct imgui__shader_uniforms {
     sx_vec2 disp_size;
-    float   padd[2];
+    float padd[2];
 } imgui__shader_uniforms;
 
 static rizz_vertex_layout k__imgui_vertex = {
     .attrs[0] = { .semantic = "POSITION", .offset = offsetof(ImDrawVert, pos) },
     .attrs[1] = { .semantic = "TEXCOORD", .offset = offsetof(ImDrawVert, uv) },
-    .attrs[2] = { .semantic = "COLOR", 
+    .attrs[2] = { .semantic = "COLOR",
                   .offset = offsetof(ImDrawVert, col),
                   .format = SG_VERTEXFORMAT_UBYTE4N }
 };
 
 RIZZ_STATE static imgui__context g_imgui;
 
-static void* imgui__malloc(size_t sz, void* user_data) {
+static void* imgui__malloc(size_t sz, void* user_data)
+{
     return sx_malloc((const sx_alloc*)user_data, sz);
 }
 
-static void imgui__free(void* ptr, void* user_data) {
+static void imgui__free(void* ptr, void* user_data)
+{
     sx_free((const sx_alloc*)user_data, ptr);
 }
 
-static bool imgui__setup() {
+static bool imgui__setup()
+{
     sx_assert(g_imgui.ctx == NULL);
     const sx_alloc* alloc = the_core->alloc(RIZZ_MEMID_TOOLSET);
     g_sg_imgui_alloc = alloc;
@@ -613,7 +616,7 @@ static bool imgui__setup() {
     }
 
     static char ini_filename[64];
-    ImGuiIO*    conf = the__imgui.GetIO();
+    ImGuiIO* conf = the__imgui.GetIO();
     sx_snprintf(ini_filename, sizeof(ini_filename), "%s_imgui.ini", the_app->name());
     conf->IniFilename = ini_filename;
 
@@ -668,7 +671,7 @@ static bool imgui__setup() {
                                                     .size = sizeof(uint16_t) * MAX_INDICES });
 
     uint8_t* font_pixels;
-    int      font_width, font_height, bpp;
+    int font_width, font_height, bpp;
     the__imgui.ImFontAtlas_GetTexDataAsRGBA32(conf->Fonts, &font_pixels, &font_width, &font_height,
                                               &bpp);
     g_imgui.font_tex = the_gfx->imm.make_image(
@@ -685,7 +688,7 @@ static bool imgui__setup() {
     conf->Fonts->TexID = (ImTextureID)(uintptr_t)g_imgui.font_tex.id;
 
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
-    rizz_shader     shader = the_gfx->shader_make_with_data(
+    rizz_shader shader = the_gfx->shader_make_with_data(
         tmp_alloc, k_imgui_vs_size, k_imgui_vs_data, k_imgui_vs_refl_size, k_imgui_vs_refl_data,
         k_imgui_fs_size, k_imgui_fs_data, k_imgui_fs_refl_size, k_imgui_fs_refl_data);
     g_imgui.shader = shader.shd;
@@ -710,7 +713,8 @@ static bool imgui__setup() {
     return true;
 }
 
-static void imgui__release() {
+static void imgui__release()
+{
     const sx_alloc* alloc = the_core->alloc(RIZZ_MEMID_TOOLSET);
 
     if (g_imgui.ctx)
@@ -732,7 +736,8 @@ static void imgui__release() {
         sx_free(alloc, g_imgui.indices);
 }
 
-static void imgui__update_cursor() {
+static void imgui__update_cursor()
+{
 #if SX_PLATFORM_WINDOWS
     ImGuiIO* io = the__imgui.GetIO();
     if (io->ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange)
@@ -775,7 +780,8 @@ static void imgui__update_cursor() {
 #endif
 }
 
-static void imgui__frame() {
+static void imgui__frame()
+{
     ImGuiIO* io = the__imgui.GetIO();
 
     io->DisplaySize = the_app->sizef();
@@ -813,21 +819,22 @@ static void imgui__frame() {
     }
 }
 
-static void imgui__draw(ImDrawData* draw_data) {
+static void imgui__draw(ImDrawData* draw_data)
+{
     sx_assert(draw_data);
     if (draw_data->CmdListsCount == 0)
         return;
 
     // Fill vertex/index buffers
-    int         num_verts = 0;
-    int         num_indices = 0;
+    int num_verts = 0;
+    int num_indices = 0;
     ImDrawVert* verts = g_imgui.verts;
-    uint16_t*   indices = g_imgui.indices;
+    uint16_t* indices = g_imgui.indices;
 
     for (int dlist = 0; dlist < draw_data->CmdListsCount; dlist++) {
         const ImDrawList* dl = draw_data->CmdLists[dlist];
-        const int         dl_num_verts = dl->VtxBuffer.Size;
-        const int         dl_num_indices = dl->IdxBuffer.Size;
+        const int dl_num_verts = dl->VtxBuffer.Size;
+        const int dl_num_indices = dl->IdxBuffer.Size;
 
         if ((num_verts + dl_num_verts) > MAX_VERTS) {
             sx_assert(0 && "imgui: vertex buffer overflowed");
@@ -842,7 +849,7 @@ static void imgui__draw(ImDrawData* draw_data) {
         sx_memcpy(&verts[num_verts], dl->VtxBuffer.Data, dl_num_verts * sizeof(ImDrawVert));
 
         const ImDrawIdx* src_index_ptr = (ImDrawIdx*)dl->IdxBuffer.Data;
-        const uint16_t   base_vertex_idx = num_verts;
+        const uint16_t base_vertex_idx = num_verts;
         for (int i = 0; i < dl_num_indices; i++)
             indices[num_indices++] = src_index_ptr[i] + base_vertex_idx;
         num_verts += dl_num_verts;
@@ -853,11 +860,11 @@ static void imgui__draw(ImDrawData* draw_data) {
     the_gfx->imm.update_buffer(g_imgui.bind.index_buffer, indices, MAX_INDICES * sizeof(uint16_t));
 
     // Draw the list
-    ImGuiIO*               io = the__imgui.GetIO();
+    ImGuiIO* io = the__imgui.GetIO();
     imgui__shader_uniforms uniforms = { .disp_size.x = io->DisplaySize.x,
                                         .disp_size.y = io->DisplaySize.y };
-    int                    base_elem = 0;
-    sg_image               last_img = { 0 };
+    int base_elem = 0;
+    sg_image last_img = { 0 };
     g_imgui.bind.fs_images[0] = the_gfx->texture_white();
     the_gfx->imm.apply_pipeline(g_imgui.pip);
     the_gfx->imm.apply_bindings(&g_imgui.bind);
@@ -889,7 +896,8 @@ static void imgui__draw(ImDrawData* draw_data) {
     }        // foreach DrawList
 }
 
-static void imgui__render(void) {
+static void imgui__render(void)
+{
     igRender();
 
     // Draw imgui primitives
@@ -898,8 +906,9 @@ static void imgui__render(void) {
     the_gfx->imm.end_pass();
 }
 
-static ImDrawList* imgui__begin_fullscreen_draw(const char* name) {
-    ImGuiIO*       io = the__imgui.GetIO();
+static ImDrawList* imgui__begin_fullscreen_draw(const char* name)
+{
+    ImGuiIO* io = the__imgui.GetIO();
     const uint32_t flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoInputs |
                            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
@@ -920,7 +929,8 @@ static ImDrawList* imgui__begin_fullscreen_draw(const char* name) {
     return dlist;
 }
 
-static sx_vec2 imgui__project_to_screen(const sx_vec3 pt, const sx_mat4* mvp, const sx_rect* vp) {
+static sx_vec2 imgui__project_to_screen(const sx_vec3 pt, const sx_mat4* mvp, const sx_rect* vp)
+{
     sx_vec4 trans = sx_vec4f(pt.x, pt.y, pt.z, 1.0f);
 
     trans = sx_mat4_mul_vec4(mvp, trans);
@@ -943,23 +953,27 @@ static sx_vec2 imgui__project_to_screen(const sx_vec3 pt, const sx_mat4* mvp, co
 }
 
 // gizmo
-static void imgui__gizmo_set_rect(const sx_rect rc) {
+static void imgui__gizmo_set_rect(const sx_rect rc)
+{
     ImGuizmo_SetRect(rc.xmin, rc.ymin, rc.xmax - rc.xmin, rc.ymax - rc.ymin);
 }
 
 static void imgui__gizmo_decompose_mat4(const sx_mat4* mat, sx_vec3* translation, sx_vec3* rotation,
-                                        sx_vec3* scale) {
+                                        sx_vec3* scale)
+{
     sx_mat4 transpose = sx_mat4_transpose(mat);
     ImGuizmo_DecomposeMatrixToComponents(transpose.f, translation->f, rotation->f, scale->f);
 }
 
 static void imgui__gizmo_compose_mat4(sx_mat4* mat, const sx_vec3 translation,
-                                      const sx_vec3 rotation, const sx_vec3 scale) {
+                                      const sx_vec3 rotation, const sx_vec3 scale)
+{
     ImGuizmo_RecomposeMatrixFromComponents(translation.f, rotation.f, scale.f, mat->f);
     sx_mat4_transpose(mat);
 }
 
-static inline void imgui__mat4_to_gizmo(float dest[16], const sx_mat4* src) {
+static inline void imgui__mat4_to_gizmo(float dest[16], const sx_mat4* src)
+{
     dest[0] = src->m11;
     dest[1] = src->m21;
     dest[2] = src->m31;
@@ -978,7 +992,8 @@ static inline void imgui__mat4_to_gizmo(float dest[16], const sx_mat4* src) {
     dest[15] = src->m44;
 }
 
-static inline sx_mat4 imgui__mat4_from_gizmo(const float src[16]) {
+static inline sx_mat4 imgui__mat4_from_gizmo(const float src[16])
+{
     //    return sx_mat4f(src[0], src[1], src[2], src[3], src[4], src[5], src[6], src[7], src[8],
     //    src[9],
     //                    src[10], src[11], src[12], src[13], src[14], src[15]);
@@ -988,7 +1003,8 @@ static inline sx_mat4 imgui__mat4_from_gizmo(const float src[16]) {
 }
 
 static void imgui__gizmo_translate(sx_mat4* mat, const sx_mat4* view, const sx_mat4* proj,
-                                   gizmo_mode mode, sx_mat4* delta_mat, sx_vec3* snap) {
+                                   gizmo_mode mode, sx_mat4* delta_mat, sx_vec3* snap)
+{
     float _mat[16];
     float tview[16];
     float tproj[16];
@@ -1004,7 +1020,8 @@ static void imgui__gizmo_translate(sx_mat4* mat, const sx_mat4* view, const sx_m
 }
 
 static void imgui__gizmo_rotation(sx_mat4* mat, const sx_mat4* view, const sx_mat4* proj,
-                                  gizmo_mode mode, sx_mat4* delta_mat, float* snap) {
+                                  gizmo_mode mode, sx_mat4* delta_mat, float* snap)
+{
     float _mat[16];
     float tview[16];
     float tproj[16];
@@ -1020,7 +1037,8 @@ static void imgui__gizmo_rotation(sx_mat4* mat, const sx_mat4* view, const sx_ma
 }
 
 static void imgui__gizmo_scale(sx_mat4* mat, const sx_mat4* view, const sx_mat4* proj,
-                               gizmo_mode mode, sx_mat4* delta_mat, float* snap) {
+                               gizmo_mode mode, sx_mat4* delta_mat, float* snap)
+{
     float _mat[16];
     float tview[16];
     float tproj[16];
@@ -1038,7 +1056,8 @@ static void imgui__gizmo_scale(sx_mat4* mat, const sx_mat4* view, const sx_mat4*
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // memory debugger
 static void imgui__dual_progress_bar(float fraction1, float fraction2, const sx_vec2 ctrl_size,
-                                     const char* overlay1, const char* overlay2) {
+                                     const char* overlay1, const char* overlay2)
+{
 
     ImDrawList* draw_list = the__imgui.GetWindowDrawList();
 
@@ -1053,15 +1072,15 @@ static void imgui__dual_progress_bar(float fraction1, float fraction2, const sx_
     fraction2 = sx_min(fraction2, 1.0f);
 
     float h = _max.y - pos.y;
-    bool  fracs_equal = sx_equal(fraction1, fraction2, 0.001f);
+    bool fracs_equal = sx_equal(fraction1, fraction2, 0.001f);
 
-    sx_vec2        overlay1_size, overlay2_size;
-    sx_vec2        overlay1_pos, overlay2_pos;
+    sx_vec2 overlay1_size, overlay2_size;
+    sx_vec2 overlay1_pos, overlay2_pos;
     const sx_vec4* text_color_f = the__imgui.GetStyleColorVec4(ImGuiCol_Text);
-    sx_color       text_color =
+    sx_color text_color =
         sx_color4f(text_color_f->x, text_color_f->y, text_color_f->z, text_color_f->w);
     const sx_vec4* prog_color_f = the__imgui.GetStyleColorVec4(ImGuiCol_PlotHistogram);
-    sx_color       prog_color =
+    sx_color prog_color =
         sx_color4f(prog_color_f->x, prog_color_f->y, prog_color_f->z, prog_color_f->w);
     sx_color prog2_color = sx_color4f(prog_color_f->x * 0.3f, prog_color_f->y * 0.3f,
                                       prog_color_f->z * 0.3f, prog_color_f->w);
@@ -1102,7 +1121,7 @@ static void imgui__dual_progress_bar(float fraction1, float fraction2, const sx_
     sx_rect overlay2_rect =
         sx_rectwh(overlay2_pos.x, overlay2_pos.y, overlay2_size.x, overlay2_size.y);
     if (!fracs_equal && sx_rect_test_rect(overlay1_rect, overlay2_rect)) {
-        int   text_size = sx_strlen(overlay1) + sx_strlen(overlay2) + 4;
+        int text_size = sx_strlen(overlay1) + sx_strlen(overlay2) + 4;
         char* text = alloca(text_size);
         sx_snprintf(text, text_size, "%s (%s)", overlay1, overlay2);
         overlay1 = text;
@@ -1134,7 +1153,8 @@ static void imgui__dual_progress_bar(float fraction1, float fraction2, const sx_
     the__imgui.NewLine();
 }
 
-static void imgui__graphics_debugger(const rizz_gfx_trace_info* info, bool* p_open) {
+static void imgui__graphics_debugger(const rizz_gfx_trace_info* info, bool* p_open)
+{
     sx_assert(info);
     the__imgui.SetNextWindowSizeConstraints(sx_vec2f(400.0f, 300.0f), sx_vec2f(FLT_MAX, FLT_MAX),
                                             NULL, NULL);
@@ -1215,9 +1235,10 @@ static void imgui__graphics_debugger(const rizz_gfx_trace_info* info, bool* p_op
     the__imgui.End();
 }
 
-static void imgui__memory_debugger(const rizz_mem_info* info, bool* p_open) {
+static void imgui__memory_debugger(const rizz_mem_info* info, bool* p_open)
+{
     static bool peaks = true;
-    static int  selected_heap = -1;
+    static int selected_heap = -1;
 
     // TODO: add search filters to items in allocations
     the__imgui.SetNextWindowSizeConstraints(sx_vec2f(600.0f, 100.0f), sx_vec2f(FLT_MAX, FLT_MAX),
@@ -1233,8 +1254,8 @@ static void imgui__memory_debugger(const rizz_mem_info* info, bool* p_open) {
             the__imgui.Columns(1, NULL, false);
             the__imgui.Separator();
 
-            char          size_text[32];
-            char          peak_text[32];
+            char size_text[32];
+            char peak_text[32];
             const sx_vec2 progress_size = sx_vec2f(-1.0f, 14.0f);
 
             if (peaks)
@@ -1272,10 +1293,10 @@ static void imgui__memory_debugger(const rizz_mem_info* info, bool* p_open) {
             }
 
             if (selected_heap != -1) {
-                char                        text[32];
+                char text[32];
                 const rizz_trackalloc_info* t = &info->trackers[selected_heap];
-                ImGuiListClipper            clipper;
-                int                         num_items = t->num_items;
+                ImGuiListClipper clipper;
+                int num_items = t->num_items;
 
                 if (num_items) {
                     the__imgui.Separator();
@@ -1387,7 +1408,8 @@ static rizz_api_imgui_extra the__imgui_debug_tools = {
     .gizmo_scale = imgui__gizmo_scale
 };
 
-rizz_plugin_decl_event_handler(imgui, e) {
+rizz_plugin_decl_event_handler(imgui, e)
+{
     ImGuiIO* io = the__imgui.GetIO();
     switch (e->type) {
     case RIZZ_APP_EVENTTYPE_MOUSE_DOWN:
@@ -1441,7 +1463,8 @@ typedef enum {
 } rizz__gfx_command_make;
 
 
-static void imgui__submit_make_commands(const void* cmdbuff, int cmdbuff_sz) {
+static void imgui__submit_make_commands(const void* cmdbuff, int cmdbuff_sz)
+{
     sx_mem_reader r;
     sx_mem_init_reader(&r, cmdbuff, cmdbuff_sz);
 
@@ -1450,35 +1473,35 @@ static void imgui__submit_make_commands(const void* cmdbuff, int cmdbuff_sz) {
         sx_mem_read_var(&r, _cmd);
         switch ((rizz__gfx_command_make)_cmd) {
         case GFX_COMMAND_MAKE_BUFFER: {
-            sg_buffer      buf;
+            sg_buffer buf;
             sg_buffer_desc desc;
             sx_mem_read_var(&r, buf);
             sx_mem_read_var(&r, desc);
             _sg_imgui_make_buffer(&desc, buf, &g_imgui.sg_imgui);
         } break;
         case GFX_COMMAND_MAKE_IMAGE: {
-            sg_image      img;
+            sg_image img;
             sg_image_desc desc;
             sx_mem_read_var(&r, img);
             sx_mem_read_var(&r, desc);
             _sg_imgui_make_image(&desc, img, &g_imgui.sg_imgui);
         } break;
         case GFX_COMMAND_MAKE_SHADER: {
-            sg_shader      shd;
+            sg_shader shd;
             sg_shader_desc desc;
             sx_mem_read_var(&r, shd);
             sx_mem_read_var(&r, desc);
             _sg_imgui_make_shader(&desc, shd, &g_imgui.sg_imgui);
         } break;
         case GFX_COMMAND_MAKE_PIPELINE: {
-            sg_pipeline      pip;
+            sg_pipeline pip;
             sg_pipeline_desc desc;
             sx_mem_read_var(&r, pip);
             sx_mem_read_var(&r, desc);
             _sg_imgui_make_pipeline(&desc, pip, &g_imgui.sg_imgui);
         } break;
         case GFX_COMMAND_MAKE_PASS: {
-            sg_pass      pass;
+            sg_pass pass;
             sg_pass_desc desc;
             sx_mem_read_var(&r, pass);
             sx_mem_read_var(&r, desc);
@@ -1490,7 +1513,8 @@ static void imgui__submit_make_commands(const void* cmdbuff, int cmdbuff_sz) {
     }
 }
 
-rizz_plugin_decl_main(imgui, plugin, e) {
+rizz_plugin_decl_main(imgui, plugin, e)
+{
     static sg_trace_hooks hooks_nil = { .user_data = NULL };
     switch (e) {
     case RIZZ_PLUGIN_EVENT_STEP:
@@ -1511,8 +1535,8 @@ rizz_plugin_decl_main(imgui, plugin, e) {
         the_plugin->inject_api("imgui", 0, &the__imgui);
         the_plugin->inject_api("imgui_extra", 0, &the__imgui_debug_tools);
 
-        void* make_cmdbuff; 
-        int   make_cmdbuff_sz;
+        void* make_cmdbuff;
+        int make_cmdbuff_sz;
         the_gfx->imm._get_internal_state(&make_cmdbuff, &make_cmdbuff_sz);
 
         sg_imgui_init(&g_imgui.sg_imgui, &the_gfx->imm);
@@ -1531,7 +1555,7 @@ rizz_plugin_decl_main(imgui, plugin, e) {
         the__imgui.SetAllocatorFunctions(imgui__malloc, imgui__free, (void*)g_sg_imgui_alloc);
         the_plugin->inject_api("imgui", 0, &the__imgui);
         the_plugin->inject_api("imgui_extra", 0, &the__imgui_debug_tools);
-        break; 
+        break;
     }
 
     case RIZZ_PLUGIN_EVENT_UNLOAD:
@@ -1539,7 +1563,7 @@ rizz_plugin_decl_main(imgui, plugin, e) {
 
     case RIZZ_PLUGIN_EVENT_SHUTDOWN:
         sx_assert(the_plugin);
-        sg_imgui_discard(&g_imgui.sg_imgui); 
+        sg_imgui_discard(&g_imgui.sg_imgui);
         imgui__release();
         the_plugin->remove_api("imgui", 0);
         the_plugin->remove_api("imgui_extra", 0);

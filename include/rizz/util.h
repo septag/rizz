@@ -23,14 +23,16 @@ typedef struct rizz_tween {
     float tm;
 } rizz_tween;
 
-static inline float rizz_tween_update(rizz_tween* tween, float dt, float max_tm) {
+static inline float rizz_tween_update(rizz_tween* tween, float dt, float max_tm)
+{
     sx_assert(max_tm > 0.0);
     float t = sx_min(1.0f, tween->tm / max_tm);
     tween->tm += dt;
     return t;
 }
 
-static inline bool rizz_tween_done(rizz_tween* tween) {
+static inline bool rizz_tween_done(rizz_tween* tween)
+{
     return tween->tm >= 1.0f;
 }
 
@@ -50,17 +52,18 @@ static inline bool rizz_tween_done(rizz_tween* tween) {
 #endif
 
 typedef struct rizz_event {
-    int   e;
+    int e;
     void* user;
 } rizz_event;
 
 typedef struct rizz_event_queue {
     rizz_event events[RIZZ_EVENTQUEUE_MAX_EVENTS];
-    int        first;
-    int        count;
+    int first;
+    int count;
 } rizz_event_queue;
 
-static inline void rizz_event_push(rizz_event_queue* eq, int event, void* user) {
+static inline void rizz_event_push(rizz_event_queue* eq, int event, void* user)
+{
     if (eq->count < RIZZ_EVENTQUEUE_MAX_EVENTS) {
         int index = (eq->first + eq->count) % RIZZ_EVENTQUEUE_MAX_EVENTS;
         eq->events[index].e = event;
@@ -77,7 +80,8 @@ static inline void rizz_event_push(rizz_event_queue* eq, int event, void* user) 
     }
 }
 
-static inline bool rizz_event_poll(rizz_event_queue* eq, rizz_event* e) {
+static inline bool rizz_event_poll(rizz_event_queue* eq, rizz_event* e)
+{
     if (eq->count > 0) {
         int first = eq->first;
         *e = eq->events[first];
@@ -89,12 +93,14 @@ static inline bool rizz_event_poll(rizz_event_queue* eq, rizz_event* e) {
     }
 }
 
-static inline rizz_event rizz_event_peek(const rizz_event_queue* eq) {
+static inline rizz_event rizz_event_peek(const rizz_event_queue* eq)
+{
     sx_assert(eq->count > 0);
     return eq->events[eq->first];
 }
 
-static inline bool rizz_event_empty(const rizz_event_queue* eq) {
+static inline bool rizz_event_empty(const rizz_event_queue* eq)
+{
     return eq->count == 0;
 }
 
@@ -146,8 +152,9 @@ static inline bool rizz_event_empty(const rizz_event_queue* eq) {
 // }
 //
 
-#define rizz_fsm_with(st) \
-    for (int i = 1; i--; st[1] = st[0]) switch (((st[0]) << 16) | (st[1]))
+#define rizz_fsm_with(st)               \
+    for (int i = 1; i--; st[1] = st[0]) \
+        switch (((st[0]) << 16) | (st[1]))
 #define rizz_fsm_when(a) \
     break;               \
     case (((a) << 16) | (a))

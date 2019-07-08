@@ -38,11 +38,11 @@ enum rizz_asset_load_flags_ {
 typedef uint32_t rizz_asset_load_flags;
 
 typedef struct rizz_asset_load_params {
-    const char*           path;      // path to asset file
-    const void*           params;    // must cast to asset-specific implementation type
-    const sx_alloc*       alloc;     // allocator that is user sends for loading asset data
-    uint32_t              tags;      // user-defined tag bits
-    rizz_asset_load_flags flags;     // flags that are used for loading
+    const char* path;               // path to asset file
+    const void* params;             // must cast to asset-specific implementation type
+    const sx_alloc* alloc;          // allocator that is user sends for loading asset data
+    uint32_t tags;                  // user-defined tag bits
+    rizz_asset_load_flags flags;    // flags that are used for loading
 } rizz_asset_load_params;
 
 typedef struct rizz_asset_load_data {

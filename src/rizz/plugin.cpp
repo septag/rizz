@@ -3,9 +3,10 @@
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
 
-#include "rizz/plugin.h"
 #include "config.h"
+
 #include "rizz/core.h"
+#include "rizz/plugin.h"
 
 #include "sx/allocator.h"
 #include "sx/array.h"
@@ -48,32 +49,32 @@ static void* g_native_apis[_RIZZ_API_COUNT] = { &the__core,  &the__plugin, &the_
                                                 &the__asset, &the__camera, &the__http };
 
 struct rizz__plugin_injected_api {
-    char     name[32];
+    char name[32];
     uint32_t version;
-    void*    api;
+    void* api;
 };
 
-typedef struct rizz__plugin_dependency {
+struct rizz__plugin_dependency {
     char name[32];
-} rizz__plugin_dependency;
+};
 
 struct rizz__plugin_item {
-    cr_plugin                p;
-    rizz_plugin_info         info;
-    int                      order;
-    char                     filepath[RIZZ_MAX_PATH];
-    float                    update_tm;
+    cr_plugin p;
+    rizz_plugin_info info;
+    int order;
+    char filepath[RIZZ_MAX_PATH];
+    float update_tm;
     rizz__plugin_dependency* deps;
-    int                      num_deps;
+    int num_deps;
 };
 
 struct rizz__plugin_mgr {
-    const sx_alloc*            alloc = nullptr;
-    rizz__plugin_item*         plugins = nullptr;
-    int*                       plugin_update_order = nullptr;    // indices to 'plugins' array
-    char                       plugin_path[256] = { 0 };
+    const sx_alloc* alloc = nullptr;
+    rizz__plugin_item* plugins = nullptr;
+    int* plugin_update_order = nullptr;    // indices to 'plugins' array
+    char plugin_path[256] = { 0 };
     rizz__plugin_injected_api* injected = nullptr;
-    bool                       loaded;
+    bool loaded;
 };
 
 static rizz__plugin_mgr g_plugin;
@@ -88,7 +89,8 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4146)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
 #include "sort/sort.h"
 
-bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path) {
+bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path)
+{
     static_assert(RIZZ_PLUGIN_CRASH_OTHER == (rizz_plugin_crash)CR_OTHER, "crash enum mismatch");
     sx_assert(alloc);
     g_plugin.alloc = alloc;
@@ -113,14 +115,16 @@ bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path) {
     return true;
 }
 
-void* rizz__plugin_get_api(rizz_api_type api, uint32_t version) {
+void* rizz__plugin_get_api(rizz_api_type api, uint32_t version)
+{
     sx_unused(version);
     sx_assert(api < _RIZZ_API_COUNT);
 
     return g_native_apis[api];
 }
 
-void* rizz__plugin_get_api_byname(const char* name, uint32_t version) {
+void* rizz__plugin_get_api_byname(const char* name, uint32_t version)
+{
     sx_unused(version);
     for (int i = 0, c = sx_array_count(g_plugin.injected); i < c; i++) {
         if (sx_strequal(name, g_plugin.injected[i].name) &&
@@ -133,7 +137,8 @@ void* rizz__plugin_get_api_byname(const char* name, uint32_t version) {
     return NULL;
 }
 
-void rizz__plugin_release() {
+void rizz__plugin_release()
+{
     if (!g_plugin.alloc)
         return;
 
@@ -166,7 +171,8 @@ void rizz__plugin_release() {
     sx_memset(&g_plugin, 0x0, sizeof(g_plugin));
 }
 
-static bool rizz__plugin_order_dependencies() {
+static bool rizz__plugin_order_dependencies()
+{
     int num_plugins = sx_array_count(g_plugin.plugins);
     if (num_plugins == 0)
         return true;
@@ -239,7 +245,8 @@ static bool rizz__plugin_order_dependencies() {
 }
 
 #ifdef RIZZ_BUNDLE
-static void rizz__plugin_register(const rizz_plugin_info* info) {
+static void rizz__plugin_register(const rizz_plugin_info* info)
+{
     rizz__plugin_item item;
     sx_memset(&item, 0x0, sizeof(item));
     item.p.api = &the__plugin;
@@ -253,13 +260,15 @@ static void rizz__plugin_register(const rizz_plugin_info* info) {
                   sx_array_count(g_plugin.plugins) - 1);
 }
 
-static bool rizz__plugin_load(const char* name) {
+static bool rizz__plugin_load(const char* name)
+{
     sx_assert(!g_plugin.loaded && "cannot load anymore plugins after `init_plugins` is called");
 
     return rizz__plugin_load_abs(name, false, NULL, 0);
 }
 
-bool rizz__plugin_load_abs(const char* name, bool entry, const char** edeps, int enum_deps) {
+bool rizz__plugin_load_abs(const char* name, bool entry, const char** edeps, int enum_deps)
+{
     // find the plugin and save it's flags, the list is already populated
     int plugin_id = -1;
     for (int i = 0; i < sx_array_count(g_plugin.plugins); i++) {
@@ -273,7 +282,7 @@ bool rizz__plugin_load_abs(const char* name, bool entry, const char** edeps, int
         rizz__plugin_item* item = &g_plugin.plugins[plugin_id];
 
         // We got the info, the plugin seems to be valid
-        int          num_deps = entry ? enum_deps : item->info.num_deps;
+        int num_deps = entry ? enum_deps : item->info.num_deps;
         const char** deps = entry ? edeps : item->info.deps;
         if (num_deps > 0 && deps) {
             item->deps = (rizz__plugin_dependency*)sx_malloc(
@@ -294,13 +303,14 @@ bool rizz__plugin_load_abs(const char* name, bool entry, const char** edeps, int
     }
 }
 
-bool rizz__plugin_init_plugins() {
+bool rizz__plugin_init_plugins()
+{
     if (!rizz__plugin_order_dependencies()) {
         return false;
     }
 
     for (int i = 0; i < sx_array_count(g_plugin.plugin_update_order); i++) {
-        int                index = g_plugin.plugin_update_order[i];
+        int index = g_plugin.plugin_update_order[i];
         rizz__plugin_item* item = &g_plugin.plugins[index];
 
         // load the plugin
@@ -313,7 +323,7 @@ bool rizz__plugin_init_plugins() {
         item->p._p = (void*)0x1;    // set it to something that indicates plugin is loaded
 
         if (item->info.name[0]) {
-            int  version = item->info.version;
+            int version = item->info.version;
             char filename[32];
             sx_os_path_basename(filename, sizeof(filename), item->filepath);
             rizz_log_info("(init) plugin: %s (%s) - %s - v%d.%d.%d", item->info.name, filename,
@@ -329,10 +339,11 @@ bool rizz__plugin_init_plugins() {
     return true;
 }
 
-void rizz__plugin_update(float dt) {
+void rizz__plugin_update(float dt)
+{
     sx_unused(dt);
     for (int i = 0, c = sx_array_count(g_plugin.plugin_update_order); i < c; i++) {
-        int                index = g_plugin.plugin_update_order[i];
+        int index = g_plugin.plugin_update_order[i];
         rizz__plugin_item* item = &g_plugin.plugins[index];
         if (item->p._p == (void*)0x1) {
             sx_assert(item->info.main_cb);
@@ -341,9 +352,10 @@ void rizz__plugin_update(float dt) {
     }
 }
 
-void rizz__plugin_broadcast_event(const rizz_app_event* e) {
+void rizz__plugin_broadcast_event(const rizz_app_event* e)
+{
     for (int i = 0, c = sx_array_count(g_plugin.plugin_update_order); i < c; i++) {
-        int                index = g_plugin.plugin_update_order[i];
+        int index = g_plugin.plugin_update_order[i];
         rizz__plugin_item* item = &g_plugin.plugins[index];
         if (item->p._p == (void*)0x1) {
             if (item->info.event_cb)
@@ -354,7 +366,8 @@ void rizz__plugin_broadcast_event(const rizz_app_event* e) {
 #else    // RIZZ_BUNDLE
 
 static void rizz__plugin_reload_handler(cr_plugin* plugin, const char* filename, const void** ptrs,
-                                        const void** new_ptrs, int num_ptrs) {
+                                        const void** new_ptrs, int num_ptrs)
+{
     sx_unused(filename);
     sx_unused(plugin);
 
@@ -363,7 +376,8 @@ static void rizz__plugin_reload_handler(cr_plugin* plugin, const char* filename,
     }
 }
 
-static bool rizz__plugin_load(const char* name) {
+static bool rizz__plugin_load(const char* name)
+{
     sx_assert(!g_plugin.loaded && "cannot load anymore plugins after `init_plugins` is called");
 
     // construct full filepath, by joining to root plugin path and adding extension
@@ -378,7 +392,8 @@ static bool rizz__plugin_load(const char* name) {
     return rizz__plugin_load_abs(filepath, false, NULL, 0);
 }
 
-bool rizz__plugin_load_abs(const char* filepath, bool entry, const char** edeps, int enum_deps) {
+bool rizz__plugin_load_abs(const char* filepath, bool entry, const char** edeps, int enum_deps)
+{
     rizz__plugin_item item;
     sx_memset(&item, 0x0, sizeof(item));
     item.p.userdata = &the__plugin;
@@ -405,7 +420,7 @@ bool rizz__plugin_load_abs(const char* filepath, bool entry, const char** edeps,
     sx_strcpy(item.filepath, sizeof(item.filepath), filepath);
 
     // We got the info, the plugin seems to be valid
-    int          num_deps = entry ? enum_deps : item.info.num_deps;
+    int num_deps = entry ? enum_deps : item.info.num_deps;
     const char** deps = entry ? edeps : item.info.deps;
     if (num_deps > 0 && deps) {
         item.deps = (rizz__plugin_dependency*)sx_malloc(g_plugin.alloc,
@@ -431,12 +446,13 @@ bool rizz__plugin_load_abs(const char* filepath, bool entry, const char** edeps,
     return true;
 }
 
-bool rizz__plugin_init_plugins() {
+bool rizz__plugin_init_plugins()
+{
     if (!rizz__plugin_order_dependencies())
         return false;
 
     for (int i = 0; i < sx_array_count(g_plugin.plugin_update_order); i++) {
-        int                index = g_plugin.plugin_update_order[i];
+        int index = g_plugin.plugin_update_order[i];
         rizz__plugin_item* item = &g_plugin.plugins[index];
 
         if (!cr_plugin_load(item->p, item->filepath, rizz__plugin_reload_handler)) {
@@ -445,7 +461,7 @@ bool rizz__plugin_init_plugins() {
         }
 
         if (item->info.name[0]) {
-            int  version = item->info.version;
+            int version = item->info.version;
             char filename[32];
             sx_os_path_basename(filename, sizeof(filename), item->filepath);
             rizz_log_info("(init) plugin: %s (%s) - %s - v%d.%d.%d", item->info.name, filename,
@@ -459,10 +475,11 @@ bool rizz__plugin_init_plugins() {
     return true;
 }
 
-void rizz__plugin_update(float dt) {
+void rizz__plugin_update(float dt)
+{
     for (int i = 0, c = sx_array_count(g_plugin.plugin_update_order); i < c; i++) {
         rizz__plugin_item* plugin = &g_plugin.plugins[g_plugin.plugin_update_order[i]];
-        bool               check_reload = false;
+        bool check_reload = false;
         plugin->update_tm += dt;
         if (plugin->update_tm >= RIZZ_CONFIG_PLUGIN_UPDATE_INTERVAL) {
             check_reload = true;
@@ -482,14 +499,16 @@ void rizz__plugin_update(float dt) {
     }
 }
 
-void rizz__plugin_broadcast_event(const rizz_app_event* e) {
+void rizz__plugin_broadcast_event(const rizz_app_event* e)
+{
     for (int i = 0, c = sx_array_count(g_plugin.plugin_update_order); i < c; i++) {
         cr_plugin_event(g_plugin.plugins[g_plugin.plugin_update_order[i]].p, e);
     }
 }
 #endif    // RIZZ_BUNDLE
 
-void rizz__plugin_inject_api(const char* name, uint32_t version, void* api) {
+void rizz__plugin_inject_api(const char* name, uint32_t version, void* api)
+{
     int api_idx = -1;
     for (int i = 0, c = sx_array_count(g_plugin.injected); i < c; i++) {
         if (sx_strequal(g_plugin.injected[i].name, name) &&
@@ -512,7 +531,8 @@ void rizz__plugin_inject_api(const char* name, uint32_t version, void* api) {
     }
 }
 
-void rizz__plugin_remove_api(const char* name, uint32_t version) {
+void rizz__plugin_remove_api(const char* name, uint32_t version)
+{
     for (int i = 0, c = sx_array_count(g_plugin.injected); i < c; i++) {
         if (sx_strequal(g_plugin.injected[i].name, name) &&
             g_plugin.injected[i].version == version) {
@@ -523,7 +543,8 @@ void rizz__plugin_remove_api(const char* name, uint32_t version) {
     rizz_log_warn("API (name='%s', version=%d) not found", name, version);
 }
 
-const char* rizz__plugin_crash_reason(rizz_plugin_crash crash) {
+const char* rizz__plugin_crash_reason(rizz_plugin_crash crash)
+{
     // clang-format off
     switch (crash) {
     case RIZZ_PLUGIN_CRASH_NONE:             return "None";

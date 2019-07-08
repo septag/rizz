@@ -11,44 +11,52 @@
 #include "rizz/graphics.h"
 #include "rizz/imgui-extra.h"
 #include "rizz/imgui.h"
+#include "rizz/input.h"
 #include "rizz/plugin.h"
 #include "rizz/vfs.h"
-#include "rizz/input.h"
 
-RIZZ_STATE static rizz_api_core*        the_core;
-RIZZ_STATE static rizz_api_gfx*         the_gfx;
-RIZZ_STATE static rizz_api_app*         the_app;
-RIZZ_STATE static rizz_api_imgui*       the_imgui;
-RIZZ_STATE static rizz_api_asset*       the_asset;
+RIZZ_STATE static rizz_api_core* the_core;
+RIZZ_STATE static rizz_api_gfx* the_gfx;
+RIZZ_STATE static rizz_api_app* the_app;
+RIZZ_STATE static rizz_api_imgui* the_imgui;
+RIZZ_STATE static rizz_api_asset* the_asset;
 RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
-RIZZ_STATE static rizz_api_camera*      the_camera;
-RIZZ_STATE static rizz_api_vfs*         the_vfs;
+RIZZ_STATE static rizz_api_camera* the_camera;
+RIZZ_STATE static rizz_api_vfs* the_vfs;
 
 RIZZ_STATE static rizz_api_input* the_input;
 
 RIZZ_STATE rizz_gfx_stage g_stage;
 
 RIZZ_STATE rizz_input_device g_pad0;
-RIZZ_STATE rizz_input_device g_pad;
 
-static bool init() {
+static bool init()
+{
     // register main graphics stage.
     // at least one stage should be registered if you want to draw anything
     g_stage = the_gfx->stage_register("main", (rizz_gfx_stage){ .id = 0 });
     sx_assert(g_stage.id);
 
-	g_pad0 = the_input->create_device(RIZZ_INPUT_DEVICETYPE_PAD);
-	g_pad = the_input->create_device(RIZZ_INPUT_DEVICETYPE_PAD);
-    the_input->map_bool(g_pad, RIZZ_INPUT_PADBUTTON_A, 666);
-    the_input->map_float(g_pad, RIZZ_INPUT_PADBUTTON_LEFTSTICKX, 667, 0, 1.0f, NULL, NULL);
+    the_input->create_device(RIZZ_INPUT_DEVICETYPE_MOUSE);
+    rizz_input_device keyboard = the_input->create_device(RIZZ_INPUT_DEVICETYPE_KEYBOARD);
+    g_pad0 = the_input->create_device(RIZZ_INPUT_DEVICETYPE_PAD);
+    // the_input->map_bool(g_pad0, RIZZ_INPUT_PADBUTTON_A, 666);
+    // the_input->map_float(g_pad0, RIZZ_INPUT_PADBUTTON_LEFTSTICKX, 667, 0, 1.0f, NULL, NULL);
+    the_input->map_bool(keyboard, RIZZ_INPUT_KBKEY_SPACE, 666);
     return true;
 }
 
 static void shutdown() {}
 
-static void update(float dt) {}
+static void update(float dt)
+{
+    static bool debugger = true;
+    if (debugger)
+        the_input->show_debugger(&debugger);
+}
 
-static void render() {
+static void render()
+{
     sg_pass_action pass_action = { .colors[0] = { SG_ACTION_CLEAR, { 0.25f, 0.5f, 0.75f, 1.0f } },
                                    .depth = { SG_ACTION_CLEAR, 1.0f } };
 
@@ -62,17 +70,18 @@ static void render() {
     if (the_imgui->Begin("Hello", NULL, 0)) {
         the_imgui->LabelText("Fps", "%.3f", the_core->fps());
 
-		bool dev_avail = the_input->device_avail(g_pad);
-		the_imgui->Checkbox("avail?", &dev_avail);
+        // bool dev_avail = the_input->device_avail(g_pad0);
+        // the_imgui->Checkbox("avail?", &dev_avail);
         bool button = the_input->get_bool(666);
         the_imgui->Checkbox("A", &button);
-        float analogx = the_input->get_float(667);
-        the_imgui->SliderFloat("AnalogueX", &analogx, -1.0f, 1.0f, "%.2f", 1.0f);
+        // float analogx = the_input->get_float(667);
+        // the_imgui->SliderFloat("AnalogueX", &analogx, -1.0f, 1.0f, "%.2f", 1.0f);
     }
     the_imgui->End();
 }
 
-rizz_plugin_decl_main(hello, plugin, e) {
+rizz_plugin_decl_main(hello, plugin, e)
+{
     switch (e) {
     case RIZZ_PLUGIN_EVENT_STEP:
         update((float)sx_tm_sec(the_core->delta_tick()));
@@ -104,7 +113,8 @@ rizz_plugin_decl_main(hello, plugin, e) {
     return 0;
 }
 
-rizz_plugin_decl_event_handler(hello, e) {
+rizz_plugin_decl_event_handler(hello, e)
+{
     switch (e->type) {
     case RIZZ_APP_EVENTTYPE_SUSPENDED:
         break;
@@ -121,7 +131,8 @@ rizz_plugin_decl_event_handler(hello, e) {
     }
 }
 
-rizz_game_decl_config(conf) {
+rizz_game_decl_config(conf)
+{
     conf->app_name = "hello";
     conf->app_version = 1000;
     conf->app_title = "01 - Hello";

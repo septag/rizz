@@ -15,11 +15,11 @@ typedef enum rizz_http_status {
 
 typedef struct rizz_http_state {
     rizz_http_status status;
-    int             status_code;
-    char const*     reason_phrase;
-    char const*     content_type;
-    size_t          response_size;
-    void*           response_data;
+    int status_code;
+    char const* reason_phrase;
+    char const* content_type;
+    size_t response_size;
+    void* response_data;
 } rizz_http_state;
 
 typedef void(rizz_http_cb)(const rizz_http_state* http, void* user);
@@ -32,7 +32,7 @@ typedef struct rizz_api_http {
     rizz_http (*get)(const char* url);
     rizz_http (*post)(const char* url, const void* data, size_t size);
     void (*free)(rizz_http handle);
-    
+
     // return can be NULL (if it is not even started)
     const rizz_http_state* (*state)(rizz_http handle);
 

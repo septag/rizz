@@ -6649,6 +6649,7 @@ _SOKOL_PRIVATE void _sapp_run(const sapp_desc* desc) {
         int count = XPending(_sapp_x11_display);
         while (count--) {
             XEvent event;
+            _sapp.native_event = &event;
             XNextEvent(_sapp_x11_display, &event);
             _sapp_x11_process_event(&event);
         }

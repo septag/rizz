@@ -5,6 +5,7 @@
 #pragma once
 
 #include "sx/math.h"
+
 #include "types.h"
 
 typedef struct rizz_camera {
@@ -14,16 +15,16 @@ typedef struct rizz_camera {
     sx_vec3 pos;
 
     sx_quat quat;
-    float   ffar;
-    float   fnear;
-    float   fov;
+    float ffar;
+    float fnear;
+    float fov;
     sx_rect viewport;
 } rizz_camera;
 
 typedef struct rizz_camera_fps {
     rizz_camera cam;
-    float      pitch;
-    float      yaw;
+    float pitch;
+    float yaw;
 } rizz_camera_fps;
 
 typedef struct rizz_api_camera {
@@ -38,7 +39,8 @@ typedef struct rizz_api_camera {
 
     void (*fps_init)(rizz_camera_fps* cam, float fov_deg, const sx_rect viewport, float fnear,
                      float ffar);
-    void (*fps_lookat)(rizz_camera_fps* cam, const sx_vec3 pos, const sx_vec3 target, const sx_vec3 up);
+    void (*fps_lookat)(rizz_camera_fps* cam, const sx_vec3 pos, const sx_vec3 target,
+                       const sx_vec3 up);
     void (*fps_pitch)(rizz_camera_fps* cam, float pitch);
     void (*fps_pitch_range)(rizz_camera_fps* cam, float pitch, float _min, float _max);
     void (*fps_yaw)(rizz_camera_fps* cam, float yaw);

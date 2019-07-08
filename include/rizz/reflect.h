@@ -39,24 +39,24 @@ typedef uint32_t rizz_refl_flags;
 
 typedef struct rizz_refl_info {
     union {
-        void*    any;
+        void* any;
         intptr_t offset;
     };
 
-    const char*    type;
-    const char*    name;
-    const char*    base;
-    const char*    desc;
-    int            size;
-    int            array_size;
-    int            stride;
-    uint32_t       flags;
+    const char* type;
+    const char* name;
+    const char* base;
+    const char* desc;
+    int size;
+    int array_size;
+    int stride;
+    uint32_t flags;
     rizz_refl_type internal_type;
 } rizz_refl_info;
 
 typedef struct rizz_refl_field {
     rizz_refl_info info;
-    void*          value;
+    void* value;
 } rizz_refl_field;
 
 typedef struct rizz_api_refl {

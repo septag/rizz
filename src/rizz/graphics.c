@@ -9,8 +9,8 @@
 // rizz__cb_run_gpu_command: command-buffer deferred commands (this is actually where the command is
 // executed) rizz__gpu_command: overrides for immediate mode commands _sg_xxxx: sokol overrides
 //
-
 #include "config.h"
+
 #include "rizz/app.h"
 #include "rizz/asset.h"
 #include "rizz/core.h"
@@ -25,8 +25,9 @@
 #include "sx/os.h"
 #include "sx/string.h"
 
-#include "Remotery.h"
 #include "sjson/sjson.h"
+
+#include "Remotery.h"
 
 #include <alloca.h>
 
@@ -177,45 +178,45 @@ typedef enum rizz__gfx_stage_state {
 } rizz__gfx_stage_state;
 
 typedef struct rizz__gfx_cmdbuffer_ref {
-    uint32_t          key;    // sort key. higher bits: rizz__gfx_stage.order, lower bits: cmd_idx
-    int               cmdbuffer_idx;
+    uint32_t key;    // sort key. higher bits: rizz__gfx_stage.order, lower bits: cmd_idx
+    int cmdbuffer_idx;
     rizz__gfx_command cmd;
-    int               params_offset;
+    int params_offset;
 } rizz__gfx_cmdbuffer_ref;
 
 typedef struct rizz__gfx_cmdbuffer {
-    const sx_alloc*          alloc;
-    uint8_t*                 params_buff;    // sx_array
-    rizz__gfx_cmdbuffer_ref* refs;           // sx_array
-    rizz_gfx_stage           running_stage;
-    int                      index;
-    uint16_t                 stage_order;
-    uint16_t                 cmd_idx;
+    const sx_alloc* alloc;
+    uint8_t* params_buff;             // sx_array
+    rizz__gfx_cmdbuffer_ref* refs;    // sx_array
+    rizz_gfx_stage running_stage;
+    int index;
+    uint16_t stage_order;
+    uint16_t cmd_idx;
 } rizz__gfx_cmdbuffer;
 
 // stream-buffers are used to emulate sg_append_buffer behaviour
 typedef struct rizz__gfx_stream_buffer {
-    sg_buffer     buf;
+    sg_buffer buf;
     sx_atomic_int offset;
-    int           size;
+    int size;
 } rizz__gfx_stream_buffer;
 
 typedef struct rizz__gfx_stage {
-    char                  name[32];
-    uint32_t              name_hash;
+    char name[32];
+    uint32_t name_hash;
     rizz__gfx_stage_state state;
-    rizz_gfx_stage        parent;
-    rizz_gfx_stage        child;
-    rizz_gfx_stage        next;
-    rizz_gfx_stage        prev;
-    uint16_t              order;    // dependency order (higher bits: depth, lower bits: stage_id)
-    uint8_t               enabled;
-    uint8_t               single_enabled;
+    rizz_gfx_stage parent;
+    rizz_gfx_stage child;
+    rizz_gfx_stage next;
+    rizz_gfx_stage prev;
+    uint16_t order;    // dependency order (higher bits: depth, lower bits: stage_id)
+    uint8_t enabled;
+    uint8_t single_enabled;
 } rizz__gfx_stage;
 
 typedef struct rizz__debug_vertex {
-    sx_vec3  pos;
-    sx_vec2  uv;
+    sx_vec3 pos;
+    sx_vec2 uv;
     sx_color color;
 } rizz__debug_vertex;
 
@@ -233,31 +234,31 @@ typedef struct rizz__debug_uniforms {
 } rizz__debug_uniforms;
 
 typedef struct rizz__gfx_debug {
-    sg_buffer   vb;
-    sg_buffer   ib;
+    sg_buffer vb;
+    sg_buffer ib;
     sg_pipeline pip_wire;
-    sg_shader   shader;
-    sx_mat4     vp;
+    sg_shader shader;
+    sx_mat4 vp;
 } rizz__gfx_debug;
 
 #ifdef SOKOL_METAL
 typedef struct rizz__pip_mtl {
-    sg_pipeline      pip;
+    sg_pipeline pip;
     sg_pipeline_desc desc;
 } rizz__pip_mtl;
 #endif
 
 typedef struct rizz__trace_gfx {
     rizz_gfx_trace_info t;
-    sx_mem_writer       make_cmds_writer;
-    sg_trace_hooks      hooks;
+    sx_mem_writer make_cmds_writer;
+    sg_trace_hooks hooks;
 } rizz__trace_gfx;
 
 typedef struct rizz__gfx {
-    rizz_gfx_driver       driver;
-    rizz__gfx_stage*      stages;         // sx_array
+    rizz_gfx_driver driver;
+    rizz__gfx_stage* stages;              // sx_array
     rizz__gfx_cmdbuffer** cmd_buffers;    // sx_array
-    sx_lock_t             stage_lk;
+    sx_lock_t stage_lk;
     rizz__gfx_texture_mgr tex_mgr;
 #ifdef SOKOL_METAL
     rizz__pip_mtl* pips;    // sx_array: keep track of pipelines for shader hot-reloads
@@ -265,12 +266,12 @@ typedef struct rizz__gfx {
     sg_pipeline* pips;
 #endif
     rizz__gfx_stream_buffer*
-                    stream_buffs;    // sx_array: keep track of streaming buffers for append_buffers
+        stream_buffs;    // sx_array: keep track of streaming buffers for append_buffers
     rizz__gfx_debug dbg;
 
     rizz__trace_gfx trace;
-    bool            enable_profile;
-    bool            record_make_commands;
+    bool enable_profile;
+    bool record_make_commands;
 } rizz__gfx;
 
 
@@ -294,7 +295,8 @@ static rizz__gfx g_gfx;
 #if defined(SOKOL_D3D11)
 _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shader_id,
                                             _sg_shader_t* shd, const rizz_shader_info* info,
-                                            const sg_pipeline_desc* desc) {
+                                            const sg_pipeline_desc* desc)
+{
     SOKOL_ASSERT(shd->slot.state == SG_RESOURCESTATE_VALID);
     SOKOL_ASSERT(shd->d3d11_vs_blob && shd->d3d11_vs_blob_length > 0);
     sx_unused(desc);
@@ -305,7 +307,8 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
 #elif defined(SOKOL_METAL)
 _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shader_id,
                                             _sg_shader_t* shd, const rizz_shader_info* info,
-                                            const sg_pipeline_desc* desc) {
+                                            const sg_pipeline_desc* desc)
+{
     sx_unused(info);
     SOKOL_ASSERT(shd->slot.state == SG_RESOURCESTATE_VALID);
 
@@ -405,7 +408,8 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
 #elif defined(SOKOL_GLCORE33) || defined(SOKOL_GLES2) || defined(SOKOL_GLES3)
 _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shader_id,
                                             _sg_shader_t* shd, const rizz_shader_info* info,
-                                            const sg_pipeline_desc* desc) {
+                                            const sg_pipeline_desc* desc)
+{
     SOKOL_ASSERT(shd->slot.state == SG_RESOURCESTATE_VALID);
     sx_unused(desc);
 
@@ -434,7 +438,8 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
 
 static void sg_set_pipeline_shader(sg_pipeline pip_id, sg_shader prev_shader_id,
                                    sg_shader shader_id, const rizz_shader_info* info,
-                                   const sg_pipeline_desc* desc) {
+                                   const sg_pipeline_desc* desc)
+{
     SOKOL_ASSERT(pip_id.id != SG_INVALID_ID);
     _sg_pipeline_t* pip = _sg_lookup_pipeline(&_sg.pools, pip_id.id);
     SOKOL_ASSERT(pip && pip->slot.state == SG_RESOURCESTATE_VALID);
@@ -445,7 +450,8 @@ static void sg_set_pipeline_shader(sg_pipeline pip_id, sg_shader prev_shader_id,
     }
 }
 
-static void sg_map_buffer(sg_buffer buf_id, int offset, const void* data, int num_bytes) {
+static void sg_map_buffer(sg_buffer buf_id, int offset, const void* data, int num_bytes)
+{
     _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, buf_id.id);
     if (buf) {
         /* rewind append cursor in a new frame */
@@ -478,7 +484,8 @@ static void sg_map_buffer(sg_buffer buf_id, int offset, const void* data, int nu
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @texture
-static inline sg_image_type rizz__texture_get_type(const ddsktx_texture_info* tc) {
+static inline sg_image_type rizz__texture_get_type(const ddsktx_texture_info* tc)
+{
     sx_assert(!((tc->flags & DDSKTX_TEXTURE_FLAG_CUBEMAP) && (tc->num_layers > 1)) &&
               "cube-array textures are not supported");
     sx_assert(!(tc->num_layers > 1 && tc->depth > 1) && "3d-array textures are not supported");
@@ -493,7 +500,8 @@ static inline sg_image_type rizz__texture_get_type(const ddsktx_texture_info* tc
         return SG_IMAGETYPE_2D;
 }
 
-static inline sg_pixel_format rizz__texture_get_texture_format(ddsktx_format fmt) {
+static inline sg_pixel_format rizz__texture_get_texture_format(ddsktx_format fmt)
+{
     // clang-format off
     switch (fmt) {
     case DDSKTX_FORMAT_RGBA8:   return SG_PIXELFORMAT_RGBA8;
@@ -518,8 +526,9 @@ static inline sg_pixel_format rizz__texture_get_texture_format(ddsktx_format fmt
 }
 
 static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_params* params,
-                                                     const void*                   metadata) {
-    const sx_alloc*          alloc = params->alloc ? params->alloc : g_gfx_alloc;
+                                                     const void* metadata)
+{
+    const sx_alloc* alloc = params->alloc ? params->alloc : g_gfx_alloc;
     const rizz_texture_info* info = metadata;
 
     // TODO: allocate and cache texture data for later restoring (android+ES2)
@@ -536,10 +545,11 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
 }
 
 static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params,
-                                  const sx_mem_block* mem) {
+                                  const sx_mem_block* mem)
+{
     const rizz_texture_load_params* tparams = params->params;
-    rizz_texture*                   tex = data->obj.ptr;
-    sg_image_desc*                  desc = data->user;
+    rizz_texture* tex = data->obj.ptr;
+    sg_image_desc* desc = data->user;
     sx_assert(desc);
 
     *desc = (sg_image_desc){
@@ -560,7 +570,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
     sx_os_path_ext(ext, sizeof(ext), params->path);
     if (sx_strequalnocase(ext, ".dds") || sx_strequalnocase(ext, ".ktx")) {
         ddsktx_texture_info tc = { 0 };
-        ddsktx_error        err;
+        ddsktx_error err;
         if (ddsktx_parse(&tc, mem->data, mem->size, &err)) {
             switch (tex->info.type) {
             case SG_IMAGETYPE_2D: {
@@ -609,7 +619,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
             return false;
         }
     } else {
-        int      w, h, comp;
+        int w, h, comp;
         stbi_uc* pixels = stbi_load_from_memory(mem->data, mem->size, &w, &h, &comp, 4);
         if (pixels) {
             sx_assert(tex->info.width == w && tex->info.height == h);
@@ -624,12 +634,12 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
     return true;
 }
 
-static void rizz__texture_on_finalize(rizz_asset_load_data*         data,
-                                      const rizz_asset_load_params* params,
-                                      const sx_mem_block*           mem) {
+static void rizz__texture_on_finalize(rizz_asset_load_data* data,
+                                      const rizz_asset_load_params* params, const sx_mem_block* mem)
+{
     sx_unused(mem);
 
-    rizz_texture*  tex = data->obj.ptr;
+    rizz_texture* tex = data->obj.ptr;
     sg_image_desc* desc = data->user;
     sx_assert(desc);
 
@@ -648,13 +658,15 @@ static void rizz__texture_on_finalize(rizz_asset_load_data*         data,
 }
 
 static void rizz__texture_on_reload(rizz_asset handle, rizz_asset_obj prev_obj,
-                                    const sx_alloc* alloc) {
+                                    const sx_alloc* alloc)
+{
     sx_unused(prev_obj);
     sx_unused(handle);
     sx_unused(alloc);
 }
 
-static void rizz__texture_on_release(rizz_asset_obj obj, const sx_alloc* alloc) {
+static void rizz__texture_on_release(rizz_asset_obj obj, const sx_alloc* alloc)
+{
     rizz_texture* tex = obj.ptr;
     sx_assert(tex);
 
@@ -667,13 +679,14 @@ static void rizz__texture_on_release(rizz_asset_obj obj, const sx_alloc* alloc) 
 }
 
 static void rizz__texture_on_read_metadata(void* metadata, const rizz_asset_load_params* params,
-                                           const sx_mem_block* mem) {
+                                           const sx_mem_block* mem)
+{
     rizz_texture_info* info = metadata;
-    char               ext[32];
+    char ext[32];
     sx_os_path_ext(ext, sizeof(ext), params->path);
     if (sx_strequalnocase(ext, ".dds") || sx_strequalnocase(ext, ".ktx")) {
         ddsktx_texture_info tc = { 0 };
-        ddsktx_error        err;
+        ddsktx_error err;
         if (ddsktx_parse(&tc, mem->data, mem->size, &err)) {
             info->type = rizz__texture_get_type(&tc);
             info->format = rizz__texture_get_texture_format(tc.format);
@@ -713,11 +726,12 @@ static void rizz__texture_on_read_metadata(void* metadata, const rizz_asset_load
 }
 
 static rizz_texture rizz__texture_create_checker(int checker_size, int size,
-                                                 const sx_color colors[2]) {
+                                                 const sx_color colors[2])
+{
     sx_assert(size % 4 == 0 && "size must be multiple of four");
     sx_assert(size % checker_size == 0 && "checker_size must be dividable by size");
 
-    int       size_bytes = size * size * sizeof(uint32_t);
+    int size_bytes = size * size * sizeof(uint32_t);
     uint32_t* pixels = sx_malloc(g_gfx_alloc, size_bytes);
 
     // split into tiles and color them
@@ -774,7 +788,8 @@ static rizz_texture rizz__texture_create_checker(int checker_size, int size,
     return tex;
 }
 
-static void rizz__texture_init() {
+static void rizz__texture_init()
+{
     // register metadata struct reflection
     rizz_refl_enum(sg_image_type, SG_IMAGETYPE_2D);
     rizz_refl_enum(sg_image_type, SG_IMAGETYPE_CUBE);
@@ -870,7 +885,8 @@ static void rizz__texture_init() {
         (rizz_asset_obj){ .ptr = &g_gfx.tex_mgr.white_tex }, 0);
 }
 
-static void rizz__texture_release() {
+static void rizz__texture_release()
+{
     if (g_gfx.tex_mgr.white_tex.img.id)
         the__gfx.imm.destroy_image(g_gfx.tex_mgr.white_tex.img);
     if (g_gfx.tex_mgr.black_tex.img.id)
@@ -879,15 +895,18 @@ static void rizz__texture_release() {
         the__gfx.imm.destroy_image(g_gfx.tex_mgr.checker_tex.img);
 }
 
-static sg_image rizz__texture_white() {
+static sg_image rizz__texture_white()
+{
     return g_gfx.tex_mgr.white_tex.img;
 }
 
-static sg_image rizz__texture_black() {
+static sg_image rizz__texture_black()
+{
     return g_gfx.tex_mgr.black_tex.img;
 }
 
-static sg_image rizz__texture_checker() {
+static sg_image rizz__texture_checker()
+{
     return g_gfx.tex_mgr.checker_tex.img;
 }
 
@@ -937,7 +956,7 @@ struct sgs_chunk {
 
 // REFL
 struct sgs_chunk_refl {
-    char     name[32];
+    char name[32];
     uint32_t num_inputs;
     uint32_t num_textures;
     uint32_t num_uniform_buffers;
@@ -950,24 +969,24 @@ struct sgs_chunk_refl {
 };
 
 struct sgs_refl_input {
-    char     name[32];
-    int32_t  loc;
-    char     semantic[32];
+    char name[32];
+    int32_t loc;
+    char semantic[32];
     uint32_t semantic_index;
     uint32_t format;
 };
 
 struct sgs_refl_texture {
-    char     name[32];
-    int32_t  binding;
+    char name[32];
+    int32_t binding;
     uint32_t image_dim;
-    uint8_t  multisample;
-    uint8_t  is_array;
+    uint8_t multisample;
+    uint8_t is_array;
 };
 
 struct sgs_refl_uniformbuffer {
-    char     name[32];
-    int32_t  binding;
+    char name[32];
+    int32_t binding;
     uint32_t size_bytes;
     uint16_t array_size;
 };
@@ -975,7 +994,8 @@ struct sgs_refl_uniformbuffer {
 #pragma pack(pop)
 // End: SGS format
 
-static rizz_shader_lang rizz__shader_str_to_lang(const char* s) {
+static rizz_shader_lang rizz__shader_str_to_lang(const char* s)
+{
     if (sx_strequal(s, "gles"))
         return RIZZ_SHADER_LANG_GLES;
     else if (sx_strequal(s, "hlsl"))
@@ -988,7 +1008,8 @@ static rizz_shader_lang rizz__shader_str_to_lang(const char* s) {
         return _RIZZ_SHADER_LANG_COUNT;
 }
 
-static rizz_shader_lang rizz__shader_fourcc_to_lang(uint32_t fourcc) {
+static rizz_shader_lang rizz__shader_fourcc_to_lang(uint32_t fourcc)
+{
     if (fourcc == SGS_LANG_GLES)
         return RIZZ_SHADER_LANG_GLES;
     else if (fourcc == SGS_LANG_HLSL)
@@ -1001,7 +1022,8 @@ static rizz_shader_lang rizz__shader_fourcc_to_lang(uint32_t fourcc) {
         return _RIZZ_SHADER_LANG_COUNT;
 }
 
-static sg_vertex_format rizz__shader_str_to_vertex_format(const char* s) {
+static sg_vertex_format rizz__shader_str_to_vertex_format(const char* s)
+{
     if (sx_strequal(s, "float"))
         return SG_VERTEXFORMAT_FLOAT;
     else if (sx_strequal(s, "float2"))
@@ -1030,8 +1052,8 @@ static sg_vertex_format rizz__shader_str_to_vertex_format(const char* s) {
         return _SG_VERTEXFORMAT_NUM;
 }
 
-static sg_vertex_format rizz__shader_fourcc_to_vertex_format(uint32_t    fourcc,
-                                                             const char* semantic) {
+static sg_vertex_format rizz__shader_fourcc_to_vertex_format(uint32_t fourcc, const char* semantic)
+{
     if (fourcc == SGS_VERTEXFORMAT_FLOAT)
         return SG_VERTEXFORMAT_FLOAT;
     else if (fourcc == SGS_VERTEXFORMAT_FLOAT2)
@@ -1046,7 +1068,8 @@ static sg_vertex_format rizz__shader_fourcc_to_vertex_format(uint32_t    fourcc,
         return _SG_VERTEXFORMAT_NUM;
 }
 
-static sg_image_type rizz__shader_str_to_texture_type(const char* s, bool array) {
+static sg_image_type rizz__shader_str_to_texture_type(const char* s, bool array)
+{
     if (array && sx_strequal(s, "2d"))
         return SG_IMAGETYPE_ARRAY;
     else if (sx_strequal(s, "2d"))
@@ -1059,7 +1082,8 @@ static sg_image_type rizz__shader_str_to_texture_type(const char* s, bool array)
         return _SG_IMAGETYPE_DEFAULT;
 }
 
-static sg_image_type rizz__shader_fourcc_to_texture_type(uint32_t fourcc, bool array) {
+static sg_image_type rizz__shader_fourcc_to_texture_type(uint32_t fourcc, bool array)
+{
     if (array && fourcc == SGS_IMAGEDIM_2D) {
         return SG_IMAGETYPE_ARRAY;
     } else if (!array) {
@@ -1074,7 +1098,8 @@ static sg_image_type rizz__shader_fourcc_to_texture_type(uint32_t fourcc, bool a
 }
 
 static rizz_shader_refl* rizz__shader_parse_reflect_bin(const sx_alloc* alloc,
-                                                        const void* refl_data, uint32_t refl_size) {
+                                                        const void* refl_data, uint32_t refl_size)
+{
     sx_mem_reader r;
     sx_mem_init_reader(&r, refl_data, refl_size);
 
@@ -1149,8 +1174,9 @@ static rizz_shader_refl* rizz__shader_parse_reflect_bin(const sx_alloc* alloc,
 }
 
 static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
-                                                         const char*     stage_refl_json,
-                                                         sjson_context*  jctx) {
+                                                         const char* stage_refl_json,
+                                                         sjson_context* jctx)
+{
     // if json context is NULL, create one and close it later
     bool close = false;
     if (!jctx) {
@@ -1165,7 +1191,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
     }
 
     // count everything and allocate the whole block
-    sjson_node*       jstage = NULL;
+    sjson_node* jstage = NULL;
     rizz_shader_stage stage = _RIZZ_SHADER_STAGE_COUNT;
     if ((jstage = sjson_find_member(jroot, "vs")) != NULL)
         stage = RIZZ_SHADER_STAGE_VS;
@@ -1180,7 +1206,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
     }
 
     sjson_node* jinputs = NULL;
-    int         num_inputs = 0, num_uniforms = 0, num_textures = 0;
+    int num_inputs = 0, num_uniforms = 0, num_textures = 0;
 
     if (stage == RIZZ_SHADER_STAGE_VS) {
         jinputs = sjson_find_member(jstage, "inputs");
@@ -1217,9 +1243,10 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
     void* buff = refl + 1;
     if (jinputs) {
         refl->inputs = (rizz_shader_refl_input*)buff;
-        sjson_node*             jinput;
+        sjson_node* jinput;
         rizz_shader_refl_input* input = refl->inputs;
-        sjson_foreach(jinput, jinputs) {
+        sjson_foreach(jinput, jinputs)
+        {
             sx_strcpy(input->name, sizeof(input->name), sjson_get_string(jinput, "name", ""));
             sx_strcpy(input->semantic, sizeof(input->semantic),
                       sjson_get_string(jinput, "semantic", ""));
@@ -1233,9 +1260,10 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
 
     if (juniforms) {
         refl->uniform_buffers = (rizz_shader_refl_uniform_buffer*)buff;
-        sjson_node*                      jubo;
+        sjson_node* jubo;
         rizz_shader_refl_uniform_buffer* ubo = refl->uniform_buffers;
-        sjson_foreach(jubo, juniforms) {
+        sjson_foreach(jubo, juniforms)
+        {
             sx_strcpy(ubo->name, sizeof(ubo->name), sjson_get_string(jubo, "name", ""));
             ubo->size_bytes = sjson_get_int(jubo, "block_size", 0);
             ubo->binding = sjson_get_int(jubo, "binding", 0);
@@ -1251,9 +1279,10 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
 
     if (jtextures) {
         refl->textures = (rizz_shader_refl_texture*)buff;
-        sjson_node*               jtex;
+        sjson_node* jtex;
         rizz_shader_refl_texture* tex = refl->textures;
-        sjson_foreach(jtex, jtextures) {
+        sjson_foreach(jtex, jtextures)
+        {
             sx_strcpy(tex->name, sizeof(tex->name), sjson_get_string(jtex, "name", ""));
             tex->binding = sjson_get_int(jtex, "binding", 0);
             tex->type = rizz__shader_str_to_texture_type(sjson_get_string(jtex, "dimension", ""),
@@ -1270,23 +1299,25 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
     return refl;
 }
 
-static void rizz__shader_free_reflect(rizz_shader_refl* refl, const sx_alloc* alloc) {
+static void rizz__shader_free_reflect(rizz_shader_refl* refl, const sx_alloc* alloc)
+{
     sx_assert(refl);
     sx_free(alloc, refl);
 }
 
 typedef struct {
     const rizz_shader_refl* refl;
-    const void*             code;
-    int                     code_size;
+    const void* code;
+    int code_size;
 } rizz__shader_setup_desc_stage;
 
-static sg_shader_desc* rizz__shader_setup_desc(sg_shader_desc*         desc,
+static sg_shader_desc* rizz__shader_setup_desc(sg_shader_desc* desc,
                                                const rizz_shader_refl* vs_refl, const void* vs,
                                                int vs_size, const rizz_shader_refl* fs_refl,
-                                               const void* fs, int fs_size) {
+                                               const void* fs, int fs_size)
+{
     sx_memset(desc, 0x0, sizeof(sg_shader_desc));
-    const int                     num_stages = 2;
+    const int num_stages = 2;
     rizz__shader_setup_desc_stage stages[] = {
         { .refl = vs_refl, .code = vs, .code_size = vs_size },
         { .refl = fs_refl, .code = fs, .code_size = fs_size }
@@ -1294,7 +1325,7 @@ static sg_shader_desc* rizz__shader_setup_desc(sg_shader_desc*         desc,
 
     for (int i = 0; i < num_stages; i++) {
         const rizz__shader_setup_desc_stage* stage = &stages[i];
-        sg_shader_stage_desc*                stage_desc = NULL;
+        sg_shader_stage_desc* stage_desc = NULL;
         // clang-format off
         switch (stage->refl->stage) {
         case RIZZ_SHADER_STAGE_VS:   stage_desc = &desc->vs;             break;
@@ -1325,7 +1356,7 @@ static sg_shader_desc* rizz__shader_setup_desc(sg_shader_desc*         desc,
         // uniform blocks
         for (int iub = 0; iub < stage->refl->num_uniform_buffers; iub++) {
             rizz_shader_refl_uniform_buffer* rub = &stage->refl->uniform_buffers[iub];
-            sg_shader_uniform_block_desc*    ub = &stage_desc->uniform_blocks[rub->binding];
+            sg_shader_uniform_block_desc* ub = &stage_desc->uniform_blocks[rub->binding];
             ub->size = rub->size_bytes;
             if (stage->refl->flatten_ubos) {
                 ub->uniforms[0].array_count = rub->array_size;
@@ -1340,7 +1371,7 @@ static sg_shader_desc* rizz__shader_setup_desc(sg_shader_desc*         desc,
 
         for (int itex = 0; itex < stage->refl->num_textures; itex++) {
             rizz_shader_refl_texture* rtex = &stage->refl->textures[itex];
-            sg_shader_image_desc*     img = &stage_desc->images[rtex->binding];
+            sg_shader_image_desc* img = &stage_desc->images[rtex->binding];
             img->name = rtex->name;
             img->type = rtex->type;
         }
@@ -1352,7 +1383,8 @@ static rizz_shader rizz__shader_make_with_data(const sx_alloc* alloc, uint32_t v
                                                const uint32_t* vs_data, uint32_t vs_refl_size,
                                                const uint32_t* vs_refl_json, uint32_t fs_data_size,
                                                const uint32_t* fs_data, uint32_t fs_refl_size,
-                                               const uint32_t* fs_refl_json) {
+                                               const uint32_t* fs_refl_json)
+{
     sx_unused(fs_refl_size);
     sx_unused(vs_refl_size);
 
@@ -1361,7 +1393,7 @@ static rizz_shader rizz__shader_make_with_data(const sx_alloc* alloc, uint32_t v
         return (rizz_shader){ 0 };
     }
 
-    sg_shader_desc    shader_desc = { 0 };
+    sg_shader_desc shader_desc = { 0 };
     rizz_shader_refl* vs_refl =
         rizz__shader_parse_reflect_json(alloc, (const char*)vs_refl_json, jctx);
     sjson_reset_context(jctx);
@@ -1382,15 +1414,16 @@ static rizz_shader rizz__shader_make_with_data(const sx_alloc* alloc, uint32_t v
     return s;
 }
 
-static sg_pipeline_desc* rizz__shader_bindto_pipeline_sg(sg_shader                     shd,
+static sg_pipeline_desc* rizz__shader_bindto_pipeline_sg(sg_shader shd,
                                                          const rizz_shader_refl_input* inputs,
                                                          int num_inputs, sg_pipeline_desc* desc,
-                                                         const rizz_vertex_layout* vl) {
+                                                         const rizz_vertex_layout* vl)
+{
     sx_assert(vl);
     desc->shader = shd;
 
     // map offsets in the `vl` to shader inputs
-    int                     index = 0;
+    int index = 0;
     const rizz_vertex_attr* attr = &vl->attrs[0];
     sx_memset(desc->layout.attrs, 0x0, sizeof(sg_vertex_attr_desc) * SG_MAX_VERTEX_ATTRIBUTES);
 
@@ -1424,14 +1457,16 @@ static sg_pipeline_desc* rizz__shader_bindto_pipeline_sg(sg_shader              
 
 
 static sg_pipeline_desc* rizz__shader_bindto_pipeline(rizz_shader* shd, sg_pipeline_desc* desc,
-                                                      const rizz_vertex_layout* vl) {
+                                                      const rizz_vertex_layout* vl)
+{
     return rizz__shader_bindto_pipeline_sg(shd->shd, shd->info.inputs, shd->info.num_inputs, desc,
                                            vl);
 }
 
 static rizz_asset_load_data rizz__shader_on_prepare(const rizz_asset_load_params* params,
-                                                    const void*                   metadata) {
-    const sx_alloc*         alloc = params->alloc ? params->alloc : g_gfx_alloc;
+                                                    const void* metadata)
+{
+    const sx_alloc* alloc = params->alloc ? params->alloc : g_gfx_alloc;
     const rizz_shader_info* info = metadata;
 
     rizz_shader* shader = sx_malloc(alloc, sizeof(rizz_shader));
@@ -1445,15 +1480,16 @@ static rizz_asset_load_data rizz__shader_on_prepare(const rizz_asset_load_params
 }
 
 static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params,
-                                 const sx_mem_block* mem) {
+                                 const sx_mem_block* mem)
+{
     sx_unused(params);
 
     const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
     sg_shader_desc* shader_desc = data->user;
 
     rizz_shader_refl *vs_refl = NULL, *fs_refl = NULL;
-    const uint8_t *   vs_data = NULL, *fs_data = NULL;
-    int               vs_size = 0, fs_size = 0;
+    const uint8_t *vs_data = NULL, *fs_data = NULL;
+    int vs_size = 0, fs_size = 0;
 
     sx_mem_reader reader;
     sx_mem_init_reader(&reader, mem->data, mem->size);
@@ -1474,7 +1510,7 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
         sx_mem_read_var(&reader, stage_type);
 
         rizz_shader_code_type code_type = RIZZ_SHADER_CODE_SOURCE;
-        rizz_shader_stage     stage;
+        rizz_shader_stage stage;
 
         sx_iff_chunk code_chunk = sx_mem_get_iff_chunk(&reader, stage_chunk.size, SGS_CHUNK_CODE);
         if (code_chunk.pos == -1) {
@@ -1528,13 +1564,13 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
     return true;
 }
 
-static void rizz__shader_on_finalize(rizz_asset_load_data*         data,
-                                     const rizz_asset_load_params* params,
-                                     const sx_mem_block*           mem) {
+static void rizz__shader_on_finalize(rizz_asset_load_data* data,
+                                     const rizz_asset_load_params* params, const sx_mem_block* mem)
+{
     sx_unused(mem);
     sx_unused(params);
 
-    rizz_shader*    shader = data->obj.ptr;
+    rizz_shader* shader = data->obj.ptr;
     sg_shader_desc* desc = data->user;
     sx_assert(desc);
 
@@ -1544,15 +1580,16 @@ static void rizz__shader_on_finalize(rizz_asset_load_data*         data,
 }
 
 static void rizz__shader_on_reload(rizz_asset handle, rizz_asset_obj prev_obj,
-                                   const sx_alloc* alloc) {
+                                   const sx_alloc* alloc)
+{
     sx_unused(alloc);
 
-    sg_shader    prev_shader = ((rizz_shader*)prev_obj.ptr)->shd;
+    sg_shader prev_shader = ((rizz_shader*)prev_obj.ptr)->shd;
     rizz_shader* new_shader = (rizz_shader*)the__asset.obj(handle).ptr;
     for (int i = 0, c = sx_array_count(g_gfx.pips); i < c; i++) {
 #if defined(SOKOL_METAL)
         const sg_pipeline_desc* _desc = &g_gfx.pips[i].desc;
-        sg_pipeline             _pip = g_gfx.pips[i].pip;
+        sg_pipeline _pip = g_gfx.pips[i].pip;
 #else
         const sg_pipeline_desc* _desc = NULL;
         sg_pipeline _pip = g_gfx.pips[i];
@@ -1561,7 +1598,8 @@ static void rizz__shader_on_reload(rizz_asset handle, rizz_asset_obj prev_obj,
     }
 }
 
-static void rizz__shader_on_release(rizz_asset_obj obj, const sx_alloc* alloc) {
+static void rizz__shader_on_release(rizz_asset_obj obj, const sx_alloc* alloc)
+{
     rizz_shader* shader = obj.ptr;
     sx_assert(shader);
 
@@ -1574,7 +1612,8 @@ static void rizz__shader_on_release(rizz_asset_obj obj, const sx_alloc* alloc) {
 }
 
 static void rizz__shader_on_read_metadata(void* metadata, const rizz_asset_load_params* params,
-                                          const sx_mem_block* mem) {
+                                          const sx_mem_block* mem)
+{
     sx_unused(params);
 
     rizz_shader_info* info = metadata;
@@ -1604,7 +1643,7 @@ static void rizz__shader_on_read_metadata(void* metadata, const rizz_asset_load_
             sx_iff_chunk reflect_chunk =
                 sx_mem_get_iff_chunk(&reader, stage_chunk.size, SGS_CHUNK_REFL);
             if (reflect_chunk.pos != -1) {
-                const sx_alloc*   tmp_alloc = the__core.tmp_alloc_push();
+                const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
                 rizz_shader_refl* refl = rizz__shader_parse_reflect_bin(
                     tmp_alloc, reader.data + reflect_chunk.pos, reflect_chunk.size);
                 sx_memcpy(info->inputs, refl->inputs,
@@ -1619,7 +1658,8 @@ static void rizz__shader_on_read_metadata(void* metadata, const rizz_asset_load_
     }
 }
 
-static void rizz__shader_init() {
+static void rizz__shader_init()
+{
     // NOTE: shaders are always forced to load in blocking mode
     the__asset.register_asset_type(
         "shader",
@@ -1659,31 +1699,31 @@ static void rizz__shader_init() {
 // @font
 typedef struct {
     uint32_t second_id;
-    float    amount;
+    float amount;
 } rizz__font_glyph_kern;
 
 typedef struct {
     uint32_t id;
-    sx_rect  uvs;
-    float    xoffset;     // pixels to offset right/left
-    float    yoffset;     // pixels to offset up/down
-    float    xadvance;    // pixels to advance to next char
-    int      num_kerns;
-    int      kern_idx;
+    sx_rect uvs;
+    float xoffset;     // pixels to offset right/left
+    float yoffset;     // pixels to offset up/down
+    float xadvance;    // pixels to advance to next char
+    int num_kerns;
+    int kern_idx;
 } rizz__font_glyph;
 
 typedef struct {
-    rizz_font              f;
-    rizz__font_glyph*      glyphs;
+    rizz_font f;
+    rizz__font_glyph* glyphs;
     rizz__font_glyph_kern* kerns;
-    sx_hashtbl             glyph_tbl;    // key: glyph-id, value: index-to-glyphs
+    sx_hashtbl glyph_tbl;    // key: glyph-id, value: index-to-glyphs
 } rizz__font;
 
 typedef struct {
-    sx_vec2  pos;
-    sx_vec2  uv;
-    sx_vec3  transform1;
-    sx_vec3  transform2;
+    sx_vec2 pos;
+    sx_vec2 uv;
+    sx_vec3 transform1;
+    sx_vec3 transform2;
     sx_color color;
 } rizz__text_vertex;
 
@@ -1691,18 +1731,18 @@ typedef struct {
 #define RIZZ__FNT_SIGN "BMF"
 #pragma pack(push, 1)
 typedef struct {
-    int16_t  font_size;
-    int8_t   bit_field;
-    uint8_t  charset;
+    int16_t font_size;
+    int8_t bit_field;
+    uint8_t charset;
     uint16_t stretch_h;
-    uint8_t  aa;
-    uint8_t  padding_up;
-    uint8_t  padding_right;
-    uint8_t  padding_dwn;
-    uint8_t  padding_left;
-    uint8_t  spacing_horz;
-    uint8_t  spacing_vert;
-    uint8_t  outline;
+    uint8_t aa;
+    uint8_t padding_up;
+    uint8_t padding_right;
+    uint8_t padding_dwn;
+    uint8_t padding_left;
+    uint8_t spacing_horz;
+    uint8_t spacing_vert;
+    uint8_t outline;
     /* name (str) */
 } rizz__fnt_info;
 
@@ -1712,11 +1752,11 @@ typedef struct {
     uint16_t scale_w;
     uint16_t scale_h;
     uint16_t pages;
-    int8_t   bit_field;
-    uint8_t  alpha_channel;
-    uint8_t  red_channel;
-    uint8_t  green_channel;
-    uint8_t  blue_channel;
+    int8_t bit_field;
+    uint8_t alpha_channel;
+    uint8_t red_channel;
+    uint8_t green_channel;
+    uint8_t blue_channel;
 } rizz__fnt_common;
 
 typedef struct {
@@ -1725,25 +1765,25 @@ typedef struct {
 
 typedef struct {
     uint32_t id;
-    int16_t  x;
-    int16_t  y;
-    int16_t  width;
-    int16_t  height;
-    int16_t  xoffset;
-    int16_t  yoffset;
-    int16_t  xadvance;
-    uint8_t  page;
-    uint8_t  channel;
+    int16_t x;
+    int16_t y;
+    int16_t width;
+    int16_t height;
+    int16_t xoffset;
+    int16_t yoffset;
+    int16_t xadvance;
+    uint8_t page;
+    uint8_t channel;
 } rizz__fnt_char;
 
 typedef struct {
     uint32_t first;
     uint32_t second;
-    int16_t  amount;
+    int16_t amount;
 } rizz__fnt_kern;
 
 typedef struct {
-    uint8_t  id;
+    uint8_t id;
     uint32_t size;
 } rizz__fnt_block;
 #pragma pack(pop)
@@ -1751,13 +1791,14 @@ typedef struct {
 // metadata
 typedef struct {
     char img_filepath[RIZZ_MAX_PATH];
-    int  img_width;
-    int  img_height;
-    int  num_glyphs;
-    int  num_kerns;
+    int img_width;
+    int img_height;
+    int num_glyphs;
+    int num_kerns;
 } rizz__font_metadata;
 
-static char* rizz__fnt_text_read_keyval(char* token, char* key, char* value, int max_chars) {
+static char* rizz__fnt_text_read_keyval(char* token, char* key, char* value, int max_chars)
+{
     char* equal = (char*)sx_strchar(token, '=');
     if (equal) {
         sx_strncpy(key, max_chars, token, (int)(intptr_t)(equal - token));
@@ -1770,7 +1811,8 @@ static char* rizz__fnt_text_read_keyval(char* token, char* key, char* value, int
         } else {
             // search for next whitespace (where key=value ends)
             val_end = val_start;
-            while (!sx_isspace(*val_end)) ++val_end;
+            while (!sx_isspace(*val_end))
+                ++val_end;
         }
         sx_strncpy(value, max_chars, val_start, (int)(intptr_t)(val_end - val_start));
         return *val_end != '"' ? val_end : (val_end + 1);
@@ -1781,9 +1823,10 @@ static char* rizz__fnt_text_read_keyval(char* token, char* key, char* value, int
     }
 }
 
-static int rizz__fnt_text_parse_numbers(char* value, int16_t* numbers, int max_numbers) {
-    int   index = 0;
-    char  snum[16];
+static int rizz__fnt_text_parse_numbers(char* value, int16_t* numbers, int max_numbers)
+{
+    int index = 0;
+    char snum[16];
     char* token = (char*)sx_strchar(value, ',');
     while (token) {
         sx_strncpy(snum, sizeof(snum), value, (int)(intptr_t)(token - value));
@@ -1798,7 +1841,8 @@ static int rizz__fnt_text_parse_numbers(char* value, int16_t* numbers, int max_n
     return index;
 }
 
-static void rizz__fnt_text_read_info(char* token, rizz_font* font) {
+static void rizz__fnt_text_read_info(char* token, rizz_font* font)
+{
     char key[32], value[32];
 
     token = (char*)sx_skip_whitespace(token);
@@ -1825,7 +1869,8 @@ static void rizz__fnt_text_read_info(char* token, rizz_font* font) {
     }
 }
 
-static void rizz__fnt_text_read_common(char* token, rizz_font* font) {
+static void rizz__fnt_text_read_common(char* token, rizz_font* font)
+{
     char key[32], value[32];
     token = (char*)sx_skip_whitespace(token);
     while (*token) {
@@ -1844,7 +1889,8 @@ static void rizz__fnt_text_read_common(char* token, rizz_font* font) {
 }
 
 static void rizz__fnt_text_read_page(char* token, char* img_filepath, int img_filepath_sz,
-                                     const char* fnt_path) {
+                                     const char* fnt_path)
+{
     char key[32], value[32];
     token = (char*)sx_skip_whitespace(token);
     while (*token) {
@@ -1858,7 +1904,8 @@ static void rizz__fnt_text_read_page(char* token, char* img_filepath, int img_fi
     }
 }
 
-static int rizz__fnt_text_read_count(char* token) {
+static int rizz__fnt_text_read_count(char* token)
+{
     char key[32], value[32];
     token = (char*)sx_skip_whitespace(token);
     token = rizz__fnt_text_read_keyval(token, key, value, 32);
@@ -1869,8 +1916,9 @@ static int rizz__fnt_text_read_count(char* token) {
 }
 
 static void rizz__fnt_text_read_char(char* token, rizz__font_glyph* g, int* char_width,
-                                     float img_width, float img_height) {
-    char  key[32], value[32];
+                                     float img_width, float img_height)
+{
+    char key[32], value[32];
     float x = 0, y = 0, w = 0, h = 0;
     token = (char*)sx_skip_whitespace(token);
     while (*token) {
@@ -1901,9 +1949,10 @@ static void rizz__fnt_text_read_char(char* token, rizz__font_glyph* g, int* char
 }
 
 static void rizz__fnt_text_read_kern(char* token, rizz__font_glyph_kern* k, int kern_idx,
-                                     rizz__font_glyph* glyphs, int num_glyphs) {
+                                     rizz__font_glyph* glyphs, int num_glyphs)
+{
     char key[32], value[32];
-    int  first_glyph_idx = -1;
+    int first_glyph_idx = -1;
     token = (char*)sx_skip_whitespace(token);
     while (*token) {
         token = rizz__fnt_text_read_keyval(token, key, value, 32);
@@ -1929,7 +1978,8 @@ static void rizz__fnt_text_read_kern(char* token, rizz__font_glyph_kern* k, int 
     ++glyphs[first_glyph_idx].num_kerns;
 }
 
-static bool rizz__fnt_text_check(char* buff, int len) {
+static bool rizz__fnt_text_check(char* buff, int len)
+{
     for (int i = 0; i < len; i++) {
         if (buff[i] <= 0)
             return false;
@@ -1938,8 +1988,9 @@ static bool rizz__fnt_text_check(char* buff, int len) {
 }
 
 static rizz_asset_load_data rizz__font_on_prepare(const rizz_asset_load_params* params,
-                                                  const void*                   metadata) {
-    const sx_alloc*            alloc = params->alloc ? params->alloc : g_gfx_alloc;
+                                                  const void* metadata)
+{
+    const sx_alloc* alloc = params->alloc ? params->alloc : g_gfx_alloc;
     const rizz__font_metadata* meta = metadata;
     sx_assert(meta);
 
@@ -1974,8 +2025,9 @@ static rizz_asset_load_data rizz__font_on_prepare(const rizz_asset_load_params* 
 }
 
 static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params,
-                               const sx_mem_block* mem) {
-    rizz__font*   font = data->obj.ptr;
+                               const sx_mem_block* mem)
+{
+    rizz__font* font = data->obj.ptr;
     sx_mem_reader rd;
     sx_mem_init_reader(&rd, mem->data, mem->size);
 
@@ -1993,8 +2045,8 @@ static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load
         }
 
         //
-        rizz__fnt_block  block;
-        rizz__fnt_info   info;
+        rizz__fnt_block block;
+        rizz__fnt_info info;
         rizz__fnt_common common;
         sx_mem_read(&rd, &block, sizeof(block));
         sx_assert(block.id == 1);
@@ -2013,8 +2065,8 @@ static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load
 
         // Font pages (textures)
         rizz__fnt_page page;
-        char           dirname[RIZZ_MAX_PATH];
-        char           img_filepath[RIZZ_MAX_PATH];
+        char dirname[RIZZ_MAX_PATH];
+        char img_filepath[RIZZ_MAX_PATH];
         sx_os_path_dirname(dirname, sizeof(dirname), params->path);
 
         sx_mem_read(&rd, &block, sizeof(block));
@@ -2025,14 +2077,14 @@ static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load
         // Characters (glyphs)
         sx_mem_read(&rd, &block, sizeof(block));
         sx_assert(block.id == 4);
-        int             num_glyphs = block.size / sizeof(rizz__fnt_char);
+        int num_glyphs = block.size / sizeof(rizz__fnt_char);
         rizz__fnt_char* chars = alloca(sizeof(rizz__fnt_char) * num_glyphs);
         sx_assert(chars);
         sx_mem_read(&rd, chars, block.size);
 
         // Kernings
-        int             last_r = rd.pos != rd.top ? sx_mem_read(&rd, &block, sizeof(block)) : 0;
-        int             num_kerns = block.size / sizeof(rizz__fnt_kern);
+        int last_r = rd.pos != rd.top ? sx_mem_read(&rd, &block, sizeof(block)) : 0;
+        int num_kerns = block.size / sizeof(rizz__fnt_kern);
         rizz__fnt_kern* kerns = NULL;
         if (block.id == 5 && num_kerns > 0 && last_r == sizeof(block)) {
             kerns = alloca(sizeof(rizz__fnt_kern) * num_kerns);
@@ -2095,7 +2147,7 @@ static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load
         // text
         // read line by line and parse needed information
         const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
-        char*           buff = sx_malloc(tmp_alloc, mem->size + 1);
+        char* buff = sx_malloc(tmp_alloc, mem->size + 1);
         if (!buff) {
             sx_out_of_memory();
             return false;
@@ -2110,14 +2162,14 @@ static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load
 
         // check if it's character
         char* eol;
-        char  img_filepath[RIZZ_MAX_PATH];
-        char  line[1024];
-        int   char_idx = 0;
-        int   kern_idx = 0;
+        char img_filepath[RIZZ_MAX_PATH];
+        char line[1024];
+        int char_idx = 0;
+        int kern_idx = 0;
 
         while ((eol = (char*)sx_strchar(buff, '\n'))) {
             sx_strncpy(line, sizeof(line), buff, (int)(intptr_t)(eol - buff));
-            char  name[32];
+            char name[32];
             char* name_end = (char*)sx_skip_word(line);
             sx_assert(name_end);
             sx_strncpy(name, sizeof(name), line, (int)(intptr_t)(name_end - line));
@@ -2153,20 +2205,22 @@ static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load
 }
 
 static void rizz__font_on_finalize(rizz_asset_load_data* data, const rizz_asset_load_params* params,
-                                   const sx_mem_block* mem) {
+                                   const sx_mem_block* mem)
+{
     sx_unused(data);
     sx_unused(params);
     sx_unused(mem);
 }
 
-static void rizz__font_on_reload(rizz_asset handle, rizz_asset_obj prev_obj,
-                                 const sx_alloc* alloc) {
+static void rizz__font_on_reload(rizz_asset handle, rizz_asset_obj prev_obj, const sx_alloc* alloc)
+{
     sx_unused(handle);
     sx_unused(prev_obj);
     sx_unused(alloc);
 }
 
-static void rizz__font_on_release(rizz_asset_obj obj, const sx_alloc* alloc) {
+static void rizz__font_on_release(rizz_asset_obj obj, const sx_alloc* alloc)
+{
     rizz__font* font = obj.ptr;
     sx_assert(font);
 
@@ -2180,9 +2234,10 @@ static void rizz__font_on_release(rizz_asset_obj obj, const sx_alloc* alloc) {
 }
 
 static void rizz__font_on_read_metadata(void* metadata, const rizz_asset_load_params* params,
-                                        const sx_mem_block* mem) {
+                                        const sx_mem_block* mem)
+{
     rizz__font_metadata* meta = metadata;
-    sx_mem_reader        rd;
+    sx_mem_reader rd;
     sx_mem_init_reader(&rd, mem->data, mem->size);
 
     // read first 3-bytes and check if we have binary or (probably) text formats
@@ -2197,10 +2252,10 @@ static void rizz__font_on_read_metadata(void* metadata, const rizz_asset_load_pa
             return;
         }
 
-        rizz__fnt_block  block;
-        rizz__fnt_info   info;
+        rizz__fnt_block block;
+        rizz__fnt_info info;
         rizz__fnt_common common;
-        char             name[256];
+        char name[256];
 
         sx_mem_read(&rd, &block, sizeof(block));
         sx_assert(block.id == 1);
@@ -2217,7 +2272,7 @@ static void rizz__font_on_read_metadata(void* metadata, const rizz_asset_load_pa
 
         // Font pages (textures)
         rizz__fnt_page page;
-        char           dirname[RIZZ_MAX_PATH];
+        char dirname[RIZZ_MAX_PATH];
         sx_os_path_dirname(dirname, sizeof(dirname), params->path);
         sx_mem_read(&rd, &block, sizeof(block));
         sx_assert(block.id == 3);
@@ -2241,7 +2296,7 @@ static void rizz__font_on_read_metadata(void* metadata, const rizz_asset_load_pa
         // text
         // read line by line and parse needed information
         const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
-        char*           buff = sx_malloc(tmp_alloc, mem->size + 1);
+        char* buff = sx_malloc(tmp_alloc, mem->size + 1);
         if (!buff) {
             sx_out_of_memory();
             return;
@@ -2255,13 +2310,13 @@ static void rizz__font_on_read_metadata(void* metadata, const rizz_asset_load_pa
         }
 
         // check if it's character
-        char*     eol;
+        char* eol;
         rizz_font fnt = { .name = { 0 } };
-        char      img_filepath[RIZZ_MAX_PATH];
-        char      line[1024];
+        char img_filepath[RIZZ_MAX_PATH];
+        char line[1024];
         while ((eol = (char*)sx_strchar(buff, '\n'))) {
             sx_strncpy(line, sizeof(line), buff, (int)(intptr_t)(eol - buff));
-            char  name[32];
+            char name[32];
             char* name_end = (char*)sx_skip_word(line);
             sx_assert(name_end);
             sx_strncpy(name, sizeof(name), line, (int)(intptr_t)(name_end - line));
@@ -2290,7 +2345,8 @@ static void rizz__font_on_read_metadata(void* metadata, const rizz_asset_load_pa
     }
 }
 
-static void rizz__font_init() {
+static void rizz__font_init()
+{
     rizz_refl_field(rizz__font_metadata, char[RIZZ_MAX_PATH], img_filepath, "img_filepath");
     rizz_refl_field(rizz__font_metadata, int, img_width, "img_width");
     rizz_refl_field(rizz__font_metadata, int, img_height, "img_height");
@@ -2313,7 +2369,8 @@ static void rizz__font_init() {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @common
-static inline void rizz__stage_add_child(rizz_gfx_stage parent, rizz_gfx_stage child) {
+static inline void rizz__stage_add_child(rizz_gfx_stage parent, rizz_gfx_stage child)
+{
     sx_assert(parent.id);
     sx_assert(child.id);
 
@@ -2331,7 +2388,8 @@ static inline void rizz__stage_add_child(rizz_gfx_stage parent, rizz_gfx_stage c
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // trace graphics commands
 
-static void rizz__trace_make_buffer(const sg_buffer_desc* desc, sg_buffer result, void* user_data) {
+static void rizz__trace_make_buffer(const sg_buffer_desc* desc, sg_buffer result, void* user_data)
+{
     sx_unused(user_data);
 
     if (g_gfx.record_make_commands) {
@@ -2347,7 +2405,8 @@ static void rizz__trace_make_buffer(const sg_buffer_desc* desc, sg_buffer result
     ++g_gfx.trace.t.num_buffers;
 }
 
-static void rizz__trace_make_image(const sg_image_desc* desc, sg_image result, void* user_data) {
+static void rizz__trace_make_image(const sg_image_desc* desc, sg_image result, void* user_data)
+{
     sx_unused(user_data);
     if (g_gfx.record_make_commands) {
         const int32_t _cmd = GFX_COMMAND_MAKE_IMAGE;
@@ -2363,7 +2422,7 @@ static void rizz__trace_make_image(const sg_image_desc* desc, sg_image result, v
         int bytesize = _sg_is_valid_rendertarget_depth_format(desc->pixel_format)
                            ? 4
                            : _sg_pixelformat_bytesize(desc->pixel_format);
-        int     pixels = desc->width * desc->height * desc->layers;
+        int pixels = desc->width * desc->height * desc->layers;
         int64_t size = pixels * bytesize;
         g_gfx.trace.t.render_target_size += size;
         g_gfx.trace.t.render_target_peak =
@@ -2373,7 +2432,8 @@ static void rizz__trace_make_image(const sg_image_desc* desc, sg_image result, v
     ++g_gfx.trace.t.num_images;
 }
 
-static void rizz__trace_make_shader(const sg_shader_desc* desc, sg_shader result, void* user_data) {
+static void rizz__trace_make_shader(const sg_shader_desc* desc, sg_shader result, void* user_data)
+{
     sx_unused(user_data);
 
     if (g_gfx.record_make_commands) {
@@ -2387,7 +2447,8 @@ static void rizz__trace_make_shader(const sg_shader_desc* desc, sg_shader result
 }
 
 static void rizz__trace_make_pipeline(const sg_pipeline_desc* desc, sg_pipeline result,
-                                      void* user_data) {
+                                      void* user_data)
+{
     sx_unused(user_data);
 
     if (g_gfx.record_make_commands) {
@@ -2400,7 +2461,8 @@ static void rizz__trace_make_pipeline(const sg_pipeline_desc* desc, sg_pipeline 
     ++g_gfx.trace.t.num_pipelines;
 }
 
-static void rizz__trace_make_pass(const sg_pass_desc* desc, sg_pass result, void* user_data) {
+static void rizz__trace_make_pass(const sg_pass_desc* desc, sg_pass result, void* user_data)
+{
     sx_unused(user_data);
 
     if (g_gfx.record_make_commands) {
@@ -2413,14 +2475,16 @@ static void rizz__trace_make_pass(const sg_pass_desc* desc, sg_pass result, void
     ++g_gfx.trace.t.num_passes;
 }
 
-static void rizz__trace_destroy_buffer(sg_buffer buf_id, void* user_data) {
+static void rizz__trace_destroy_buffer(sg_buffer buf_id, void* user_data)
+{
     sx_unused(user_data);
     _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, buf_id.id);
     g_gfx.trace.t.buffer_size -= buf->size;
     --g_gfx.trace.t.num_buffers;
 }
 
-static void rizz__trace_destroy_image(sg_image img_id, void* user_data) {
+static void rizz__trace_destroy_image(sg_image img_id, void* user_data)
+{
     sx_unused(user_data);
     _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
     if (img->render_target && _sg_is_valid_rendertarget_color_format(img->pixel_format) &&
@@ -2430,33 +2494,36 @@ static void rizz__trace_destroy_image(sg_image img_id, void* user_data) {
         int bytesize = _sg_is_valid_rendertarget_depth_format(img->pixel_format)
                            ? 4
                            : _sg_pixelformat_bytesize(img->pixel_format);
-        int     pixels = img->width * img->height * img->depth;
+        int pixels = img->width * img->height * img->depth;
         int64_t size = pixels * bytesize;
         g_gfx.trace.t.render_target_size -= size;
     }
     --g_gfx.trace.t.num_images;
 }
 
-static void rizz__trace_destroy_shader(sg_shader shd, void* user_data) {
+static void rizz__trace_destroy_shader(sg_shader shd, void* user_data)
+{
     sx_unused(shd);
     sx_unused(user_data);
     --g_gfx.trace.t.num_shaders;
 }
 
-static void rizz__trace_destroy_pipeline(sg_pipeline pip, void* user_data) {
+static void rizz__trace_destroy_pipeline(sg_pipeline pip, void* user_data)
+{
     sx_unused(pip);
     sx_unused(user_data);
     --g_gfx.trace.t.num_pipelines;
 }
 
-static void rizz__trace_destroy_pass(sg_pass pass, void* user_data) {
+static void rizz__trace_destroy_pass(sg_pass pass, void* user_data)
+{
     sx_unused(pass);
     sx_unused(user_data);
     --g_gfx.trace.t.num_passes;
 }
 
-static void rizz__trace_begin_pass(sg_pass pass, const sg_pass_action* pass_action,
-                                   void* user_data) {
+static void rizz__trace_begin_pass(sg_pass pass, const sg_pass_action* pass_action, void* user_data)
+{
     sx_unused(user_data);
     sx_unused(pass);
     sx_unused(pass_action);
@@ -2464,7 +2531,8 @@ static void rizz__trace_begin_pass(sg_pass pass, const sg_pass_action* pass_acti
 }
 
 static void rizz__trace_begin_default_pass(const sg_pass_action* pass_action, int width, int height,
-                                           void* user_data) {
+                                           void* user_data)
+{
     sx_unused(pass_action);
     sx_unused(width);
     sx_unused(height);
@@ -2472,14 +2540,15 @@ static void rizz__trace_begin_default_pass(const sg_pass_action* pass_action, in
     ++g_gfx.trace.t.num_apply_passes;
 }
 
-static void rizz__trace_apply_pipeline(sg_pipeline pip, void* user_data) {
+static void rizz__trace_apply_pipeline(sg_pipeline pip, void* user_data)
+{
     sx_unused(user_data);
     sx_unused(pip);
     ++g_gfx.trace.t.num_apply_pipelines;
 }
 
-static void rizz__trace_draw(int base_element, int num_elements, int num_instances,
-                             void* user_data) {
+static void rizz__trace_draw(int base_element, int num_elements, int num_instances, void* user_data)
+{
     sx_unused(user_data);
     sx_unused(base_element);
 
@@ -2488,7 +2557,8 @@ static void rizz__trace_draw(int base_element, int num_elements, int num_instanc
     g_gfx.trace.t.num_elements += num_elements;
 }
 
-void rizz__gfx_trace_reset_frame_stats() {
+void rizz__gfx_trace_reset_frame_stats()
+{
     g_gfx.trace.t.num_draws = 0;
     g_gfx.trace.t.num_instances = 0;
     g_gfx.trace.t.num_elements = 0;
@@ -2497,7 +2567,8 @@ void rizz__gfx_trace_reset_frame_stats() {
 }
 
 //
-bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_profile) {
+bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_profile)
+{
 #if SX_PLATFORM_LINUX
     glewExperimental = GL_TRUE;
     GLenum r = glewInit();
@@ -2557,7 +2628,7 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
             .size = sizeof(rizz__debug_vertex) * RIZZ_CONFIG_MAX_DEBUG_INDICES });
 
         const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
-        rizz_shader     shader = the__gfx.shader_make_with_data(
+        rizz_shader shader = the__gfx.shader_make_with_data(
             tmp_alloc, k_debug_vs_size, k_debug_vs_data, k_debug_vs_refl_size, k_debug_vs_refl_data,
             k_debug_fs_size, k_debug_fs_data, k_debug_fs_refl_size, k_debug_fs_refl_data);
 
@@ -2579,7 +2650,8 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
     return true;
 }
 
-void rizz__gfx_release() {
+void rizz__gfx_release()
+{
     for (int i = 0; i < sx_array_count(g_gfx.cmd_buffers); i++) {
         sx_assert(g_gfx.cmd_buffers[i]);
         rizz__gfx_cmdbuffer* cb = g_gfx.cmd_buffers[i];
@@ -2620,16 +2692,19 @@ void rizz__gfx_release() {
     g_gfx.driver = RIZZ_GFX_UNKNOWN;
 }
 
-static rizz_gfx_driver rizz__gfx_driver(void) {
+static rizz_gfx_driver rizz__gfx_driver(void)
+{
     return g_gfx.driver;
 }
 
-static bool rizz__gfx_gl_family() {
+static bool rizz__gfx_gl_family()
+{
     sx_assert(g_gfx.driver < _RIZZ_GFX_COUNT);
     return g_gfx.driver > _RIZZ_GFX_GL_FAMILY;
 }
 
-static bool rizz__cb_begin_stage(rizz_gfx_stage stage) {
+static bool rizz__cb_begin_stage(rizz_gfx_stage stage)
+{
     rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
 
     sx_lock(&g_gfx.stage_lk);
@@ -2648,7 +2723,8 @@ static bool rizz__cb_begin_stage(rizz_gfx_stage stage) {
     return true;
 }
 
-static void rizz__cb_end_stage() {
+static void rizz__cb_end_stage()
+{
     rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
     sx_assert(cb->running_stage.id && "must call begin_stage before this call");
 
@@ -2661,7 +2737,8 @@ static void rizz__cb_end_stage() {
     cb->running_stage = (rizz_gfx_stage){ 0 };
 }
 
-static inline uint8_t* rizz__cb_alloc_params_buff(rizz__gfx_cmdbuffer* cb, int size, int* offset) {
+static inline uint8_t* rizz__cb_alloc_params_buff(rizz__gfx_cmdbuffer* cb, int size, int* offset)
+{
     uint8_t* ptr = sx_array_add(cb->alloc, cb->params_buff,
                                 sx_align_mask(size, SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT - 1));
     if (!ptr) {
@@ -2672,14 +2749,15 @@ static inline uint8_t* rizz__cb_alloc_params_buff(rizz__gfx_cmdbuffer* cb, int s
     return ptr;
 }
 
-static void rizz__cb_begin_default_pass(const sg_pass_action* pass_action, int width, int height) {
+static void rizz__cb_begin_default_pass(const sg_pass_action* pass_action, int width, int height)
+{
     rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
 
     sx_assert(cb->running_stage.id &&
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff =
         rizz__cb_alloc_params_buff(cb, sizeof(sg_pass_action) + sizeof(int) * 2, &offset);
     sx_assert(buff);
@@ -2700,7 +2778,8 @@ static void rizz__cb_begin_default_pass(const sg_pass_action* pass_action, int w
     *((int*)buff) = height;
 }
 
-static uint8_t* rizz__cb_run_begin_default_pass(uint8_t* buff) {
+static uint8_t* rizz__cb_run_begin_default_pass(uint8_t* buff)
+{
     sg_pass_action* pass_action = (sg_pass_action*)buff;
     buff += sizeof(sg_pass_action);
     int width = *((int*)buff);
@@ -2711,14 +2790,15 @@ static uint8_t* rizz__cb_run_begin_default_pass(uint8_t* buff) {
     return buff;
 }
 
-static void rizz__cb_begin_pass(sg_pass pass, const sg_pass_action* pass_action) {
+static void rizz__cb_begin_pass(sg_pass pass, const sg_pass_action* pass_action)
+{
     rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
 
     sx_assert(cb->running_stage.id &&
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff =
         rizz__cb_alloc_params_buff(cb, sizeof(sg_pass_action) + sizeof(sg_pass), &offset);
     sx_assert(buff);
@@ -2737,7 +2817,8 @@ static void rizz__cb_begin_pass(sg_pass pass, const sg_pass_action* pass_action)
     *((sg_pass*)buff) = pass;
 }
 
-static uint8_t* rizz__cb_run_begin_pass(uint8_t* buff) {
+static uint8_t* rizz__cb_run_begin_pass(uint8_t* buff)
+{
     sg_pass_action* pass_action = (sg_pass_action*)buff;
     buff += sizeof(sg_pass_action);
     sg_pass pass = *((sg_pass*)buff);
@@ -2746,14 +2827,15 @@ static uint8_t* rizz__cb_run_begin_pass(uint8_t* buff) {
     return buff;
 }
 
-static void rizz__cb_apply_viewport(int x, int y, int width, int height, bool origin_top_left) {
+static void rizz__cb_apply_viewport(int x, int y, int width, int height, bool origin_top_left)
+{
     rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
 
     sx_assert(cb->running_stage.id &&
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(int) * 4 + sizeof(bool), &offset);
     sx_assert(buff);
 
@@ -2777,7 +2859,8 @@ static void rizz__cb_apply_viewport(int x, int y, int width, int height, bool or
     *((bool*)buff) = origin_top_left;
 }
 
-static uint8_t* rizz__cb_run_apply_viewport(uint8_t* buff) {
+static uint8_t* rizz__cb_run_apply_viewport(uint8_t* buff)
+{
     int x = *((int*)buff);
     buff += sizeof(int);
     int y = *((int*)buff);
@@ -2793,14 +2876,15 @@ static uint8_t* rizz__cb_run_apply_viewport(uint8_t* buff) {
     return buff;
 }
 
-static void rizz__cb_apply_scissor_rect(int x, int y, int width, int height, bool origin_top_left) {
+static void rizz__cb_apply_scissor_rect(int x, int y, int width, int height, bool origin_top_left)
+{
     rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
 
     sx_assert(cb->running_stage.id &&
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(int) * 4 + sizeof(bool), &offset);
     sx_assert(buff);
 
@@ -2824,7 +2908,8 @@ static void rizz__cb_apply_scissor_rect(int x, int y, int width, int height, boo
     *((bool*)buff) = origin_top_left;
 }
 
-static uint8_t* rizz__cb_run_apply_scissor_rect(uint8_t* buff) {
+static uint8_t* rizz__cb_run_apply_scissor_rect(uint8_t* buff)
+{
     int x = *((int*)buff);
     buff += sizeof(int);
     int y = *((int*)buff);
@@ -2840,14 +2925,15 @@ static uint8_t* rizz__cb_run_apply_scissor_rect(uint8_t* buff) {
     return buff;
 }
 
-static void rizz__cb_apply_pipeline(sg_pipeline pip) {
+static void rizz__cb_apply_pipeline(sg_pipeline pip)
+{
     rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
 
     sx_assert(cb->running_stage.id &&
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(sg_pipeline), &offset);
     sx_assert(buff);
 
@@ -2863,21 +2949,23 @@ static void rizz__cb_apply_pipeline(sg_pipeline pip) {
     *((sg_pipeline*)buff) = pip;
 }
 
-static uint8_t* rizz__cb_run_apply_pipeline(uint8_t* buff) {
+static uint8_t* rizz__cb_run_apply_pipeline(uint8_t* buff)
+{
     sg_pipeline pip = *((sg_pipeline*)buff);
     sg_apply_pipeline(pip);
     buff += sizeof(sg_pipeline);
     return buff;
 }
 
-static void rizz__cb_apply_bindings(const sg_bindings* bind) {
+static void rizz__cb_apply_bindings(const sg_bindings* bind)
+{
     rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
 
     sx_assert(cb->running_stage.id &&
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(sg_bindings), &offset);
     sx_assert(buff);
 
@@ -2893,21 +2981,23 @@ static void rizz__cb_apply_bindings(const sg_bindings* bind) {
     sx_memcpy(buff, bind, sizeof(*bind));
 }
 
-static uint8_t* rizz__cb_run_apply_bindings(uint8_t* buff) {
+static uint8_t* rizz__cb_run_apply_bindings(uint8_t* buff)
+{
     sg_apply_bindings((const sg_bindings*)buff);
     buff += sizeof(sg_bindings);
     return buff;
 }
 
 static void rizz__cb_apply_uniforms(sg_shader_stage stage, int ub_index, const void* data,
-                                    int num_bytes) {
+                                    int num_bytes)
+{
     rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
 
     sx_assert(cb->running_stage.id &&
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff = rizz__cb_alloc_params_buff(
         cb, sizeof(sg_shader_stage) + sizeof(int) * 2 + num_bytes, &offset);
     sx_assert(buff);
@@ -2930,7 +3020,8 @@ static void rizz__cb_apply_uniforms(sg_shader_stage stage, int ub_index, const v
     sx_memcpy(buff, data, num_bytes);
 }
 
-static uint8_t* rizz__cb_run_apply_uniforms(uint8_t* buff) {
+static uint8_t* rizz__cb_run_apply_uniforms(uint8_t* buff)
+{
     sg_shader_stage stage = *((sg_shader_stage*)buff);
     buff += sizeof(sg_shader_stage);
     int ub_index = *((int*)buff);
@@ -2942,14 +3033,15 @@ static uint8_t* rizz__cb_run_apply_uniforms(uint8_t* buff) {
     return buff;
 }
 
-static void rizz__cb_draw(int base_element, int num_elements, int num_instances) {
+static void rizz__cb_draw(int base_element, int num_elements, int num_instances)
+{
     rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
 
     sx_assert(cb->running_stage.id &&
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(int) * 3, &offset);
     sx_assert(buff);
 
@@ -2969,7 +3061,8 @@ static void rizz__cb_draw(int base_element, int num_elements, int num_instances)
     *((int*)buff) = num_instances;
 }
 
-static uint8_t* rizz__cb_run_draw(uint8_t* buff) {
+static uint8_t* rizz__cb_run_draw(uint8_t* buff)
+{
     int base_element = *((int*)buff);
     buff += sizeof(int);
     int num_elements = *((int*)buff);
@@ -2980,7 +3073,8 @@ static uint8_t* rizz__cb_run_draw(uint8_t* buff) {
     return buff;
 }
 
-static void rizz__cb_end_pass() {
+static void rizz__cb_end_pass()
+{
     rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
 
     sx_assert(cb->running_stage.id &&
@@ -2997,19 +3091,21 @@ static void rizz__cb_end_pass() {
     ++cb->cmd_idx;
 }
 
-static uint8_t* rizz__cb_run_end_pass(uint8_t* buff) {
+static uint8_t* rizz__cb_run_end_pass(uint8_t* buff)
+{
     sg_end_pass();
     return buff;
 }
 
-static void rizz__cb_update_buffer(sg_buffer buf, const void* data_ptr, int data_size) {
+static void rizz__cb_update_buffer(sg_buffer buf, const void* data_ptr, int data_size)
+{
     rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
 
     sx_assert(cb->running_stage.id &&
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff =
         rizz__cb_alloc_params_buff(cb, sizeof(sg_buffer) + data_size + sizeof(int), &offset);
     sx_assert(buff);
@@ -3030,7 +3126,8 @@ static void rizz__cb_update_buffer(sg_buffer buf, const void* data_ptr, int data
     sx_memcpy(buff, data_ptr, data_size);
 }
 
-static uint8_t* rizz__cb_run_update_buffer(uint8_t* buff) {
+static uint8_t* rizz__cb_run_update_buffer(uint8_t* buff)
+{
     sg_buffer buf = *((sg_buffer*)buff);
     buff += sizeof(sg_buffer);
     int data_size = *((int*)buff);
@@ -3040,7 +3137,8 @@ static uint8_t* rizz__cb_run_update_buffer(uint8_t* buff) {
     return buff;
 }
 
-static int rizz__cb_append_buffer(sg_buffer buf, const void* data_ptr, int data_size) {
+static int rizz__cb_append_buffer(sg_buffer buf, const void* data_ptr, int data_size)
+{
     // search for stream-buffer
     int index = -1;
     for (int i = 0, c = sx_array_count(g_gfx.stream_buffs); i < c; i++) {
@@ -3061,7 +3159,7 @@ static int rizz__cb_append_buffer(sg_buffer buf, const void* data_ptr, int data_
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff =
         rizz__cb_alloc_params_buff(cb, data_size + sizeof(int) * 3 + sizeof(sg_buffer), &offset);
     sx_assert(buff);
@@ -3088,7 +3186,8 @@ static int rizz__cb_append_buffer(sg_buffer buf, const void* data_ptr, int data_
     return stream_offset;
 }
 
-static uint8_t* rizz__cb_run_append_buffer(uint8_t* buff) {
+static uint8_t* rizz__cb_run_append_buffer(uint8_t* buff)
+{
     int stream_index = *((int*)buff);
     buff += sizeof(int);
     sg_buffer buf = *((sg_buffer*)buff);
@@ -3107,7 +3206,8 @@ static uint8_t* rizz__cb_run_append_buffer(uint8_t* buff) {
     return buff;
 }
 
-static void rizz__cb_update_image(sg_image img, const sg_image_content* data) {
+static void rizz__cb_update_image(sg_image img, const sg_image_content* data)
+{
     rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
 
     sx_assert(cb->running_stage.id &&
@@ -3121,7 +3221,7 @@ static void rizz__cb_update_image(sg_image img, const sg_image_content* data) {
         }
     }
 
-    int      offset;
+    int offset;
     uint8_t* buff =
         rizz__cb_alloc_params_buff(cb, sizeof(sg_image) + sizeof(sg_image_content), &offset);
     sx_assert(buff);
@@ -3156,7 +3256,8 @@ static void rizz__cb_update_image(sg_image img, const sg_image_content* data) {
     }
 }
 
-static uint8_t* rizz__cb_run_update_image(uint8_t* buff) {
+static uint8_t* rizz__cb_run_update_image(uint8_t* buff)
+{
     sg_image img = *((sg_image*)buff);
     buff += sizeof(sg_image);
     sg_image_content data = *((sg_image_content*)buff);
@@ -3177,14 +3278,15 @@ static uint8_t* rizz__cb_run_update_image(uint8_t* buff) {
     return buff;
 }
 
-static void rizz__cb_begin_profile_sample(const char* name, uint32_t* hash_cache) {
+static void rizz__cb_begin_profile_sample(const char* name, uint32_t* hash_cache)
+{
     rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
 
     sx_assert(cb->running_stage.id &&
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff = rizz__cb_alloc_params_buff(cb, 32 + sizeof(uint32_t*), &offset);
     sx_assert(buff);
 
@@ -3202,7 +3304,8 @@ static void rizz__cb_begin_profile_sample(const char* name, uint32_t* hash_cache
     *((uint32_t**)buff) = hash_cache;
 }
 
-static uint8_t* rizz__cb_run_begin_profile_sample(uint8_t* buff) {
+static uint8_t* rizz__cb_run_begin_profile_sample(uint8_t* buff)
+{
     const char* name = (const char*)buff;
     sx_unused(name);
     buff += 32;
@@ -3213,7 +3316,8 @@ static uint8_t* rizz__cb_run_begin_profile_sample(uint8_t* buff) {
     return buff;
 }
 
-static void rizz__cb_end_profile_sample() {
+static void rizz__cb_end_profile_sample()
+{
     rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
 
     sx_assert(cb->running_stage.id &&
@@ -3230,12 +3334,14 @@ static void rizz__cb_end_profile_sample() {
     ++cb->cmd_idx;
 }
 
-static uint8_t* rizz__cb_run_end_profile_sample(uint8_t* buff) {
+static uint8_t* rizz__cb_run_end_profile_sample(uint8_t* buff)
+{
     rmt__end_gpu_sample();
     return buff;
 }
 
-rizz__gfx_cmdbuffer* rizz__gfx_create_command_buffer(const sx_alloc* alloc) {
+rizz__gfx_cmdbuffer* rizz__gfx_create_command_buffer(const sx_alloc* alloc)
+{
     rizz__gfx_cmdbuffer* cb = sx_malloc(alloc, sizeof(rizz__gfx_cmdbuffer));
     if (!cb) {
         sx_out_of_memory();
@@ -3248,7 +3354,8 @@ rizz__gfx_cmdbuffer* rizz__gfx_create_command_buffer(const sx_alloc* alloc) {
     return cb;
 }
 
-void rizz__gfx_destroy_command_buffer(rizz__gfx_cmdbuffer* cb) {
+void rizz__gfx_destroy_command_buffer(rizz__gfx_cmdbuffer* cb)
+{
     sx_assert(cb);
     sx_assert(cb->alloc);
 
@@ -3277,13 +3384,14 @@ static const rizz__run_command_cb k_run_cbs[_GFX_COMMAND_COUNT] = {
 };
 
 // note: must run in main thread
-void rizz__gfx_execute_command_buffers() {
+void rizz__gfx_execute_command_buffers()
+{
     static_assert((sizeof(k_run_cbs) / sizeof(rizz__run_command_cb)) == _GFX_COMMAND_COUNT,
                   "k_run_cbs must match rizz__gfx_command");
 
     // gather all command buffers that submitted a command
     const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
-    int             cmd_count = 0;
+    int cmd_count = 0;
     for (int i = 0, c = sx_array_count(g_gfx.cmd_buffers); i < c; i++) {
         rizz__gfx_cmdbuffer* cb = g_gfx.cmd_buffers[i];
         sx_assert(cb->running_stage.id == 0 &&
@@ -3300,7 +3408,7 @@ void rizz__gfx_execute_command_buffers() {
         rizz__gfx_cmdbuffer_ref* init_refs = refs;
         for (int i = 0, c = sx_array_count(g_gfx.cmd_buffers); i < c; i++) {
             rizz__gfx_cmdbuffer* cb = g_gfx.cmd_buffers[i];
-            int                  ref_count = sx_array_count(cb->refs);
+            int ref_count = sx_array_count(cb->refs);
             if (ref_count) {
                 sx_memcpy(refs, cb->refs, sizeof(rizz__gfx_cmdbuffer_ref) * ref_count);
                 refs += ref_count;
@@ -3315,7 +3423,7 @@ void rizz__gfx_execute_command_buffers() {
 
         for (int i = 0; i < cmd_count; i++) {
             const rizz__gfx_cmdbuffer_ref* ref = &refs[i];
-            rizz__gfx_cmdbuffer*           cb = g_gfx.cmd_buffers[ref->cmdbuffer_idx];
+            rizz__gfx_cmdbuffer* cb = g_gfx.cmd_buffers[ref->cmdbuffer_idx];
             k_run_cbs[ref->cmd](&cb->params_buff[ref->params_offset]);
         }
 
@@ -3341,7 +3449,8 @@ void rizz__gfx_execute_command_buffers() {
     the__core.tmp_alloc_pop();
 }
 
-static rizz_gfx_stage rizz__stage_register(const char* name, rizz_gfx_stage parent_stage) {
+static rizz_gfx_stage rizz__stage_register(const char* name, rizz_gfx_stage parent_stage)
+{
     sx_assert(name);
     sx_assert(parent_stage.id == 0 || parent_stage.id < (uint32_t)sx_array_count(g_gfx.stages));
     sx_assert(sx_array_count(g_gfx.stages) < MAX_STAGES && "maximum stages exceeded");
@@ -3377,7 +3486,8 @@ static rizz_gfx_stage rizz__stage_register(const char* name, rizz_gfx_stage pare
     return stage;
 }
 
-static void rizz__stage_enable(rizz_gfx_stage stage) {
+static void rizz__stage_enable(rizz_gfx_stage stage)
+{
     sx_assert(stage.id);
 
     sx_lock(&g_gfx.stage_lk);
@@ -3394,7 +3504,8 @@ static void rizz__stage_enable(rizz_gfx_stage stage) {
     sx_unlock(&g_gfx.stage_lk);
 }
 
-static void rizz__stage_disable(rizz_gfx_stage stage) {
+static void rizz__stage_disable(rizz_gfx_stage stage)
+{
     sx_assert(stage.id);
 
     sx_lock(&g_gfx.stage_lk);
@@ -3411,7 +3522,8 @@ static void rizz__stage_disable(rizz_gfx_stage stage) {
     sx_unlock(&g_gfx.stage_lk);
 }
 
-static bool rizz__stage_isenabled(rizz_gfx_stage stage) {
+static bool rizz__stage_isenabled(rizz_gfx_stage stage)
+{
     sx_assert(stage.id);
 
     sx_lock(&g_gfx.stage_lk);
@@ -3420,7 +3532,8 @@ static bool rizz__stage_isenabled(rizz_gfx_stage stage) {
     return enabled;
 }
 
-static rizz_gfx_stage rizz__stage_find(const char* name) {
+static rizz_gfx_stage rizz__stage_find(const char* name)
+{
     sx_assert(name);
 
     uint32_t name_hash = sx_hash_fnv32_str(name);
@@ -3433,7 +3546,8 @@ static rizz_gfx_stage rizz__stage_find(const char* name) {
     return (rizz_gfx_stage){ .id = -1 };
 }
 
-static void rizz__init_pipeline(sg_pipeline pip_id, const sg_pipeline_desc* desc) {
+static void rizz__init_pipeline(sg_pipeline pip_id, const sg_pipeline_desc* desc)
+{
 #if RIZZ_CONFIG_HOT_LOADING
 #    if defined(SOKOL_METAL)
     rizz__pip_mtl pip = { .pip = pip_id, .desc = *desc };
@@ -3445,7 +3559,8 @@ static void rizz__init_pipeline(sg_pipeline pip_id, const sg_pipeline_desc* desc
     sg_init_pipeline(pip_id, desc);
 }
 
-static sg_pipeline rizz__make_pipeline(const sg_pipeline_desc* desc) {
+static sg_pipeline rizz__make_pipeline(const sg_pipeline_desc* desc)
+{
     sg_pipeline pip_id = sg_make_pipeline(desc);
 #if RIZZ_CONFIG_HOT_LOADING
 #    if defined(SOKOL_METAL)
@@ -3458,7 +3573,8 @@ static sg_pipeline rizz__make_pipeline(const sg_pipeline_desc* desc) {
     return pip_id;
 }
 
-static void rizz__destroy_pipeline(sg_pipeline pip_id) {
+static void rizz__destroy_pipeline(sg_pipeline pip_id)
+{
 #if RIZZ_CONFIG_HOT_LOADING
     for (int i = 0, c = sx_array_count(g_gfx.pips); i < c; i++) {
 #    if defined(SOKOL_METAL)
@@ -3475,7 +3591,8 @@ static void rizz__destroy_pipeline(sg_pipeline pip_id) {
     sg_destroy_pipeline(pip_id);
 }
 
-static void rizz__init_buffer(sg_buffer buf_id, const sg_buffer_desc* desc) {
+static void rizz__init_buffer(sg_buffer buf_id, const sg_buffer_desc* desc)
+{
     if (desc->usage == SG_USAGE_STREAM) {
         rizz__gfx_stream_buffer sbuff = { .buf = buf_id, .offset = 0, .size = desc->size };
         sx_array_push(g_gfx_alloc, g_gfx.stream_buffs, sbuff);
@@ -3483,7 +3600,8 @@ static void rizz__init_buffer(sg_buffer buf_id, const sg_buffer_desc* desc) {
     sg_init_buffer(buf_id, desc);
 }
 
-static sg_buffer rizz__make_buffer(const sg_buffer_desc* desc) {
+static sg_buffer rizz__make_buffer(const sg_buffer_desc* desc)
+{
     sg_buffer buf_id = sg_make_buffer(desc);
     if (desc->usage == SG_USAGE_STREAM) {
         rizz__gfx_stream_buffer sbuff = { .buf = buf_id, .offset = 0, .size = desc->size };
@@ -3492,7 +3610,8 @@ static sg_buffer rizz__make_buffer(const sg_buffer_desc* desc) {
     return buf_id;
 }
 
-static void rizz__destroy_buffer(sg_buffer buf_id) {
+static void rizz__destroy_buffer(sg_buffer buf_id)
+{
     _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, buf_id.id);
     if (buf->usage == SG_USAGE_STREAM) {
         for (int i = 0, c = sx_array_count(g_gfx.stream_buffs); i < c; i++) {
@@ -3506,19 +3625,22 @@ static void rizz__destroy_buffer(sg_buffer buf_id) {
     sg_destroy_buffer(buf_id);
 }
 
-static void rizz__begin_profile_sample(const char* name, uint32_t* hash_cache) {
+static void rizz__begin_profile_sample(const char* name, uint32_t* hash_cache)
+{
     sx_unused(name);
     sx_unused(hash_cache);
 
     rmt__begin_gpu_sample(name, hash_cache);
 }
 
-static void rizz__end_profile_sample() {
+static void rizz__end_profile_sample()
+{
     rmt__end_gpu_sample();
 }
 
 static void rizz__debug_grid_xzplane(float spacing, float spacing_bold, const sx_mat4* vp,
-                                     const sx_vec3 frustum[8]) {
+                                     const sx_vec3 frustum[8])
+{
     static const sx_color color = { { 170, 170, 170, 255 } };
     static const sx_color bold_color = { { 255, 255, 255, 255 } };
 
@@ -3537,13 +3659,13 @@ static void rizz__debug_grid_xzplane(float spacing, float spacing_bold, const sx
     }
 
     // snap grid bounds to `spacing`
-    int     nspace = (int)spacing;
+    int nspace = (int)spacing;
     sx_aabb snapbox = sx_aabbf((float)((int)bb.xmin - (int)bb.xmin % nspace), 0,
                                (float)((int)bb.zmin - (int)bb.zmin % nspace),
                                (float)((int)bb.xmax - (int)bb.xmax % nspace), 0,
                                (float)((int)bb.zmax - (int)bb.zmax % nspace));
-    float   w = snapbox.xmax - snapbox.xmin;
-    float   d = snapbox.zmax - snapbox.zmin;
+    float w = snapbox.xmax - snapbox.xmin;
+    float d = snapbox.zmax - snapbox.zmin;
     if (sx_equal(w, 0, 0.00001f) || sx_equal(d, 0, 0.00001f))
         return;
 
@@ -3552,7 +3674,7 @@ static void rizz__debug_grid_xzplane(float spacing, float spacing_bold, const sx
     int num_verts = (xlines + ylines) * 2;
 
     // draw
-    int                 data_size = num_verts * sizeof(rizz__debug_vertex);
+    int data_size = num_verts * sizeof(rizz__debug_vertex);
     rizz__debug_vertex* verts = alloca(data_size);
     sx_assert(verts);
 
@@ -3589,7 +3711,7 @@ static void rizz__debug_grid_xzplane(float spacing, float spacing_bold, const sx
                 : SX_COLOR_BLUE;
     }
 
-    int         offset = the__gfx.staged.append_buffer(g_gfx.dbg.vb, verts, data_size);
+    int offset = the__gfx.staged.append_buffer(g_gfx.dbg.vb, verts, data_size);
     sg_bindings bind = { .vertex_buffers[0] = g_gfx.dbg.vb, .vertex_buffer_offsets[0] = offset };
     rizz__debug_uniforms uniforms = { .model = sx_mat4_ident(), .vp = *vp };
 
@@ -3600,7 +3722,8 @@ static void rizz__debug_grid_xzplane(float spacing, float spacing_bold, const sx
 }
 
 void rizz__debug_grid_xyplane(float spacing, float spacing_bold, const sx_mat4* vp,
-                              const sx_vec3 frustum[8]) {
+                              const sx_vec3 frustum[8])
+{
     static const sx_color color = { { 170, 170, 170, 255 } };
     static const sx_color bold_color = { { 255, 255, 255, 255 } };
 
@@ -3619,13 +3742,13 @@ void rizz__debug_grid_xyplane(float spacing, float spacing_bold, const sx_mat4* 
     }
 
     // snap grid bounds to `spacing`
-    int     nspace = (int)spacing;
+    int nspace = (int)spacing;
     sx_aabb snapbox = sx_aabbf((float)((int)bb.xmin - (int)bb.xmin % nspace),
                                (float)((int)bb.ymin - (int)bb.ymin % nspace), 0,
                                (float)((int)bb.xmax - (int)bb.xmax % nspace),
                                (float)((int)bb.ymax - (int)bb.ymax % nspace), 0);
-    float   w = snapbox.xmax - snapbox.xmin;
-    float   h = snapbox.ymax - snapbox.ymin;
+    float w = snapbox.xmax - snapbox.xmin;
+    float h = snapbox.ymax - snapbox.ymin;
     if (sx_equal(w, 0, 0.00001f) || sx_equal(h, 0, 0.00001f))
         return;
 
@@ -3634,7 +3757,7 @@ void rizz__debug_grid_xyplane(float spacing, float spacing_bold, const sx_mat4* 
     int num_verts = (xlines + ylines) * 2;
 
     // draw
-    int                 data_size = num_verts * sizeof(rizz__debug_vertex);
+    int data_size = num_verts * sizeof(rizz__debug_vertex);
     rizz__debug_vertex* verts = alloca(data_size);
     sx_assert(verts);
 
@@ -3671,7 +3794,7 @@ void rizz__debug_grid_xyplane(float spacing, float spacing_bold, const sx_mat4* 
                 : SX_COLOR_GREEN;
     }
 
-    int         offset = the__gfx.staged.append_buffer(g_gfx.dbg.vb, verts, data_size);
+    int offset = the__gfx.staged.append_buffer(g_gfx.dbg.vb, verts, data_size);
     sg_bindings bind = { .vertex_buffers[0] = g_gfx.dbg.vb, .vertex_buffer_offsets[0] = offset };
     rizz__debug_uniforms uniforms = { .model = sx_mat4_ident(), .vp = *vp };
 
@@ -3681,13 +3804,15 @@ void rizz__debug_grid_xyplane(float spacing, float spacing_bold, const sx_mat4* 
     the__gfx.staged.draw(0, num_verts, 1);
 }
 
-static void rizz__get_internal_state(void** make_cmdbuff, int* make_cmdbuff_sz) {
+static void rizz__get_internal_state(void** make_cmdbuff, int* make_cmdbuff_sz)
+{
     *make_cmdbuff = g_gfx.trace.make_cmds_writer.data;
     *make_cmdbuff_sz = (int)g_gfx.trace.make_cmds_writer.pos;
     g_gfx.record_make_commands = false;
 }
 
-static const rizz_gfx_trace_info* rizz__trace_info() {
+static const rizz_gfx_trace_info* rizz__trace_info()
+{
     return &g_gfx.trace.t;
 }
 

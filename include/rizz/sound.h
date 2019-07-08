@@ -29,8 +29,8 @@ typedef struct { uint32_t id; } rizz_snd_instance;
 // params for asset manager to pass with "sound" asset-name
 typedef struct rizz_snd_load_params {
     float volume;
-    bool  looping;
-    bool  singleton;
+    bool looping;
+    bool singleton;
 } rizz_snd_load_params;
 
 // thread-safe queued API

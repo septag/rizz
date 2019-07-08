@@ -41,7 +41,7 @@ typedef struct rizz_api_vfs {
 } rizz_api_vfs;
 
 #ifdef RIZZ_INTERNAL_API
-#include "types.h"
+#    include "types.h"
 
 bool rizz__vfs_init(const sx_alloc* alloc);
 void rizz__vfs_release();

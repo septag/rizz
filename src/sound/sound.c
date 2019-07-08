@@ -28,10 +28,10 @@
 #define FIXPOINT_FRAC_MASK ((1 << FIXPOINT_FRAC_BITS) - 1)
 
 RIZZ_STATE static rizz_api_plugin* the_plugin;
-RIZZ_STATE static rizz_api_core*   the_core;
-RIZZ_STATE static rizz_api_asset*  the_asset;
-RIZZ_STATE static rizz_api_refl*   the_refl;
-RIZZ_STATE static rizz_api_imgui*  the_imgui;
+RIZZ_STATE static rizz_api_core* the_core;
+RIZZ_STATE static rizz_api_asset* the_asset;
+RIZZ_STATE static rizz_api_refl* the_refl;
+RIZZ_STATE static rizz_api_imgui* the_imgui;
 
 RIZZ_STATE static const sx_alloc* g_snd_alloc;
 
@@ -75,38 +75,38 @@ typedef enum snd__source_format {
 
 typedef struct snd__metadata {
     snd__source_format fmt;
-    int                num_frames;
-    int                num_channels;
-    int                vorbis_buffer_size;
+    int num_frames;
+    int num_channels;
+    int vorbis_buffer_size;
 } snd__metadata;
 
 typedef struct snd__source {
-    void*              data;
-    float*             samples;
-    int                num_frames;
-    int                sample_rate;
-    snd__source_flags  flags;
+    void* data;
+    float* samples;
+    int num_frames;
+    int sample_rate;
+    snd__source_flags flags;
     snd__source_format fmt;
-    float              volume;
-    sx_str_t           name;    // for debugging purposes
-    int                num_plays;
+    float volume;
+    sx_str_t name;    // for debugging purposes
+    int num_plays;
 } snd__source;
 
 typedef struct snd__instance {
-    int64_t             play_frame;
-    rizz_snd_source     srchandle;
-    int                 pos;    // unit: frame
-    float               volume;
-    float               pan;
-    int                 bus_id;
+    int64_t play_frame;
+    rizz_snd_source srchandle;
+    int pos;    // unit: frame
+    float volume;
+    float pan;
+    int bus_id;
     snd__instance_state state;
 } snd__instance;
 
 typedef struct snd__ringbuffer {
-    float*        samples;
-    int           capacity;
-    int           start;
-    int           end;
+    float* samples;
+    int capacity;
+    int start;
+    int end;
     sx_atomic_int size;
 } snd__ringbuffer;
 
@@ -117,12 +117,12 @@ typedef struct snd__bus {
 
 typedef struct snd__clocked {
     struct snd__clocked* next;    // next item to be queued for play
-    rizz_snd_source      src;
-    rizz_snd_instance    inst;
-    int                  bus_id;
-    float                tm;
-    float                wait_tm;
-    bool                 first;
+    rizz_snd_source src;
+    rizz_snd_instance inst;
+    int bus_id;
+    float tm;
+    float wait_tm;
+    bool first;
 } snd__clocked;
 
 typedef enum snd__command {
@@ -139,38 +139,38 @@ typedef enum snd__command {
 
 typedef struct snd__cmdheader {
     snd__command cmd;
-    int          cmdbuffer_idx;
-    int          params_offset;
+    int cmdbuffer_idx;
+    int params_offset;
 } snd__cmdheader;
 
 typedef struct snd__cmdbuffer {
-    uint8_t*        params_buff;    // sx_array
-    snd__cmdheader* cmds;           // sx_array
-    int             index;
-    int             cmd_idx;
+    uint8_t* params_buff;    // sx_array
+    snd__cmdheader* cmds;    // sx_array
+    int index;
+    int cmd_idx;
 } snd__cmdbuffer;
 
 typedef uint8_t* (*snd__run_command_cb)(uint8_t* buff);
 
 typedef struct snd__context {
-    snd__cmdbuffer**  cmd_buffers;
-    sx_handle_pool*   source_handles;
-    snd__source*      sources;
-    sx_handle_pool*   instance_handles;
-    snd__instance*    instances;
-    sx_strpool*       name_pool;
-    sx_pool*          clocked_pool;
-    snd__clocked**    clocked;
-    int               num_cmdbuffers;
+    snd__cmdbuffer** cmd_buffers;
+    sx_handle_pool* source_handles;
+    snd__source* sources;
+    sx_handle_pool* instance_handles;
+    snd__instance* instances;
+    sx_strpool* name_pool;
+    sx_pool* clocked_pool;
+    snd__clocked** clocked;
+    int num_cmdbuffers;
     rizz_snd_instance playlist[RIZZ_SND_DEVICE_MAX_LANES];
-    int               num_plays;
-    snd__ringbuffer   mixer_buffer;
-    float             master_volume;
-    float             master_pan;
-    snd__ringbuffer   mixer_plot_buffer;
-    snd__bus          buses[RIZZ_SND_DEVICE_MAX_BUSES];
-    rizz_snd_source   silence_src;
-    rizz_snd_source   beep_src;
+    int num_plays;
+    snd__ringbuffer mixer_buffer;
+    float master_volume;
+    float master_pan;
+    snd__ringbuffer mixer_plot_buffer;
+    snd__bus buses[RIZZ_SND_DEVICE_MAX_BUSES];
+    rizz_snd_source silence_src;
+    rizz_snd_source beep_src;
 } snd__context;
 
 RIZZ_STATE static snd__context g_snd;
@@ -186,7 +186,8 @@ static char k__snd_silent[] = { 0, 0, 0, 0 };
 //       more). It just may make it not very optimal.
 //       But again, more tests are needed, because obviously I'm not doing the right thing in
 //       terms of thread-safetly
-static bool snd__ringbuffer_init(snd__ringbuffer* rb, int size) {
+static bool snd__ringbuffer_init(snd__ringbuffer* rb, int size)
+{
     sx_memset(rb, 0x0, sizeof(*rb));
 
     rb->samples = sx_malloc(g_snd_alloc, size * sizeof(float));
@@ -201,16 +202,19 @@ static bool snd__ringbuffer_init(snd__ringbuffer* rb, int size) {
     return true;
 }
 
-static void snd__ringbuffer_release(snd__ringbuffer* rb) {
+static void snd__ringbuffer_release(snd__ringbuffer* rb)
+{
     sx_assert(rb);
     sx_free(g_snd_alloc, rb->samples);
 }
 
-static inline int snd__ringbuffer_expect(snd__ringbuffer* rb) {
+static inline int snd__ringbuffer_expect(snd__ringbuffer* rb)
+{
     return rb->capacity - rb->size;
 }
 
-static int snd__ringbuffer_consume(snd__ringbuffer* rb, float* samples, int count) {
+static int snd__ringbuffer_consume(snd__ringbuffer* rb, float* samples, int count)
+{
     sx_assert(count > 0);
 
     count = sx_min(count, rb->size);
@@ -232,7 +236,8 @@ static int snd__ringbuffer_consume(snd__ringbuffer* rb, float* samples, int coun
     return count;
 }
 
-static void snd__ringbuffer_produce(snd__ringbuffer* rb, const float* samples, int count) {
+static void snd__ringbuffer_produce(snd__ringbuffer* rb, const float* samples, int count)
+{
     sx_assert(count > 0);
     sx_assert(count <= snd__ringbuffer_expect(rb));
 
@@ -249,7 +254,8 @@ static void snd__ringbuffer_produce(snd__ringbuffer* rb, const float* samples, i
 }
 
 
-static void snd__destroy_source(rizz_snd_source handle, const sx_alloc* alloc) {
+static void snd__destroy_source(rizz_snd_source handle, const sx_alloc* alloc)
+{
     sx_assert_rel(sx_handle_valid(g_snd.source_handles, handle.id));
 
     snd__source* src = &g_snd.sources[sx_handle_index(handle.id)];
@@ -265,7 +271,8 @@ static void snd__destroy_source(rizz_snd_source handle, const sx_alloc* alloc) {
     // TODO: delete all instances with this source
 }
 
-static const char* snd__vorbis_get_error(int error) {
+static const char* snd__vorbis_get_error(int error)
+{
     switch (error) {
     case VORBIS_need_more_data:
         return "need_more_data";
@@ -313,9 +320,10 @@ static const char* snd__vorbis_get_error(int error) {
 }
 
 static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params,
-                                            const void*                   metadata) {
-    const snd__metadata*        meta = metadata;
-    const sx_alloc*             alloc = params->alloc ? params->alloc : g_snd_alloc;
+                                            const void* metadata)
+{
+    const snd__metadata* meta = metadata;
+    const sx_alloc* alloc = params->alloc ? params->alloc : g_snd_alloc;
     const rizz_snd_load_params* sparams = params->params;
 
     sx_handle_t handle = sx_handle_new_and_grow(g_snd.source_handles, g_snd_alloc);
@@ -359,13 +367,14 @@ static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params
 }
 
 static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params,
-                         const sx_mem_block* mem) {
+                         const sx_mem_block* mem)
+{
     rizz_snd_source srchandle = { .id = (uint32_t)data->obj.id };
     sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
 
     const sx_alloc* alloc = params->alloc ? params->alloc : g_snd_alloc;
 
-    uint8_t*     buff = (uint8_t*)data->user;
+    uint8_t* buff = (uint8_t*)data->user;
     snd__source* src = (snd__source*)buff;
     buff += sizeof(snd__source);
 
@@ -420,13 +429,13 @@ static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_param
     } else if (src->fmt == SND_SOURCEFORMAT_OGG) {
         // TODO: possible bug with tmp_alloc or vorbis. I saw some random crashes, until I put
         //       the tmp_buff = sx_malloc right next to vorbis_buff
-        int             vorbis_err;
+        int vorbis_err;
         const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
-        int             vorbis_buffer_size = *((int*)buff);
+        int vorbis_buffer_size = *((int*)buff);
         buff += sizeof(int);
 
         sx_assert(vorbis_buffer_size > 0);
-        void*  vorbis_buff = sx_malloc(tmp_alloc, vorbis_buffer_size);
+        void* vorbis_buff = sx_malloc(tmp_alloc, vorbis_buffer_size);
         float* tmp_buff = sx_malloc(tmp_alloc, sizeof(float) * 4096);
 
         stb_vorbis* vorbis =
@@ -464,33 +473,37 @@ static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_param
 }
 
 static void snd__on_finalize(rizz_asset_load_data* data, const rizz_asset_load_params* params,
-                             const sx_mem_block* mem) {
+                             const sx_mem_block* mem)
+{
     sx_unused(data);
     sx_unused(params);
     sx_unused(mem);
 
-    uint8_t*     buff = (uint8_t*)data->user;
+    uint8_t* buff = (uint8_t*)data->user;
     snd__source* src = (snd__source*)buff;
-    sx_handle_t  srchandle = (sx_handle_t)data->obj.id;
+    sx_handle_t srchandle = (sx_handle_t)data->obj.id;
     g_snd.sources[sx_handle_index(srchandle)] = *src;
 }
 
-static void snd__on_reload(rizz_asset handle, rizz_asset_obj prev_obj, const sx_alloc* alloc) {
+static void snd__on_reload(rizz_asset handle, rizz_asset_obj prev_obj, const sx_alloc* alloc)
+{
     sx_unused(handle);
     sx_unused(prev_obj);
     sx_unused(alloc);
 }
 
-static void snd__on_release(rizz_asset_obj obj, const sx_alloc* alloc) {
+static void snd__on_release(rizz_asset_obj obj, const sx_alloc* alloc)
+{
     rizz_snd_source srchandle = { .id = (uint32_t)obj.id };
     snd__destroy_source(srchandle, alloc ? alloc : g_snd_alloc);
 }
 
 static void snd__on_read_metadata(void* metadata, const rizz_asset_load_params* params,
-                                  const sx_mem_block* mem) {
+                                  const sx_mem_block* mem)
+{
     snd__metadata* meta = metadata;
-    drwav          wav;
-    char           ext[32];
+    drwav wav;
+    char ext[32];
 
     sx_os_path_ext(ext, sizeof(ext), params->path);
     if (sx_strequalnocase(ext, ".wav")) {
@@ -507,7 +520,7 @@ static void snd__on_read_metadata(void* metadata, const rizz_asset_load_params* 
 
         drwav_uninit(&wav);
     } else if (sx_strequalnocase(ext, ".ogg")) {
-        int         error;
+        int error;
         stb_vorbis* vorbis = stb_vorbis_open_memory(mem->data, mem->size, &error, NULL);
         if (!vorbis) {
             rizz_log_warn(the_core, "loading sound '%s' failed: %s", snd__vorbis_get_error(error));
@@ -526,7 +539,8 @@ static void snd__on_read_metadata(void* metadata, const rizz_asset_load_params* 
     }
 }
 
-static void snd__stream_cb(float* buffer, int num_frames, int num_channels) {
+static void snd__stream_cb(float* buffer, int num_frames, int num_channels)
+{
     int r = snd__ringbuffer_consume(&g_snd.mixer_buffer, buffer, num_frames * num_channels) /
             num_channels;
 
@@ -544,7 +558,8 @@ static void snd__stream_cb(float* buffer, int num_frames, int num_channels) {
 }
 
 static rizz_snd_source snd__create_dummy_source(const char* samples, int num_samples,
-                                                const char* name) {
+                                                const char* name)
+{
     // convert to float
     float* fsamples = sx_malloc(g_snd_alloc, sizeof(float) * num_samples);
     if (!fsamples) {
@@ -572,7 +587,8 @@ static rizz_snd_source snd__create_dummy_source(const char* samples, int num_sam
     return (rizz_snd_source){ handle };
 }
 
-static void snd__destroy_dummy_source(rizz_snd_source srchandle) {
+static void snd__destroy_dummy_source(rizz_snd_source srchandle)
+{
     sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
     snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
     if (src->samples) {
@@ -580,7 +596,8 @@ static void snd__destroy_dummy_source(rizz_snd_source srchandle) {
     }
 }
 
-static void* snd__cmdbuffer_init(int thread_index, uint32_t thread_id, void* user) {
+static void* snd__cmdbuffer_init(int thread_index, uint32_t thread_id, void* user)
+{
     sx_unused(thread_id);
     sx_unused(user);
     sx_assert(!g_snd.cmd_buffers[thread_index]);
@@ -597,7 +614,8 @@ static void* snd__cmdbuffer_init(int thread_index, uint32_t thread_id, void* use
     return cb;
 }
 
-static bool snd__init() {
+static bool snd__init()
+{
     static_assert(RIZZ_SND_DEVICE_NUM_CHANNELS == 1 || RIZZ_SND_DEVICE_NUM_CHANNELS == 2,
                   "only mono or stereo output channel is supported");
 
@@ -681,7 +699,8 @@ static bool snd__init() {
     return true;
 }
 
-static void snd__release() {
+static void snd__release()
+{
     saudio_shutdown();
 
     if (g_snd.cmd_buffers) {
@@ -739,7 +758,8 @@ static void snd__release() {
 }
 
 static inline rizz_snd_instance snd__create_instance(rizz_snd_source srchandle, int bus,
-                                                     float volume, float pan) {
+                                                     float volume, float pan)
+{
     sx_assert(bus >= 0 && bus < RIZZ_SND_DEVICE_MAX_BUSES);
     sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
     sx_handle_t handle = sx_handle_new_and_grow(g_snd.instance_handles, g_snd_alloc);
@@ -754,7 +774,8 @@ static inline rizz_snd_instance snd__create_instance(rizz_snd_source srchandle, 
     return (rizz_snd_instance){ handle };
 }
 
-static inline void snd__destroy_instance(rizz_snd_instance insthandle, bool remove_from_bus) {
+static inline void snd__destroy_instance(rizz_snd_instance insthandle, bool remove_from_bus)
+{
     sx_assert_rel(sx_handle_valid(g_snd.instance_handles, insthandle.id));
     snd__instance* inst = &g_snd.instances[sx_handle_index(insthandle.id)];
     if (remove_from_bus && inst->play_frame >= 0) {
@@ -774,16 +795,17 @@ static inline void snd__destroy_instance(rizz_snd_instance insthandle, bool remo
     sx_handle_del(g_snd.instance_handles, insthandle.id);
 }
 
-static void snd__queue_play(rizz_snd_instance insthandle) {
+static void snd__queue_play(rizz_snd_instance insthandle)
+{
     sx_assert_rel(sx_handle_valid(g_snd.instance_handles, insthandle.id));
     snd__instance* inst = &g_snd.instances[sx_handle_index(insthandle.id)];
-    int            bus_id = inst->bus_id;
+    int bus_id = inst->bus_id;
     sx_assert_rel(g_snd.buses[bus_id].max_lanes >
                   0);    // bus is not initialized. call `bus_set_max_lanes` on bus_id
 
     sx_assert_rel(sx_handle_valid(g_snd.source_handles, inst->srchandle.id));
 
-    int          index = sx_handle_index(inst->srchandle.id);
+    int index = sx_handle_index(inst->srchandle.id);
     snd__source* src = &g_snd.sources[sx_handle_index(inst->srchandle.id)];
     sx_assert(src->samples);
 
@@ -809,10 +831,10 @@ static void snd__queue_play(rizz_snd_instance insthandle) {
     if (g_snd.buses[bus_id].max_lanes == g_snd.buses[bus_id].num_lanes) {
         // remove one sound from the playlist and replace it with this one
         int64_t min_play_frame = INT64_MAX;
-        int     replace_inst_index = -1;
+        int replace_inst_index = -1;
         for (int i = 0, c = g_snd.num_plays; i < c; i++) {
             rizz_snd_instance check_handle = g_snd.playlist[i];
-            snd__instance*    check_inst = &g_snd.instances[sx_handle_index(check_handle.id)];
+            snd__instance* check_inst = &g_snd.instances[sx_handle_index(check_handle.id)];
             if (check_inst->bus_id == bus_id && check_inst->play_frame < min_play_frame) {
                 min_play_frame = check_inst->play_frame;
                 replace_inst_index = i;
@@ -832,7 +854,8 @@ static void snd__queue_play(rizz_snd_instance insthandle) {
 }
 
 static rizz_snd_instance snd__play(rizz_snd_source srchandle, int bus, float volume, float pan,
-                                   bool paused) {
+                                   bool paused)
+{
     rizz_snd_instance insthandle = snd__create_instance(srchandle, bus, volume, pan);
     if (!paused) {
         snd__queue_play(insthandle);
@@ -841,7 +864,8 @@ static rizz_snd_instance snd__play(rizz_snd_source srchandle, int bus, float vol
 }
 
 static rizz_snd_instance snd__play_clocked(rizz_snd_source src, float wait_tm, int bus,
-                                           float volume, float pan) {
+                                           float volume, float pan)
+{
     snd__clocked* new_clocked = sx_pool_new(g_snd.clocked_pool);
     if (!new_clocked) {
         sx_out_of_memory();
@@ -873,7 +897,8 @@ static rizz_snd_instance snd__play_clocked(rizz_snd_source src, float wait_tm, i
     return new_clocked->inst;
 }
 
-static void snd__stop(rizz_snd_instance insthandle) {
+static void snd__stop(rizz_snd_instance insthandle)
+{
     if (sx_handle_valid(g_snd.instance_handles, insthandle.id)) {
         for (int i = 0, c = g_snd.num_plays; i < c; i++) {
             if (g_snd.playlist[i].id == insthandle.id) {
@@ -886,26 +911,29 @@ static void snd__stop(rizz_snd_instance insthandle) {
     }
 }
 
-static void snd__stop_all() {
+static void snd__stop_all()
+{
     for (int i = 0, c = g_snd.num_plays; i < c; i++) {
         snd__destroy_instance(g_snd.playlist[i], true);
     }
     g_snd.num_plays = 0;
 }
 
-static void snd__resume(rizz_snd_instance insthandle) {
+static void snd__resume(rizz_snd_instance insthandle)
+{
     if (sx_handle_valid(g_snd.instance_handles, insthandle.id)) {
         snd__queue_play(insthandle);
     }
 }
 
-static void snd__bus_stop(int bus) {
+static void snd__bus_stop(int bus)
+{
     sx_assert(bus >= 0 && bus < RIZZ_SND_DEVICE_MAX_BUSES);
 
     int num_plays = g_snd.num_plays;
     for (int i = 0; i < num_plays; i++) {
         rizz_snd_instance insthandle = g_snd.playlist[i];
-        snd__instance*    inst = &g_snd.instances[sx_handle_index(insthandle.id)];
+        snd__instance* inst = &g_snd.instances[sx_handle_index(insthandle.id)];
         if (inst->bus_id == bus) {
             sx_swap(g_snd.playlist[i], g_snd.playlist[num_plays - 1], rizz_snd_instance);
             --num_plays;
@@ -918,8 +946,9 @@ static void snd__bus_stop(int bus) {
 
 // TODO: research on fixed-point math, in order to implement linear sampling
 static int snd__resample_point(float* dst, int num_dst_samples, int sample_offset, const float* src,
-                               float src_sample_rate, float dst_sample_rate) {
-    float    multiplier = dst_sample_rate / src_sample_rate;
+                               float src_sample_rate, float dst_sample_rate)
+{
+    float multiplier = dst_sample_rate / src_sample_rate;
     uint32_t step_fixed = (uint32_t)sx_floor(FIXPOINT_FRAC_MUL / multiplier);
     uint64_t pos = ((uint64_t)sample_offset << FIXPOINT_FRAC_BITS);
 
@@ -932,9 +961,10 @@ static int snd__resample_point(float* dst, int num_dst_samples, int sample_offse
     return new_pos != sample_offset ? new_pos : sample_offset + num_dst_samples;
 }
 
-static void snd__mix(float* dst, int dst_num_frames, int dst_num_channels, int dst_sample_rate) {
+static void snd__mix(float* dst, int dst_num_frames, int dst_num_channels, int dst_sample_rate)
+{
     float dst_sample_ratef = (float)dst_sample_rate;
-    int   frames_written = 0;
+    int frames_written = 0;
     float master_pan_ch1 = g_snd.master_pan > 0.0f ? (1.0f - g_snd.master_pan) : 1.0f;
     float master_pan_ch2 = g_snd.master_pan < 0.0f ? (1.0f + g_snd.master_pan) : 1.0f;
 
@@ -946,15 +976,15 @@ static void snd__mix(float* dst, int dst_num_frames, int dst_num_channels, int d
     for (int i = 0, c = g_snd.num_plays; i < c; i++) {
         rizz_snd_instance insthandle = g_snd.playlist[i];
         sx_assert_rel(sx_handle_valid(g_snd.instance_handles, insthandle.id));
-        snd__instance*  inst = &g_snd.instances[sx_handle_index(insthandle.id)];
+        snd__instance* inst = &g_snd.instances[sx_handle_index(insthandle.id)];
         rizz_snd_source srchandle = inst->srchandle;
         sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
         snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
 
-        int    pos = inst->pos;
-        int    src_frames_remain = src->num_frames - pos;
-        int    num_frames = sx_min(dst_num_frames, src_frames_remain);
-        int    num_samples = num_frames;    // mono
+        int pos = inst->pos;
+        int src_frames_remain = src->num_frames - pos;
+        int num_frames = sx_min(dst_num_frames, src_frames_remain);
+        int num_samples = num_frames;    // mono
         float* frames;
 
         if (src->sample_rate != dst_sample_rate) {
@@ -1026,7 +1056,8 @@ static void snd__mix(float* dst, int dst_num_frames, int dst_num_channels, int d
     }
 }
 
-static void snd__update(float dt) {
+static void snd__update(float dt)
+{
     int device_channels = saudio_channels();
     int device_sample_rate = saudio_sample_rate();
 
@@ -1084,16 +1115,17 @@ static void snd__update(float dt) {
 }
 
 static void snd__plot_samples_rms(const char* label, const float* samples, int num_samples,
-                                  int channel, int num_channels, int height, float scale) {
+                                  int channel, int num_channels, int height, float scale)
+{
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
-    int       width = (int)the_imgui->GetContentRegionAvailWidth();
-    int       num_values;
-    float*    values;
+    int width = (int)the_imgui->GetContentRegionAvailWidth();
+    int num_values;
+    float* values;
     const int optimal_values = 50;
 
     if (num_samples > 0) {
-        int    num_plot_samples = num_samples / num_channels;
+        int num_plot_samples = num_samples / num_channels;
         float* plot_samples = sx_malloc(tmp_alloc, sizeof(float) * num_plot_samples);
         sx_assert(plot_samples);
 
@@ -1106,7 +1138,7 @@ static void snd__plot_samples_rms(const char* label, const float* samples, int n
             num_values = 20;
         values = sx_malloc(tmp_alloc, sizeof(float) * num_values);
         sx_assert(values);
-        int   block_sz = num_plot_samples / num_values;
+        int block_sz = num_plot_samples / num_values;
         float block_sz_rcp = 1.0f / (float)block_sz;
         for (int i = 0; i < num_values; i++) {
             float rms = 0;
@@ -1128,11 +1160,12 @@ static void snd__plot_samples_rms(const char* label, const float* samples, int n
 }
 
 static void snd__plot_samples_wav(const char* label, const float* samples, int num_samples,
-                                  int height) {
+                                  int height)
+{
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
     sx_assert(num_samples > 0);
 
-    int       width = (int)the_imgui->GetContentRegionAvailWidth();
+    int width = (int)the_imgui->GetContentRegionAvailWidth();
     const int optimal_values = 50;
 
     int num_values = width * optimal_values / 250;
@@ -1140,14 +1173,14 @@ static void snd__plot_samples_wav(const char* label, const float* samples, int n
         num_values = 20;
     float* values = sx_malloc(tmp_alloc, sizeof(float) * num_values * 2);
     sx_assert(values);
-    int          block_sz = num_samples / num_values;
+    int block_sz = num_samples / num_values;
     const float* plot_samples = samples;
-    float        block_sz_rcp = 1.0f / (float)block_sz;
+    float block_sz_rcp = 1.0f / (float)block_sz;
     for (int i = 0; i < num_values; i++) {
         float _max = -FLT_MAX;
         float _min = FLT_MAX;
-        int   max_idx = -1;
-        int   min_idx = -1;
+        int max_idx = -1;
+        int min_idx = -1;
 
         for (int s = 0; s < block_sz; s++) {
             if (plot_samples[s] > _max) {
@@ -1174,18 +1207,19 @@ static void snd__plot_samples_wav(const char* label, const float* samples, int n
     the_core->tmp_alloc_pop();
 }
 
-static void snd__show_mixer_tab_contents() {
+static void snd__show_mixer_tab_contents()
+{
     the_imgui->LabelText("sample_rate", "%d", saudio_sample_rate());
     the_imgui->LabelText("channels", "%d", saudio_channels());
     the_imgui->SliderFloat("master", &g_snd.master_volume, 0.0f, 1.2f, "%.1f", 1.0f);
     the_imgui->SliderFloat("pan", &g_snd.master_pan, -1.0f, 1.0f, "%.1f", 1.0f);
 
     // plot samples
-    static float    plot_scale = 1.0f;
+    static float plot_scale = 1.0f;
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
-    int             num_channels = saudio_channels();
-    int             num_samples = RIZZ_SND_DEVICE_BUFFER_FRAMES * num_channels;
-    float*          samples = sx_malloc(tmp_alloc, sizeof(float) * num_samples);
+    int num_channels = saudio_channels();
+    int num_samples = RIZZ_SND_DEVICE_BUFFER_FRAMES * num_channels;
+    float* samples = sx_malloc(tmp_alloc, sizeof(float) * num_samples);
     if (!samples) {
         sx_out_of_memory();
         return;
@@ -1272,16 +1306,18 @@ static void snd__show_mixer_tab_contents() {
     the_core->tmp_alloc_pop();
 }
 
-static float snd__source_duration(rizz_snd_source srchandle) {
+static float snd__source_duration(rizz_snd_source srchandle)
+{
     sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
 
     snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
     return (float)src->num_frames / (float)src->sample_rate;
 }
 
-static void snd__show_sources_tab_contents() {
+static void snd__show_sources_tab_contents()
+{
     static int selected_source = -1;
-    int        num_sources = g_snd.source_handles->count;
+    int num_sources = g_snd.source_handles->count;
 
     the_imgui->Columns(3, NULL, false);
     the_imgui->SetColumnWidth(0, 30.0f);
@@ -1354,7 +1390,7 @@ static void snd__show_sources_tab_contents() {
 
         the_imgui->NextColumn();
         static int bus_id = 0;
-        const int  bus_id_step = 1;
+        const int bus_id_step = 1;
         if (the_imgui->Button("Play", SX_VEC2_ZERO)) {
             snd__play((rizz_snd_source){ handle }, bus_id, 1.0f, 0, false);
         }
@@ -1364,7 +1400,8 @@ static void snd__show_sources_tab_contents() {
     }
 }
 
-static void snd__show_debugger(bool* p_open) {
+static void snd__show_debugger(bool* p_open)
+{
     if (!the_imgui) {
         return;
     }
@@ -1389,23 +1426,28 @@ static void snd__show_debugger(bool* p_open) {
     the_imgui->End();
 }
 
-static float snd__master_volume() {
+static float snd__master_volume()
+{
     return g_snd.master_volume;
 }
 
-static void snd__set_master_volume(float vol) {
+static void snd__set_master_volume(float vol)
+{
     g_snd.master_volume = sx_clamp(vol, 0.0f, 1.2f);
 }
 
-static float snd__master_pan() {
+static float snd__master_pan()
+{
     return g_snd.master_pan;
 }
 
-static void snd__set_master_pan(float pan) {
+static void snd__set_master_pan(float pan)
+{
     g_snd.master_pan = sx_clamp(pan, -1.0f, 1.0f);
 }
 
-static void snd__bus_set_max_lanes(int bus, int max_lanes) {
+static void snd__bus_set_max_lanes(int bus, int max_lanes)
+{
     sx_assert(bus >= 0 && bus < RIZZ_SND_DEVICE_MAX_BUSES);
 
     // count all lanes and check if we have to
@@ -1427,14 +1469,16 @@ static void snd__bus_set_max_lanes(int bus, int max_lanes) {
     }
 }
 
-static float snd__source_volume(rizz_snd_source srchandle) {
+static float snd__source_volume(rizz_snd_source srchandle)
+{
     sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
 
     snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
     return src->volume;
 }
 
-static void snd__source_stop(rizz_snd_source srchandle) {
+static void snd__source_stop(rizz_snd_source srchandle)
+{
     sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
 
     snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
@@ -1454,13 +1498,15 @@ static void snd__source_stop(rizz_snd_source srchandle) {
     g_snd.num_plays = c;
 }
 
-static bool snd__source_looping(rizz_snd_source srchandle) {
+static bool snd__source_looping(rizz_snd_source srchandle)
+{
     sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
     snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
     return src->flags & SND_SOURCEFLAG_LOOPING;
 }
 
-static void snd__source_set_looping(rizz_snd_source srchandle, bool loop) {
+static void snd__source_set_looping(rizz_snd_source srchandle, bool loop)
+{
     sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
     snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
     if (loop) {
@@ -1470,7 +1516,8 @@ static void snd__source_set_looping(rizz_snd_source srchandle, bool loop) {
     }
 }
 
-static void snd__source_set_singleton(rizz_snd_source srchandle, bool singleton) {
+static void snd__source_set_singleton(rizz_snd_source srchandle, bool singleton)
+{
     sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
     snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
     if (singleton) {
@@ -1480,13 +1527,15 @@ static void snd__source_set_singleton(rizz_snd_source srchandle, bool singleton)
     }
 }
 
-static void snd__source_set_volume(rizz_snd_source srchandle, float vol) {
+static void snd__source_set_volume(rizz_snd_source srchandle, float vol)
+{
     sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
     snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
     src->volume = sx_clamp(vol, 0.0f, 1.2f);
 }
 
-static inline uint8_t* snd__cb_alloc_params_buff(snd__cmdbuffer* cb, int size, int* offset) {
+static inline uint8_t* snd__cb_alloc_params_buff(snd__cmdbuffer* cb, int size, int* offset)
+{
     uint8_t* ptr = sx_array_add(g_snd_alloc, cb->params_buff,
                                 sx_align_mask(size, SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT - 1));
     if (!ptr) {
@@ -1500,18 +1549,19 @@ static inline uint8_t* snd__cb_alloc_params_buff(snd__cmdbuffer* cb, int size, i
 
 typedef struct snd__play_params {
     rizz_snd_source src;
-    int             bus;
-    float           vol;
-    float           pan;
-    float           wait_tm;
-    bool            paused;
+    int bus;
+    float vol;
+    float pan;
+    float wait_tm;
+    bool paused;
 } snd__play_params;
 
-static void snd__cb_play(rizz_snd_source src, int bus, float volume, float pan, bool paused) {
+static void snd__cb_play(rizz_snd_source src, int bus, float volume, float pan, bool paused)
+{
     snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
     sx_assert(cb->cmd_idx < INT_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(snd__play_params), &offset);
     sx_assert(buff);
 
@@ -1525,7 +1575,8 @@ static void snd__cb_play(rizz_snd_source src, int bus, float volume, float pan, 
         (snd__play_params){ .src = src, .bus = bus, .vol = volume, .pan = pan, .paused = paused };
 }
 
-static uint8_t* snd__cb_run_play(uint8_t* buff) {
+static uint8_t* snd__cb_run_play(uint8_t* buff)
+{
     snd__play_params* p = (snd__play_params*)buff;
     buff += sizeof(snd__play_params);
     snd__play(p->src, p->bus, p->vol, p->pan, p->paused);
@@ -1533,11 +1584,12 @@ static uint8_t* snd__cb_run_play(uint8_t* buff) {
 }
 
 static void snd__cb_play_clocked(rizz_snd_source src, float wait_tm, int bus, float volume,
-                                 float pan) {
+                                 float pan)
+{
     snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
     sx_assert(cb->cmd_idx < INT_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(snd__play_params), &offset);
     sx_assert(buff);
 
@@ -1551,18 +1603,20 @@ static void snd__cb_play_clocked(rizz_snd_source src, float wait_tm, int bus, fl
         (snd__play_params){ .src = src, .bus = bus, .vol = volume, .pan = pan, .wait_tm = wait_tm };
 }
 
-static uint8_t* snd__cb_run_play_clocked(uint8_t* buff) {
+static uint8_t* snd__cb_run_play_clocked(uint8_t* buff)
+{
     snd__play_params* p = (snd__play_params*)buff;
     buff += sizeof(snd__play_params);
     snd__play_clocked(p->src, p->wait_tm, p->bus, p->vol, p->pan);
     return buff;
 }
 
-static void snd__cb_bus_stop(int bus) {
+static void snd__cb_bus_stop(int bus)
+{
     snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
     sx_assert(cb->cmd_idx < INT_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(int), &offset);
     sx_assert(buff);
 
@@ -1575,18 +1629,20 @@ static void snd__cb_bus_stop(int bus) {
     *((int*)buff) = bus;
 }
 
-static uint8_t* snd__cb_run_bus_stop(uint8_t* buff) {
+static uint8_t* snd__cb_run_bus_stop(uint8_t* buff)
+{
     int bus_id = *((int*)buff);
     buff += sizeof(int);
     snd__bus_stop(bus_id);
     return buff;
 }
 
-static void snd__cb_set_master_volume(float volume) {
+static void snd__cb_set_master_volume(float volume)
+{
     snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
     sx_assert(cb->cmd_idx < INT_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(int), &offset);
     sx_assert(buff);
 
@@ -1599,18 +1655,20 @@ static void snd__cb_set_master_volume(float volume) {
     *((float*)buff) = volume;
 }
 
-static uint8_t* snd__cb_run_set_master_volume(uint8_t* buff) {
+static uint8_t* snd__cb_run_set_master_volume(uint8_t* buff)
+{
     float vol = *((float*)buff);
     buff += sizeof(float);
     snd__set_master_volume(vol);
     return buff;
 }
 
-static void snd__cb_set_master_pan(float pan) {
+static void snd__cb_set_master_pan(float pan)
+{
     snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
     sx_assert(cb->cmd_idx < INT_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(int), &offset);
     sx_assert(buff);
 
@@ -1623,18 +1681,20 @@ static void snd__cb_set_master_pan(float pan) {
     *((float*)buff) = pan;
 }
 
-static uint8_t* snd__cb_run_set_master_pan(uint8_t* buff) {
+static uint8_t* snd__cb_run_set_master_pan(uint8_t* buff)
+{
     float pan = *((float*)buff);
     buff += sizeof(float);
     snd__set_master_pan(pan);
     return buff;
 }
 
-static void snd__cb_source_stop(rizz_snd_source src) {
+static void snd__cb_source_stop(rizz_snd_source src)
+{
     snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
     sx_assert(cb->cmd_idx < INT_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(rizz_snd_source), &offset);
     sx_assert(buff);
 
@@ -1647,18 +1707,20 @@ static void snd__cb_source_stop(rizz_snd_source src) {
     *((rizz_snd_source*)buff) = src;
 }
 
-static uint8_t* snd__cb_run_source_stop(uint8_t* buff) {
+static uint8_t* snd__cb_run_source_stop(uint8_t* buff)
+{
     rizz_snd_source src = *((rizz_snd_source*)buff);
     buff += sizeof(rizz_snd_source);
     snd__source_stop(src);
     return buff;
 }
 
-static void snd__cb_source_set_volume(rizz_snd_source src, float vol) {
+static void snd__cb_source_set_volume(rizz_snd_source src, float vol)
+{
     snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
     sx_assert(cb->cmd_idx < INT_MAX);
 
-    int      offset;
+    int offset;
     uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(rizz_snd_source) + sizeof(float), &offset);
     sx_assert(buff);
 
@@ -1673,7 +1735,8 @@ static void snd__cb_source_set_volume(rizz_snd_source src, float vol) {
     *((float*)buff) = vol;
 }
 
-static uint8_t* snd__cb_run_source_set_volume(uint8_t* buff) {
+static uint8_t* snd__cb_run_source_set_volume(uint8_t* buff)
+{
     rizz_snd_source src = *((rizz_snd_source*)buff);
     buff += sizeof(rizz_snd_source);
     float vol = *((float*)buff);
@@ -1692,7 +1755,8 @@ static const snd__run_command_cb k_snd_run_cbs[_SND_COMMAND_COUNT] = {
     snd__cb_run_source_set_volume
 };
 
-static void snd__execute_command_buffers() {
+static void snd__execute_command_buffers()
+{
     static_assert((sizeof(k_snd_run_cbs) / sizeof(snd__run_command_cb)) == _SND_COMMAND_COUNT,
                   "k_snd_run_cbs must match snd__command");
 
@@ -1737,7 +1801,8 @@ static rizz_api_snd the__snd = { .queued = { .play = snd__cb_play,
                                  .source_set_singleton = snd__source_set_singleton,
                                  .source_set_volume = snd__source_set_volume };
 
-rizz_plugin_decl_main(sound, plugin, e) {
+rizz_plugin_decl_main(sound, plugin, e)
+{
     switch (e) {
     case RIZZ_PLUGIN_EVENT_STEP: {
         snd__execute_command_buffers();
@@ -1771,7 +1836,8 @@ rizz_plugin_decl_main(sound, plugin, e) {
     return 0;
 }
 
-rizz_plugin_decl_event_handler(sound, e) {
+rizz_plugin_decl_event_handler(sound, e)
+{
     if (e->type == RIZZ_APP_EVENTTYPE_UPDATE_APIS) {
         the_imgui = the_plugin->get_api_byname("imgui", 0);
     }

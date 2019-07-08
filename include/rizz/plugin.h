@@ -95,24 +95,24 @@ typedef uint32_t rizz_plugin_info_flags;
 // Plugins should implement these functions (names should be the same without the _cb)
 // use rizz_plugin_decl macros to declare the proper function signatures based on build type
 // (bundle/dynamic)
-typedef struct rizz_plugin      rizz_plugin;
+typedef struct rizz_plugin rizz_plugin;
 typedef struct rizz_plugin_info rizz_plugin_info;
-typedef struct rizz_app_event   rizz_app_event;
+typedef struct rizz_app_event rizz_app_event;
 typedef int(rizz_plugin_main_cb)(rizz_plugin* ctx, rizz_plugin_event e);
 typedef void(rizz_plugin_get_info_cb)(rizz_plugin_info* out_info);
 typedef void(rizz_plugin_event_handler_cb)(const rizz_app_event* ev);
 
 typedef struct rizz_plugin_info {
-    uint32_t               version;
-    const char**           deps;    // array: name of dependency plugins
-    int                    num_deps;
-    char                   name[32];
-    char                   desc[256];
+    uint32_t version;
+    const char** deps;    // array: name of dependency plugins
+    int num_deps;
+    char name[32];
+    char desc[256];
 
 #ifdef RIZZ_BUNDLE
     // These callback functions are automatically assigned by auto-generated script (see
     // bundle.cmake)
-    rizz_plugin_main_cb*          main_cb;
+    rizz_plugin_main_cb* main_cb;
     rizz_plugin_event_handler_cb* event_cb;
 #endif
 } rizz_plugin_info;
@@ -129,45 +129,47 @@ typedef struct rizz_api_plugin {
 // Data layout is same as 'cr_plugin' but with different variable names to make it more
 // user-friendly
 typedef struct rizz_plugin {
-    void*             _p;
-    rizz_api_plugin*  api;
-    uint32_t          iteration;    // What reload we are on, first load is 1
+    void* _p;
+    rizz_api_plugin* api;
+    uint32_t iteration;    // What reload we are on, first load is 1
     rizz_plugin_crash crash_reason;
 } rizz_plugin;
 
 typedef struct rizz_app_event rizz_app_event;
 
 #ifndef RIZZ_BUNDLE
-#    define rizz_plugin_decl_main(_name, _plugin_param_name, _event_param_name)       \
-        RIZZ_PLUGIN_EXPORT int rizz_plugin_main(rizz_plugin*      _plugin_param_name, \
+#    define rizz_plugin_decl_main(_name, _plugin_param_name, _event_param_name)  \
+        RIZZ_PLUGIN_EXPORT int rizz_plugin_main(rizz_plugin* _plugin_param_name, \
                                                 rizz_plugin_event _event_param_name)
 
 #    define rizz_plugin_decl_event_handler(_name, __event_param_name) \
         RIZZ_PLUGIN_EXPORT void rizz_plugin_event_handler(const rizz_app_event* __event_param_name)
 
 #    define rizz_plugin_implement_info(_name, _version, _desc, _deps, _num_deps) \
-        RIZZ_PLUGIN_EXPORT void rizz_plugin_get_info(rizz_plugin_info* out_info) {       \
-            out_info->version = (_version);                                              \
-            out_info->deps = (_deps);                                                    \
-            out_info->num_deps = (_num_deps);                                            \
-            sx_strcpy(out_info->name, sizeof(out_info->name), #_name);                   \
-            sx_strcpy(out_info->desc, sizeof(out_info->desc), (_desc));                  \
+        RIZZ_PLUGIN_EXPORT void rizz_plugin_get_info(rizz_plugin_info* out_info) \
+        {                                                                        \
+            out_info->version = (_version);                                      \
+            out_info->deps = (_deps);                                            \
+            out_info->num_deps = (_num_deps);                                    \
+            sx_strcpy(out_info->name, sizeof(out_info->name), #_name);           \
+            sx_strcpy(out_info->desc, sizeof(out_info->desc), (_desc));          \
         }
 #else
-#    define rizz_plugin_decl_main(_name, _plugin_param_name, _event_param_name)               \
-        RIZZ_PLUGIN_EXPORT int rizz_plugin_main_##_name(rizz_plugin*      _plugin_param_name, \
+#    define rizz_plugin_decl_main(_name, _plugin_param_name, _event_param_name)          \
+        RIZZ_PLUGIN_EXPORT int rizz_plugin_main_##_name(rizz_plugin* _plugin_param_name, \
                                                         rizz_plugin_event _event_param_name)
 #    define rizz_plugin_decl_event_handler(_name, __event_param_name) \
         RIZZ_PLUGIN_EXPORT void rizz_plugin_event_handler_##_name(    \
             const rizz_app_event* __event_param_name)
 
-#    define rizz_plugin_implement_info(_name, _version, _desc, _deps, _num_deps)                     \
-        RIZZ_PLUGIN_EXPORT void rizz_plugin_get_info_##_name(rizz_plugin_info* out_info) { \
-            out_info->version = (_version);                                                \
-            out_info->deps = (_deps);                                                      \
-            out_info->num_deps = (_num_deps);                                              \
-            sx_strcpy(out_info->name, sizeof(out_info->name), #_name);                     \
-            sx_strcpy(out_info->desc, sizeof(out_info->desc), (_desc));                    \
+#    define rizz_plugin_implement_info(_name, _version, _desc, _deps, _num_deps)         \
+        RIZZ_PLUGIN_EXPORT void rizz_plugin_get_info_##_name(rizz_plugin_info* out_info) \
+        {                                                                                \
+            out_info->version = (_version);                                              \
+            out_info->deps = (_deps);                                                    \
+            out_info->num_deps = (_num_deps);                                            \
+            sx_strcpy(out_info->name, sizeof(out_info->name), #_name);                   \
+            sx_strcpy(out_info->desc, sizeof(out_info->desc), (_desc));                  \
         }
 #endif    // RIZZ_BUNDLE
 

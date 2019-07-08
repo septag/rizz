@@ -2,9 +2,9 @@
 
 #include "sx/math.h"
 
-typedef struct rizz_mem_info       rizz_mem_info;
+typedef struct rizz_mem_info rizz_mem_info;
 typedef struct rizz_gfx_trace_info rizz_gfx_trace_info;
-typedef struct ImDrawList          ImDrawList;
+typedef struct ImDrawList ImDrawList;
 
 typedef enum { GIZMO_MODE_LOCAL, GIZMO_MODE_WORLD } gizmo_mode;
 

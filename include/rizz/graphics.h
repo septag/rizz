@@ -5,6 +5,7 @@
 #pragma once
 
 #include "_sg-types.h"
+
 #include "sx/math.h"
 
 // clang-format off
@@ -54,53 +55,53 @@ typedef enum rizz_shader_code_type {
 } rizz_shader_code_type;
 
 typedef struct rizz_shader_refl_input {
-    char             name[32];
-    char             semantic[32];
-    int              semantic_index;
+    char name[32];
+    char semantic[32];
+    int semantic_index;
     sg_vertex_format type;
 } rizz_shader_refl_input;
 
 typedef struct rizz_shader_refl_uniform_buffer {
     char name[32];
-    int  size_bytes;
-    int  binding;
-    int  array_size;    // for flattened ubos, we must provide array_size to the api with the type
-                        // FLOAT4
+    int size_bytes;
+    int binding;
+    int array_size;    // for flattened ubos, we must provide array_size to the api with the type
+                       // FLOAT4
 } rizz_shader_refl_uniform_buffer;
 
 typedef struct rizz_shader_refl_texture {
-    char          name[32];
-    int           binding;
+    char name[32];
+    int binding;
     sg_image_type type;
 } rizz_shader_refl_texture;
 
 typedef struct rizz_shader_refl {
-    rizz_shader_lang                 lang;
-    rizz_shader_stage                stage;
-    int                              profile_version;
-    char                             source_file[32];
-    rizz_shader_refl_input*          inputs;
-    int                              num_inputs;
-    rizz_shader_refl_texture*        textures;
-    int                              num_textures;
+    rizz_shader_lang lang;
+    rizz_shader_stage stage;
+    int profile_version;
+    char source_file[32];
+    rizz_shader_refl_input* inputs;
+    int num_inputs;
+    rizz_shader_refl_texture* textures;
+    int num_textures;
     rizz_shader_refl_uniform_buffer* uniform_buffers;
-    int                              num_uniform_buffers;
-    rizz_shader_code_type            code_type;
-    bool                             flatten_ubos;
+    int num_uniform_buffers;
+    rizz_shader_code_type code_type;
+    bool flatten_ubos;
 } rizz_shader_refl;
 
 // shader metadata
 typedef struct rizz_shader_info {
     rizz_shader_refl_input inputs[SG_MAX_VERTEX_ATTRIBUTES];
-    int                    num_inputs;
+    int num_inputs;
 } rizz_shader_info;
 
 typedef struct rizz_vertex_attr {
-    const char*      semantic;
-    int              semantic_idx;
-    int              offset;
+    const char* semantic;
+    int semantic_idx;
+    int offset;
     sg_vertex_format format;
-    int              buffer_index;
+    int buffer_index;
 } rizz_vertex_attr;
 
 typedef struct rizz_vertex_layout {
@@ -108,26 +109,26 @@ typedef struct rizz_vertex_layout {
 } rizz_vertex_layout;
 
 typedef struct rizz_shader {
-    sg_shader        shd;
+    sg_shader shd;
     rizz_shader_info info;
 } rizz_shader;
 
 typedef struct rizz_texture_load_params {
-    int       first_mip;
+    int first_mip;
     sg_filter min_filter;
     sg_filter mag_filter;
-    sg_wrap   wrap_u;
-    sg_wrap   wrap_v;
-    sg_wrap   wrap_w;
+    sg_wrap wrap_u;
+    sg_wrap wrap_v;
+    sg_wrap wrap_w;
 } rizz_texture_load_params;
 
 // texture metadata
 typedef struct rizz_texture_info {
-    sg_image_type   type;
+    sg_image_type type;
     sg_pixel_format format;
-    int             mem_size_bytes;
-    int             width;
-    int             height;
+    int mem_size_bytes;
+    int width;
+    int height;
     union {
         int depth;
         int layers;
@@ -137,7 +138,7 @@ typedef struct rizz_texture_info {
 } rizz_texture_info;
 
 typedef struct rizz_texture {
-    sg_image          img;
+    sg_image img;
     rizz_texture_info info;
 } rizz_texture;
 
@@ -160,19 +161,19 @@ enum rizz_font_flags_ {
 typedef uint32_t rizz_font_flags;
 
 typedef struct rizz_font {
-    char            name[32];
-    int             size;
-    int             line_height;
-    int             base;
-    int             img_width;
-    int             img_height;
-    int             char_width;
+    char name[32];
+    int size;
+    int line_height;
+    int base;
+    int img_width;
+    int img_height;
+    int char_width;
     rizz_font_flags flags;
-    int16_t         padding[4];
-    int16_t         spacing[2];
-    rizz_asset      img;
-    int             num_glyphs;
-    int             num_kerns;
+    int16_t padding[4];
+    int16_t spacing[2];
+    rizz_asset img;
+    int num_glyphs;
+    int num_kerns;
 } rizz_font;
 
 typedef struct rizz_gfx_trace_info {
@@ -378,7 +379,7 @@ typedef struct rizz_api_gfx_staged {
 
 typedef struct rizz_api_gfx {
     rizz_api_gfx_immediate imm;
-    rizz_api_gfx_staged    staged;
+    rizz_api_gfx_staged staged;
 
     // Stage:
     //     To performed deferred drawing calls, you should setup rendering stages on application
@@ -407,7 +408,7 @@ typedef struct rizz_api_gfx {
                                          const uint32_t* fs_refl_json);
     sg_pipeline_desc* (*shader_bindto_pipeline)(rizz_shader* shd, sg_pipeline_desc* pip_desc,
                                                 const rizz_vertex_layout* vl);
-    sg_pipeline_desc* (*shader_bindto_pipeline_sg)(sg_shader                     shd,
+    sg_pipeline_desc* (*shader_bindto_pipeline_sg)(sg_shader shd,
                                                    const rizz_shader_refl_input* inputs,
                                                    int num_inputs, sg_pipeline_desc* pip_desc,
                                                    const rizz_vertex_layout* vl);
@@ -433,8 +434,8 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
 void rizz__gfx_release();
 void rizz__gfx_trace_reset_frame_stats();
 rizz__gfx_cmdbuffer* rizz__gfx_create_command_buffer(const sx_alloc* alloc);
-void                 rizz__gfx_destroy_command_buffer(rizz__gfx_cmdbuffer* cb);
-void                 rizz__gfx_execute_command_buffers();
+void rizz__gfx_destroy_command_buffer(rizz__gfx_cmdbuffer* cb);
+void rizz__gfx_execute_command_buffers();
 
 RIZZ_API rizz_api_gfx the__gfx;
 #endif

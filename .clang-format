@@ -1,7 +1,7 @@
 ﻿---
 AlignAfterOpenBracket: Align
 AlignConsecutiveAssignments: 'false'
-AlignConsecutiveDeclarations: 'true'
+AlignConsecutiveDeclarations: 'false'
 AlignEscapedNewlines: Left
 AlignTrailingComments: 'true'
 AllowAllParametersOfDeclarationOnNextLine: 'true'
@@ -9,11 +9,11 @@ AllowShortBlocksOnASingleLine: 'false'
 AllowShortCaseLabelsOnASingleLine: 'false'
 AllowShortFunctionsOnASingleLine: Inline
 AllowShortIfStatementsOnASingleLine: 'false'
-AllowShortLoopsOnASingleLine: 'true'
+AllowShortLoopsOnASingleLine: 'false'
 AlwaysBreakBeforeMultilineStrings: 'true'
 AlwaysBreakTemplateDeclarations: 'true'
 BreakBeforeBinaryOperators: None
-BreakBeforeBraces: Attach
+BreakBeforeBraces: Linux
 ColumnLimit: '100'
 Cpp11BracedListStyle: 'false'
 IncludeBlocks: Preserve

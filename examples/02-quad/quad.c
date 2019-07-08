@@ -10,40 +10,41 @@
 #include "rizz/core.h"
 #include "rizz/entry.h"
 #include "rizz/graphics.h"
-#include "rizz/plugin.h"
-#include "rizz/vfs.h"
 #include "rizz/imgui-extra.h"
 #include "rizz/imgui.h"
+#include "rizz/plugin.h"
+#include "rizz/vfs.h"
 
 #include "../common.h"
 
-RIZZ_STATE static rizz_api_core*        the_core;
-RIZZ_STATE static rizz_api_gfx*         the_gfx;
-RIZZ_STATE static rizz_api_app*         the_app;
-RIZZ_STATE static rizz_api_imgui*       the_imgui;
-RIZZ_STATE static rizz_api_asset*       the_asset;
+RIZZ_STATE static rizz_api_core* the_core;
+RIZZ_STATE static rizz_api_gfx* the_gfx;
+RIZZ_STATE static rizz_api_app* the_app;
+RIZZ_STATE static rizz_api_imgui* the_imgui;
+RIZZ_STATE static rizz_api_asset* the_asset;
 RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
-RIZZ_STATE static rizz_api_camera*      the_camera;
-RIZZ_STATE static rizz_api_vfs*         the_vfs;
+RIZZ_STATE static rizz_api_camera* the_camera;
+RIZZ_STATE static rizz_api_vfs* the_vfs;
 
 typedef struct {
     sx_mat4 mvp;
 } quad_matrices;
 
 typedef struct {
-    rizz_gfx_stage  stage;
-    sg_bindings     bindings;
-    sg_pipeline     pip;
-    rizz_asset      img;
-    rizz_asset      shader;
-    sg_buffer       vbuff;
-    sg_buffer       ibuff;
+    rizz_gfx_stage stage;
+    sg_bindings bindings;
+    sg_pipeline pip;
+    rizz_asset img;
+    rizz_asset shader;
+    sg_buffer vbuff;
+    sg_buffer ibuff;
     rizz_camera_fps cam;
 } quad_state;
 
 RIZZ_STATE static quad_state g_quad;
 
-static bool init() {
+static bool init()
+{
     // mount `/asset` directory
     char asset_dir[RIZZ_MAX_PATH];
     sx_os_path_join(asset_dir, sizeof(asset_dir), EXAMPLES_ROOT, "assets");    // "/examples/assets"
@@ -116,7 +117,7 @@ static bool init() {
     // camera
     // projection: setup for ortho, total-width = 10 units
     // view: Z-UP Y-Forward (like blender)
-    sx_vec2     screen_size = the_app->sizef();
+    sx_vec2 screen_size = the_app->sizef();
     const float view_width = 5.0f;
     const float view_height = screen_size.y * view_width / screen_size.x;
     the_camera->fps_init(&g_quad.cam, 50.0f,
@@ -127,7 +128,8 @@ static bool init() {
     return true;
 }
 
-static void shutdown() {
+static void shutdown()
+{
     if (g_quad.vbuff.id)
         the_gfx->imm.destroy_buffer(g_quad.vbuff);
     if (g_quad.ibuff.id)
@@ -142,7 +144,8 @@ static void shutdown() {
 
 static void update(float dt) {}
 
-static void render() {
+static void render()
+{
     sg_pass_action pass_action = { .colors[0] = { SG_ACTION_CLEAR, { 0.25f, 0.5f, 0.75f, 1.0f } },
                                    .depth = { SG_ACTION_CLEAR, 1.0f } };
 
@@ -175,7 +178,8 @@ static void render() {
     the_imgui->End();
 }
 
-rizz_plugin_decl_main(quad, plugin, e) {
+rizz_plugin_decl_main(quad, plugin, e)
+{
     switch (e) {
     case RIZZ_PLUGIN_EVENT_STEP:
         update((float)sx_tm_sec(the_core->delta_tick()));
@@ -209,7 +213,8 @@ rizz_plugin_decl_main(quad, plugin, e) {
     return 0;
 }
 
-rizz_plugin_decl_event_handler(quad, e) {
+rizz_plugin_decl_event_handler(quad, e)
+{
     switch (e->type) {
     case RIZZ_APP_EVENTTYPE_SUSPENDED:
         break;
@@ -226,7 +231,8 @@ rizz_plugin_decl_event_handler(quad, e) {
     }
 }
 
-rizz_game_decl_config(conf) {
+rizz_game_decl_config(conf)
+{
     conf->app_name = "quad";
     conf->app_version = 1000;
     conf->app_title = "02 - Quad";

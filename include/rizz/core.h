@@ -6,10 +6,7 @@
 
 #include "types.h"
 
-// #include "sx/jobs.h"
-typedef volatile int*      sx_job_t;
-typedef struct sx_job_desc sx_job_desc;
-typedef struct sx_alloc    sx_alloc;
+#include "sx/jobs.h"
 
 #define RIZZ_MAX_TEMP_ALLOCS 32
 
@@ -28,17 +25,17 @@ typedef enum rizz_mem_id {
     RIZZ_MEMID_OTHER,
     RIZZ_MEMID_DEBUG,
     RIZZ_MEMID_TOOLSET,
-	RIZZ_MEMID_INPUT,
+    RIZZ_MEMID_INPUT,
     RIZZ_MEMID_GAME,
     _RIZZ_MEMID_COUNT
 } rizz_mem_id;
 
 typedef struct rizz_track_alloc_item {
-    char    file[32];
-    char    func[64];
-    void*   ptr;
+    char file[32];
+    char func[64];
+    void* ptr;
     int64_t size;
-    int     line;
+    int line;
 } rizz_track_alloc_item;
 
 typedef struct {
@@ -48,22 +45,22 @@ typedef struct {
 } rizz_linalloc_info;
 
 typedef struct {
-    const char*                  name;
+    const char* name;
     const rizz_track_alloc_item* items;
-    int                          num_items;
-    int                          mem_id;
-    int64_t                      size;
-    int64_t                      peak;
+    int num_items;
+    int mem_id;
+    int64_t size;
+    int64_t peak;
 } rizz_trackalloc_info;
 
 typedef struct rizz_mem_info {
     rizz_trackalloc_info trackers[_RIZZ_MEMID_COUNT];
-    rizz_linalloc_info   temp_allocs[RIZZ_MAX_TEMP_ALLOCS];
-    int                  num_trackers;
-    int                  num_temp_allocs;
-    size_t               heap;
-    size_t               heap_max;
-    int                  heap_count;
+    rizz_linalloc_info temp_allocs[RIZZ_MAX_TEMP_ALLOCS];
+    int num_trackers;
+    int num_temp_allocs;
+    size_t heap;
+    size_t heap_max;
+    int heap_count;
 } rizz_mem_info;
 
 // internal: same as sx_fiber_transfer
@@ -114,8 +111,9 @@ typedef struct rizz_api_core {
     const char* (*data_dir)();
 
     // jobs
-    sx_job_t (*job_dispatch)(const sx_job_desc* descs, int count);
-    sx_job_t (*job_dispatch_by_tags)(const sx_job_desc* descs, int count, uint32_t tags);
+    sx_job_t (*job_dispatch)(int count,
+                             void (*callback)(int start, int end, int thrd_index, void* user),
+                             void* user, sx_job_priority priority, uint32_t tags);
     void (*job_wait_and_del)(sx_job_t job);
     bool (*job_test_and_del)(sx_job_t job);
     int (*job_num_workers)();
@@ -141,9 +139,13 @@ typedef struct rizz_api_core {
 #ifdef RIZZ_INTERNAL_API
 typedef struct rizz_gfx_cmdbuffer rizz_gfx_cmdbuffer;    // #include "rizz/graphics.h"
 
-bool                rizz__core_init(const rizz_config* conf);
-void                rizz__core_release();
-void                rizz__core_frame();
+bool rizz__core_init(const rizz_config* conf);
+void rizz__core_release();
+void rizz__core_frame();
+sx_job_t rizz__core_job_dispatch_internal(int count,
+                                          void (*callback)(int start, int end, int thrd_index,
+                                                           void* user),
+                                          void* user, sx_job_priority priority, uint32_t tags);
 rizz_gfx_cmdbuffer* rizz__core_gfx_cmdbuffer();
 RIZZ_API void rizz__core_fix_callback_ptrs(const void** ptrs, const void** new_ptrs, int num_ptrs);
 
@@ -208,8 +210,8 @@ struct rizz_profile_scoped {
     rizz_profile_scoped(const rizz_profile_scoped&) = delete;
     rizz_profile_scoped(const rizz_profile_scoped&&) = delete;
 
-    rizz_profile_scoped(rizz_api_core* api, const char* name, uint32_t flags,
-                        uint32_t* hash_cache) {
+    rizz_profile_scoped(rizz_api_core* api, const char* name, uint32_t flags, uint32_t* hash_cache)
+    {
         _api = api;
         api->begin_profile_sample(name, flags, hash_cache);
     }

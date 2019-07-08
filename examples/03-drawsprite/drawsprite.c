@@ -10,11 +10,11 @@
 #include "rizz/core.h"
 #include "rizz/entry.h"
 #include "rizz/graphics.h"
-#include "rizz/plugin.h"
-#include "rizz/vfs.h"
-#include "rizz/sprite.h"
 #include "rizz/imgui-extra.h"
 #include "rizz/imgui.h"
+#include "rizz/plugin.h"
+#include "rizz/sprite.h"
+#include "rizz/vfs.h"
 
 #include "../common.h"
 
@@ -23,15 +23,15 @@
 #define NUM_SPRITES 6
 #define SPRITE_WIDTH 3.5f
 
-RIZZ_STATE static rizz_api_core*        the_core;
-RIZZ_STATE static rizz_api_gfx*         the_gfx;
-RIZZ_STATE static rizz_api_app*         the_app;
-RIZZ_STATE static rizz_api_imgui*       the_imgui;
-RIZZ_STATE static rizz_api_asset*       the_asset;
+RIZZ_STATE static rizz_api_core* the_core;
+RIZZ_STATE static rizz_api_gfx* the_gfx;
+RIZZ_STATE static rizz_api_app* the_app;
+RIZZ_STATE static rizz_api_imgui* the_imgui;
+RIZZ_STATE static rizz_api_asset* the_asset;
 RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
-RIZZ_STATE static rizz_api_camera*      the_camera;
-RIZZ_STATE static rizz_api_vfs*         the_vfs;
-RIZZ_STATE static rizz_api_sprite*      the_sprite;
+RIZZ_STATE static rizz_api_camera* the_camera;
+RIZZ_STATE static rizz_api_vfs* the_vfs;
+RIZZ_STATE static rizz_api_sprite* the_sprite;
 
 typedef struct {
     sx_mat4 vp;
@@ -39,11 +39,11 @@ typedef struct {
 } drawsprite_params;
 
 typedef struct {
-    sx_vec2  pos;
-    sx_vec2  uv;
-    sx_vec4  transform;    // (x,y: pos) (z: rotation) (w: scale)
+    sx_vec2 pos;
+    sx_vec2 uv;
+    sx_vec4 transform;    // (x,y: pos) (z: rotation) (w: scale)
     sx_color color;
-    sx_vec3  bc;
+    sx_vec3 bc;
 } drawsprite_vertex;
 
 static rizz_vertex_layout k_vertex_layout = {
@@ -66,23 +66,24 @@ static rizz_vertex_layout k_vertex_layout_wire = {
 };
 
 typedef struct {
-    rizz_gfx_stage  stage;
-    sg_pipeline     pip;
-    sg_pipeline     pip_wire;
-    rizz_asset      atlas;
-    rizz_asset      shader;
-    rizz_asset      shader_wire;
-    sg_buffer       vbuff;
-    sg_buffer       ibuff;
+    rizz_gfx_stage stage;
+    sg_pipeline pip;
+    sg_pipeline pip_wire;
+    rizz_asset atlas;
+    rizz_asset shader;
+    rizz_asset shader_wire;
+    sg_buffer vbuff;
+    sg_buffer ibuff;
     rizz_camera_fps cam;
-    rizz_sprite     sprites[NUM_SPRITES];
-    bool            wireframe;
-    bool            custom;
+    rizz_sprite sprites[NUM_SPRITES];
+    bool wireframe;
+    bool custom;
 } drawsprite_state;
 
 RIZZ_STATE static drawsprite_state g_ds;
 
-static bool init() {
+static bool init()
+{
     // mount `/asset` directory
     char asset_dir[RIZZ_MAX_PATH];
     sx_os_path_join(asset_dir, sizeof(asset_dir), EXAMPLES_ROOT, "assets");    // "/examples/assets"
@@ -144,7 +145,7 @@ static bool init() {
     // camera
     // projection: setup for ortho, total-width = 10 units
     // view: Y-UP
-    sx_vec2     screen_size = the_app->sizef();
+    sx_vec2 screen_size = the_app->sizef();
     const float view_width = 5.0f;
     const float view_height = screen_size.y * view_width / screen_size.x;
     the_camera->fps_init(&g_ds.cam, 50.0f,
@@ -168,7 +169,8 @@ static bool init() {
     return true;
 }
 
-static void shutdown() {
+static void shutdown()
+{
     for (int i = 0; i < NUM_SPRITES; i++) {
         if (g_ds.sprites[i].id) {
             the_sprite->destroy(g_ds.sprites[i]);
@@ -192,10 +194,11 @@ static void update(float dt) {}
 
 // Custom drawing uses `make_drawdata_batch` API function
 // which basically returns vertex-buffer/index-buffer and batch data needed to draw the input
-// sprites effieciently. 
+// sprites effieciently.
 // As an example, we modify vertices and use custom shader with the draw-data
-static void draw_custom(const drawsprite_params* params) {
-    const sx_alloc*       tmp_alloc = the_core->tmp_alloc_push();
+static void draw_custom(const drawsprite_params* params)
+{
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
     rizz_sprite_drawdata* dd =
         the_sprite->make_drawdata_batch(g_ds.sprites, NUM_SPRITES, tmp_alloc);
 
@@ -213,7 +216,7 @@ static void draw_custom(const drawsprite_params* params) {
             rizz_sprite_drawsprite* dspr = &dd->sprites[i];
 
             sx_vec4 transform = sx_vec4f(start_x, start_y, 0, 1.0f);
-            int     end_vertex = dspr->start_vertex + dspr->num_verts;
+            int end_vertex = dspr->start_vertex + dspr->num_verts;
             for (int v = dspr->start_vertex; v < end_vertex; v++) {
                 verts[v].pos = dd->verts[v].pos;
                 verts[v].uv = dd->verts[v].uv;
@@ -239,12 +242,12 @@ static void draw_custom(const drawsprite_params* params) {
 
         float start_x = -3.0f;
         float start_y = -1.5f;
-        int   vindex = 0;
+        int vindex = 0;
         for (int i = 0; i < dd->num_sprites; i++) {
             rizz_sprite_drawsprite* dspr = &dd->sprites[i];
 
             sx_vec4 transform = sx_vec4f(start_x, start_y, 0, 1.0f);
-            int     end_index = dspr->start_index + dspr->num_indices;
+            int end_index = dspr->start_index + dspr->num_indices;
             for (int ii = dspr->start_index; ii < end_index; ii++) {
                 int v = dd->indices[ii];
                 verts[vindex].pos = dd->verts[v].pos;
@@ -276,7 +279,8 @@ static void draw_custom(const drawsprite_params* params) {
     the_core->tmp_alloc_pop();
 }
 
-static void render() {
+static void render()
+{
     sg_pass_action pass_action = { .colors[0] = { SG_ACTION_CLEAR, { 0.25f, 0.5f, 0.75f, 1.0f } },
                                    .depth = { SG_ACTION_CLEAR, 1.0f } };
 
@@ -293,8 +297,8 @@ static void render() {
     };
 
     sx_mat3 mats[NUM_SPRITES];
-    float   start_x = -3.0f;
-    float   start_y = -1.5f;
+    float start_x = -3.0f;
+    float start_y = -1.5f;
 
     for (int i = 0; i < NUM_SPRITES; i++) {
         mats[i] = sx_mat3_translate(start_x, start_y);
@@ -333,7 +337,8 @@ static void render() {
     }
 }
 
-rizz_plugin_decl_main(drawsprite, plugin, e) {
+rizz_plugin_decl_main(drawsprite, plugin, e)
+{
     switch (e) {
     case RIZZ_PLUGIN_EVENT_STEP:
         update((float)sx_tm_sec(the_core->delta_tick()));
@@ -372,7 +377,8 @@ rizz_plugin_decl_main(drawsprite, plugin, e) {
     return 0;
 }
 
-rizz_plugin_decl_event_handler(drawsprite, e) {
+rizz_plugin_decl_event_handler(drawsprite, e)
+{
     switch (e->type) {
     case RIZZ_APP_EVENTTYPE_SUSPENDED:
         break;
@@ -389,7 +395,8 @@ rizz_plugin_decl_event_handler(drawsprite, e) {
     }
 }
 
-rizz_game_decl_config(conf) {
+rizz_game_decl_config(conf)
+{
     conf->app_name = "drawsprite";
     conf->app_version = 1000;
     conf->app_title = "03 - DrawSprite";

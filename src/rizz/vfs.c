@@ -2,15 +2,15 @@
 // Copyright 2019 Sepehr Taghdisian (septag@github). All rights reserved.
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
-
 #include "config.h"
-#include "rizz/vfs.h"
+
 #include "rizz/core.h"
+#include "rizz/vfs.h"
 
 #if RIZZ_CONFIG_HOT_LOADING
 #    include "efsw/efsw.h"
 typedef enum efsw_action efsw_action;
-typedef enum efsw_error  efsw_error;
+typedef enum efsw_error efsw_error;
 #endif
 
 #include "sx/allocator.h"
@@ -33,7 +33,7 @@ static void efsw__fileaction_cb(efsw_watcher watcher, efsw_watchid watchid, cons
 
 typedef struct efsw__result {
     efsw_action action;
-    char        path[RIZZ_MAX_PATH];
+    char path[RIZZ_MAX_PATH];
 } efsw__result;
 #endif    // RIZZ_CONFIG_HOT_LOADING
 
@@ -48,10 +48,10 @@ typedef enum {
 
 typedef struct {
     rizz__vfs_async_command cmd;
-    rizz_vfs_flags          flags;
-    char                    path[RIZZ_MAX_PATH];
-    sx_mem_block*           write_mem;
-    const sx_alloc*         alloc;
+    rizz_vfs_flags flags;
+    char path[RIZZ_MAX_PATH];
+    sx_mem_block* write_mem;
+    const sx_alloc* alloc;
 } rizz__vfs_async_request;
 
 typedef struct {
@@ -60,32 +60,32 @@ typedef struct {
         sx_mem_block* read_mem;
         sx_mem_block* write_mem;
     };
-    int  write_bytes;    // on writes, it's the number of written bytes. on reads, it's 0
+    int write_bytes;    // on writes, it's the number of written bytes. on reads, it's 0
     char path[RIZZ_MAX_PATH];
 } rizz__vfs_async_response;
 
 typedef struct {
     char path[RIZZ_MAX_PATH];
     char alias[RIZZ_MAX_PATH];
-    int  alias_len;
+    int alias_len;
 #if RIZZ_CONFIG_HOT_LOADING
-    char         efsw_root_dir[RIZZ_MAX_PATH];
+    char efsw_root_dir[RIZZ_MAX_PATH];
     efsw_watchid watch_id;
 #endif
 } rizz__vfs_mount_point;
 
 typedef struct {
-    const sx_alloc*          alloc;
-    rizz__vfs_mount_point*   mounts;
+    const sx_alloc* alloc;
+    rizz__vfs_mount_point* mounts;
     rizz_vfs_async_callbacks callbacks;
-    sx_thread*               worker_thrd;
+    sx_thread* worker_thrd;
     sx_queue_spsc* req_queue;    // producer: main, consumer: worker, data: rizz__vfs_async_request
     sx_queue_spsc* res_queue;    // producer: worker, consumer: main, data: rizz__vfs_async_response
-    sx_sem         worker_sem;
-    int            quit;
+    sx_sem worker_sem;
+    int quit;
 
 #if RIZZ_CONFIG_HOT_LOADING
-    efsw_watcher   watcher;
+    efsw_watcher watcher;
     sx_queue_spsc* efsw_queue;    // producer: efsw_cb, consumer: main, data: efsw__result
 #endif
 
@@ -95,29 +95,34 @@ typedef struct {
 
 #if SX_PLATFORM_ANDROID
     AAssetManager* asset_mgr;
-    char           assets_alias[RIZZ_MAX_PATH];
-    int            assets_alias_len;
+    char assets_alias[RIZZ_MAX_PATH];
+    int assets_alias_len;
 #endif
 } rizz__vfs;
 
 static rizz__vfs g_vfs;
 
 // Dummy callbacks
-void rizz__dummy_on_read_error(const char* uri) {
+void rizz__dummy_on_read_error(const char* uri)
+{
     rizz_log_debug("disk: read_error: %s", uri);
 }
-void rizz__dummy_on_write_error(const char* uri) {
+void rizz__dummy_on_write_error(const char* uri)
+{
     rizz_log_debug("disk: write_error: %s", uri);
 }
-void rizz__dummy_on_read_complete(const char* uri, sx_mem_block* mem) {
+void rizz__dummy_on_read_complete(const char* uri, sx_mem_block* mem)
+{
     rizz_log_debug("disk: read_complete: %s (size: %d kb)", uri, mem->size / 1024);
     sx_mem_destroy_block(mem);
 }
-void rizz__dummy_on_write_complete(const char* uri, int bytes_written, sx_mem_block* mem) {
+void rizz__dummy_on_write_complete(const char* uri, int bytes_written, sx_mem_block* mem)
+{
     rizz_log_debug("disk: write_complete: %s (size: %d kb)", uri, bytes_written / 1024);
     sx_mem_destroy_block(mem);
 }
-void rizz__dummy_on_modified(const char* uri) {
+void rizz__dummy_on_modified(const char* uri)
+{
     rizz_log_debug("disk: modified: %s", uri);
 }
 
@@ -131,14 +136,16 @@ static rizz_vfs_async_callbacks g_vfs_dummy_callbacks = {
 
 #if SX_PLATFORM_ANDROID
 JNIEXPORT void JNICALL Java_com_glitterbombg_rizz_jni_set_asset_mgr(JNIEnv* env, jclass cls,
-                                                                    jobject jni_asset_mgr) {
+                                                                    jobject jni_asset_mgr)
+{
     sx_unused(cls);
     g_vfs.asset_mgr = AAssetManager_fromJava(env, jni_asset_mgr);
 }
 #endif    // SX_PLATFORM_ANDROID
 
 static bool rizz__vfs_resolve_path(char* out_path, int out_path_sz, const char* path,
-                                   rizz_vfs_flags flags) {
+                                   rizz_vfs_flags flags)
+{
     if (flags & RIZZ_VFS_FLAG_ABSOLUTE_PATH) {
         sx_os_path_normpath(out_path, out_path_sz, path);
         return true;
@@ -161,16 +168,17 @@ static bool rizz__vfs_resolve_path(char* out_path, int out_path_sz, const char* 
 }
 
 #if SX_PLATFORM_ANDROID
-static sx_mem_block* rizz__vfs_read_asset_android(const char* path, const sx_alloc* alloc) {
+static sx_mem_block* rizz__vfs_read_asset_android(const char* path, const sx_alloc* alloc)
+{
     if (path[0] == '/')
         ++path;
     AAsset* asset = AAssetManager_open(g_vfs.asset_mgr, path, AASSET_MODE_UNKNOWN);
     if (!asset)
         return NULL;
 
-    off_t         size = AAsset_getLength(asset);
+    off_t size = AAsset_getLength(asset);
     sx_mem_block* mem = NULL;
-    int           r = -1;
+    int r = -1;
     if (size > 0) {
         sx_assert(size < (off_t)UINT32_MAX);
         mem = sx_mem_create_block(alloc, (int)size, NULL, 0);
@@ -190,7 +198,8 @@ static sx_mem_block* rizz__vfs_read_asset_android(const char* path, const sx_all
 }
 #endif
 
-static sx_mem_block* rizz__vfs_read(const char* path, rizz_vfs_flags flags, const sx_alloc* alloc) {
+static sx_mem_block* rizz__vfs_read(const char* path, rizz_vfs_flags flags, const sx_alloc* alloc)
+{
     if (!alloc)
         alloc = g_vfs.alloc;
 
@@ -205,7 +214,8 @@ static sx_mem_block* rizz__vfs_read(const char* path, rizz_vfs_flags flags, cons
                                               : sx_file_load_text(alloc, resolved_path);
 }
 
-static int rizz__vfs_write(const char* path, const sx_mem_block* mem, rizz_vfs_flags flags) {
+static int rizz__vfs_write(const char* path, const sx_mem_block* mem, rizz_vfs_flags flags)
+{
 #if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
     if (sx_strnequal(path, g_vfs.assets_alias, g_vfs.assets_alias_len)) {
         sx_assert(0 && "cannot write to assets on mobile platform");
@@ -213,7 +223,7 @@ static int rizz__vfs_write(const char* path, const sx_mem_block* mem, rizz_vfs_f
     }
 #endif
 
-    char           resolved_path[RIZZ_MAX_PATH];
+    char resolved_path[RIZZ_MAX_PATH];
     sx_file_writer writer;
 
     rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, flags);
@@ -228,7 +238,8 @@ static int rizz__vfs_write(const char* path, const sx_mem_block* mem, rizz_vfs_f
     }
 }
 
-static int rizz__vfs_worker(void* user1, void* user2) {
+static int rizz__vfs_worker(void* user1, void* user2)
+{
     sx_unused(user1);
     sx_unused(user2);
     while (!g_vfs.quit) {
@@ -276,7 +287,8 @@ static int rizz__vfs_worker(void* user1, void* user2) {
     return 0;
 }
 
-bool rizz__vfs_mount(const char* path, const char* alias) {
+bool rizz__vfs_mount(const char* path, const char* alias)
+{
     if (sx_os_path_isdir(path)) {
         rizz__vfs_mount_point mp;
         sx_os_path_normpath(mp.path, sizeof(mp.path), path);
@@ -311,7 +323,8 @@ bool rizz__vfs_mount(const char* path, const char* alias) {
     }
 }
 
-void rizz__vfs_mount_android_assets(const char* alias) {
+void rizz__vfs_mount_android_assets(const char* alias)
+{
     sx_unused(alias);
 #if SX_PLATFORM_ANDROID
     sx_os_path_unixpath(g_vfs.assets_alias, sizeof(g_vfs.assets_alias), alias);
@@ -320,7 +333,8 @@ void rizz__vfs_mount_android_assets(const char* alias) {
 #endif
 }
 
-bool rizz__vfs_init(const sx_alloc* alloc) {
+bool rizz__vfs_init(const sx_alloc* alloc)
+{
     g_vfs.alloc = alloc;
     g_vfs.callbacks = g_vfs_dummy_callbacks;
 
@@ -349,7 +363,8 @@ bool rizz__vfs_init(const sx_alloc* alloc) {
     return true;
 }
 
-void rizz__vfs_release() {
+void rizz__vfs_release()
+{
     if (!g_vfs.alloc)
         return;
 
@@ -383,7 +398,8 @@ void rizz__vfs_release() {
     g_vfs.alloc = NULL;
 }
 
-void rizz__vfs_watch_mounts() {
+void rizz__vfs_watch_mounts()
+{
 #if RIZZ_CONFIG_HOT_LOADING
     if (sx_array_count(g_vfs.mounts)) {
         efsw_watch(g_vfs.watcher);
@@ -391,7 +407,8 @@ void rizz__vfs_watch_mounts() {
 #endif
 }
 
-void rizz__vfs_async_update() {
+void rizz__vfs_async_update()
+{
     // retreive results from worker thread and call the callback functions
     rizz__vfs_async_response res;
     while (sx_queue_spsc_consume(g_vfs.res_queue, &res)) {
@@ -432,21 +449,24 @@ void rizz__vfs_async_update() {
 #endif
 }
 
-static void rizz__vfs_read_async(const char* path, rizz_vfs_flags flags, const sx_alloc* alloc) {
+static void rizz__vfs_read_async(const char* path, rizz_vfs_flags flags, const sx_alloc* alloc)
+{
     rizz__vfs_async_request req = { .cmd = VFS_COMMAND_READ, .flags = flags, .alloc = alloc };
     sx_strcpy(req.path, sizeof(req.path), path);
     sx_queue_spsc_produce_and_grow(g_vfs.req_queue, &req, g_vfs.alloc);
     sx_semaphore_post(&g_vfs.worker_sem, 1);
 }
 
-static void rizz__vfs_write_async(const char* path, sx_mem_block* mem, rizz_vfs_flags flags) {
+static void rizz__vfs_write_async(const char* path, sx_mem_block* mem, rizz_vfs_flags flags)
+{
     rizz__vfs_async_request req = { .cmd = VFS_COMMAND_WRITE, .flags = flags, .write_mem = mem };
     sx_strcpy(req.path, sizeof(req.path), path);
     sx_queue_spsc_produce_and_grow(g_vfs.req_queue, &req, g_vfs.alloc);
     sx_semaphore_post(&g_vfs.worker_sem, 1);
 }
 
-static rizz_vfs_async_callbacks rizz__vfs_set_async_callbacks(const rizz_vfs_async_callbacks* cbs) {
+static rizz_vfs_async_callbacks rizz__vfs_set_async_callbacks(const rizz_vfs_async_callbacks* cbs)
+{
     rizz_vfs_async_callbacks prev = g_vfs.callbacks;
     if (cbs) {
         g_vfs.callbacks = *cbs;
@@ -456,7 +476,8 @@ static rizz_vfs_async_callbacks rizz__vfs_set_async_callbacks(const rizz_vfs_asy
     return prev;
 }
 
-static bool rizz__vfs_mkdir(const char* path) {
+static bool rizz__vfs_mkdir(const char* path)
+{
     char resolved_path[RIZZ_MAX_PATH];
     if (rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, 0))
         return sx_os_mkdir(resolved_path);
@@ -464,7 +485,8 @@ static bool rizz__vfs_mkdir(const char* path) {
         return false;
 }
 
-static bool rizz__vfs_is_dir(const char* path) {
+static bool rizz__vfs_is_dir(const char* path)
+{
     char resolved_path[RIZZ_MAX_PATH];
     if (rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, 0))
         return sx_os_path_isdir(resolved_path);
@@ -472,15 +494,17 @@ static bool rizz__vfs_is_dir(const char* path) {
         return false;
 }
 
-static bool rizz__vfs_is_file(const char* path) {
+static bool rizz__vfs_is_file(const char* path)
+{
     char resolved_path[RIZZ_MAX_PATH];
-    if (rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, 0)) 
+    if (rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, 0))
         return sx_os_path_isfile(resolved_path);
     else
         return false;
 }
 
-static uint64_t rizz__vfs_last_modified(const char* path) {
+static uint64_t rizz__vfs_last_modified(const char* path)
+{
     char resolved_path[RIZZ_MAX_PATH];
     if (rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, 0))
         return sx_os_stat(resolved_path).last_modified;
@@ -491,7 +515,8 @@ static uint64_t rizz__vfs_last_modified(const char* path) {
 #if RIZZ_CONFIG_HOT_LOADING
 static void efsw__fileaction_cb(efsw_watcher watcher, efsw_watchid watchid, const char* dir,
                                 const char* filename, efsw_action action, const char* old_filename,
-                                void* param) {
+                                void* param)
+{
     sx_unused(param);
     sx_unused(old_filename);
     sx_unused(watchid);

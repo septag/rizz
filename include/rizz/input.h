@@ -388,12 +388,12 @@ typedef struct rizz_api_input {
 
     void (*map_bool)(rizz_input_device device, int device_key, rizz_input_userkey key);
     void (*map_float)(rizz_input_device device, int device_key, rizz_input_userkey key,
-                      float min_val, float                                     max_val,
+                      float min_val, float max_val,
                       float (*filter_cb)(float const value, void* user), void* filter_user_ptr);
     void (*unmap)(rizz_input_userkey key);
     void (*clear_mappings)();
 
-	bool (*device_avail)(rizz_input_device device);
+    bool (*device_avail)(rizz_input_device device);
 
     bool (*get_bool)(rizz_input_userkey key);
     bool (*get_bool_pressed)(rizz_input_userkey key);
@@ -407,4 +407,5 @@ typedef struct rizz_api_input {
     void (*set_dead_zone)(rizz_input_userkey key, float zone);
     void (*set_userkey_policy)(rizz_input_userkey key, rizz_input_userkey_policy policy);
 
+    void (*show_debugger)(bool* p_open);
 } rizz_api_input;

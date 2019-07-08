@@ -3,8 +3,8 @@
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
 
-#include "config.h"
 #include "rizz/http.h"
+#include "config.h"
 #include "rizz/core.h"
 
 #include "sx/allocator.h"
@@ -17,39 +17,40 @@
 #define HTTP_FREE(ctx, ptr) (sx_free((const sx_alloc*)ctx, ptr))
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-variable")
-#   if SX_PLATFORM_ANDROID
-#       include <linux/in.h>
-#   endif
+#if SX_PLATFORM_ANDROID
+#    include <linux/in.h>
+#endif
 #include "mattias/http.h"
 SX_PRAGMA_DIAGNOSTIC_POP();
 
 typedef enum { HTTP_MODE_NONE, HTTP_MODE_GET, HTTP_MODE_POST } rizz__http_mode;
 
 typedef struct {
-    char*          url;
+    char* url;
     rizz__http_mode mode;
-    void*          data;
-    size_t         size;
+    void* data;
+    size_t size;
 } rizz__http_request_params;
 
 typedef struct {
-    http_t*                   h;
+    http_t* h;
     rizz__http_request_params* params;    // optional: only allocated for inactive objects
-    rizz_http_cb*              callback;
-    void*                     callback_user;
+    rizz_http_cb* callback;
+    void* callback_user;
 } rizz__http;
 
 typedef struct {
     const sx_alloc* alloc;
     sx_handle_pool* http_handles;    // rizz__http
-    rizz__http*      https;           // sx_array
-    rizz_http        pending[RIZZ_CONFIG_MAX_HTTP_REQUESTS];
-    int             num_pending;
+    rizz__http* https;               // sx_array
+    rizz_http pending[RIZZ_CONFIG_MAX_HTTP_REQUESTS];
+    int num_pending;
 } rizz__http_context;
 
 static rizz__http_context g_http;
 
-bool rizz__http_init(const sx_alloc* alloc) {
+bool rizz__http_init(const sx_alloc* alloc)
+{
     g_http.alloc = alloc;
     g_http.http_handles = sx_handle_create_pool(alloc, RIZZ_CONFIG_MAX_HTTP_REQUESTS);
     if (!g_http.http_handles)
@@ -58,7 +59,8 @@ bool rizz__http_init(const sx_alloc* alloc) {
     return true;
 }
 
-void rizz__http_release() {
+void rizz__http_release()
+{
     if (g_http.alloc) {
         // remove remaining http requests
         if (g_http.http_handles) {
@@ -82,14 +84,15 @@ void rizz__http_release() {
     }
 }
 
-void rizz__http_update() {
+void rizz__http_update()
+{
     int remove_list[RIZZ_CONFIG_MAX_HTTP_REQUESTS];
     int num_removes = 0;
 
     // process pending
     // for callback requests, call the callback and release the request automatically
     for (int i = 0, c = g_http.num_pending; i < c; i++) {
-        rizz_http   handle = g_http.pending[i];
+        rizz_http handle = g_http.pending[i];
         rizz__http* http = &g_http.https[sx_handle_index(handle.id)];
         sx_assert(http->h);
         if (http->h->status != HTTP_STATUS_PENDING)
@@ -130,7 +133,7 @@ void rizz__http_update() {
         if (!inactive_handle.id)
             break;
 
-        rizz__http*                      http = &g_http.https[sx_handle_index(inactive_handle.id)];
+        rizz__http* http = &g_http.https[sx_handle_index(inactive_handle.id)];
         const rizz__http_request_params* params = http->params;
         switch (params->mode) {
         case HTTP_MODE_GET:
@@ -152,9 +155,10 @@ void rizz__http_update() {
 }
 
 static rizz__http_request_params* rizz__http_alloc_params(const char* url, rizz__http_mode mode,
-                                                        const void* data, size_t size) {
-    int      url_size = sx_strlen(url) + 1;
-    size_t   total_sz = sizeof(rizz__http_request_params) + url_size + size;
+                                                          const void* data, size_t size)
+{
+    int url_size = sx_strlen(url) + 1;
+    size_t total_sz = sizeof(rizz__http_request_params) + url_size + size;
     uint8_t* buff = sx_malloc(g_http.alloc, total_sz);
     if (!buff) {
         sx_out_of_memory();
@@ -178,10 +182,12 @@ static rizz__http_request_params* rizz__http_alloc_params(const char* url, rizz_
     return p;
 }
 
-static rizz_http rizz__http_get(const char* url) {
+static rizz_http rizz__http_get(const char* url)
+{
     sx_assert(g_http.alloc);
 
-    rizz_http handle = (rizz_http){ .id = sx_handle_new_and_grow(g_http.http_handles, g_http.alloc) };
+    rizz_http handle =
+        (rizz_http){ .id = sx_handle_new_and_grow(g_http.http_handles, g_http.alloc) };
     sx_assert(handle.id);
     rizz__http _http = (rizz__http){ 0 };
 
@@ -201,10 +207,12 @@ static rizz_http rizz__http_get(const char* url) {
     return handle;
 }
 
-static rizz_http rizz__http_post(const char* url, const void* data, size_t size) {
+static rizz_http rizz__http_post(const char* url, const void* data, size_t size)
+{
     sx_assert(g_http.alloc);
 
-    rizz_http handle = (rizz_http){ .id = sx_handle_new_and_grow(g_http.http_handles, g_http.alloc) };
+    rizz_http handle =
+        (rizz_http){ .id = sx_handle_new_and_grow(g_http.http_handles, g_http.alloc) };
     sx_assert(handle.id);
     rizz__http _http = (rizz__http){ 0 };
 
@@ -224,7 +232,8 @@ static rizz_http rizz__http_post(const char* url, const void* data, size_t size)
     return handle;
 }
 
-static void rizz__http_free(rizz_http handle) {
+static void rizz__http_free(rizz_http handle)
+{
     sx_assert(g_http.alloc);
 
     sx_assert(handle.id);
@@ -250,17 +259,20 @@ static void rizz__http_free(rizz_http handle) {
     }
 }
 
-static const rizz_http_state* rizz__http_state(rizz_http handle) {
+static const rizz_http_state* rizz__http_state(rizz_http handle)
+{
     sx_assert(g_http.alloc);
     sx_assert(handle.id);
 
     return (const rizz_http_state*)g_http.https[sx_handle_index(handle.id)].h;
 }
 
-static void rizz__http_get_cb(const char* url, rizz_http_cb* callback, void* user) {
+static void rizz__http_get_cb(const char* url, rizz_http_cb* callback, void* user)
+{
     sx_assert(g_http.alloc);
 
-    rizz_http handle = (rizz_http){ .id = sx_handle_new_and_grow(g_http.http_handles, g_http.alloc) };
+    rizz_http handle =
+        (rizz_http){ .id = sx_handle_new_and_grow(g_http.http_handles, g_http.alloc) };
     sx_assert(handle.id);
     rizz__http _http = (rizz__http){ .callback = callback, .callback_user = user };
 
@@ -278,11 +290,13 @@ static void rizz__http_get_cb(const char* url, rizz_http_cb* callback, void* use
         g_http.https[index] = _http;
 }
 
-static void rizz__http_post_cb(const char* url, const void* data, size_t size, rizz_http_cb* callback,
-                              void* user) {
+static void rizz__http_post_cb(const char* url, const void* data, size_t size,
+                               rizz_http_cb* callback, void* user)
+{
     sx_assert(g_http.alloc);
 
-    rizz_http handle = (rizz_http){ .id = sx_handle_new_and_grow(g_http.http_handles, g_http.alloc) };
+    rizz_http handle =
+        (rizz_http){ .id = sx_handle_new_and_grow(g_http.http_handles, g_http.alloc) };
     sx_assert(handle.id);
     rizz__http _http = (rizz__http){ .callback = callback, .callback_user = user };
 
@@ -301,8 +315,8 @@ static void rizz__http_post_cb(const char* url, const void* data, size_t size, r
 }
 
 rizz_api_http the__http = { .get = rizz__http_get,
-                           .post = rizz__http_post,
-                           .free = rizz__http_free,
-                           .state = rizz__http_state,
-                           .get_cb = rizz__http_get_cb,
-                           .post_cb = rizz__http_post_cb };
+                            .post = rizz__http_post,
+                            .free = rizz__http_free,
+                            .state = rizz__http_state,
+                            .get_cb = rizz__http_get_cb,
+                            .post_cb = rizz__http_post_cb };

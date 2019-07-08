@@ -35,21 +35,21 @@ typedef uint32_t rizz_core_flags;
 
 // This structure can also be loaded from INI file
 typedef struct rizz_config {
-    const char*     app_name;
-    const char*     app_title;
-    const char*     plugin_path;
-    const char*     cache_path;
-    uint32_t        app_version;
-    rizz_app_flags  app_flags;
+    const char* app_name;
+    const char* app_title;
+    const char* plugin_path;
+    const char* cache_path;
+    uint32_t app_version;
+    rizz_app_flags app_flags;
     rizz_core_flags core_flags;
-    const char*     plugins[RIZZ_CONFIG_MAX_PLUGINS];
-    const char*     _dummy;
+    const char* plugins[RIZZ_CONFIG_MAX_PLUGINS];
+    const char* _dummy;
 
-    int                window_width;
-    int                window_height;
-    int                multisample_count;
-    int                swap_interval;
-    const char*        html5_canvas_name;
+    int window_width;
+    int window_height;
+    int multisample_count;
+    int swap_interval;
+    const char* html5_canvas_name;
     rizz_app_event_cb* event_cb;
 
     int job_num_threads;    // number of worker threads (default:-1, then it will be num_cores-1)

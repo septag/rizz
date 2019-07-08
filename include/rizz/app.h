@@ -5,6 +5,7 @@
 #pragma once
 
 #include "sx/math.h"
+
 #include "types.h"
 
 enum {
@@ -35,7 +36,7 @@ typedef enum rizz_app_event_type {
     RIZZ_APP_EVENTTYPE_RESUMED,
     RIZZ_APP_EVENTTYPE_UPDATE_CURSOR,
     _RIZZ_APP_EVENTTYPE_NUM,
-    RIZZ_APP_EVENTTYPE_UPDATE_APIS,     // happens when a plugin updates it's API
+    RIZZ_APP_EVENTTYPE_UPDATE_APIS,    // happens when a plugin updates it's API
     _RIZZ_APP_EVENTTYPE_FORCE_U32 = 0x7FFFFFF
 } rizz_app_event_type;
 
@@ -166,9 +167,9 @@ typedef enum rizz_keycode {
 
 typedef struct rizz_touch_point {
     uintptr_t identifier;
-    float     pos_x;
-    float     pos_y;
-    bool      changed;
+    float pos_x;
+    float pos_y;
+    bool changed;
 } rizz_touch_point;
 
 typedef enum rizz_mouse_btn {
@@ -188,22 +189,22 @@ typedef uint32_t rizz_modifier_keys;
 
 typedef struct rizz_app_event {
     rizz_app_event_type type;
-    uint32_t            frame_count;
-    rizz_keycode        key_code;
-    uint32_t            char_code;
-    rizz_modifier_keys  modkeys;
-    rizz_mouse_btn      mouse_button;
-    float               mouse_x;
-    float               mouse_y;
-    float               scroll_x;
-    float               scroll_y;
-    int                 num_touches;
-    rizz_touch_point    touches[RIZZ_APP_MAX_TOUCHPOINTS];
-    int                 window_width;
-    int                 window_height;
-    int                 framebuffer_width;
-    int                 framebuffer_height;
-    void*               native_event;
+    uint32_t frame_count;
+    rizz_keycode key_code;
+    uint32_t char_code;
+    rizz_modifier_keys modkeys;
+    rizz_mouse_btn mouse_button;
+    float mouse_x;
+    float mouse_y;
+    float scroll_x;
+    float scroll_y;
+    int num_touches;
+    rizz_touch_point touches[RIZZ_APP_MAX_TOUCHPOINTS];
+    int window_width;
+    int window_height;
+    int framebuffer_width;
+    int framebuffer_height;
+    void* native_event;
 } rizz_app_event;
 
 typedef void(rizz_app_event_cb)(const rizz_app_event*);
@@ -225,7 +226,8 @@ typedef struct rizz_api_app {
 RIZZ_API rizz_api_app the__app;
 
 typedef struct sg_desc sg_desc;
-void                   rizz__app_init_gfx_desc(sg_desc* desc);
-const void*            rizz__app_d3d11_device();
-const void*            rizz__app_d3d11_device_context();
+
+void rizz__app_init_gfx_desc(sg_desc* desc);
+const void* rizz__app_d3d11_device();
+const void* rizz__app_d3d11_device_context();
 #endif    // RIZZ_INTERNAL_API

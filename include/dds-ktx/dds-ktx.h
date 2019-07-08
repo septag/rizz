@@ -2,6 +2,12 @@
 // Copyright 2018 Sepehr Taghdisian (septag@github). All rights reserved.
 // License: https://github.com/septag/dds-ktx#license-bsd-2-clause
 //
+// Many parts of this code is taken from bimg library: 
+// https://github.com/bkaradzic/bimg 
+//
+// Copyright 2011-2019 Branimir Karadzic. All rights reserved.
+// License: https://github.com/bkaradzic/bimg#license-bsd-2-clause
+//
 // dds-ktx.h - v1.0.0 - Reader/Writer for DDS/KTX formats
 //      Parses DDS and KTX files from a memory blob, written in C99
 //      
@@ -15,6 +21,7 @@
 //          ddsktx_memset  default: memset(dst, v, size)
 //          ddsktx_assert  default: assert(a)
 //          ddsktx_strcpy  default: strcpy(dst, src)
+//          ddsktx_memcmp  default: memcmp(ptr1, ptr2, size)
 //          
 //      API:
 //          bool ddsktx_parse(ddsktx_texture_info* tc, const void* file_data, int size, ddsktx_error* err);
@@ -452,6 +459,11 @@ typedef struct ddsktx__block_info
 #   endif
 #endif
 
+#ifndef ddsktx_memcmp
+#   include <string.h>
+#   define ddsktx_memcmp(_ptr1, _ptr2, _num) memcmp((_ptr1), (_ptr2), (_num))
+#endif
+
 #define ddsktx__max(a, b)                  ((a) > (b) ? (a) : (b))
 #define ddsktx__min(a, b)                  ((a) < (b) ? (a) : (b))
 #define ddsktx__align_mask(_value, _mask)  (((_value)+(_mask)) & ((~0)&(~(_mask))))
@@ -886,6 +898,8 @@ static inline int ddsktx__read(ddsktx__mem_reader* reader, void* buff, int size)
 
 static bool ddsktx__parse_ktx(ddsktx_texture_info* tc, const void* file_data, int size, ddsktx_error* err)
 {
+    static const uint8_t ktx__id[] = { 0x20, 0x31, 0x31, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A };
+
     ddsktx_memset(tc, 0x0, sizeof(ddsktx_texture_info));
 
     ddsktx__mem_reader r = {(const uint8_t*)file_data, size, sizeof(uint32_t)};
@@ -893,8 +907,8 @@ static bool ddsktx__parse_ktx(ddsktx_texture_info* tc, const void* file_data, in
     if (ddsktx__read(&r, &header, sizeof(header)) != DDSKTX__KTX_HEADER_SIZE) {
         ddsktx__err(err, "ktx; header size does not match");
     }
-
-    if (header.id[1] != '1' && header.id[2] != '1')    {
+    
+    if (ddsktx_memcmp(header.id, ktx__id, sizeof(header.id)) == 0) {
         ddsktx__err(err, "ktx: invalid file header");
     }
 
@@ -945,7 +959,7 @@ static bool ddsktx__parse_ktx(ddsktx_texture_info* tc, const void* file_data, in
     tc->num_mips = ddsktx__max((int)header.mip_count, 1);
     tc->bpp = k__block_info[format].bpp;
 
-    if (header.face_count > 1)
+    if (header.face_count == 6)
         tc->flags |= DDSKTX_TEXTURE_FLAG_CUBEMAP;
     tc->flags |= k__formats_info[format].has_alpha ? DDSKTX_TEXTURE_FLAG_ALPHA : 0;
     tc->flags |= DDSKTX_TEXTURE_FLAG_KTX;
@@ -955,7 +969,6 @@ static bool ddsktx__parse_ktx(ddsktx_texture_info* tc, const void* file_data, in
 
 static bool ddsktx__parse_dds(ddsktx_texture_info* tc, const void* file_data, int size, ddsktx_error* err)
 {
-
     ddsktx__mem_reader r = {(const uint8_t*)file_data, size, sizeof(uint32_t)};
     ddsktx__dds_header header;
     if (ddsktx__read(&r, &header, sizeof(header)) < DDSKTX__DDS_HEADER_SIZE ||
