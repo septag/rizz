@@ -23,16 +23,16 @@
 
 typedef struct sx_alloc sx_alloc;
 
-typedef enum {
-    RIZZ_GFX_UNKNOWN = 0,
-    RIZZ_GFX_D3D11,
-    RIZZ_GFX_METAL,
-    _RIZZ_GFX_GL_FAMILY,
-    RIZZ_GFX_GLES2,
-    RIZZ_GFX_GLES3,
-    RIZZ_GFX_GL33,
-    _RIZZ_GFX_COUNT
-} rizz_gfx_driver;
+typedef enum rizz_gfx_backend {
+    RIZZ_GFX_BACKEND_GLCORE33,
+    RIZZ_GFX_BACKEND_GLES2,
+    RIZZ_GFX_BACKEND_GLES3,
+    RIZZ_GFX_BACKEND_D3D11,
+    RIZZ_GFX_BACKEND_METAL_IOS,
+    RIZZ_GFX_BACKEND_METAL_MACOS,
+    RIZZ_GFX_BACKEND_METAL_SIMULATOR,
+    RIZZ_GFX_BACKEND_DUMMY,
+} rizz_gfx_backend;
 
 typedef enum rizz_shader_lang {
     RIZZ_SHADER_LANG_GLES,
@@ -209,8 +209,8 @@ typedef struct sjson_context sjson_context;    // shader_parse_reflection
 //       because most of graphics primitives like sprites and text uses retained-mode API for it's
 //       muti-threading capabilities
 typedef struct rizz_api_gfx_immediate {
-    rizz_gfx_driver (*driver)(void);
-    bool (*gl_family)();
+    rizz_gfx_backend (*backend)(void);
+    bool (*GL_family)();
     bool (*query_feature)(sg_feature feature);
     void (*reset_state_cache)(void);
 

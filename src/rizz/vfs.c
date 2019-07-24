@@ -19,6 +19,7 @@ typedef enum efsw_error efsw_error;
 #include "sx/os.h"
 #include "sx/string.h"
 #include "sx/threads.h"
+#include "sx/lockless.h"
 
 #if SX_PLATFORM_ANDROID
 #    include <android/asset_manager.h>

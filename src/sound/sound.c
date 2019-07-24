@@ -42,7 +42,7 @@ RIZZ_STATE static const sx_alloc* g_snd_alloc;
 #define DRWAV_FREE(p) sx_free(g_snd_alloc, p)
 #define DRWAV_COPY_MEMORY(dst, src, sz) sx_memcpy(dst, src, sz)
 #define DRWAV_ZERO_MEMORY(p, sz) sx_memset(p, 0, sz)
-//#define DR_WAV_NO_STDIO
+#define DR_WAV_NO_STDIO
 #include "dr_libs/dr_wav.h"
 
 #define SOKOL_ASSERT(c) sx_assert(c)

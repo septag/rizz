@@ -87,7 +87,7 @@ typedef struct sx_job_context {
 
 static void sx__del_job(sx_job_context* ctx, sx__job* job)
 {
-    sx_lock(&ctx->job_lk);
+    sx_lock(&ctx->job_lk, 1);
     sx_pool_del(ctx->job_pool, job);
     sx_unlock(&ctx->job_lk);
 }
@@ -169,7 +169,7 @@ static inline void sx__job_remove_list(sx__job** pfirst, sx__job** plast, sx__jo
     node->prev = node->next = NULL;
 }
 
-typedef struct sx__job_select_result {
+typedef struct sx__job_select_result {  
     sx__job* job;
     bool waiting_list_alive;
 } sx__job_select_result;
@@ -181,7 +181,7 @@ static sx__job_select_result sx__job_select(sx_job_context* ctx, uint32_t tid, u
     r.job = NULL;
     r.waiting_list_alive = false;
 
-    sx_lock(&ctx->job_lk);
+    sx_lock(&ctx->job_lk, 1);
     for (int pr = 0; pr < SX_JOB_PRIORITY_COUNT && !r.job; pr++) {
         sx__job* node = ctx->waiting_list[pr];
         while (node) {
@@ -191,6 +191,7 @@ static sx__job_select_result sx__job_select(sx_job_context* ctx, uint32_t tid, u
                     (node->tags == 0 || (node->tags & tags))) {
                     r.job = node;
                     sx__job_remove_list(&ctx->waiting_list[pr], &ctx->waiting_list_last[pr], node);
+                    pr = SX_JOB_PRIORITY_COUNT; // break out of the outer loop
                     break;
                 }
             }
@@ -309,7 +310,7 @@ sx_job_t sx_job_dispatch(sx_job_context* ctx, int count, sx_job_cb* callback, vo
               "this amount of jobs at a time cannot be done. increase max_jobs");
 
     // Create a counter (job handle)
-    sx_lock(&ctx->counter_lk);
+    sx_lock(&ctx->counter_lk, 1);
     sx_job_t counter = (sx_job_t)sx_pool_new_and_grow(ctx->counter_pool, ctx->alloc);
     sx_unlock(&ctx->counter_lk);
 
@@ -327,7 +328,7 @@ sx_job_t sx_job_dispatch(sx_job_context* ctx, int count, sx_job_cb* callback, vo
         tdata->cur_job->wait_counter = counter;
 
     // Push jobs to the end of the list, so they can be collected by threads
-    sx_lock(&ctx->job_lk);
+    sx_lock(&ctx->job_lk, 1);
     if (!sx_pool_fulln(ctx->job_pool, num_jobs)) {
         int range_start = 0;
         int range_end = range_size + (range_reminder > 0 ? 1 : 0);
@@ -393,6 +394,7 @@ static void sx__job_process_pending(sx_job_context* ctx)
 
 static void sx__job_process_pending_single(sx_job_context* ctx, int index)
 {
+    sx_lock(&ctx->job_lk, 1);
     // unlike sx__job_process_pending, only check the specific index to push into job-list
     sx__job_pending pending = ctx->pending[index];
     if (!sx_pool_fulln(ctx->job_pool, *pending.counter)) {
@@ -415,6 +417,7 @@ static void sx__job_process_pending_single(sx_job_context* ctx, int index)
         }
         sx_semaphore_post(&ctx->sem, count);
     }
+    sx_unlock(&ctx->job_lk);
 }
 
 void sx_job_wait_and_del(sx_job_context* ctx, sx_job_t job)
@@ -424,14 +427,12 @@ void sx_job_wait_and_del(sx_job_context* ctx, sx_job_t job)
     sx_compiler_read_barrier();
     while (*job > 0) {
         // check if the current job is the pending list
-        sx_lock(&ctx->job_lk);
         for (int i = 0, c = sx_array_count(ctx->pending); i < c; i++) {
             if (ctx->pending[i].counter == job) {
                 sx__job_process_pending_single(ctx, i);
                 break;
             }
         }
-        sx_unlock(&ctx->job_lk);
 
         // If thread is running a job, make it slave to the thread so it can only be picked up by
         // this thread And push the job back to waiting_list
@@ -440,7 +441,7 @@ void sx_job_wait_and_del(sx_job_context* ctx, sx_job_t job)
             tdata->cur_job = NULL;
             cur_job->owner_tid = tdata->tid;
 
-            sx_lock(&ctx->job_lk);
+            sx_lock(&ctx->job_lk, 1);
             int list_idx = cur_job->priority;
             sx__job_add_list(&ctx->waiting_list[list_idx], &ctx->waiting_list_last[list_idx],
                              cur_job);
@@ -456,12 +457,12 @@ void sx_job_wait_and_del(sx_job_context* ctx, sx_job_t job)
     }
 
     // All jobs are done, Delete the counter
-    sx_lock(&ctx->counter_lk);
+    sx_lock(&ctx->counter_lk, 1);
     sx_pool_del(ctx->counter_pool, (void*)job);
     sx_unlock(&ctx->counter_lk);
 
     // auto-dispatch pending jobs
-    sx_lock(&ctx->job_lk);
+    sx_lock(&ctx->job_lk, 1);
     sx__job_process_pending(ctx);
     sx_unlock(&ctx->job_lk);
 }
@@ -471,12 +472,12 @@ bool sx_job_test_and_del(sx_job_context* ctx, sx_job_t job)
     sx_compiler_read_barrier();
     if (*job == 0) {
         // All jobs are done, Delete the counter
-        sx_lock(&ctx->counter_lk);
+        sx_lock(&ctx->counter_lk, 1);
         sx_pool_del(ctx->counter_pool, (void*)job);
         sx_unlock(&ctx->counter_lk);
 
         // auto-dispatch pending jobs
-        sx_lock(&ctx->job_lk);
+        sx_lock(&ctx->job_lk, 1);
         sx__job_process_pending(ctx);
         sx_unlock(&ctx->job_lk);
         return true;

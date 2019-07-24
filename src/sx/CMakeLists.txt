@@ -55,7 +55,8 @@ set(SOURCE_FILES src/sx.c
                  src/jobs.c
                  src/bheap.c
                  src/tlsf-alloc.c
-                 src/ringbuffer.c)
+                 src/ringbuffer.c
+                 src/lockless.c)
 set(INCLUDE_FILES ../../include/sx/allocator.h
                   ../../include/sx/array.h 
                   ../../include/sx/config.h 

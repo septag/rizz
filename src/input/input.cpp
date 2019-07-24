@@ -567,6 +567,8 @@ rizz_plugin_decl_event_handler(input, e)
         break;
 
     case RIZZ_APP_EVENTTYPE_UPDATE_APIS:
+        the_imgui = (rizz_api_imgui*)the_plugin->get_api_byname("imgui", 0);
+        the_imguix = (rizz_api_imgui_extra*)the_plugin->get_api_byname("imgui_extra", 0);    
         break;
 
     case RIZZ_APP_EVENTTYPE_MOUSE_DOWN:
@@ -578,6 +580,7 @@ rizz_plugin_decl_event_handler(input, e)
     case RIZZ_APP_EVENTTYPE_CHAR:
         input__dispatch_event(e);
         break;
+
     default:
         break;
     }

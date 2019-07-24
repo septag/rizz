@@ -20,7 +20,7 @@ enum {
     SG_NUM_SHADER_STAGES = 2,
     SG_NUM_INFLIGHT_FRAMES = 2,
     SG_MAX_COLOR_ATTACHMENTS = 4,
-    SG_MAX_SHADERSTAGE_BUFFERS = 4,
+    SG_MAX_SHADERSTAGE_BUFFERS = 8,
     SG_MAX_SHADERSTAGE_IMAGES = 12,
     SG_MAX_SHADERSTAGE_UBS = 4,
     SG_MAX_UB_MEMBERS = 16,
@@ -57,6 +57,28 @@ typedef struct sg_shader   { uint32_t id; } sg_shader;
 typedef struct sg_pipeline { uint32_t id; } sg_pipeline;
 typedef struct sg_pass     { uint32_t id; } sg_pass;
 typedef struct sg_context  { uint32_t id; } sg_context;
+
+/*
+    sg_backend
+
+    The active 3D-API backend, use the function sg_query_backend()
+    to get the currently active backend.
+
+    For returned value corresponds with the compile-time define to select
+    a backend, with the only exception of SOKOL_GLES3: this may
+    return SG_BACKEND_GLES2 if the backend has to fallback to GLES2 mode
+    because GLES3 isn't supported.
+*/
+typedef enum sg_backend {
+    SG_BACKEND_GLCORE33,
+    SG_BACKEND_GLES2,
+    SG_BACKEND_GLES3,
+    SG_BACKEND_D3D11,
+    SG_BACKEND_METAL_IOS,
+    SG_BACKEND_METAL_MACOS,
+    SG_BACKEND_METAL_SIMULATOR,
+    SG_BACKEND_DUMMY,
+} sg_backend;
 
 /*
     sg_feature
@@ -143,7 +165,7 @@ typedef enum sg_resource_state {
     The default usage is SG_USAGE_IMMUTABLE.
 */
 typedef enum sg_usage {
-    _SG_USAGE_DEFAULT, /* value 0 reserved for default-init */
+    _SG_USAGE_DEFAULT,      /* value 0 reserved for default-init */
     SG_USAGE_IMMUTABLE,
     SG_USAGE_DYNAMIC,
     SG_USAGE_STREAM,
@@ -160,7 +182,7 @@ typedef enum sg_usage {
     The default value is SG_BUFFERTYPE_VERTEXBUFFER.
 */
 typedef enum sg_buffer_type {
-    _SG_BUFFERTYPE_DEFAULT, /* value 0 reserved for default-init */
+    _SG_BUFFERTYPE_DEFAULT,         /* value 0 reserved for default-init */
     SG_BUFFERTYPE_VERTEXBUFFER,
     SG_BUFFERTYPE_INDEXBUFFER,
     _SG_BUFFERTYPE_NUM,
@@ -178,7 +200,7 @@ typedef enum sg_buffer_type {
     The default index type is SG_INDEXTYPE_NONE.
 */
 typedef enum sg_index_type {
-    _SG_INDEXTYPE_DEFAULT, /* value 0 reserved for default-init */
+    _SG_INDEXTYPE_DEFAULT,   /* value 0 reserved for default-init */
     SG_INDEXTYPE_NONE,
     SG_INDEXTYPE_UINT16,
     SG_INDEXTYPE_UINT32,
@@ -197,7 +219,7 @@ typedef enum sg_index_type {
     The default image type when creating an image is SG_IMAGETYPE_2D.
 */
 typedef enum sg_image_type {
-    _SG_IMAGETYPE_DEFAULT, /* value 0 reserved for default-init */
+    _SG_IMAGETYPE_DEFAULT,  /* value 0 reserved for default-init */
     SG_IMAGETYPE_2D,
     SG_IMAGETYPE_CUBE,
     SG_IMAGETYPE_3D,
@@ -250,7 +272,7 @@ typedef enum sg_shader_stage {
     The default pixel format when creating an image is SG_PIXELFORMAT_RGBA8.
 */
 typedef enum sg_pixel_format {
-    _SG_PIXELFORMAT_DEFAULT, /* value 0 reserved for default-init */
+    _SG_PIXELFORMAT_DEFAULT,    /* value 0 reserved for default-init */
     SG_PIXELFORMAT_NONE,
     SG_PIXELFORMAT_RGBA8,
     SG_PIXELFORMAT_RGB8,
@@ -288,7 +310,7 @@ typedef enum sg_pixel_format {
     The default primitive type is SG_PRIMITIVETYPE_TRIANGLES.
 */
 typedef enum sg_primitive_type {
-    _SG_PRIMITIVETYPE_DEFAULT, /* value 0 reserved for default-init */
+    _SG_PRIMITIVETYPE_DEFAULT,  /* value 0 reserved for default-init */
     SG_PRIMITIVETYPE_POINTS,
     SG_PRIMITIVETYPE_LINES,
     SG_PRIMITIVETYPE_LINE_STRIP,
@@ -329,7 +351,7 @@ typedef enum sg_filter {
     The default wrap mode is SG_WRAP_REPEAT.
 */
 typedef enum sg_wrap {
-    _SG_WRAP_DEFAULT, /* value 0 reserved for default-init */
+    _SG_WRAP_DEFAULT,   /* value 0 reserved for default-init */
     SG_WRAP_REPEAT,
     SG_WRAP_CLAMP_TO_EDGE,
     SG_WRAP_MIRRORED_REPEAT,
@@ -374,7 +396,7 @@ typedef enum sg_vertex_format {
     when creating pipeline objects.
 */
 typedef enum sg_vertex_step {
-    _SG_VERTEXSTEP_DEFAULT, /* value 0 reserved for default-init */
+    _SG_VERTEXSTEP_DEFAULT,     /* value 0 reserved for default-init */
     SG_VERTEXSTEP_PER_VERTEX,
     SG_VERTEXSTEP_PER_INSTANCE,
     _SG_VERTEXSTEP_NUM,
@@ -409,7 +431,7 @@ typedef enum sg_uniform_type {
     The default cull mode is SG_CULLMODE_NONE
 */
 typedef enum sg_cull_mode {
-    _SG_CULLMODE_DEFAULT, /* value 0 reserved for default-init */
+    _SG_CULLMODE_DEFAULT,   /* value 0 reserved for default-init */
     SG_CULLMODE_NONE,
     SG_CULLMODE_FRONT,
     SG_CULLMODE_BACK,
@@ -427,7 +449,7 @@ typedef enum sg_cull_mode {
     The default winding is SG_FACEWINDING_CW (clockwise)
 */
 typedef enum sg_face_winding {
-    _SG_FACEWINDING_DEFAULT, /* value 0 reserved for default-init */
+    _SG_FACEWINDING_DEFAULT,    /* value 0 reserved for default-init */
     SG_FACEWINDING_CCW,
     SG_FACEWINDING_CW,
     _SG_FACEWINDING_NUM,
@@ -450,7 +472,7 @@ typedef enum sg_face_winding {
     SG_COMPAREFUNC_ALWAYS.
 */
 typedef enum sg_compare_func {
-    _SG_COMPAREFUNC_DEFAULT, /* value 0 reserved for default-init */
+    _SG_COMPAREFUNC_DEFAULT,    /* value 0 reserved for default-init */
     SG_COMPAREFUNC_NEVER,
     SG_COMPAREFUNC_LESS,
     SG_COMPAREFUNC_EQUAL,
@@ -484,7 +506,7 @@ typedef enum sg_compare_func {
     The default value is SG_STENCILOP_KEEP.
 */
 typedef enum sg_stencil_op {
-    _SG_STENCILOP_DEFAULT, /* value 0 reserved for default-init */
+    _SG_STENCILOP_DEFAULT,      /* value 0 reserved for default-init */
     SG_STENCILOP_KEEP,
     SG_STENCILOP_ZERO,
     SG_STENCILOP_REPLACE,
@@ -514,7 +536,7 @@ typedef enum sg_stencil_op {
     factors, and SG_BLENDFACTOR_ZERO for destination factors.
 */
 typedef enum sg_blend_factor {
-    _SG_BLENDFACTOR_DEFAULT, /* value 0 reserved for default-init */
+    _SG_BLENDFACTOR_DEFAULT,    /* value 0 reserved for default-init */
     SG_BLENDFACTOR_ZERO,
     SG_BLENDFACTOR_ONE,
     SG_BLENDFACTOR_SRC_COLOR,
@@ -549,7 +571,7 @@ typedef enum sg_blend_factor {
     The default value is SG_BLENDOP_ADD.
 */
 typedef enum sg_blend_op {
-    _SG_BLENDOP_DEFAULT, /* value 0 reserved for default-init */
+    _SG_BLENDOP_DEFAULT,    /* value 0 reserved for default-init */
     SG_BLENDOP_ADD,
     SG_BLENDOP_SUBTRACT,
     SG_BLENDOP_REVERSE_SUBTRACT,
@@ -567,12 +589,12 @@ typedef enum sg_blend_op {
     The default colormask is SG_COLORMASK_RGBA (write all colors channels)
 */
 typedef enum sg_color_mask {
-    _SG_COLORMASK_DEFAULT = 0,  /* value 0 reserved for default-init */
-    SG_COLORMASK_NONE = (0x10), /* special value for 'all channels disabled */
-    SG_COLORMASK_R = (1 << 0),
-    SG_COLORMASK_G = (1 << 1),
-    SG_COLORMASK_B = (1 << 2),
-    SG_COLORMASK_A = (1 << 3),
+    _SG_COLORMASK_DEFAULT = 0,      /* value 0 reserved for default-init */
+    SG_COLORMASK_NONE = (0x10),     /* special value for 'all channels disabled */
+    SG_COLORMASK_R = (1<<0),
+    SG_COLORMASK_G = (1<<1),
+    SG_COLORMASK_B = (1<<2),
+    SG_COLORMASK_A = (1<<3),
     SG_COLORMASK_RGB = 0x7,
     SG_COLORMASK_RGBA = 0xF,
     _SG_COLORMASK_FORCE_U32 = 0x7FFFFFFF
@@ -626,25 +648,25 @@ typedef enum sg_action {
 */
 typedef struct sg_color_attachment_action {
     sg_action action;
-    float     val[4];
+    float val[4];
 } sg_color_attachment_action;
 
 typedef struct sg_depth_attachment_action {
     sg_action action;
-    float     val;
+    float val;
 } sg_depth_attachment_action;
 
 typedef struct sg_stencil_attachment_action {
     sg_action action;
-    uint8_t   val;
+    uint8_t val;
 } sg_stencil_attachment_action;
 
 typedef struct sg_pass_action {
-    uint32_t                     _start_canary;
-    sg_color_attachment_action   colors[SG_MAX_COLOR_ATTACHMENTS];
-    sg_depth_attachment_action   depth;
+    uint32_t _start_canary;
+    sg_color_attachment_action colors[SG_MAX_COLOR_ATTACHMENTS];
+    sg_depth_attachment_action depth;
     sg_stencil_attachment_action stencil;
-    uint32_t                     _end_canary;
+    uint32_t _end_canary;
 } sg_pass_action;
 
 /*
@@ -671,14 +693,14 @@ typedef struct sg_pass_action {
     of vertex- and/or index-data into the same buffer objects.
 */
 typedef struct sg_bindings {
-    uint32_t  _start_canary;
+    uint32_t _start_canary;
     sg_buffer vertex_buffers[SG_MAX_SHADERSTAGE_BUFFERS];
-    int       vertex_buffer_offsets[SG_MAX_SHADERSTAGE_BUFFERS];
+    int vertex_buffer_offsets[SG_MAX_SHADERSTAGE_BUFFERS];
     sg_buffer index_buffer;
-    int       index_buffer_offset;
-    sg_image  vs_images[SG_MAX_SHADERSTAGE_IMAGES];
-    sg_image  fs_images[SG_MAX_SHADERSTAGE_IMAGES];
-    uint32_t  _end_canary;
+    int index_buffer_offset;
+    sg_image vs_images[SG_MAX_SHADERSTAGE_IMAGES];
+    sg_image fs_images[SG_MAX_SHADERSTAGE_IMAGES];
+    uint32_t _end_canary;
 } sg_bindings;
 
 /*
@@ -723,19 +745,19 @@ typedef struct sg_bindings {
     functions, and before calling any sokol_gfx function.
 */
 typedef struct sg_buffer_desc {
-    uint32_t       _start_canary;
-    int            size;
+    uint32_t _start_canary;
+    int size;
     sg_buffer_type type;
-    sg_usage       usage;
-    const void*    content;
-    const char*    label;
+    sg_usage usage;
+    const void* content;
+    const char* label;
     /* GL specific */
     uint32_t gl_buffers[SG_NUM_INFLIGHT_FRAMES];
     /* Metal specific */
     const void* mtl_buffers[SG_NUM_INFLIGHT_FRAMES];
     /* D3D11 specific */
     const void* d3d11_buffer;
-    uint32_t    _end_canary;
+    uint32_t _end_canary;
 } sg_buffer_desc;
 
 /*
@@ -751,8 +773,8 @@ typedef struct sg_buffer_desc {
     an entire mipmap level, not parts of it.
 */
 typedef struct sg_subimage_content {
-    const void* ptr;  /* pointer to subimage data */
-    int         size; /* size in bytes of pointed-to subimage data */
+    const void* ptr;    /* pointer to subimage data */
+    int size;           /* size in bytes of pointed-to subimage data */
 } sg_subimage_content;
 
 /*
@@ -817,85 +839,104 @@ typedef struct sg_image_content {
     (see sg_buffer_desc documentation for more details).
 */
 typedef struct sg_image_desc {
-    uint32_t      _start_canary;
+    uint32_t _start_canary;
     sg_image_type type;
-    bool          render_target;
-    int           width;
-    int           height;
+    bool render_target;
+    int width;
+    int height;
     union {
         int depth;
         int layers;
     };
-    int              num_mipmaps;
-    sg_usage         usage;
-    sg_pixel_format  pixel_format;
-    int              sample_count;
-    sg_filter        min_filter;
-    sg_filter        mag_filter;
-    sg_wrap          wrap_u;
-    sg_wrap          wrap_v;
-    sg_wrap          wrap_w;
-    uint32_t         max_anisotropy;
-    float            min_lod;
-    float            max_lod;
+    int num_mipmaps;
+    sg_usage usage;
+    sg_pixel_format pixel_format;
+    int sample_count;
+    sg_filter min_filter;
+    sg_filter mag_filter;
+    sg_wrap wrap_u;
+    sg_wrap wrap_v;
+    sg_wrap wrap_w;
+    uint32_t max_anisotropy;
+    float min_lod;
+    float max_lod;
     sg_image_content content;
-    const char*      label;
+    const char* label;
     /* GL specific */
     uint32_t gl_textures[SG_NUM_INFLIGHT_FRAMES];
     /* Metal specific */
     const void* mtl_textures[SG_NUM_INFLIGHT_FRAMES];
     /* D3D11 specific */
     const void* d3d11_texture;
-    uint32_t    _end_canary;
+    uint32_t _end_canary;
 } sg_image_desc;
 
 /*
     sg_shader_desc
 
-    The structure sg_shader_desc describes the shaders, uniform blocks
-    texture images and vertex-attribute-names/semantics (required
-    for GLES2 and D3D11) of a shader stage.
+    The structure sg_shader_desc defines all creation parameters
+    for shader programs, used as input to the sg_make_shader() function:
 
-    TODO: source code vs byte code, 3D backend API specifics.
+    - reflection information for vertex attributes (vertex shader inputs):
+        - vertex attribute name (required for GLES2, optional for GLES3 and GL)
+        - a semantic name and index (required for D3D11)
+    - for each vertex- and fragment-shader-stage:
+        - the shader source or bytecode
+        - an optional entry function name
+        - reflection info for each uniform block used by the shader stage:
+            - the size of the uniform block in bytes
+            - reflection info for each uniform block member (only required for GL backends):
+                - member name
+                - member type (SG_UNIFORMTYPE_xxx)
+                - if the member is an array, the number of array items
+        - reflection info for the texture images used by the shader stage:
+            - the image type (SG_IMAGETYPE_xxx)
+            - the name of the texture sampler (required for GLES2, optional everywhere else)
+
+    For all GL backends, shader source-code must be provided. For D3D11 and Metal,
+    either shader source-code or byte-code can be provided.
+
+    For D3D11, if source code is provided, the d3dcompiler_47.dll will be loaded
+    on demand. If this fails, shader creation will fail.
 */
 typedef struct sg_shader_attr_desc {
-    const char* name;      /* GLSL vertex attribute name (only required for GLES2) */
-    const char* sem_name;  /* HLSL semantic name */
-    int         sem_index; /* HLSL semantic index */
+    const char* name;           /* GLSL vertex attribute name (only required for GLES2) */
+    const char* sem_name;       /* HLSL semantic name */
+    int sem_index;              /* HLSL semantic index */
 } sg_shader_attr_desc;
 
 typedef struct sg_shader_uniform_desc {
-    const char*     name;
+    const char* name;
     sg_uniform_type type;
-    int             array_count;
+    int array_count;
 } sg_shader_uniform_desc;
 
 typedef struct sg_shader_uniform_block_desc {
-    int                    size;
+    int size;
     sg_shader_uniform_desc uniforms[SG_MAX_UB_MEMBERS];
 } sg_shader_uniform_block_desc;
 
 typedef struct sg_shader_image_desc {
-    const char*   name;
+    const char* name;
     sg_image_type type;
 } sg_shader_image_desc;
 
 typedef struct sg_shader_stage_desc {
-    const char*                  source;
-    const uint8_t*               byte_code;
-    int                          byte_code_size;
-    const char*                  entry;
+    const char* source;
+    const uint8_t* byte_code;
+    int byte_code_size;
+    const char* entry;
     sg_shader_uniform_block_desc uniform_blocks[SG_MAX_SHADERSTAGE_UBS];
-    sg_shader_image_desc         images[SG_MAX_SHADERSTAGE_IMAGES];
+    sg_shader_image_desc images[SG_MAX_SHADERSTAGE_IMAGES];
 } sg_shader_stage_desc;
 
 typedef struct sg_shader_desc {
-    uint32_t             _start_canary;
-    sg_shader_attr_desc  attrs[SG_MAX_VERTEX_ATTRIBUTES];
+    uint32_t _start_canary;
+    sg_shader_attr_desc attrs[SG_MAX_VERTEX_ATTRIBUTES];
     sg_shader_stage_desc vs;
     sg_shader_stage_desc fs;
-    const char*          label;
-    uint32_t             _end_canary;
+    const char* label;
+    uint32_t _end_canary;
 } sg_shader_desc;
 
 /*
@@ -905,7 +946,7 @@ typedef struct sg_shader_desc {
     for an sg_pipeline object, used as argument to the
     sg_make_pipeline() function:
 
-    - the complete vertex layout for all input vertex buffers
+    - the vertex layout for all input vertex buffers
     - a shader object
     - the 3D primitive type (points, lines, triangles, ...)
     - the index type (none, 16- or 32-bit)
@@ -931,9 +972,6 @@ typedef struct sg_shader_desc {
             .buffer_index   0 the vertex buffer bind slot
             .offset         0 (offsets can be omitted if the vertex layout has no gaps)
             .format         SG_VERTEXFORMAT_INVALID (must be initialized!)
-            .name           0 (GLES2 requires an attribute name here)
-            .sem_name       0 (D3D11 requires a semantic name here)
-            .sem_index      0 (D3D11 requires a semantic index here)
     .shader:            0 (must be intilized with a valid sg_shader id!)
     .primitive_type:    SG_PRIMITIVETYPE_TRIANGLES
     .index_type:        SG_INDEXTYPE_NONE
@@ -973,76 +1011,76 @@ typedef struct sg_shader_desc {
     .label  0       (optional string label for trace hooks)
 */
 typedef struct sg_buffer_layout_desc {
-    int            stride;
+    int stride;
     sg_vertex_step step_func;
-    int            step_rate;
+    int step_rate;
 } sg_buffer_layout_desc;
 
 typedef struct sg_vertex_attr_desc {
-    int              buffer_index;
-    int              offset;
+    int buffer_index;
+    int offset;
     sg_vertex_format format;
 } sg_vertex_attr_desc;
 
 typedef struct sg_layout_desc {
     sg_buffer_layout_desc buffers[SG_MAX_SHADERSTAGE_BUFFERS];
-    sg_vertex_attr_desc   attrs[SG_MAX_VERTEX_ATTRIBUTES];
+    sg_vertex_attr_desc attrs[SG_MAX_VERTEX_ATTRIBUTES];
 } sg_layout_desc;
 
 typedef struct sg_stencil_state {
-    sg_stencil_op   fail_op;
-    sg_stencil_op   depth_fail_op;
-    sg_stencil_op   pass_op;
+    sg_stencil_op fail_op;
+    sg_stencil_op depth_fail_op;
+    sg_stencil_op pass_op;
     sg_compare_func compare_func;
 } sg_stencil_state;
 
 typedef struct sg_depth_stencil_state {
     sg_stencil_state stencil_front;
     sg_stencil_state stencil_back;
-    sg_compare_func  depth_compare_func;
-    bool             depth_write_enabled;
-    bool             stencil_enabled;
-    uint8_t          stencil_read_mask;
-    uint8_t          stencil_write_mask;
-    uint8_t          stencil_ref;
+    sg_compare_func depth_compare_func;
+    bool depth_write_enabled;
+    bool stencil_enabled;
+    uint8_t stencil_read_mask;
+    uint8_t stencil_write_mask;
+    uint8_t stencil_ref;
 } sg_depth_stencil_state;
 
 typedef struct sg_blend_state {
-    bool            enabled;
+    bool enabled;
     sg_blend_factor src_factor_rgb;
     sg_blend_factor dst_factor_rgb;
-    sg_blend_op     op_rgb;
+    sg_blend_op op_rgb;
     sg_blend_factor src_factor_alpha;
     sg_blend_factor dst_factor_alpha;
-    sg_blend_op     op_alpha;
-    uint8_t         color_write_mask;
-    int             color_attachment_count;
+    sg_blend_op op_alpha;
+    uint8_t color_write_mask;
+    int color_attachment_count;
     sg_pixel_format color_format;
     sg_pixel_format depth_format;
-    float           blend_color[4];
+    float blend_color[4];
 } sg_blend_state;
 
 typedef struct sg_rasterizer_state {
-    bool            alpha_to_coverage_enabled;
-    sg_cull_mode    cull_mode;
+    bool alpha_to_coverage_enabled;
+    sg_cull_mode cull_mode;
     sg_face_winding face_winding;
-    int             sample_count;
-    float           depth_bias;
-    float           depth_bias_slope_scale;
-    float           depth_bias_clamp;
+    int sample_count;
+    float depth_bias;
+    float depth_bias_slope_scale;
+    float depth_bias_clamp;
 } sg_rasterizer_state;
 
 typedef struct sg_pipeline_desc {
-    uint32_t               _start_canary;
-    sg_layout_desc         layout;
-    sg_shader              shader;
-    sg_primitive_type      primitive_type;
-    sg_index_type          index_type;
+    uint32_t _start_canary;
+    sg_layout_desc layout;
+    sg_shader shader;
+    sg_primitive_type primitive_type;
+    sg_index_type index_type;
     sg_depth_stencil_state depth_stencil;
-    sg_blend_state         blend;
-    sg_rasterizer_state    rasterizer;
-    const char*            label;
-    uint32_t               _end_canary;
+    sg_blend_state blend;
+    sg_rasterizer_state rasterizer;
+    const char* label;
+    uint32_t _end_canary;
 } sg_pipeline_desc;
 
 /*
@@ -1070,7 +1108,7 @@ typedef struct sg_pipeline_desc {
 */
 typedef struct sg_attachment_desc {
     sg_image image;
-    int      mip_level;
+    int mip_level;
     union {
         int face;
         int layer;
@@ -1079,11 +1117,11 @@ typedef struct sg_attachment_desc {
 } sg_attachment_desc;
 
 typedef struct sg_pass_desc {
-    uint32_t           _start_canary;
+    uint32_t _start_canary;
     sg_attachment_desc color_attachments[SG_MAX_COLOR_ATTACHMENTS];
     sg_attachment_desc depth_stencil_attachment;
-    const char*        label;
-    uint32_t           _end_canary;
+    const char* label;
+    uint32_t _end_canary;
 } sg_pass_desc;
 
 /*
@@ -1114,19 +1152,14 @@ typedef struct sg_trace_hooks {
     void (*destroy_pass)(sg_pass pass, void* user_data);
     void (*update_buffer)(sg_buffer buf, const void* data_ptr, int data_size, void* user_data);
     void (*update_image)(sg_image img, const sg_image_content* data, void* user_data);
-    void (*append_buffer)(sg_buffer buf, const void* data_ptr, int data_size, int result,
-                          void* user_data);
-    void (*begin_default_pass)(const sg_pass_action* pass_action, int width, int height,
-                               void* user_data);
+    void (*append_buffer)(sg_buffer buf, const void* data_ptr, int data_size, int result, void* user_data);
+    void (*begin_default_pass)(const sg_pass_action* pass_action, int width, int height, void* user_data);
     void (*begin_pass)(sg_pass pass, const sg_pass_action* pass_action, void* user_data);
-    void (*apply_viewport)(int x, int y, int width, int height, bool origin_top_left,
-                           void* user_data);
-    void (*apply_scissor_rect)(int x, int y, int width, int height, bool origin_top_left,
-                               void* user_data);
+    void (*apply_viewport)(int x, int y, int width, int height, bool origin_top_left, void* user_data);
+    void (*apply_scissor_rect)(int x, int y, int width, int height, bool origin_top_left, void* user_data);
     void (*apply_pipeline)(sg_pipeline pip, void* user_data);
     void (*apply_bindings)(const sg_bindings* bindings, void* user_data);
-    void (*apply_uniforms)(sg_shader_stage stage, int ub_index, const void* data, int num_bytes,
-                           void* user_data);
+    void (*apply_uniforms)(sg_shader_stage stage, int ub_index, const void* data, int num_bytes, void* user_data);
     void (*draw)(int base_element, int num_elements, int num_instances, void* user_data);
     void (*end_pass)(void* user_data);
     void (*commit)(void* user_data);
@@ -1180,38 +1213,38 @@ typedef struct sg_trace_hooks {
     sg_query_pass_info()
 */
 typedef struct sg_slot_info {
-    sg_resource_state state;  /* the current state of this resource slot */
-    uint32_t          res_id; /* type-neutral resource if (e.g. sg_buffer.id) */
-    uint32_t          ctx_id; /* the context this resource belongs to */
+    sg_resource_state state;    /* the current state of this resource slot */
+    uint32_t res_id;        /* type-neutral resource if (e.g. sg_buffer.id) */
+    uint32_t ctx_id;        /* the context this resource belongs to */
 } sg_slot_info;
 
 typedef struct sg_buffer_info {
-    sg_slot_info slot;               /* resource pool slot info */
-    uint32_t     update_frame_index; /* frame index of last sg_update_buffer() */
-    uint32_t     append_frame_index; /* frame index of last sg_append_buffer() */
-    int          append_pos;         /* current position in buffer for sg_append_buffer() */
-    bool         append_overflow;    /* is buffer in overflow state (due to sg_append_buffer) */
-    int          num_slots;          /* number of renaming-slots for dynamically updated buffers */
-    int          active_slot; /* currently active write-slot for dynamically updated buffers */
+    sg_slot_info slot;              /* resource pool slot info */
+    uint32_t update_frame_index;    /* frame index of last sg_update_buffer() */
+    uint32_t append_frame_index;    /* frame index of last sg_append_buffer() */
+    int append_pos;                 /* current position in buffer for sg_append_buffer() */
+    bool append_overflow;           /* is buffer in overflow state (due to sg_append_buffer) */
+    int num_slots;                  /* number of renaming-slots for dynamically updated buffers */
+    int active_slot;                /* currently active write-slot for dynamically updated buffers */
 } sg_buffer_info;
 
 typedef struct sg_image_info {
-    sg_slot_info slot;            /* resource pool slot info */
-    uint32_t     upd_frame_index; /* frame index of last sg_update_image() */
-    int          num_slots;       /* number of renaming-slots for dynamically updated images */
-    int          active_slot;     /* currently active write-slot for dynamically updated images */
+    sg_slot_info slot;              /* resource pool slot info */
+    uint32_t upd_frame_index;       /* frame index of last sg_update_image() */
+    int num_slots;                  /* number of renaming-slots for dynamically updated images */
+    int active_slot;                /* currently active write-slot for dynamically updated images */
 } sg_image_info;
 
 typedef struct sg_shader_info {
-    sg_slot_info slot; /* resoure pool slot info */
+    sg_slot_info slot;              /* resoure pool slot info */
 } sg_shader_info;
 
 typedef struct sg_pipeline_info {
-    sg_slot_info slot; /* resource pool slot info */
+    sg_slot_info slot;              /* resource pool slot info */
 } sg_pipeline_info;
 
 typedef struct sg_pass_info {
-    sg_slot_info slot; /* resource pool slot info */
+    sg_slot_info slot;              /* resource pool slot info */
 } sg_pass_info;
 
 /*
@@ -1281,12 +1314,12 @@ typedef struct sg_pass_info {
 */
 typedef struct sg_desc {
     uint32_t _start_canary;
-    int      buffer_pool_size;
-    int      image_pool_size;
-    int      shader_pool_size;
-    int      pipeline_pool_size;
-    int      pass_pool_size;
-    int      context_pool_size;
+    int buffer_pool_size;
+    int image_pool_size;
+    int shader_pool_size;
+    int pipeline_pool_size;
+    int pass_pool_size;
+    int context_pool_size;
     /* GL specific */
     bool gl_force_gles2;
     /* Metal-specific */

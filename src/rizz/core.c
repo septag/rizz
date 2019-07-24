@@ -399,9 +399,10 @@ sx_job_context* rizz__job_ctx()
     return g_core.jobs;
 }
 
-static const char* k__gfx_driver_names[_RIZZ_GFX_COUNT] = { "unknown",   "d3d11",      "metal",
-                                                            "gl_family", "opengl-es2", "opengl-es3",
-                                                            "opengl 3.3" };
+static const char* k__gfx_driver_names[RIZZ_GFX_BACKEND_DUMMY] = { "OpenGL 3.3",  "OpenGL-ES 2",
+                                                                   "OpenGL-ES 3", "Direct3D11",
+                                                                   "Metal IOS",   "Metal MacOS",
+                                                                   "Metal Sim" };
 
 static void rizz__init_log(const char* logfile)
 {
@@ -624,7 +625,7 @@ static void* rizz__track_alloc_cb(void* ptr, size_t size, uint32_t align, const 
         // free
         if (ptr) {
             const rizz__proxy_alloc_header* header = (rizz__proxy_alloc_header*)ptr - 1;
-            sx_lock(&talloc->_lk);
+            sx_lock(&talloc->_lk, 1);
             sx_assert(header->track_item_idx >= 0 &&
                       header->track_item_idx < sx_array_count(talloc->items));
             talloc->size -= header->size;
@@ -655,7 +656,7 @@ static void* rizz__track_alloc_cb(void* ptr, size_t size, uint32_t align, const 
         sx_os_path_basename(mem_item.file, sizeof(mem_item.file), file);
         sx_strcpy(mem_item.func, sizeof(mem_item.func), func);
 
-        sx_lock(&talloc->_lk);
+        sx_lock(&talloc->_lk, 1);
         talloc->size += header->size;
         talloc->peak = sx_max(talloc->peak, talloc->size);
         header->track_item_idx = sx_array_count(talloc->items);
@@ -672,7 +673,7 @@ static void* rizz__track_alloc_cb(void* ptr, size_t size, uint32_t align, const 
         sx_assert(ptr);
         const rizz__proxy_alloc_header* header = (rizz__proxy_alloc_header*)ptr - 1;
 
-        sx_lock(&talloc->_lk);
+        sx_lock(&talloc->_lk, 1);
         sx_assert(header->track_item_idx >= 0 &&
                   header->track_item_idx < sx_array_count(talloc->items));
         int64_t size_diff = header->size - prev_size;
@@ -735,7 +736,7 @@ bool rizz__core_init(const rizz_config* conf)
     sx_rng_seed(&g_core.rng,
                 sizeof(time_t) == sizeof(uint64_t) ? sx_hash_u64_to_u32(time(NULL)) : time(NULL));
 
-    // disk-io
+    // disk-io (virtual file system)
     if (!rizz__vfs_init(rizz__alloc(RIZZ_MEMID_VFS))) {
         rizz_log_error("initializing disk-io failed");
         return false;
@@ -845,7 +846,7 @@ bool rizz__core_init(const rizz_config* conf)
         sx_assert(g_core.gfx_cmdbuffers[i]);
     }
     sx_tls_set(g_core.cmdbuffer_tls, g_core.gfx_cmdbuffers[0]);
-    rizz_log_info("(init) graphics: %s", k__gfx_driver_names[the__gfx.imm.driver()]);
+    rizz_log_info("(init) graphics: %s", k__gfx_driver_names[the__gfx.imm.backend()]);
 
     // job dispatcher
     g_core.jobs = sx_job_create_context(
@@ -1149,7 +1150,8 @@ static void rizz__get_mem_info(rizz_mem_info* info)
     info->heap_count = g_core.heap_count;
 }
 
-static void rizz__coro_invoke(void (*coro_cb)(sx_fiber_transfer), void* user) {
+static void rizz__coro_invoke(void (*coro_cb)(sx_fiber_transfer), void* user)
+{
     sx__coro_invoke(g_core.coro, coro_cb, user);
 }
 
