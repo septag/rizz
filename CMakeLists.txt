@@ -140,7 +140,7 @@ if (NOT ENABLE_HOT_LOADING)
 endif()
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-    list(APPEND 3rdparty_projects flextGL)
+    list(APPEND 3rdparty_projects flextgl)
 endif()
 
 # examples
