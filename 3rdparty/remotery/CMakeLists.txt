@@ -12,9 +12,11 @@ target_include_directories(remotery PUBLIC lib)
 
 if (APPLE)
     target_compile_definitions(remotery PUBLIC -DRMT_USE_METAL=1)
+elseif (ANDROID)
+    target_compile_definitions(remotery PUBLIC -DRMT_USE_OPENGL=0)
 elseif (WIN32)
     target_compile_definitions(remotery PUBLIC -DRMT_USE_D3D11=1)
-elseif (ANDROID OR (${CMAKE_SYSTEM_NAME} MATCHES "Linux"))
+elseif ((${CMAKE_SYSTEM_NAME} MATCHES "Linux"))
     target_compile_definitions(remotery PUBLIC -DRMT_USE_OPENGL=1)
 endif()
 

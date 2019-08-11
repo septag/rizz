@@ -237,6 +237,7 @@ static void rizz__asset_on_read_complete(const char* path, sx_mem_block* mem)
     const void* params_ptr = NULL;
     if (a->params_id)
         params_ptr = &amgr->params_buff[rizz_to_index(a->params_id)];
+
     rizz_asset_load_params aparams = (rizz_asset_load_params){ .path = res->path,
                                                                .params = params_ptr,
                                                                .alloc = a->alloc,
@@ -282,8 +283,7 @@ static void rizz__asset_on_read_complete(const char* path, sx_mem_block* mem)
         .load_data = load_data, .mem = mem, .amgr = amgr, .lparams = aparams, .asset = asset
     };
 
-    ajob->job = rizz__core_job_dispatch_internal(1, rizz__asset_load_job_cb, ajob,
-                                                 SX_JOB_PRIORITY_LOW, RIZZ__ASSET_SYSTEM_WORK_TAG);
+    ajob->job = the__core.job_dispatch(1, rizz__asset_load_job_cb, ajob, SX_JOB_PRIORITY_HIGH, 0);
     rizz__asset_job_add_list(&g_asset.async_job_list, &g_asset.async_job_list_last, ajob);
 }
 
@@ -441,7 +441,7 @@ static void rizz__asset_meta_write_item(const rizz_refl_field* field, sjson_cont
     }
 }
 
-bool rizz__asset_load_meta_cache()
+static bool rizz__asset_load_meta_cache()
 {
     sx_mem_block* db = the__vfs.read(g_asset.asset_db_file, RIZZ_VFS_FLAG_TEXT_FILE, g_asset.alloc);
     if (!db) {
@@ -465,8 +465,10 @@ bool rizz__asset_load_meta_cache()
         if (name[0]) {
             rizz__asset_resource rs = { .path = { 0 } };
 
-            // TODO: on mobile, we still don't have any solution
             // check last-modified date of the actual file
+            // NOTE: on mobile, we still don't have any solution
+            //       so we just rely on tools to provide the latest database file
+#if !SX_PLATFORM_ANDROID && !SX_PLATFORM_IOS
             uint64_t cur_lastmod = the__vfs.last_modified(name);
             if (cur_lastmod == 0)
                 continue;    // file isn't valid are does not exist
@@ -474,8 +476,8 @@ bool rizz__asset_load_meta_cache()
             uint64_t lastmod = (uint64_t)sjson_get_double(jitem, "last_modified", 0);
             if (lastmod == 0 || cur_lastmod != lastmod)
                 continue;
-
             rs.last_modified = cur_lastmod;
+#endif // !SX_PLATFORM_ANDROID && !SX_PLATFORM_IOS
 
             sx_strcpy(rs.path, sizeof(rs.path), name);
             sx_strcpy(rs.real_path, sizeof(rs.real_path), sjson_get_string(jitem, "path", name));
@@ -610,8 +612,9 @@ static rizz_asset rizz__asset_create_new(const char* path, const void* params, r
         sx_strcpy(res.real_path, sizeof(res.real_path), path);
         res.path_hash = path_hash;
         res.asset_mgr_id = amgr_id;
+#if !SX_PLATFORM_ANDROID && !SX_PLATFORM_IOS
         res.last_modified = the__vfs.last_modified(res.real_path);
-
+#endif
         res_idx = sx_array_count(g_asset.resources);
         sx_array_push(g_asset.alloc, g_asset.resources, res);
         sx_hashtbl_add_and_grow(g_asset.resource_tbl, path_hash, res_idx, g_asset.alloc);

@@ -802,8 +802,8 @@ static void imgui__frame()
     if (io->WantTextInput && !the_app->keyboard_shown()) {
         the_app->show_keyboard(true);
     }
-    if (!io->WantTextInput && !the_app->keyboard_shown()) {
-        the_app->show_keyboard(false);
+    if (!io->WantTextInput && the_app->keyboard_shown()) {
+        // the_app->show_keyboard(false);
     }
 
     the__imgui.NewFrame();

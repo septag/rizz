@@ -25,6 +25,17 @@ RIZZ_STATE static rizz_api_vfs* the_vfs;
 
 RIZZ_STATE rizz_gfx_stage g_stage;
 
+/*
+#if SX_PLATFORM_ANDROID
+    #include <jni.h>
+    #include <android/native_activity.h>
+    JNIEXPORT
+    void ANativeActivity_onCreate(ANativeActivity* activity, void* saved_state, size_t saved_state_size) {
+        native_activity_create(activity, saved_state, saved_state_size);
+    }
+#endif
+*/
+
 static bool init()
 {
     // register main graphics stage.
@@ -50,11 +61,13 @@ static void render()
     the_gfx->staged.end();
 
     // Use imgui UI
-    the_imgui->SetNextWindowContentSize(sx_vec2f(100.0f, 50.0f));
-    if (the_imgui->Begin("Hello", NULL, 0)) {
-        the_imgui->LabelText("Fps", "%.3f", the_core->fps());
+    if (the_imgui) {
+        the_imgui->SetNextWindowContentSize(sx_vec2f(100.0f, 50.0f));
+        if (the_imgui->Begin("Hello", NULL, 0)) {
+            the_imgui->LabelText("Fps", "%.3f", the_core->fps());
+        }
+        the_imgui->End();
     }
-    the_imgui->End();
 }
 
 rizz_plugin_decl_main(hello, plugin, e)

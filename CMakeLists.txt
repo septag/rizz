@@ -34,12 +34,16 @@ endfunction()
 
 function(rizz__add_example proj_name)
     string(SUBSTRING ${proj_name} 3 -1 source_file)
-    if (BUNDLE) 
+    if (BUNDLE AND NOT ANDROID) 
         add_executable(${proj_name} ${EXEC_TYPE} examples/${proj_name}/${source_file}.c)
     else()
         add_library(${proj_name} SHARED examples/${proj_name}/${source_file}.c)
     endif()
-    target_compile_definitions(${proj_name} PRIVATE COMPILE_DEFINITIONS -DEXAMPLES_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/examples")
+
+    if (NOT ANDROID AND NOT IOS)
+        target_compile_definitions(${proj_name} PRIVATE COMPILE_DEFINITIONS -DEXAMPLES_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/examples")
+    endif()
+    
     target_link_libraries(${proj_name} PRIVATE sx)
     add_dependencies(${proj_name} rizz)
 endfunction()
@@ -135,6 +139,10 @@ if (NOT ENABLE_HOT_LOADING)
     list(REMOVE_ITEM 3rdparty_projects efsw)
 endif()
 
+if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    list(APPEND 3rdparty_projects flextGL)
+endif()
+
 # examples
 set(example_projects 01-hello 
                      02-quad 
@@ -162,6 +170,10 @@ foreach (native_project ${native_projects})
             -Werror 
             -Wno-missing-field-initializers)
     endif()
+
+    if (BUNDLE)
+        target_compile_definitions(${native_project} PRIVATE -DRIZZ_BUNDLE)
+    endif()
 endforeach()
 
 if (BUILD_EXAMPLES AND NOT BUNDLE) 
@@ -171,17 +183,27 @@ if (BUILD_EXAMPLES AND NOT BUNDLE)
     endforeach()
 endif()
 
-# enable bundle mode for `rizz` project if set
+# use -DBUNDLE_TARGET=target-name and -DBUNDLE_TARGET_NAME=name to define 
 if (BUNDLE)
-    target_compile_definitions(rizz PRIVATE -DRIZZ_BUNDLE)
-endif()
+    if (NOT BUNDLE_TARGET)
+        message(FATAL_ERROR "BUNDLE_TARGET is not set, set BUNDLE_TARGET to the target name of your executable target")
+    endif()
 
-# Use this command to assign executable in BUNDLE=1 mode
-# rizz__add_example(03-drawsprite)
-# rizz_set_executable(03-drawsprite PLUGINS sprite imgui NAME drawsprite)
+    if (NOT BUNDLE_TARGET_NAME)
+        message(STATUS "BUNDLE_TARGET_NAME is not set. defaults to '${BUNDLE_TARGET}'")
+        set(BUNDLE_TARGET_NAME ${BUNDLE_TARGET})
+    endif()
 
-# copy compile_commands.json from build/ to parent in order for clangd to work properly
-if (CMAKE_EXPORT_COMPILE_COMMANDS) 
-    add_custom_target(compile_commands COMMAND ${CMAKE_COMMAND} -E 
-        copy ${CMAKE_CURRENT_SOURCE_DIR}/build/compile_commands.json ${CMAKE_CURRENT_SOURCE_DIR})
+    foreach (example_project ${example_projects})
+        if ("${BUNDLE_TARGET}" STREQUAL "${example_project}")
+            rizz__add_example(${BUNDLE_TARGET})
+            break()
+        endif()
+    endforeach()
+
+    if (BUNDLE_PLUGINS)
+        rizz_set_executable(${BUNDLE_TARGET} PLUGINS ${BUNDLE_PLUGINS} NAME ${BUNDLE_TARGET_NAME})
+    else()
+        rizz_set_executable(${BUNDLE_TARGET} NAME ${BUNDLE_TARGET_NAME})
+    endif()
 endif()

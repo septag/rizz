@@ -6,6 +6,7 @@
 
 #include "rizz/core.h"
 #include "rizz/vfs.h"
+#include "rizz/android.h"
 
 #if RIZZ_CONFIG_HOT_LOADING
 #    include "efsw/efsw.h"
@@ -135,15 +136,6 @@ static rizz_vfs_async_callbacks g_vfs_dummy_callbacks = {
     .on_modified = rizz__dummy_on_modified
 };
 
-#if SX_PLATFORM_ANDROID
-JNIEXPORT void JNICALL Java_com_glitterbombg_rizz_jni_set_asset_mgr(JNIEnv* env, jclass cls,
-                                                                    jobject jni_asset_mgr)
-{
-    sx_unused(cls);
-    g_vfs.asset_mgr = AAssetManager_fromJava(env, jni_asset_mgr);
-}
-#endif    // SX_PLATFORM_ANDROID
-
 static bool rizz__vfs_resolve_path(char* out_path, int out_path_sz, const char* path,
                                    rizz_vfs_flags flags)
 {
@@ -181,7 +173,6 @@ static sx_mem_block* rizz__vfs_read_asset_android(const char* path, const sx_all
     sx_mem_block* mem = NULL;
     int r = -1;
     if (size > 0) {
-        sx_assert(size < (off_t)UINT32_MAX);
         mem = sx_mem_create_block(alloc, (int)size, NULL, 0);
         if (mem)
             r = AAsset_read(asset, mem->data, size);
@@ -360,6 +351,10 @@ bool rizz__vfs_init(const sx_alloc* alloc)
     if (!g_vfs.efsw_queue)
         return false;
 #endif    // RIZZ_CONFIG_HOT_LOADING
+
+#if SX_PLATFORM_ANDROID
+    g_vfs.asset_mgr = rizz_android_asset_mgr();
+#endif
 
     return true;
 }

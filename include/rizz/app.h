@@ -211,6 +211,10 @@ typedef struct rizz_app_event {
 
 typedef void(rizz_app_event_cb)(const rizz_app_event*);
 
+#if SX_PLATFORM_ANDROID
+typedef struct ANativeActivity ANativeActivity;
+#endif
+
 typedef struct rizz_api_app {
     int (*width)();
     int (*height)();
@@ -232,3 +236,17 @@ void rizz__app_init_gfx_desc(sg_desc* desc);
 const void* rizz__app_d3d11_device();
 const void* rizz__app_d3d11_device_context();
 #endif    // RIZZ_INTERNAL_API
+
+#if SX_PLATFORM_ANDROID
+typedef struct ANativeActivity ANativeActivity;
+RIZZ_API void ANativeActivity_onCreate_(ANativeActivity*, void*, size_t);
+
+#    define rizz_app_android_decl()                                                \
+        __attribute__((visibility("default"))) void ANativeActivity_onCreate(      \
+            ANativeActivity* activity, void* saved_state, size_t saved_state_size) \
+        {                                                                          \
+            ANativeActivity_onCreate_(activity, saved_state, saved_state_size);    \
+        }
+#else
+#    define rizz_app_android_decl()
+#endif

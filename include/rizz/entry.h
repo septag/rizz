@@ -71,4 +71,5 @@ typedef struct rizz_config {
 typedef void(rizz_game_config_cb)(rizz_config* conf, int argc, char* argv[]);
 
 #define rizz_game_decl_config(_conf_param_name) \
+    rizz_app_android_decl() \
     RIZZ_PLUGIN_EXPORT void rizz_game_config(rizz_config* _conf_param_name, int argc, char* argv[])

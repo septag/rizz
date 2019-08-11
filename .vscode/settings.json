@@ -73,5 +73,7 @@
         "misc/**": true,
         "compile_commands.json": true
     },
-    "cmake.configureOnOpen": true
+    "cmake.configureOnOpen": true,
+    "C_Cpp.loggingLevel":"Information",
+    "C_Cpp.configurationWarnings": "Disabled"
 }

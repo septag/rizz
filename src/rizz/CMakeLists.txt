@@ -10,7 +10,8 @@ set(SOURCE_FILES "config.h"
                  "asset.c" 
                  "camera.c" 
                  "http.c" 
-                 "vfs.c")
+                 "vfs.c" 
+                 "android.c")
 
 set(INCLUDE_FILES "../../include/rizz/types.h"
                   "../../include/rizz/app.h" 
@@ -25,7 +26,8 @@ set(INCLUDE_FILES "../../include/rizz/types.h"
                   "../../include/rizz/http.h"
                   "../../include/rizz/util.h"
                   "../../include/rizz/vfs.h"
-                  "../../include/rizz/json.h")
+                  "../../include/rizz/json.h" 
+                  "../../include/rizz/android.h")
 
 set(TEXT_FILES     "../../README.md"
                    "../../TODO.md")
@@ -48,6 +50,9 @@ endif()
 # no-bundle: make rizz.exe and run the game.dll as a plugin
 if (BUNDLE)
     add_library(rizz STATIC ${SOURCE_FILES} ${EXTERNAL_INCLUDES} ${INCLUDE_FILES} ${TEXT_FILES})
+    if (BUNDLE_PLUGINS)
+        target_link_libraries(rizz PUBLIC ${BUNDLE_PLUGINS})
+    endif()    
 else()
     add_executable(rizz ${EXEC_TYPE} ${SOURCE_FILES} ${EXTERNAL_INCLUDES} ${INCLUDE_FILES} ${TEXT_FILES})
 endif()
@@ -64,9 +69,10 @@ endif()
 
 # Link system libs
 if (ANDROID)
-    target_link_libraries(rizz PRIVATE EGL android)
+    target_link_libraries(rizz PRIVATE EGL android GLESv3)
+    # set_property(TARGET rizz APPEND_STRING PROPERTY LINK_FLAGS " -rdynamic")
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-    target_link_libraries(rizz PRIVATE GL GLEW PUBLIC X11)
+    target_link_libraries(rizz PRIVATE flextGL X11 GL)
 elseif (WIN32)
     target_link_libraries(rizz PRIVATE dxgi d3d11)
 endif()
@@ -78,3 +84,4 @@ set(shaders shaders/debug.vert
             shaders/debug.frag)
 set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "shaders_h")
 glslcc_target_compile_shaders_h(rizz "${shaders}")
+

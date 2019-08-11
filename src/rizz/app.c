@@ -7,6 +7,7 @@
 #include "rizz/core.h"
 #include "rizz/entry.h"
 #include "rizz/graphics.h"
+#include "rizz/android.h"
 
 #include "sx/allocator.h"
 #include "sx/cmdline.h"
@@ -67,7 +68,7 @@ SX_PRAGMA_DIAGNOSTIC_POP();
 #define SOKOL_FREE(p)       sx_free(g_app.alloc, p)
 #define SOKOL_CALLOC(n, s)  rizz__calloc(g_app.alloc, n, s)
 #define SOKOL_ASSERT(c)     sx_assert(c)
-#define SOKOL_LOG(s)        rizz_log_verbose(s)
+#define SOKOL_LOG(s)        rizz_log_debug(s)
 // clang-format on
 
 SX_PRAGMA_DIAGNOSTIC_PUSH();
@@ -77,8 +78,8 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wlogical-not-parentheses")
 #endif
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-parameter")
 #define SOKOL_IMPL
-#define SOKOL_API_DECL static
-#define SOKOL_API_IMPL static
+// #define SOKOL_API_DECL static
+// #define SOKOL_API_IMPL static
 #include "sokol/sokol_app.h"
 SX_PRAGMA_DIAGNOSTIC_POP();
 
@@ -96,6 +97,15 @@ RIZZ_PLUGIN_EXPORT void rizz_game_config(rizz_config*, int argc, char* argv[]);
 
 static void rizz__app_init(void)
 {
+#if SX_PLATFORM_ANDROID
+    static char default_cache_path[512];
+    sx_strcpy(default_cache_path, sizeof(default_cache_path), rizz_android_cache_dir());
+    g_app.conf.cache_path = default_cache_path;
+
+    rizz_android_window_size(&g_app.conf.window_width, &g_app.conf.window_height);
+    g_app.window_size = sx_vec2f(g_app.conf.window_width, g_app.conf.window_height);
+#endif
+
     // Initialize engine components
     if (!rizz__core_init(&g_app.conf)) {
         rizz_log_error("core init failed");
@@ -285,7 +295,10 @@ sapp_desc sokol_main(int argc, char* argv[])
 
     // default cache path:
     //      - win/linux/osx: executable-dir/.cache
+    //      - android/ios: app cache dir (TODO)
+#if !SX_PLATFORM_ANDROID && !SX_PLATFORM_IOS
     sx_os_path_exepath(default_cache_path, sizeof(default_cache_path));
+#endif
     sx_os_path_dirname(default_cache_path, sizeof(default_cache_path), default_cache_path);
     sx_os_path_join(default_cache_path, sizeof(default_cache_path), default_cache_path, ".cache");
 
@@ -340,7 +353,6 @@ sapp_desc sokol_main(int argc, char* argv[])
     sx_strcpy(g_app.game_filepath, sizeof(g_app.game_filepath), game_filepath);
     g_app.window_size = sx_vec2f((float)conf.window_width, (float)conf.window_height);
 
-    // Open game dll and
     return (
         sapp_desc){ .init_cb = rizz__app_init,
                     .frame_cb = rizz__app_frame,
@@ -400,6 +412,15 @@ const void* rizz__app_d3d11_device()
 const void* rizz__app_d3d11_device_context()
 {
     return sapp_d3d11_get_device_context();
+}
+
+void* sapp_android_get_native_window()
+{
+#if SX_PLATFORM_ANDROID
+    return _sapp_android_state.current.window;
+#else
+    return NULL;
+#endif
 }
 
 rizz_api_app the__app = { .width = sapp_width,

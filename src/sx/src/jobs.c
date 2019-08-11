@@ -182,7 +182,7 @@ static sx__job_select_result sx__job_select(sx_job_context* ctx, uint32_t tid, u
     r.waiting_list_alive = false;
 
     sx_lock(&ctx->job_lk, 1);
-    for (int pr = 0; pr < SX_JOB_PRIORITY_COUNT && !r.job; pr++) {
+    for (int pr = 0; pr < SX_JOB_PRIORITY_COUNT; pr++) {
         sx__job* node = ctx->waiting_list[pr];
         while (node) {
             r.waiting_list_alive = true;

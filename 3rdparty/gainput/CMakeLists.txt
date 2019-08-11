@@ -14,7 +14,7 @@ else()
 endif()
 
 if(ANDROID)
-	include(extern/cmake/AndroidNdkModules.cmake)
+	include(AndroidNdkModules)
 	android_ndk_import_module_native_app_glue()
 endif()
 

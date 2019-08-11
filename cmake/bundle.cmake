@@ -66,7 +66,7 @@ function(rizz_set_executable target_name)
 
     if (BUNDLE)
         if (plugins)
-            target_link_libraries(${target_name} PRIVATE ${plugins})
+            # target_link_libraries(${target_name} PRIVATE ${plugins})
             list(APPEND plugins ${internal_name})
         else()
             set(plugins ${internal_name})

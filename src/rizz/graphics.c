@@ -69,8 +69,8 @@ static const sx_alloc*      g_gfx_alloc = NULL;
 #   define rmt__begin_gpu_sample(_name, _hash) 
 #   define rmt__end_gpu_sample()
 #elif RIZZ_GRAPHICS_API_GL==33
+#   include "flextGL/flextGL.h"
 #   define SOKOL_GLCORE33
-#   include <GL/glew.h>     // glew must be installed on linux
 #   define rmt__begin_gpu_sample(_name, _hash)  \
     (g_gfx.enable_profile ? RMT_OPTIONAL(RMT_USE_OPENGL, _rmt_BeginOpenGLSample(_name, _hash)) : 0)
 #   define rmt__end_gpu_sample()                \
@@ -2566,10 +2566,10 @@ void rizz__gfx_trace_reset_frame_stats()
 bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_profile)
 {
 #if SX_PLATFORM_LINUX
-    glewExperimental = GL_TRUE;
-    GLenum r = glewInit();
-    if (r != GLEW_OK)
+    if (flextInit() != GL_TRUE) {
+        rizz_log_error("gfx: could not initialize OpenGL");
         return false;
+    }
 #endif
     g_gfx_alloc = alloc;
     sg_setup(desc);

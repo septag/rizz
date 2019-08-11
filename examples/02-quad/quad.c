@@ -46,9 +46,13 @@ RIZZ_STATE static quad_state g_quad;
 static bool init()
 {
     // mount `/asset` directory
+#if SX_PLATFORM_ANDROID
+    the_vfs->mount_android_assets("/assets");
+#else
     char asset_dir[RIZZ_MAX_PATH];
     sx_os_path_join(asset_dir, sizeof(asset_dir), EXAMPLES_ROOT, "assets");    // "/examples/assets"
     the_vfs->mount(asset_dir, "/assets");
+#endif
 
     // load assets metadata cache to speedup asset loading
     // always do this after you have mounted all virtual directories
@@ -118,6 +122,7 @@ static bool init()
     // projection: setup for ortho, total-width = 10 units
     // view: Z-UP Y-Forward (like blender)
     sx_vec2 screen_size = the_app->sizef();
+    rizz_log_debug(the_core, "%.0f %.0f", screen_size.x, screen_size.y);
     const float view_width = 5.0f;
     const float view_height = screen_size.y * view_width / screen_size.x;
     the_camera->fps_init(&g_quad.cam, 50.0f,

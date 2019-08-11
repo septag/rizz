@@ -146,7 +146,5 @@ bool rizz__asset_dump_unused(const char* filepath);
 void rizz__asset_release();
 void rizz__asset_update();
 
-#    define RIZZ__ASSET_SYSTEM_WORK_TAG 0x80000000u
-
 RIZZ_API rizz_api_asset the__asset;
 #endif    // RIZZ_INTERNAL_API

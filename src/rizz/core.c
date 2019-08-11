@@ -33,6 +33,10 @@
 
 #include "Remotery.h"
 
+#if SX_PLATFORM_ANDROID
+#   include <android/log.h>
+#endif
+
 #if SX_COMPILER_MSVC
 __declspec(dllimport) void __stdcall OutputDebugStringA(const char* lpOutputString);
 #endif
@@ -187,6 +191,10 @@ static void rizz__print_info(const char* fmt, ...)
     sx_strcat(text, sizeof(text), "\n");
     OutputDebugStringA(text);
 #endif
+
+#if SX_PLATFORM_ANDROID
+    __android_log_write(ANDROID_LOG_INFO, g_core.app_name, text);
+#endif
 }
 
 static void rizz__print_debug(const char* fmt, ...)
@@ -215,6 +223,10 @@ static void rizz__print_debug(const char* fmt, ...)
     sx_strcat(text, sizeof(text), "\n");
     OutputDebugStringA(text);
 #    endif
+
+#   if SX_PLATFORM_ANDROID
+    __android_log_write(ANDROID_LOG_DEBUG, g_core.app_name, text);
+#   endif
 #else
     sx_unused(fmt);
 #endif
@@ -239,10 +251,13 @@ static void rizz__print_verbose(const char* fmt, ...)
             rmt_LogText(text);
         }
 
-
 #if SX_COMPILER_MSVC && defined(_DEBUG)
         sx_strcat(text, sizeof(text), "\n");
         OutputDebugStringA(text);
+#endif
+
+#if SX_PLATFORM_ANDROID
+        __android_log_write(ANDROID_LOG_VERBOSE, g_core.app_name, text);
 #endif
     }
 }
@@ -268,6 +283,10 @@ static void rizz__print_error(const char* fmt, ...)
 #if SX_COMPILER_MSVC && defined(_DEBUG)
     sx_strcat(text, sizeof(text), "\n");
     OutputDebugStringA(text);
+#endif
+
+#if SX_PLATFORM_ANDROID
+    __android_log_write(ANDROID_LOG_ERROR, g_core.app_name, text);
 #endif
 }
 
@@ -304,8 +323,11 @@ static void rizz__print_error_trace(const char* source_file, int line, const cha
     sx_strcat(text, sizeof(text), "\n");
     OutputDebugStringA(text);
 #endif
-}
 
+#if SX_PLATFORM_ANDROID
+    __android_log_write(ANDROID_LOG_ERROR, g_core.app_name, text);
+#endif
+}
 
 static void rizz__print_warning(const char* fmt, ...)
 {
@@ -330,6 +352,10 @@ static void rizz__print_warning(const char* fmt, ...)
 #if SX_COMPILER_MSVC && defined(_DEBUG)
     sx_strcat(text, sizeof(text), "\n");
     OutputDebugStringA(text);
+#endif
+
+#if SX_PLATFORM_ANDROID
+        __android_log_write(ANDROID_LOG_WARN, g_core.app_name, text);
 #endif
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -426,13 +452,11 @@ static void rizz__job_thread_init_cb(sx_job_context* ctx, int thread_index, uint
 {
     sx_unused(thread_id);
     sx_unused(user);
+    sx_unused(ctx);
 
     int worker_index = thread_index + 1;    // 0 is rreserved for main-thread
     sx_tls_set(g_core.tmp_allocs_tls, &g_core.tmp_allocs[worker_index]);
     sx_tls_set(g_core.cmdbuffer_tls, g_core.gfx_cmdbuffers[worker_index]);
-    sx_job_set_current_thread_tags(ctx, (worker_index != g_core.num_workers - 1)
-                                            ? ~RIZZ__ASSET_SYSTEM_WORK_TAG
-                                            : RIZZ__ASSET_SYSTEM_WORK_TAG);
 
     char name[32];
     sx_snprintf(name, sizeof(name), "Thread #%d", worker_index);
@@ -743,9 +767,8 @@ bool rizz__core_init(const rizz_config* conf)
     }
     rizz_log_info("(init) vfs");
 
-    // always reserve one thread for asset manager
-    int num_worker_threads =
-        conf->job_num_threads >= 0 ? (conf->job_num_threads + 1) : sx_os_numcores();
+    int num_worker_threads = conf->job_num_threads >= 0 ? conf->job_num_threads : (sx_os_numcores() - 1);
+    num_worker_threads = sx_max(1, num_worker_threads); // we should have at least one worker thread
 
     // Temp allocators
     g_core.num_workers = num_worker_threads + 1;    // include the main-thread
@@ -780,8 +803,12 @@ bool rizz__core_init(const rizz_config* conf)
     }
 
     // asset system
-    // TODO: set asset-db from assets directory instead of cache directory on mobile
-    if (!rizz__asset_init(rizz__alloc(RIZZ_MEMID_CORE), "/cache/asset-db.json", "")) {
+#if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
+    const char* asset_dbpath = "/assets/asset-db.json";
+#else
+    const char* asset_dbpath = "/cache/asset-db.json";
+#endif
+    if (!rizz__asset_init(rizz__alloc(RIZZ_MEMID_CORE), asset_dbpath, "")) {
         rizz_log_error("initializing asset system failed");
         return false;
     }
@@ -862,7 +889,7 @@ bool rizz__core_init(const rizz_config* conf)
     rizz_log_info("(init) jobs: threads=%d, max_fibers=%d, stack_size=%dkb",
                   sx_job_num_worker_threads(g_core.jobs), conf->job_max_fibers,
                   conf->job_stack_size);
-
+                  
     // coroutines
     g_core.coro =
         sx_coro_create_context(alloc, conf->coro_max_fibers, conf->coro_stack_size * 1024);
@@ -933,7 +960,10 @@ void rizz__core_release()
     }
     sx_free(alloc, g_core.gfx_cmdbuffers);
 
+#if !SX_PLATFORM_ANDROID && !SX_PLATFORM_IOS
     rizz__asset_save_meta_cache();
+#endif
+
     if (g_core.flags & RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS)
         rizz__asset_dump_unused("unused-assets.json");
 
@@ -1032,15 +1062,6 @@ void rizz__core_frame()
     ++g_core.frame_idx;
 }
 
-
-sx_job_t rizz__core_job_dispatch_internal(int count,
-                                          void (*callback)(int start, int end, int thrd_index,
-                                                           void* user),
-                                          void* user, sx_job_priority priority, uint32_t tags)
-{
-    return sx_job_dispatch(g_core.jobs, count, callback, user, priority, tags);
-}
-
 static const sx_alloc* rizz__core_tmp_alloc_push()
 {
     rizz__core_tmpalloc* talloc = sx_tls_get(g_core.tmp_allocs_tls);
@@ -1084,13 +1105,6 @@ static sx_job_t rizz__job_dispatch(int count,
                                    void* user, sx_job_priority priority, uint32_t tags)
 {
     sx_assert(g_core.jobs);
-    sx_assert(!(tags & RIZZ__ASSET_SYSTEM_WORK_TAG));
-
-    if (tags != 0) {
-        tags &= ~RIZZ__ASSET_SYSTEM_WORK_TAG;
-    } else {
-        tags = ~RIZZ__ASSET_SYSTEM_WORK_TAG;
-    }
     return sx_job_dispatch(g_core.jobs, count, callback, user, priority, tags);
 }
 

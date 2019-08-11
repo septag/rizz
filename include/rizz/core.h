@@ -137,10 +137,6 @@ typedef struct rizz_gfx_cmdbuffer rizz_gfx_cmdbuffer;    // #include "rizz/graph
 bool rizz__core_init(const rizz_config* conf);
 void rizz__core_release();
 void rizz__core_frame();
-sx_job_t rizz__core_job_dispatch_internal(int count,
-                                          void (*callback)(int start, int end, int thrd_index,
-                                                           void* user),
-                                          void* user, sx_job_priority priority, uint32_t tags);
 rizz_gfx_cmdbuffer* rizz__core_gfx_cmdbuffer();
 RIZZ_API void rizz__core_fix_callback_ptrs(const void** ptrs, const void** new_ptrs, int num_ptrs);
 

@@ -4,7 +4,7 @@
 [@septag](https://twitter.com/septagh)  
 
 Rizz (ریز) is a tiny, multi-platform, and minimal game/app development framework, Written in C language.  
-It's currently a work in progress, features and improvements will be added constantly.
+It's currently a work in progress, features and improvements will be added constantly to different platforms.
 
 ## Design Principles
 I'm not gonna waste time by rewriting the same stuff that others put it a lot better than me.  
@@ -44,6 +44,14 @@ This is not a game engine, it's a relatively low-level framework for programmers
 - *Graphics API introspection*: Debug application level graphic calls and objects.
 - *Memory Debugger*: Debug and monitor memory allocations for all subsystems.
 
+#### Supported platforms
+- *Windows*
+- *Linux*
+- *MacOS*
+- *Android*
+- *iOS*: WIP v0.2
+- *RaspberryPI*: WIP v0.2
+
 ## Build
 _rizz_ is designed to run on all major mobile (iOS, android), PC (Windows, Linux, MacOS) and web (WebASM) platforms. 
 But as the engine is in it's early age, the current platforms are built and tested: 
@@ -56,6 +64,9 @@ But as the engine is in it's early age, the current platforms are built and test
   - libxi-dev
   - libasound2-dev (if you are planning to build `sound` plugin)
 - __MacOS__: Tested on MacOS High Sierra - AppleClang 9.1.0
+- __Android__: For android, there is a python script [android.py](scripts/build-tools/android.py) 
+               which takes care of preparing android project structure, building the code and 
+               packaging the final APK. please read the begining of ```android.py```.
 
 #### CMake options
 - **BUNDLE** (default=0, android/ios=1):  
@@ -67,9 +78,10 @@ But as the engine is in it's early age, the current platforms are built and test
     plugins you specify. to build the bundle properly, you should set it as _executable_ (*add_executable*) 
     and call `rizz_set_executable` on the target. see the end of the main `CMakeLists.txt` file for an
     example.
-- **ENABLE_HOT_LOADING** (default=1, android/ios=0):  
+- **ENABLE_HOT_LOADING** (default=1, android/ios=0)
   Enables hot reloading of assets and monitoring the assets directories. Doesn't work on mobile OSes.
-- **BUILD_EXAMPLES** (default=1, android/ios=0):
+- **ENABLE_PROFILER** (default=0/debug, default=1/release)
+- **BUILD_EXAMPLES** (default=1, android/ios=0)
   Build example projects in `/examples` directory. 
 - **MSVC_COMPILE_SUMMARY** (default=0, windows/msvc=1)
   On msvc compiler, enables `/d2cgsummary` flag for detailed compile stats. Read more about this 
