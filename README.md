@@ -58,7 +58,6 @@ But as the engine is in it's early age, the current platforms are built and test
 
 - __Windows__: Tested on Windows10 with visual studio 14 2015 update 3 (Win64).  
 - __Linux__: Tested on ubuntu 16 with clang (6.0.0) and gcc (7.3.0). Package requirements:  
-  - libglew-dev
   - libx11-dev
   - libxrandr-dev
   - libxi-dev
