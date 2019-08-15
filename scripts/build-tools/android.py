@@ -1,5 +1,6 @@
 # android build tool
 # sep.tagh@gmail.com - http://github.com/septag/rizz
+# License: https://github.com/septag/rizz#license-bsd-2-clause
 #
 # There currently are 3 main commands:
 # 'configure': This is usually the first command you have to run in order to prepare the directory 
@@ -40,6 +41,10 @@ import fnmatch
 import json
 import zipfile
 import xml.etree.ElementTree as xmltree
+import hashlib
+import threading
+import queue
+import time
 
 if (platform.system() == 'Windows'):
     EXE = '.exe'
@@ -83,11 +88,149 @@ def setup_manifest(manifest_filepath, args):
                 xmlroot.attrib[key] = str(args.app_version)
             if (key.endswith('versionName')):
                 xmlroot.attrib[key] = str(args.app_version_name)
+
+        # modify application 
+        xmlapp = xmlroot.find('application')
+        for key in xmlapp.attrib:
+            if key.endswith('debuggable'):
+                xmlapp.attrib[key] = 'true' if args.build_type == 'Debug' or args.build_type == 'RelWithDebInfo' else 'false'
+
     newxml = xmltree.ElementTree(xmlroot)
     newxml.write(manifest_filepath)
 
+def adb_check_file_exists(ADB, path_on_device, run_as = None):
+    try:
+        if (run_as):
+            cmd = [ADB, 'shell', 'run-as', run_as, 'ls ' + path_on_device]
+        else:
+            cmd = [ADB, 'shell', 'ls ' + path_on_device]
+        logging.debug(' '.join(cmd))
+        adb_result = subprocess.check_output(cmd)
+    except subprocess.CalledProcessError as e:
+        logging.error("adb returned with error code: %d" % e.returncode)
+        exit(-1)
+    else:
+        return True if adb_result.decode('ascii').strip() == path_on_device else False
+
+def adb_get_abi(ADB):
+    try:
+        cmd = [
+            ADB, 'shell',
+            'getprop', 'ro.product.cpu.abi'
+        ]
+        logging.debug(' '.join(cmd))
+        adb_result = subprocess.check_output(cmd)
+    except subprocess.CalledProcessError as e:
+        logging.error("adb returned with error code: %d" % e.returncode)
+        exit(-1)
+    else:
+        return adb_result.decode('ascii').strip()
+
+def adb_upload_debugger(ADB, ndk_root, package_name, debugger_name):
+    if not adb_check_file_exists(ADB, debugger_name, run_as=package_name):
+        abi = adb_get_abi(ADB)
+        abi_to_gdb = { 
+            'armeabi-v7a': 'android-arm', 
+            'arm64-v8a': 'android-arm64',
+            'x86': 'android-x86',
+            'x86_64': 'android-x86_64'}
+    
+        local_debugger_path = os.path.join(ndk_root, 'prebuilt', abi_to_gdb[abi], 'gdbserver', 'gdbserver')
+        if os.path.isfile(local_debugger_path):
+            print('found {}: {}'.format(debugger_name, local_debugger_path))
+        else:
+            logging.error('debugger not found: {}'.format(debugger_name))
+            return False
+    
+        remote_debugger_path = '/data/data/{}/{}'.format(package_name, debugger_name)
+        remote_debugger_path_tmp = '/data/local/tmp/' + debugger_name
+        if not adb_check_file_exists(ADB, remote_debugger_path_tmp):
+            cmd = [
+                ADB, 'push',
+                local_debugger_path, 
+                '/data/local/tmp'
+            ]
+            logging.debug(' '.join(cmd))
+            if subprocess.call(cmd) != 0:
+                return False
+            cmd = [
+                ADB, 'shell',
+                'chmod', '+x',
+                remote_debugger_path_tmp
+            ]
+            if subprocess.call(cmd) != 0:
+                return False
+
+            print('uploaded {} debugger to /data/local/tmp'.format(debugger_name))
+        
+        # copy from /tmp to data directory of the program
+        cmd = [
+            ADB, 'shell',
+            'run-as', package_name,
+            'cp', remote_debugger_path_tmp, remote_debugger_path
+        ]
+        logging.debug(' '.join(cmd))
+        if subprocess.call(cmd) != 0:
+            return False
+        print('copied {} debugger to programs data path: {}'.format(debugger_name, os.path.dirname(remote_debugger_path)))
+    
+    return True
+
+def adb_run_debugger(ADB, JDB, package_name, activity_name, debugger_name, port):
+    # run program and wait for the debugger
+    cmd = [
+        ADB, 'shell',
+        'am', 'start',
+        '-D', '-n',
+        '"{}/{}"'.format(package_name, activity_name)
+    ]    
+    logging.debug(' '.join(cmd))
+    if subprocess.call(cmd):
+        return False
+    
+    cmd = [
+        ADB, 'shell',
+        'run-as', package_name,
+        './' + debugger_name
+    ]
+    return True
+
+def adb_get_process_id(ADB, package_name):
+    try:
+        cmd = [
+            ADB, 'shell',
+            'pgrep', package_name
+        ]
+        logging.debug(' '.join(cmd))
+        adb_result = subprocess.check_output(cmd)
+    except subprocess.CalledProcessError as e:
+        logging.error("adb returned with error code: %d" % e.returncode)
+        exit(-1)
+    else:
+        return int(adb_result.decode('ascii').strip())
+
+def get_activity_name(ADB, package_name, manifest_filepath):
+    xmlroot = xmltree.parse(manifest_filepath).getroot()
+    xmlapp = xmlroot.find('application')
+    assert xmlapp
+    for appchild in xmlapp:
+        if appchild.tag == 'activity':
+            xmlintent = appchild.find('intent-filter')
+            activity_name = ''
+            for key in appchild.attrib:
+                if key.endswith('name'):
+                    activity_name = appchild.attrib[key] 
+            if xmlintent:
+                for intentchild in xmlintent:
+                    if intentchild.tag == 'category':
+                        for key in intentchild.attrib:
+                            if key.endswith('name') and intentchild.attrib[key].endswith('LAUNCHER'):
+                                return activity_name
+    return None
+
 def make_manifest(manifest_filepath, args):
     with open(manifest_filepath, 'w') as f:
+        debuggable = 'true' if args.build_type == 'Debug' or args.build_type == 'RelWithDebInfo' else 'false'
         f.write('<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n')
         f.write('  package="{}"\n'.format(args.package))
         f.write('  android:versionCode="1"\n')
@@ -95,7 +238,7 @@ def make_manifest(manifest_filepath, args):
         f.write('  <uses-sdk android:minSdkVersion="{}" android:targetSdkVersion="{}"/>\n'.format(args.sdk_min_platform_version, args.sdk_platform_version))
         f.write('  <uses-permission android:name="android.permission.INTERNET"></uses-permission>\n')
         f.write('  <uses-feature android:glEsVersion="0x00030000"></uses-feature>\n')
-        f.write('  <application android:label="{}" android:debuggable="true" android:hasCode="false">\n'.format(args.name))
+        f.write('  <application android:label="{}" android:debuggable="{}" android:hasCode="false">\n'.format(args.name, debuggable))
         f.write('    <activity android:name="android.app.NativeActivity"\n')
         f.write('      android:label="{}"\n'.format(args.name))
         f.write('      android:launchMode="singleTask"\n')
@@ -295,8 +438,29 @@ def java_compile_sources(args, java_class_root, java_src_root, apk_root, RUNTIME
         exit(-1)
     else:
         for l in dex_result.decode('ascii').split('\n'):
-            logging.debug(l)      
+            logging.debug(l)
 
+class AsyncFileReader(threading.Thread):
+    def __init__(self, fd, process_id):
+        assert callable(fd.readline)
+        threading.Thread.__init__(self)
+        self._fd = fd
+        self._stopped = False
+        self._process_id = str(process_id)
+    
+    def run(self):
+        for line in iter(self._fd.readline, ''):
+            line = line.decode('utf-8').strip()
+            proc_id = line[line.find('(')+1:line.find(')')].strip()
+            if (proc_id == self._process_id):
+                print(line)
+    
+    def eof(self):
+        return not self.is_alive()
+
+    def stop(self):
+        self._stopped = True
+    
 def build_android(args):
     if (not 'JAVA_HOME' in os.environ):
         os.environ['JAVA_HOME'] = args.java_root
@@ -305,6 +469,11 @@ def build_android(args):
     if (not os.path.isdir(BUILD_TOOLS)):
         logging.error('invalid build-tools path: %s' % (BUILD_TOOLS))
         exit(-1)
+    PLATFORM_TOOLS = os.path.join(args.sdk_root, 'platform-tools')
+    if (not os.path.isdir(PLATFORM_TOOLS)):
+        logging.error('invalid platform-tools path: %s' % (PLATFORM_TOOLS))
+        exit(-1)
+
     AAPT = os.path.join(BUILD_TOOLS, 'aapt' + EXE)
     DEX = os.path.join(BUILD_TOOLS, 'dx' + BAT)
     ZIPALIGN = os.path.join(BUILD_TOOLS, 'zipalign' + EXE)
@@ -312,6 +481,7 @@ def build_android(args):
     KEYTOOL = os.path.join(args.java_root, 'bin', 'keytool' + EXE)
     RUNTIME_JAR = java_get_rt(args)
     ANDROID_JAR = os.path.join(args.sdk_root, 'platforms', 'android-' + str(args.sdk_platform_version), 'android.jar')
+    ADB = os.path.join(PLATFORM_TOOLS, 'adb' + EXE)
 
     # make intermediate directories and build the 'so' files
     build_root = os.path.join(args.target_dir, 'build')
@@ -351,6 +521,7 @@ def build_android(args):
         
     print('-- aapt: %s' % AAPT)
     print('-- dx: %s' % DEX)
+    print('-- adb: %s' % ADB)
     print('-- zipalign: %s' % ZIPALIGN)
     print('-- apksigner: %s' % APKSIGNER)
     print('-- runtime jar: %s' % RUNTIME_JAR)
@@ -373,7 +544,7 @@ def build_android(args):
     cmake_toolchain_file = os.path.join(args.ndk_root, 'build', 'cmake', 'android.toolchain.cmake').replace('\\', '/')
 
     for abi in args.ndk_abi:
-        build_dir = os.path.join(build_root, abi)
+        build_dir = os.path.join(build_root, abi, args.build_type)
         if (not os.path.isdir(build_dir)):
             os.makedirs(build_dir)
 
@@ -393,6 +564,7 @@ def build_android(args):
                     '-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=.',
                     '-DBUNDLE_TARGET=' + args.cmake_target,
                     '-DBUNDLE_TARGET_NAME=' + args.name,
+                    '-DCMAKE_BUILD_TYPE=' + args.build_type,
                     '-G', cmake_generator,
                     args.cmake_source]
                 if (args.cmake_args):
@@ -407,7 +579,7 @@ def build_android(args):
                     logging.debug(l)
 
             # make vscode workspace files
-            vscode_workspace = os.path.join(build_root, args.name + '-' + abi + '.code-workspace')
+            vscode_workspace = os.path.join(build_root, args.name + '-' + abi + '-' + args.build_type + '.code-workspace')
             make_vscode_workspace(vscode_workspace, src_root, args.cmake_source, args.cmake_path, build_dir, abi, args)
 
         # build
@@ -558,28 +730,112 @@ def build_android(args):
             logging.debug(' '.join(cmd))
             sign_result = subprocess.check_output(cmd, cwd=args.target_dir)
         except subprocess.CalledProcessError as e:
-            logging.error('zipalign returned with error code: %d' % e.returncode)
+            logging.error('apksigner returned with error code: %d' % e.returncode)
             exit(-1)
         else:
             for l in sign_result.decode('ascii').split('\n'):
                 logging.debug(l)    
             print('signed: %s' % final_apk)
 
+        # install the apk to the device
+        if args.install:
+            apk_hashfile = os.path.join(args.target_dir, final_apk + '.sha1')
+            apk_sha1 = ''
+            apk_new_sha1 = ''
+            if os.path.isfile(apk_hashfile):
+                with open(apk_hashfile, 'rt') as f:
+                    apk_sha1 = f.readline()
+                    f.close() 
+            with open(os.path.join(args.target_dir, final_apk), 'rb') as f:
+                sha1 = hashlib.sha1()
+                while True:
+                    data = f.read(8192)
+                    if not data:
+                        break
+                    sha1.update(data)
+                f.close()
+                apk_new_sha1 = sha1.hexdigest()
+
+            if (apk_sha1 == apk_new_sha1):
+                print('APK not changed, skipping installation')
+            else:
+                # compare hash and decide if we need to install
+                try:
+                    cmd = [ADB, 'install', '-r', final_apk]
+                    logging.debug(' '.join(cmd))
+                    adb_result = subprocess.check_output(cmd, cwd=args.target_dir)
+                except subprocess.CalledProcessError as e:
+                    logging.error('adb returned with error code: %d' % e.returncode)
+                    exit(-1)
+                else:
+                    for l in adb_result.decode('ascii').split('\n'):
+                        logging.debug(l)    
+                    if adb_result.decode('ascii').find('Failure') != -1:
+                        # try uninstalling the app and reinstall
+                        try:
+                            print('install failed: trying uninstall ...')
+                            cmd = [ADB, 'uninstall', args.package]
+                            logging.debug(' '.join(cmd))
+                            adb_result = subprocess.check_output(cmd, cwd=args.target_dir)
+
+                            cmd = [ADB, 'install', '-r', final_apk]
+                            logging.debug(' '.join(cmd))
+                            adb_result = subprocess.check_output(cmd, cwd=args.target_dir)
+                        except:
+                            logging.error('adb returned with error code: %d' % e.returncode)
+                            exit(-1)
+                        else:
+                            for l in adb_result.decode('ascii').split('\n'):
+                                logging.debug(l)    
+                            print('adb install: %s' % final_apk)                       
+                    print('adb install: %s' % final_apk)
+                
+                # write hash
+                with open(apk_hashfile, 'wt') as f:
+                    f.write(apk_new_sha1)
+                    f.close()
+
         # copy the apk to the destination path
         if args.copy:
             shutil.copyfile(os.path.join(args.target_dir, final_apk), args.copy)
             print('copied to: %s' % args.copy)
-    
+
+    if args.command == 'debug':
+        # find proper gdbserver
+        adb_upload_debugger(ADB, args.ndk_root, args.package, 'gdbserver')
+
+    if args.command == 'deploy':
+        # read AndroidManifest.xml and extract the running activity
+        activity_name = get_activity_name(ADB, args.package, manifest_filepath)
+        cmd = [ADB, 'shell', 'am', 'start', args.package + '/' + activity_name]
+        logging.debug(' '.join(cmd))
+        if subprocess.call(cmd) != 0:
+            logging.error('running app {} failed'.format(cmd))
+        process_id = adb_get_process_id(ADB, args.package)
+
+        # run logcat
+        cmd = [
+            ADB, 'logcat',  
+            '-v' 'color',
+            '-v', 'raw',
+            '-v', 'printable',
+            '-v', 'process']
+        logging.debug(' '.join(cmd))
+        p_log = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        stdout_reader = AsyncFileReader(p_log.stdout, process_id)
+        stdout_reader.start()
+        stdout_reader.join()
+
 
 if __name__ == "__main__":
     # ENV vars
     arg_parser = argparse.ArgumentParser(description='rizz android build tool v1.0')
-    arg_parser.add_argument('command', help='build command', choices=['configure', 'build', 'package'])
+    arg_parser.add_argument('command', help='build command', choices=['configure', 'build', 'package', 'debug', 'deploy'])
     arg_parser.add_argument('--name', help='app/cmake target name', required=True)
     arg_parser.add_argument('--cmake-source', help='cmake (native) source directory')
     arg_parser.add_argument('--cmake-target', help='cmake (native) project name (default is same as `name`)')
     arg_parser.add_argument('--cmake-args', help='additional cmake arguments', default='')
-    arg_parser.add_argument('--build-type', help='build type', choices=['debug', 'release'], default='debug')
+    arg_parser.add_argument('--build-type', help='build type', choices=['Debug', 'Release', 'RelWithDebInfo'], default='Debug')
     arg_parser.add_argument('--target-dir', help='target build directory', required=True)
     arg_parser.add_argument('--package', help='Java package name')
     arg_parser.add_argument('--app-version', help='app incremental version number', type=int, default=1)
@@ -600,6 +856,7 @@ if __name__ == "__main__":
     arg_parser.add_argument('--keystore-password', help='password for keystore file', default='')
     arg_parser.add_argument('--key-password', help='key password', default='')
     arg_parser.add_argument('--manifest', help='custom manifest xml file', default='')
+    arg_parser.add_argument('--install', help='installs the final APK to the device (adb install)', action='store_true')
     arg_parser.add_argument('--copy', help='copy the final APK to the specified path')
     arg_parser.add_argument('--verbose', help='enable verbose output', action='store_const', const=True)
     args = arg_parser.parse_args(sys.argv[1:])
@@ -609,7 +866,7 @@ if __name__ == "__main__":
         exit(-1)
     args.cmake_source = os.path.normpath(args.cmake_source)
 
-    if (not args.package and not args.manifest and args.command == 'configure'):
+    if (not args.package and not args.manifest and (args.command == 'configure' or args.command == 'debug' or args.command == 'deploy')):
         logging.error('--package argument is not provided')
         exit(-1)
 

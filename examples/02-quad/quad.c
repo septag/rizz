@@ -45,14 +45,16 @@ RIZZ_STATE static quad_state g_quad;
 
 static bool init()
 {
-    // mount `/asset` directory
 #if SX_PLATFORM_ANDROID
     the_vfs->mount_android_assets("/assets");
 #else
+    // mount `/asset` directory
     char asset_dir[RIZZ_MAX_PATH];
     sx_os_path_join(asset_dir, sizeof(asset_dir), EXAMPLES_ROOT, "assets");    // "/examples/assets"
     the_vfs->mount(asset_dir, "/assets");
+    the_vfs->watch_mounts();
 #endif
+
 
     // load assets metadata cache to speedup asset loading
     // always do this after you have mounted all virtual directories

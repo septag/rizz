@@ -31,10 +31,15 @@ RIZZ_STATE rizz_asset g_snd[8];
 
 static bool init()
 {
+#if SX_PLATFORM_ANDROID
+    the_vfs->mount_android_assets("/assets");
+#else
     // mount `/asset` directory
     char asset_dir[RIZZ_MAX_PATH];
     sx_os_path_join(asset_dir, sizeof(asset_dir), EXAMPLES_ROOT, "assets");    // "/examples/assets"
     the_vfs->mount(asset_dir, "/assets");
+#endif
+
     the_vfs->watch_mounts();
 
     // load assets metadata cache to speedup asset loading

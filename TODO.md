@@ -1,8 +1,5 @@
 ## TODO
 
-### v0.3:
-- [ ] Audio backend for sokol_audio
-
 ### v0.2:
 - [x] Sprites
 - [x] DrawSprite example
@@ -21,7 +18,10 @@
 - [x] Cleanup and add something for examples cmake
 - [x] Add Readme to plugins (imgui, sprite)
 - [x] Better graphics debugging (stages)
-- [ ] iOS build
+- [x] Audio backend for sokol_audio
 - [x] Android build
 - [ ] Raspberry build
+- [ ] iOS build
  
+#### minor
+- [x] cleanup 'mount' API if possible

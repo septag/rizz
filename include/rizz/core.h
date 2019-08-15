@@ -152,7 +152,7 @@ RIZZ_API rizz_api_core the__core;
 #   define rizz_log_warn(_text, ...)     the__core.print_warning(_text, ##__VA_ARGS__)
 
 // coroutines
-#   define rizz_coro_declare(_name)          static void coro__##_name(rizz__coro_entry __transfer)
+#   define rizz_coro_declare(_name)          static void coro__##_name(sx_fiber_transfer __transfer)
 #   define rizz_coro_userdata()              __transfer.user
 #   define rizz_coro_end()                   the__core.coro_end(&__transfer.from)
 #   define rizz_coro_wait(_msecs)            the__core.coro_wait(&__transfer.from, (_msecs))
@@ -170,12 +170,12 @@ RIZZ_API rizz_api_core the__core;
 // coroutines
 #   ifdef __cplusplus
 #       define rizz_coro_declare(_name)     \
-            RIZZ_POINTER static auto coro__##_name = [](rizz__coro_entry __transfer)
+            RIZZ_POINTER static auto coro__##_name = [](sx_fiber_transfer __transfer)
 #   else
 #       define rizz_coro_declare(_name)     \
-            static void coro__##_nameـ(rizz__coro_entry __transfer);   \
-            RIZZ_POINTER static void (*coro__##_name)(rizz__coro_entry __transfer) = coro__##_nameـ; \
-            static void coro__##_name_(rizz__coro_entry __transfer)
+            static void coro__##_name_(sx_fiber_transfer __transfer);   \
+            RIZZ_POINTER static void (*coro__##_name)(sx_fiber_transfer __transfer) = coro__##_name_; \
+            static void coro__##_name_(sx_fiber_transfer __transfer)
 #   endif
 
 #   define rizz_coro_userdata()                  __transfer.user

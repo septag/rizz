@@ -25,17 +25,6 @@ RIZZ_STATE static rizz_api_vfs* the_vfs;
 
 RIZZ_STATE rizz_gfx_stage g_stage;
 
-/*
-#if SX_PLATFORM_ANDROID
-    #include <jni.h>
-    #include <android/native_activity.h>
-    JNIEXPORT
-    void ANativeActivity_onCreate(ANativeActivity* activity, void* saved_state, size_t saved_state_size) {
-        native_activity_create(activity, saved_state, saved_state_size);
-    }
-#endif
-*/
-
 static bool init()
 {
     // register main graphics stage.
