@@ -57,6 +57,7 @@ else()
     add_executable(rizz ${EXEC_TYPE} ${SOURCE_FILES} ${EXTERNAL_INCLUDES} ${INCLUDE_FILES} ${TEXT_FILES})
 endif()
 
+# includes and extra compile flags
 target_include_directories(rizz PRIVATE ../../3rdparty)
 target_link_libraries(rizz PUBLIC sx PRIVATE remotery utf)
 target_compile_definitions(rizz PRIVATE -DRIZZ_INTERNAL_API) # Expose internal API structs when build the library
@@ -67,10 +68,17 @@ else()
     target_compile_definitions(rizz PRIVATE -DRIZZ_CONFIG_HOT_LOADING=0)
 endif()
 
+if (RPI)
+    target_include_directories(rizz PRIVATE ${CMAKE_SYSROOT}/opt/vc/include)
+endif()
+
 # Link system libs
 if (ANDROID)
     target_link_libraries(rizz PRIVATE EGL android GLESv3)
     # set_property(TARGET rizz APPEND_STRING PROPERTY LINK_FLAGS " -rdynamic")
+elseif (RPI)
+    target_link_directories(rizz PRIVATE ${CMAKE_SYSROOT}/opt/vc/lib)
+    target_link_libraries(rizz PRIVATE GLESv2 EGL bcm_host)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     target_link_libraries(rizz PRIVATE flextGL X11 GL)
 elseif (WIN32)

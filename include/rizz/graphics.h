@@ -211,7 +211,6 @@ typedef struct sjson_context sjson_context;    // shader_parse_reflection
 typedef struct rizz_api_gfx_immediate {
     rizz_gfx_backend (*backend)(void);
     bool (*GL_family)();
-    bool (*query_feature)(sg_feature feature);
     void (*reset_state_cache)(void);
 
     // resource creation, destruction and updating
@@ -285,6 +284,9 @@ typedef struct rizz_api_gfx_immediate {
     sg_shader_info (*query_shader_info)(sg_shader shd);
     sg_pipeline_info (*query_pipeline_info)(sg_pipeline pip);
     sg_pass_info (*query_pass_info)(sg_pass pass);
+    sg_features (*query_features)(void);
+    sg_limits (*query_limits)(void);
+    sg_pixelformat_info (*query_pixelformat)(sg_pixel_format fmt);
 
     // internal use (imgui plugin)
     void (*_get_internal_state)(void** make_cmdbuff, int* make_cmdbuff_sz);

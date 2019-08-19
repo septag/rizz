@@ -103,7 +103,7 @@ bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path)
             return false;
         }
     } else {
-#if SX_PLATFORM_LINUX
+#if SX_PLATFORM_LINUX || SX_PLATFORM_RPI
         sx_strcpy(g_plugin.plugin_path, sizeof(g_plugin.plugin_path), "./");
 #endif
     }
@@ -382,12 +382,12 @@ static bool rizz__plugin_load(const char* name)
 
     // construct full filepath, by joining to root plugin path and adding extension
     char filepath[256];
-#    if SX_PLATFORM_LINUX || SX_PLATFORM_OSX
+#if SX_PLATFORM_LINUX || SX_PLATFORM_OSX || SX_PLATFORM_RPI
     sx_os_path_join(filepath, sizeof(filepath), g_plugin.plugin_path, "lib");
     sx_strcat(filepath, sizeof(filepath), name);
-#    else
+#else
     sx_os_path_join(filepath, sizeof(filepath), g_plugin.plugin_path, name);
-#    endif
+#endif
     sx_strcat(filepath, sizeof(filepath), SX_DLL_EXT);
     return rizz__plugin_load_abs(filepath, false, NULL, 0);
 }

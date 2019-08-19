@@ -68,8 +68,10 @@ typedef struct { uint32_t id; } rizz_gfx_stage;
 #    define RIZZ_GRAPHICS_SHADER_LANG hlsl
 #elif RIZZ_GRAPHICS_API_METAL
 #    define RIZZ_GRAPHICS_SHADER_LANG msl
-#elif RIZZ_GRAPHICS_API_GLES
-#    define RIZZ_GRAPHICS_SHADER_LANG gles
+#elif RIZZ_GRAPHICS_API_GLES==30
+#    define RIZZ_GRAPHICS_SHADER_LANG gles3
+#elif RIZZ_GRAPHICS_API_GLES==21
+#    define RIZZ_GRAPHICS_SHADER_LANG gles2
 #elif RIZZ_GRAPHICS_API_GL
 #    define RIZZ_GRAPHICS_SHADER_LANG glsl
 #endif

@@ -501,21 +501,22 @@ static inline sg_pixel_format rizz__texture_get_texture_format(ddsktx_format fmt
     // clang-format off
     switch (fmt) {
     case DDSKTX_FORMAT_RGBA8:   return SG_PIXELFORMAT_RGBA8;
-    case DDSKTX_FORMAT_RGB8:    return SG_PIXELFORMAT_RGB8;
-    case DDSKTX_FORMAT_RGB10A2: return SG_PIXELFORMAT_R10G10B10A2;
     case DDSKTX_FORMAT_RGBA16F: return SG_PIXELFORMAT_RGBA16F;
     case DDSKTX_FORMAT_R32F:    return SG_PIXELFORMAT_R32F;
     case DDSKTX_FORMAT_R16F:    return SG_PIXELFORMAT_R16F;
-    case DDSKTX_FORMAT_A8:      return SG_PIXELFORMAT_L8;
-    case DDSKTX_FORMAT_BC1:     return SG_PIXELFORMAT_DXT1;
-    case DDSKTX_FORMAT_BC2:     return SG_PIXELFORMAT_DXT3;
-    case DDSKTX_FORMAT_BC3:     return SG_PIXELFORMAT_DXT5;
-    case DDSKTX_FORMAT_PTC12:   return SG_PIXELFORMAT_PVRTC2_RGB;
-    case DDSKTX_FORMAT_PTC14:   return SG_PIXELFORMAT_PVRTC4_RGB;
-    case DDSKTX_FORMAT_PTC12A:  return SG_PIXELFORMAT_PVRTC2_RGBA;
-    case DDSKTX_FORMAT_PTC14A:  return SG_PIXELFORMAT_PVRTC4_RGBA;
+    case DDSKTX_FORMAT_BC1:     return SG_PIXELFORMAT_BC1_RGBA;
+    case DDSKTX_FORMAT_BC2:     return SG_PIXELFORMAT_BC2_RGBA;
+    case DDSKTX_FORMAT_BC3:     return SG_PIXELFORMAT_BC3_RGBA;
+    case DDSKTX_FORMAT_BC4:     return SG_PIXELFORMAT_BC4_R;
+    case DDSKTX_FORMAT_BC5:     return SG_PIXELFORMAT_BC5_RG;
+    case DDSKTX_FORMAT_BC6H:    return SG_PIXELFORMAT_BC6H_RGBF;
+    case DDSKTX_FORMAT_BC7:     return SG_PIXELFORMAT_BC7_RGBA;
+    case DDSKTX_FORMAT_PTC12:   return SG_PIXELFORMAT_PVRTC_RGB_2BPP;
+    case DDSKTX_FORMAT_PTC14:   return SG_PIXELFORMAT_PVRTC_RGB_4BPP;
+    case DDSKTX_FORMAT_PTC12A:  return SG_PIXELFORMAT_PVRTC_RGBA_2BPP;
+    case DDSKTX_FORMAT_PTC14A:  return SG_PIXELFORMAT_PVRTC_RGBA_4BPP;
     case DDSKTX_FORMAT_ETC2:    return SG_PIXELFORMAT_ETC2_RGB8;
-    case DDSKTX_FORMAT_ETC2A:   return SG_PIXELFORMAT_ETC2_SRGB8;
+    case DDSKTX_FORMAT_ETC2A:   return SG_PIXELFORMAT_ETC2_RGB8A1;
     default:                    return SG_PIXELFORMAT_NONE;
     }
     // clang-format on
@@ -791,30 +792,67 @@ static void rizz__texture_init()
     rizz_refl_enum(sg_image_type, SG_IMAGETYPE_CUBE);
     rizz_refl_enum(sg_image_type, SG_IMAGETYPE_3D);
     rizz_refl_enum(sg_image_type, SG_IMAGETYPE_ARRAY);
-
     rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_NONE);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGB8);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA4);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R5G6B5);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R5G5B5A1);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R10G10B10A2);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA32F);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16F);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R32F);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R8);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R8SN);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R8UI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R8SI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16SN);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16UI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16SI);
     rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16F);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_L8);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_DXT1);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_DXT3);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_DXT5);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG8);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG8SN);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG8UI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG8SI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R32UI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R32SI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R32F);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16SN);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16UI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16SI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16F);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8SN);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8UI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8SI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BGRA8);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGB10A2);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG11B10F);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG32UI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG32SI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG32F);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16SN);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16UI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16SI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16F);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA32UI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA32SI);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA32F);
     rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_DEPTH);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_DEPTHSTENCIL);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC2_RGB);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC4_RGB);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC2_RGBA);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC4_RGBA);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_DEPTH_STENCIL);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC1_RGBA);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC2_RGBA);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC3_RGBA);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC4_R);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC4_RSN);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC5_RG);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC4_R);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC4_RSN);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC5_RG);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC5_RGSN);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC6H_RGBF);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC6H_RGBUF);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC7_RGBA);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGB_2BPP);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGB_4BPP);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGBA_2BPP);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGBA_4BPP);
     rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RGB8);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_SRGB8);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RGB8A1);
 
     rizz_refl_field(rizz_texture_info, sg_image_type, type, "texture type");
     rizz_refl_field(rizz_texture_info, sg_pixel_format, format, "texture pixel format");
@@ -3878,7 +3916,6 @@ static const rizz_gfx_trace_info* rizz__trace_info()
 rizz_api_gfx the__gfx = {
     .imm = { .backend           = rizz__gfx_backend,
              .GL_family         = rizz__gfx_GL_family,
-             .query_feature     = sg_query_feature,
              .reset_state_cache = sg_reset_state_cache,
 
              .make_buffer           = rizz__make_buffer,
@@ -3942,7 +3979,10 @@ rizz_api_gfx the__gfx = {
              .query_shader_info = sg_query_shader_info,
              .query_pipeline_info = sg_query_pipeline_info,
              .query_pass_info = sg_query_pass_info,
-             ._get_internal_state = rizz__get_internal_state },
+             .query_features = sg_query_features,
+             .query_limits = sg_query_limits,
+             .query_pixelformat = sg_query_pixelformat,
+             ._get_internal_state = rizz__get_internal_state, },
     .staged = { .begin                = rizz__cb_begin_stage,
                 .end                  = rizz__cb_end_stage,
                 .begin_default_pass   = rizz__cb_begin_default_pass,

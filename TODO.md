@@ -25,3 +25,6 @@
  
 #### minor
 - [x] cleanup 'mount' API if possible
+
+#### raspberryPI
+- [ ] try to use <sys/sem.h> instead of posix semaphores

@@ -81,29 +81,163 @@ typedef enum sg_backend {
 } sg_backend;
 
 /*
-    sg_feature
+    sg_pixel_format
 
-    These are optional features, use the function
-    sg_query_feature() to check whether the feature is supported.
+    sokol_gfx.h basically uses the same pixel formats as WebGPU, since these
+    are supported on most newer GPUs. GLES2 and WebGL has a much smaller
+    subset of available pixel formats. Call sg_query_pixelformat() to check
+    at runtime if a pixel format supports the desired features.
+
+    A pixelformat name consist of three parts:
+
+        - components (R, RG, RGB or RGBA)
+        - bit width per component (8, 16 or 32)
+        - component data type:
+            - unsigned normalized (no postfix)
+            - signed normalized (SN postfix)
+            - unsigned integer (UI postfix)
+            - signed integer (SI postfix)
+            - float (F postfix)
+
+    Not all pixel formats can be used for everything, call sg_query_pixelformat()
+    to inspect the capabilities of a given pixelformat. The function returns
+    an sg_pixelformat_info struct with the following bool members:
+
+        - sample: the pixelformat can be sampled as texture at least with
+                  nearest filtering
+        - filter: the pixelformat can be samples as texture with linear
+                  filtering
+        - render: the pixelformat can be used for render targets
+        - blend:  blending is supported when using the pixelformat for
+                  render targets
+        - msaa:   multisample-antiliasing is supported when using the
+                  pixelformat for render targets
+        - depth:  the pixelformat can be used for depth-stencil attachments
+
+    When targeting GLES2/WebGL, the only safe formats to use
+    as texture are SG_PIXELFORMAT_R8 and SG_PIXELFORMAT_RGBA8. For rendering
+    in GLES2/WebGL, only SG_PIXELFORMAT_RGBA8 is safe. All other formats
+    must be checked via sg_query_pixelformats().
+
+    The default pixel format for texture images is SG_PIXELFORMAT_RGBA8.
+
+    The default pixel format for render target images is platform-dependent:
+        - for Metal and D3D11 it is SG_PIXELFORMAT_BGRA8
+        - for GL backends it is SG_PIXELFORMAT_RGBA8
+
+    This is mainly because of the default framebuffer which is setup outside
+    of sokol_gfx.h. On some backends, using BGRA for the default frame buffer
+    allows more efficient frame flips. For your own offscreen-render-targets,
+    use whatever renderable pixel format is convenient for you.
 */
-typedef enum sg_feature {
-    SG_FEATURE_INSTANCING,
-    SG_FEATURE_TEXTURE_COMPRESSION_DXT,
-    SG_FEATURE_TEXTURE_COMPRESSION_PVRTC,
-    SG_FEATURE_TEXTURE_COMPRESSION_ATC,
-    SG_FEATURE_TEXTURE_COMPRESSION_ETC2,
-    SG_FEATURE_TEXTURE_FLOAT,
-    SG_FEATURE_TEXTURE_HALF_FLOAT,
-    SG_FEATURE_ORIGIN_BOTTOM_LEFT,
-    SG_FEATURE_ORIGIN_TOP_LEFT,
-    SG_FEATURE_MSAA_RENDER_TARGETS,
-    SG_FEATURE_PACKED_VERTEX_FORMAT_10_2,
-    SG_FEATURE_MULTIPLE_RENDER_TARGET,
-    SG_FEATURE_IMAGETYPE_3D,
-    SG_FEATURE_IMAGETYPE_ARRAY,
+typedef enum sg_pixel_format {
+    _SG_PIXELFORMAT_DEFAULT,    /* value 0 reserved for default-init */
+    SG_PIXELFORMAT_NONE,
 
-    SG_NUM_FEATURES
-} sg_feature;
+    SG_PIXELFORMAT_R8,
+    SG_PIXELFORMAT_R8SN,
+    SG_PIXELFORMAT_R8UI,
+    SG_PIXELFORMAT_R8SI,
+
+    SG_PIXELFORMAT_R16,
+    SG_PIXELFORMAT_R16SN,
+    SG_PIXELFORMAT_R16UI,
+    SG_PIXELFORMAT_R16SI,
+    SG_PIXELFORMAT_R16F,
+    SG_PIXELFORMAT_RG8,
+    SG_PIXELFORMAT_RG8SN,
+    SG_PIXELFORMAT_RG8UI,
+    SG_PIXELFORMAT_RG8SI,
+
+    SG_PIXELFORMAT_R32UI,
+    SG_PIXELFORMAT_R32SI,
+    SG_PIXELFORMAT_R32F,
+    SG_PIXELFORMAT_RG16,
+    SG_PIXELFORMAT_RG16SN,
+    SG_PIXELFORMAT_RG16UI,
+    SG_PIXELFORMAT_RG16SI,
+    SG_PIXELFORMAT_RG16F,
+    SG_PIXELFORMAT_RGBA8,
+    SG_PIXELFORMAT_RGBA8SN,
+    SG_PIXELFORMAT_RGBA8UI,
+    SG_PIXELFORMAT_RGBA8SI,
+    SG_PIXELFORMAT_BGRA8,
+    SG_PIXELFORMAT_RGB10A2,
+    SG_PIXELFORMAT_RG11B10F,
+
+    SG_PIXELFORMAT_RG32UI,
+    SG_PIXELFORMAT_RG32SI,
+    SG_PIXELFORMAT_RG32F,
+    SG_PIXELFORMAT_RGBA16,
+    SG_PIXELFORMAT_RGBA16SN,
+    SG_PIXELFORMAT_RGBA16UI,
+    SG_PIXELFORMAT_RGBA16SI,
+    SG_PIXELFORMAT_RGBA16F,
+
+    SG_PIXELFORMAT_RGBA32UI,
+    SG_PIXELFORMAT_RGBA32SI,
+    SG_PIXELFORMAT_RGBA32F,
+
+    SG_PIXELFORMAT_DEPTH,
+    SG_PIXELFORMAT_DEPTH_STENCIL,
+
+    SG_PIXELFORMAT_BC1_RGBA,
+    SG_PIXELFORMAT_BC2_RGBA,
+    SG_PIXELFORMAT_BC3_RGBA,
+    SG_PIXELFORMAT_BC4_R,
+    SG_PIXELFORMAT_BC4_RSN,
+    SG_PIXELFORMAT_BC5_RG,
+    SG_PIXELFORMAT_BC5_RGSN,
+    SG_PIXELFORMAT_BC6H_RGBF,
+    SG_PIXELFORMAT_BC6H_RGBUF,
+    SG_PIXELFORMAT_BC7_RGBA,
+    SG_PIXELFORMAT_PVRTC_RGB_2BPP,
+    SG_PIXELFORMAT_PVRTC_RGB_4BPP,
+    SG_PIXELFORMAT_PVRTC_RGBA_2BPP,
+    SG_PIXELFORMAT_PVRTC_RGBA_4BPP,
+    SG_PIXELFORMAT_ETC2_RGB8,
+    SG_PIXELFORMAT_ETC2_RGB8A1,
+
+    _SG_PIXELFORMAT_NUM,
+    _SG_PIXELFORMAT_FORCE_U32 = 0x7FFFFFFF
+} sg_pixel_format;
+
+/*
+    Runtime information about a pixel format, returned
+    by sg_query_pixelformat().
+*/
+typedef struct sg_pixelformat_info {
+    bool sample:1;      /* pixel format can be sampled in shaders */
+    bool filter:1;      /* pixel format can be sampled with filtering */
+    bool render:1;      /* pixel format can be used as render target */
+    bool blend:1;       /* alpha-blending is supported */
+    bool msaa:1;        /* pixel format can be used as MSAA render target */
+    bool depth:1;       /* pixel format is a depth format */
+} sg_pixelformat_info;
+
+/*
+    Runtime information about available optional features,
+    returned by sg_query_features()
+*/
+typedef struct sg_features {
+    bool instancing:1;
+    bool origin_top_left:1;
+    bool multiple_render_targets:1;
+    bool msaa_render_targets:1;
+    bool imagetype_3d:1;        /* creation of SG_IMAGETYPE_3D images is supported */
+    bool imagetype_array:1;     /* creation of SG_IMAGETYPE_ARRAY images is supported */
+} sg_features;
+
+/*
+    Runtime information about resource limits, returned by sg_query_limit()
+*/
+typedef struct sg_limits {
+    uint32_t max_image_size_2d;      /* max width/height of SG_IMAGETYPE_2D images */
+    uint32_t max_image_size_cube;    /* max width/height of SG_IMAGETYPE_CUBE images */
+    uint32_t max_image_size_3d;      /* max width/height/depth of SG_IMAGETYPE_3D images */
+    uint32_t max_image_size_array;
+    uint32_t max_image_array_layers;
+} sg_limits;
 
 /*
     sg_resource_state
@@ -261,44 +395,6 @@ typedef enum sg_shader_stage {
     SG_SHADERSTAGE_FS,
     _SG_SHADERSTAGE_FORCE_U32 = 0x7FFFFFFF
 } sg_shader_stage;
-
-/*
-    sg_pixel_format
-
-    This is a common subset of useful and widely supported pixel formats. The
-    pixel format enum is mainly used when creating an image object in the
-    sg_image_desc.pixel_format member.
-
-    The default pixel format when creating an image is SG_PIXELFORMAT_RGBA8.
-*/
-typedef enum sg_pixel_format {
-    _SG_PIXELFORMAT_DEFAULT,    /* value 0 reserved for default-init */
-    SG_PIXELFORMAT_NONE,
-    SG_PIXELFORMAT_RGBA8,
-    SG_PIXELFORMAT_RGB8,
-    SG_PIXELFORMAT_RGBA4,
-    SG_PIXELFORMAT_R5G6B5,
-    SG_PIXELFORMAT_R5G5B5A1,
-    SG_PIXELFORMAT_R10G10B10A2,
-    SG_PIXELFORMAT_RGBA32F,
-    SG_PIXELFORMAT_RGBA16F,
-    SG_PIXELFORMAT_R32F,
-    SG_PIXELFORMAT_R16F,
-    SG_PIXELFORMAT_L8,
-    SG_PIXELFORMAT_DXT1,
-    SG_PIXELFORMAT_DXT3,
-    SG_PIXELFORMAT_DXT5,
-    SG_PIXELFORMAT_DEPTH,
-    SG_PIXELFORMAT_DEPTHSTENCIL,
-    SG_PIXELFORMAT_PVRTC2_RGB,
-    SG_PIXELFORMAT_PVRTC4_RGB,
-    SG_PIXELFORMAT_PVRTC2_RGBA,
-    SG_PIXELFORMAT_PVRTC4_RGBA,
-    SG_PIXELFORMAT_ETC2_RGB8,
-    SG_PIXELFORMAT_ETC2_SRGB8,
-    _SG_PIXELFORMAT_NUM,
-    _SG_PIXELFORMAT_FORCE_U32 = 0x7FFFFFFF
-} sg_pixel_format;
 
 /*
     sg_primitive_type
@@ -804,7 +900,8 @@ typedef struct sg_image_content {
     .depth/.layers:     1
     .num_mipmaps:       1
     .usage:             SG_USAGE_IMMUTABLE
-    .pixel_format:      SG_PIXELFORMAT_RGBA8
+    .pixel_format:      SG_PIXELFORMAT_RGBA8 for textures, backend-dependent
+                        for render targets (RGBA8 or BGRA8)
     .sample_count:      1 (only used in render_targets)
     .min_filter:        SG_FILTER_NEAREST
     .mag_filter:        SG_FILTER_NEAREST
@@ -818,8 +915,8 @@ typedef struct sg_image_content {
     .label              0       (optional string label for trace hooks)
 
     SG_IMAGETYPE_ARRAY and SG_IMAGETYPE_3D are not supported on
-    WebGL/GLES2, use sg_query_feature(SG_FEATURE_IMAGETYPE_ARRAY) and
-    sg_query_feature(SG_FEATURE_IMAGETYPE_3D) at runtime to check
+    WebGL/GLES2, use sg_query_features().imagetype_array and
+    sg_query_features().imagetype_3d at runtime to check
     if array- and 3D-textures are supported.
 
     Images with usage SG_USAGE_IMMUTABLE must be fully initialized by
@@ -1138,7 +1235,6 @@ typedef struct sg_pass_desc {
 */
 typedef struct sg_trace_hooks {
     void* user_data;
-    void (*query_feature)(sg_feature feature, bool result, void* user_data);
     void (*reset_state_cache)(void* user_data);
     void (*make_buffer)(const sg_buffer_desc* desc, sg_buffer result, void* user_data);
     void (*make_image)(const sg_image_desc* desc, sg_image result, void* user_data);

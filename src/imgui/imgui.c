@@ -572,6 +572,10 @@ typedef struct imgui__context {
     sg_image font_tex;
     bool mouse_btn_down[RIZZ_APP_MAX_MOUSEBUTTONS];
     bool mouse_btn_up[RIZZ_APP_MAX_MOUSEBUTTONS];
+    float mouse_wheel_h;
+    float mouse_wheel;
+    bool keys_down[512];
+    ImWchar* char_input;    // sx_array
     ImGuiMouseCursor last_cursor;
     sg_imgui_t sg_imgui;
 } imgui__context;
@@ -734,6 +738,7 @@ static void imgui__release()
         sx_free(alloc, g_imgui.verts);
     if (g_imgui.indices)
         sx_free(alloc, g_imgui.indices);
+    sx_array_free(the_core->alloc(RIZZ_MEMID_TOOLSET), g_imgui.char_input);
 }
 
 static void imgui__update_cursor()
@@ -799,6 +804,19 @@ static void imgui__frame()
             io->MouseDown[i] = false;
         }
     }
+
+    io->MouseWheel = g_imgui.mouse_wheel;
+    io->MouseWheelH = g_imgui.mouse_wheel_h;
+    g_imgui.mouse_wheel_h = g_imgui.mouse_wheel = 0;
+
+    sx_memcpy(io->KeysDown, g_imgui.keys_down, sizeof(io->KeysDown));
+    sx_memset(g_imgui.keys_down, 0x0, sizeof(g_imgui.keys_down));
+
+    for (int i = 0; i < sx_array_count(g_imgui.char_input); i++) {
+        the__imgui.ImGuiIO_AddInputCharacter(io, g_imgui.char_input[i]);
+    }
+    sx_array_clear(g_imgui.char_input);
+
     if (io->WantTextInput && !the_app->keyboard_shown()) {
         the_app->show_keyboard(true);
     }
@@ -1228,6 +1246,10 @@ static void imgui__graphics_debugger(const rizz_gfx_trace_info* info, bool* p_op
                 sg_imgui_draw_buffers_content(&g_imgui.sg_imgui);
                 the__imgui.EndTabItem();
             }
+            if (the__imgui.BeginTabItem("Caps", NULL, 0)) {
+                sg_imgui_draw_capabilities_content(&g_imgui.sg_imgui);
+                the__imgui.EndTabItem();
+            }
 
             the__imgui.EndTabBar();
         }
@@ -1432,17 +1454,18 @@ rizz_plugin_decl_event_handler(imgui, e)
         }
         break;
     case RIZZ_APP_EVENTTYPE_MOUSE_SCROLL:
-        io->MouseWheelH = e->scroll_x;
-        io->MouseWheel += e->scroll_y;
+        g_imgui.mouse_wheel_h = e->scroll_x;
+        g_imgui.mouse_wheel += e->scroll_y;
         break;
     case RIZZ_APP_EVENTTYPE_KEY_DOWN:
-        io->KeysDown[e->key_code] = true;
+        g_imgui.keys_down[e->key_code] = true;
         break;
     case RIZZ_APP_EVENTTYPE_KEY_UP:
-        io->KeysDown[e->key_code] = false;
+        g_imgui.keys_down[e->key_code] = false;
         break;
     case RIZZ_APP_EVENTTYPE_CHAR:
-        the__imgui.ImGuiIO_AddInputCharacter(io, (ImWchar)e->char_code);
+        sx_array_push(the_core->alloc(RIZZ_MEMID_TOOLSET), g_imgui.char_input,
+                      (ImWchar)e->char_code);
         break;
     case RIZZ_APP_EVENTTYPE_UPDATE_CURSOR:
         imgui__update_cursor();

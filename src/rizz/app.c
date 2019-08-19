@@ -25,12 +25,7 @@
 #    define SOKOL_METAL
 #elif SX_PLATFORM_RPI || SX_PLATFORM_EMSCRIPTEN
 #    define SOKOL_GLES2
-#    define GL_GLEXT_PROTOTYPES
-#    include <GLES2/gl2.h>
-#    include <GLES2/gl2ext.h>
 #elif SX_PLATFORM_ANDROID
-#    include <EGL/egl.h>
-#    include <EGL/eglext.h>
 #    define SOKOL_GLES3
 #elif SX_PLATFORM_LINUX
 #    define SOKOL_GLCORE33

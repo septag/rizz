@@ -846,6 +846,10 @@ SOKOL_API_DECL const void* sapp_android_get_native_activity(void);
     #if defined(SOKOL_NO_ENTRY)
     #error("sokol_app.h: SOKOL_NO_ENTRY is not supported on Android")
     #endif
+#elif defined(__RPI__)
+    #if !defined(SOKOL_GLES2)
+    #error("sokol_app.h: unknown 3D API selected for RaspberryPI, must be SOKOL_GLES2")
+    #endif
 #elif defined(__linux__) || defined(__unix__)
     /* Linux */
     #if !defined(SOKOL_GLCORE33)
@@ -1689,7 +1693,7 @@ static GLKViewController* _sapp_ios_view_ctrl_obj;
 _SOKOL_PRIVATE void _sapp_run(const sapp_desc* desc) {
     _sapp_init_state(desc);
     static int argc = 1;
-    static char* argv[] = { "sokol_app" };
+    static char* argv[] = { (char*)"sokol_app" };
     UIApplicationMain(argc, argv, nil, NSStringFromClass([_sapp_app_delegate class]));
 }
 
@@ -3017,6 +3021,7 @@ typedef int  GLint;
 #define GL_ZERO 0
 #define GL_CULL_FACE 0x0B44
 #define GL_INVERT 0x150A
+#define GL_INT 0x1404
 #define GL_UNSIGNED_INT 0x1405
 #define GL_UNSIGNED_SHORT 0x1403
 #define GL_NEAREST 0x2600
@@ -3054,6 +3059,57 @@ typedef int  GLint;
 #define GL_ONE_MINUS_SRC_COLOR 0x0301
 #define GL_MIRRORED_REPEAT 0x8370
 #define GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS 0x8B4D
+#define GL_R11F_G11F_B10F 0x8C3A
+#define GL_UNSIGNED_INT_10F_11F_11F_REV 0x8C3B
+#define GL_RGBA32UI 0x8D70
+#define GL_RGB32UI 0x8D71
+#define GL_RGBA16UI 0x8D76
+#define GL_RGB16UI 0x8D77
+#define GL_RGBA8UI 0x8D7C
+#define GL_RGB8UI 0x8D7D
+#define GL_RGBA32I 0x8D82
+#define GL_RGB32I 0x8D83
+#define GL_RGBA16I 0x8D88
+#define GL_RGB16I 0x8D89
+#define GL_RGBA8I 0x8D8E
+#define GL_RGB8I 0x8D8F
+#define GL_RED_INTEGER 0x8D94
+#define GL_RG 0x8227
+#define GL_RG_INTEGER 0x8228
+#define GL_R8 0x8229
+#define GL_R16 0x822A
+#define GL_RG8 0x822B
+#define GL_RG16 0x822C
+#define GL_R16F 0x822D
+#define GL_R32F 0x822E
+#define GL_RG16F 0x822F
+#define GL_RG32F 0x8230
+#define GL_R8I 0x8231
+#define GL_R8UI 0x8232
+#define GL_R16I 0x8233
+#define GL_R16UI 0x8234
+#define GL_R32I 0x8235
+#define GL_R32UI 0x8236
+#define GL_RG8I 0x8237
+#define GL_RG8UI 0x8238
+#define GL_RG16I 0x8239
+#define GL_RG16UI 0x823A
+#define GL_RG32I 0x823B
+#define GL_RG32UI 0x823C
+#define GL_RGBA_INTEGER 0x8D99
+#define GL_R8_SNORM 0x8F94
+#define GL_RG8_SNORM 0x8F95
+#define GL_RGB8_SNORM 0x8F96
+#define GL_RGBA8_SNORM 0x8F97
+#define GL_R16_SNORM 0x8F98
+#define GL_RG16_SNORM 0x8F99
+#define GL_RGB16_SNORM 0x8F9A
+#define GL_RGBA16_SNORM 0x8F9B
+#define GL_RGBA16 0x805B
+#define GL_MAX_TEXTURE_SIZE 0x0D33
+#define GL_MAX_CUBE_MAP_TEXTURE_SIZE 0x851C
+#define GL_MAX_3D_TEXTURE_SIZE 0x8073
+#define GL_MAX_ARRAY_TEXTURE_LAYERS 0x88FF
 
 typedef void  (GL_APIENTRY *PFN_glBindVertexArray)(GLuint array);
 static PFN_glBindVertexArray _sapp_glBindVertexArray;
@@ -3454,7 +3510,7 @@ _SOKOL_PRIVATE void _sapp_d3d11_create_device_and_swapchain(void) {
     DXGI_SWAP_CHAIN_DESC* sc_desc = &_sapp_dxgi_swap_chain_desc;
     sc_desc->BufferDesc.Width = _sapp.framebuffer_width;
     sc_desc->BufferDesc.Height = _sapp.framebuffer_height;
-    sc_desc->BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    sc_desc->BufferDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
     sc_desc->BufferDesc.RefreshRate.Numerator = 60;
     sc_desc->BufferDesc.RefreshRate.Denominator = 1;
     sc_desc->OutputWindow = _sapp_win32_hwnd;
@@ -3464,7 +3520,7 @@ _SOKOL_PRIVATE void _sapp_d3d11_create_device_and_swapchain(void) {
     sc_desc->SampleDesc.Count = _sapp.sample_count;
     sc_desc->SampleDesc.Quality = _sapp.sample_count > 1 ? D3D11_STANDARD_MULTISAMPLE_PATTERN : 0;
     sc_desc->BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    int create_flags = D3D11_CREATE_DEVICE_SINGLETHREADED;
+    int create_flags = D3D11_CREATE_DEVICE_SINGLETHREADED | D3D11_CREATE_DEVICE_BGRA_SUPPORT;
     #if defined(SOKOL_DEBUG)
         create_flags |= D3D11_CREATE_DEVICE_DEBUG;
     #endif
@@ -3532,7 +3588,7 @@ _SOKOL_PRIVATE void _sapp_d3d11_destroy_default_render_target(void) {
 _SOKOL_PRIVATE void _sapp_d3d11_resize_default_render_target(void) {
     if (_sapp_dxgi_swap_chain) {
         _sapp_d3d11_destroy_default_render_target();
-        IDXGISwapChain_ResizeBuffers(_sapp_dxgi_swap_chain, 1, _sapp.framebuffer_width, _sapp.framebuffer_height, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
+        IDXGISwapChain_ResizeBuffers(_sapp_dxgi_swap_chain, 1, _sapp.framebuffer_width, _sapp.framebuffer_height, DXGI_FORMAT_B8G8R8A8_UNORM, 0);
         _sapp_d3d11_create_default_render_target();
     }
 }
@@ -5057,7 +5113,7 @@ void ANativeActivity_onCreate_(ANativeActivity* activity, void* saved_state, siz
 #endif /* Android */
 
 /*== LINUX ==================================================================*/
-#if (defined(__linux__) || defined(__unix__)) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+#if (defined(__linux__) || defined(__unix__)) && !defined(__EMSCRIPTEN__) && !defined(__ANDROID__) && !defined(__RPI__)
 #define GL_GLEXT_PROTOTYPES
 #include <X11/X.h>
 #include <X11/Xlib.h>
@@ -6890,7 +6946,352 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 #endif /* SOKOL_NO_ENTRY */
-#endif /* LINUX */
+#elif defined(__RPI__)
+
+#include <EGL/egl.h>
+#if defined(SOKOL_GLES3)
+    #include <GLES3/gl3.h>
+#else
+    #ifndef GL_EXT_PROTOTYPES
+        #define GL_GLEXT_PROTOTYPES
+    #endif
+    #include <GLES2/gl2.h>
+    #include <GLES2/gl2ext.h>
+#endif
+
+#include <bcm_host.h>
+#include <fcntl.h>
+#include <linux/input.h>
+
+typedef struct {
+    DISPMANX_DISPLAY_HANDLE_T vc_display;
+    DISPMANX_UPDATE_HANDLE_T vc_update;
+    DISPMANX_ELEMENT_HANDLE_T vc_elem;
+    EGL_DISPMANX_WINDOW_T vc_win;
+
+    EGLConfig config;
+    EGLDisplay display;
+    EGLSurface surface;
+    EGLContext context;
+
+    int dev_kb;
+    int dev_mice;
+} _sapp_rpi_state_t;
+
+static _sapp_rpi_state_t _sapp_rpi_state;
+
+#define _SAPP_BITS_PER_LONG (sizeof(long) * 8)
+#define _SAPP_NBITS(x) ((((x)-1)/_SAPP_BITS_PER_LONG)+1)
+
+_SOKOL_PRIVATE void _sapp_rpi_init_kb(void) {
+    _sapp_rpi_state_t* state = &_sapp_rpi_state;
+
+    int version;
+    unsigned short id[4];
+    unsigned long bit[EV_MAX][_SAPP_NBITS(KEY_MAX)];
+
+    state->dev_kb = open("/dev/input/event0", O_RDONLY | O_NONBLOCK);
+    if (state->dev_kb < 0) {
+        SOKOL_LOG("cannot open input device");
+        SOKOL_ASSERT(0);
+        return;
+    }
+
+    if (ioctl(state->dev_kb, EVIOCGVERSION, &version)) {
+        SOKOL_LOG("KeyboardMonitor can't get version");
+        close(state->dev_kb);
+        SOKOL_ASSERT(0);
+        return;
+    }
+
+    ioctl(state->dev_kb, EVIOCGID, id);
+    memset(bit, 0x0, sizeof(bit));
+    ioctl(state->dev_kb, EVIOCGBIT(0, EV_MAX), bit[0]);
+
+    state->dev_mice = open("/dev/input/mice", O_RDONLY | O_NONBLOCK);
+    if (state->dev_mice < 0) {
+        SOKOL_LOG("cannot open mouse device");
+        SOKOL_ASSERT(0);
+        return;
+    }
+
+    ioctl(state->dev_mice, EVIOCGID, id);
+    memset(bit, 0x0, sizeof(bit));
+    ioctl(state->dev_mice, EVIOCGBIT(0, EV_MAX), bit[0]);    
+}
+
+_SOKOL_PRIVATE void _sapp_rpi_cleanup_kb(void) {
+    _sapp_rpi_state_t* state = &_sapp_rpi_state;
+
+    if (state->dev_kb) {
+        close(state->dev_kb);
+    }
+
+    if (state->dev_mice) {
+        close(state->dev_mice);
+    }
+}
+
+_SOKOL_PRIVATE bool _sapp_rpi_init_egl(void) {
+    _sapp_rpi_state_t* state = &_sapp_rpi_state;
+    SOKOL_ASSERT(state->display == EGL_NO_DISPLAY);
+    SOKOL_ASSERT(state->context == EGL_NO_CONTEXT);
+
+    EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    if (display == EGL_NO_DISPLAY) {
+        return false;
+    }
+    if (eglInitialize(display, NULL, NULL) == EGL_FALSE) {
+        return false;
+    }
+
+    EGLint alpha_size = _sapp.desc.alpha ? 8 : 0;
+    const EGLint cfg_attributes[] = {
+        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
+        EGL_RED_SIZE, 8,
+        EGL_GREEN_SIZE, 8,
+        EGL_BLUE_SIZE, 8,
+        EGL_ALPHA_SIZE, alpha_size,
+        EGL_DEPTH_SIZE, 24,
+        EGL_STENCIL_SIZE, 0,
+        EGL_NONE
+    };
+    EGLConfig available_cfgs[32];
+    EGLint cfg_count;
+    eglChooseConfig(display, cfg_attributes, available_cfgs, 32, &cfg_count);
+    SOKOL_ASSERT(cfg_count > 0);
+    SOKOL_ASSERT(cfg_count <= 32);
+
+    /* find config with 8-bit rgb buffer if available, ndk sample does not trust egl spec */
+    EGLConfig config;
+    bool exact_cfg_found = false;
+    for (int i = 0; i < cfg_count; ++i) {
+        EGLConfig c = available_cfgs[i];
+        EGLint r = 0, g = 0, b = 0, a = 0, d = 0;
+        eglGetConfigAttrib(display, c, EGL_RED_SIZE, &r);
+        eglGetConfigAttrib(display, c, EGL_GREEN_SIZE, &g);
+        eglGetConfigAttrib(display, c, EGL_BLUE_SIZE, &b);
+        eglGetConfigAttrib(display, c, EGL_ALPHA_SIZE, &a);
+        eglGetConfigAttrib(display, c, EGL_DEPTH_SIZE, &d);
+        if (r == 8 && g == 8 && b == 8 && (alpha_size == 0 || a == alpha_size) && d == 24) {
+            exact_cfg_found = true;
+            config = c;
+            break;
+        }
+    }
+    if (!exact_cfg_found) {
+        config = available_cfgs[0];
+    }
+
+    if (eglBindAPI(EGL_OPENGL_ES_API) == EGL_FALSE) {
+        return false;
+    }
+
+    EGLint ctx_attributes[] = {
+        #if defined(SOKOL_GLES3)
+            EGL_CONTEXT_CLIENT_VERSION, _sapp.desc.gl_force_gles2 ? 2 : 3,
+        #else
+            EGL_CONTEXT_CLIENT_VERSION, 2,
+        #endif
+        EGL_NONE
+    };
+    EGLContext context = eglCreateContext(display, config, EGL_NO_CONTEXT, ctx_attributes);
+    if (context == EGL_NO_CONTEXT) {
+        return false;
+    }
+
+    state->config = config;
+    state->display = display;
+    state->context = context;
+    return true;
+}
+
+_SOKOL_PRIVATE void _sapp_rpi_cleanup_egl(void) {
+    _sapp_rpi_state_t* state = &_sapp_rpi_state;
+    if (state->display != EGL_NO_DISPLAY) {
+        eglMakeCurrent(state->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        if (state->surface != EGL_NO_SURFACE) {
+            SOKOL_LOG("Destroying egl surface");
+            eglDestroySurface(state->display, state->surface);
+            state->surface = EGL_NO_SURFACE;
+        }
+        if (state->context != EGL_NO_CONTEXT) {
+            SOKOL_LOG("Destroying egl context");
+            eglDestroyContext(state->display, state->context);
+            state->context = EGL_NO_CONTEXT;
+        }
+        SOKOL_LOG("Terminating egl display");
+        eglTerminate(state->display);
+        state->display = EGL_NO_DISPLAY;
+    }
+}
+
+_SOKOL_PRIVATE void _sapp_rpi_init_egl_surface(void) {
+    EGLint ret;
+    (void)(ret);
+
+     _sapp_rpi_state_t* state = &_sapp_rpi_state;
+    state->surface = eglCreateWindowSurface(state->display, state->config, &state->vc_win, NULL);
+    SOKOL_ASSERT(state->surface != EGL_NO_SURFACE);
+
+    ret = eglMakeCurrent(state->display, state->surface, state->surface, state->context);
+    SOKOL_ASSERT(ret != EGL_FALSE);
+
+    ret = eglSwapInterval(state->display, _sapp.swap_interval);
+    SOKOL_ASSERT(ret != EGL_FALSE);
+}
+
+_SOKOL_PRIVATE void _sapp_rpi_cleanup_egl_surface(void) {
+    _sapp_rpi_state_t* state = &_sapp_rpi_state;
+    if (state->display == EGL_NO_DISPLAY) {
+        return;
+    }
+
+    eglMakeCurrent(state->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    if (state->surface != EGL_NO_SURFACE) {
+        eglDestroySurface(state->display, state->surface);
+        state->surface = EGL_NO_SURFACE;
+    }
+}
+
+
+_SOKOL_PRIVATE void _sapp_rpi_create_window(void) {
+    int ret;
+    _SOKOL_UNUSED(ret);
+
+    _sapp_rpi_state_t* state = &_sapp_rpi_state;
+
+    bcm_host_init();
+
+    state->vc_display = vc_dispmanx_display_open(DISPMANX_ID_MAIN_LCD);
+    SOKOL_ASSERT(state->vc_display != DISPMANX_NO_HANDLE);
+
+    DISPMANX_MODEINFO_T info;
+    ret = vc_dispmanx_display_get_info(state->vc_display, &info);
+    SOKOL_ASSERT(ret == 0);
+    /* modify state width/height values */
+    _sapp.window_width = info.width;
+    _sapp.window_height = info.height;
+    _sapp.framebuffer_width = info.width;
+    _sapp.framebuffer_height = info.height;
+
+    state->vc_update = vc_dispmanx_update_start(0);
+    SOKOL_ASSERT(state->vc_update != DISPMANX_NO_HANDLE);
+
+    VC_RECT_T src_rect;
+    VC_RECT_T dst_rect;
+    vc_dispmanx_rect_set(&src_rect, 0, 0, (uint32_t)info.width << 16, (uint32_t)info.height << 16);
+    vc_dispmanx_rect_set(&dst_rect, 0, 0, (uint32_t)info.width, (uint32_t)info.height);
+
+    /* set this option (alpha) to disable blending from current tty framebuffer,
+     * if we set alpha=0, then alpha blending will occur on background terminal pixels too */
+    VC_DISPMANX_ALPHA_T alpha = {DISPMANX_FLAGS_ALPHA_FROM_SOURCE | DISPMANX_FLAGS_ALPHA_FIXED_ALL_PIXELS, 255,0};    
+    state->vc_elem = vc_dispmanx_element_add(state->vc_update, state->vc_display, 0, &dst_rect, 0,
+                                             &src_rect, DISPMANX_PROTECTION_NONE, &alpha, 0, 0);
+    SOKOL_ASSERT(state->vc_elem != DISPMANX_NO_HANDLE);
+
+    state->vc_win = (EGL_DISPMANX_WINDOW_T) {
+        .element = state->vc_elem,
+        .width = info.width,
+        .height = info.height,
+    };
+
+    vc_dispmanx_update_submit_sync(state->vc_update);
+}
+
+_SOKOL_PRIVATE void _sapp_rpi_destroy_window(void) {
+    _sapp_rpi_state_t* state = &_sapp_rpi_state;
+    if (state->vc_elem != DISPMANX_NO_HANDLE) {
+        SOKOL_ASSERT(state->vc_update != DISPMANX_NO_HANDLE);
+        vc_dispmanx_element_remove(state->vc_update, state->vc_elem);
+    }
+
+    if (state->vc_display != DISPMANX_NO_HANDLE) {
+        vc_dispmanx_display_close(state->vc_display);
+    }
+
+    bcm_host_deinit();
+}
+
+_SOKOL_PRIVATE void _sapp_read_kb(void) {
+    _sapp_rpi_state_t* state = &_sapp_rpi_state;
+
+    struct input_event inputs[64];
+
+    int dev_read = read(state->dev_kb, inputs, sizeof(inputs));
+    if (dev_read > 0) {
+        int count = dev_read / sizeof(struct input_event);
+        for (int i = 0; i < count; i++) {
+            if (inputs[i].type == EV_KEY) {
+                if (inputs[i].value == 1) {
+                    switch (inputs[i].code) {
+                        case KEY_ESC:
+                            SOKOL_LOG("ESC pressed");
+                            sapp_quit();
+                            break;
+                    }
+                    
+                }
+            }
+        }
+    }
+
+    // 
+    char mouse_data[3];
+    while (read(state->dev_mice, mouse_data, sizeof(mouse_data)) == sizeof(mouse_data)) {
+        uint8_t button = mouse_data[0];
+        bool left = button & 0x1;
+        bool middle = (button & 0x4) > 0;
+        bool right = (button & 0x2) > 0;
+        int x = *(signed char *)(&mouse_data[1]);
+        int y = *(signed char *)(&mouse_data[2]);
+
+        char mstate[128];
+        snprintf(mstate, sizeof(mstate), "left=%d, right=%d, mid=%d, rx=%d, ry=%d", left, right, middle, x, y);
+        SOKOL_LOG(mstate);
+    }
+}
+
+_SOKOL_PRIVATE void _sapp_run(const sapp_desc* desc) {
+    bool ret;
+    _SOKOL_UNUSED(ret);
+
+    _sapp_rpi_state_t* state = &_sapp_rpi_state;
+
+    _sapp_init_state(desc);
+    _sapp_rpi_create_window();
+    ret = _sapp_rpi_init_egl();
+    SOKOL_ASSERT(ret);
+    _sapp_rpi_init_egl_surface();
+    _sapp_rpi_init_kb();    
+
+    _sapp.valid = true;
+
+    /* update loop */
+    bool done = false;
+    while (!(done || _sapp.quit_ordered)) {
+        eglMakeCurrent(state->display, state->surface, state->surface, state->context);
+        _sapp_read_kb();
+        _sapp_frame();
+        eglSwapBuffers(state->display, state->surface);
+    }
+    _sapp_call_cleanup();
+
+    _sapp_rpi_cleanup_kb();
+    _sapp_rpi_cleanup_egl_surface();
+    _sapp_rpi_cleanup_egl();
+    _sapp_rpi_destroy_window();
+}
+
+#if !defined(SOKOL_NO_ENTRY)
+int main(int argc, char* argv[]) {
+    sapp_desc desc = sokol_main(argc, argv);
+    _sapp_run(&desc);
+    return 0;
+}
+#endif /* SOKOL_NO_ENTRY */
+
+#endif /* __RPI__ */
 
 /*== PUBLIC API FUNCTIONS ====================================================*/
 #if defined(SOKOL_NO_ENTRY)

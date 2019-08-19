@@ -11,7 +11,7 @@
 #if defined(__ANDROID__) || defined(ANDROID)
 	#define GAINPUT_PLATFORM_ANDROID
 	#define GAINPUT_LIBEXPORT
-#elif defined(__linux) || defined(__linux__) || defined(linux) || defined(LINUX)
+#elif (defined(__linux) || defined(__linux__) || defined(linux) || defined(LINUX)) && !defined(__RPI__)
 	#define GAINPUT_PLATFORM_LINUX
 	#define GAINPUT_LIBEXPORT
 #elif defined(_WIN32) || defined(__WIN32__) || defined(_MSC_VER)

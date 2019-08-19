@@ -34,7 +34,7 @@
 #include "Remotery.h"
 
 #if SX_PLATFORM_ANDROID
-#   include <android/log.h>
+#    include <android/log.h>
 #endif
 
 #if SX_COMPILER_MSVC
@@ -224,9 +224,9 @@ static void rizz__print_debug(const char* fmt, ...)
     OutputDebugStringA(text);
 #    endif
 
-#   if SX_PLATFORM_ANDROID
+#    if SX_PLATFORM_ANDROID
     __android_log_write(ANDROID_LOG_DEBUG, g_core.app_name, text);
-#   endif
+#    endif
 #else
     sx_unused(fmt);
 #endif
@@ -355,7 +355,7 @@ static void rizz__print_warning(const char* fmt, ...)
 #endif
 
 #if SX_PLATFORM_ANDROID
-        __android_log_write(ANDROID_LOG_WARN, g_core.app_name, text);
+    __android_log_write(ANDROID_LOG_WARN, g_core.app_name, text);
 #endif
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -757,8 +757,9 @@ bool rizz__core_init(const rizz_config* conf)
     }
 
     sx_tm_init();
-    sx_rng_seed(&g_core.rng,
-                sizeof(time_t) == sizeof(uint64_t) ? sx_hash_u64_to_u32(time(NULL)) : time(NULL));
+    sx_rng_seed(&g_core.rng, sizeof(time_t) == sizeof(uint64_t)
+                                 ? sx_hash_u64_to_u32((uint64_t)time(NULL))
+                                 : (uint32_t)time(NULL));
 
     // disk-io (virtual file system)
     if (!rizz__vfs_init(rizz__alloc(RIZZ_MEMID_VFS))) {
@@ -767,8 +768,10 @@ bool rizz__core_init(const rizz_config* conf)
     }
     rizz_log_info("(init) vfs");
 
-    int num_worker_threads = conf->job_num_threads >= 0 ? conf->job_num_threads : (sx_os_numcores() - 1);
-    num_worker_threads = sx_max(1, num_worker_threads); // we should have at least one worker thread
+    int num_worker_threads =
+        conf->job_num_threads >= 0 ? conf->job_num_threads : (sx_os_numcores() - 1);
+    num_worker_threads =
+        sx_max(1, num_worker_threads);    // we should have at least one worker thread
 
     // Temp allocators
     g_core.num_workers = num_worker_threads + 1;    // include the main-thread
@@ -889,7 +892,7 @@ bool rizz__core_init(const rizz_config* conf)
     rizz_log_info("(init) jobs: threads=%d, max_fibers=%d, stack_size=%dkb",
                   sx_job_num_worker_threads(g_core.jobs), conf->job_max_fibers,
                   conf->job_stack_size);
-                  
+
     // coroutines
     g_core.coro =
         sx_coro_create_context(alloc, conf->coro_max_fibers, conf->coro_stack_size * 1024);

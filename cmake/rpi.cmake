@@ -13,6 +13,7 @@ if (WIN32)
     set(executable_suffix ".exe")
 endif()
 
+set(CMAKE_SYSROOT ${RPI_SYSGCC_ROOT}/arm-linux-gnueabihf/sysroot)
 set(CMAKE_C_COMPILER ${RPI_SYSGCC_ROOT}/bin/arm-linux-gnueabihf-gcc${executable_suffix})
 set(CMAKE_CXX_COMPILER ${RPI_SYSGCC_ROOT}/bin/arm-linux-gnueabihf-g++${executable_suffix})
 
