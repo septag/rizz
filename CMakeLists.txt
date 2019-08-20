@@ -49,7 +49,10 @@ function(rizz__add_example proj_name)
     endif()
 
     if (NOT ANDROID AND NOT IOS)
-        target_compile_definitions(${proj_name} PRIVATE COMPILE_DEFINITIONS -DEXAMPLES_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/examples")
+        if (NOT EXAMPLES_ROOT)
+            set(EXAMPLES_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/examples")
+        endif()
+        target_compile_definitions(${proj_name} PRIVATE COMPILE_DEFINITIONS -DEXAMPLES_ROOT="${EXAMPLES_ROOT}")
     endif()
     
     target_link_libraries(${proj_name} PRIVATE sx)

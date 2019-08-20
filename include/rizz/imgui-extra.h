@@ -2,6 +2,8 @@
 
 #include "sx/math.h"
 
+#include "imgui.h"
+
 typedef struct rizz_mem_info rizz_mem_info;
 typedef struct rizz_gfx_trace_info rizz_gfx_trace_info;
 typedef struct ImDrawList ImDrawList;
@@ -16,6 +18,8 @@ typedef struct rizz_api_imgui_extra {
     // You can begin by calling `begin_fullscreen_draw`, fetch and keep the ImDrawList
     // then you can issue ImDrawList_ calls to draw primitives
     ImDrawList* (*begin_fullscreen_draw)(const char* id);
+
+    void (*draw_cursor)(ImDrawList* drawlist, ImGuiMouseCursor cursor, sx_vec2 pos, float scale);
 
     // use `project_to_screen` and provide mvp matrix to it for to convert from world coords to
     // screen.

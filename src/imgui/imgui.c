@@ -947,6 +947,44 @@ static ImDrawList* imgui__begin_fullscreen_draw(const char* name)
     return dlist;
 }
 
+static void imgui__draw_cursor(ImDrawList* drawlist, ImGuiMouseCursor cursor, sx_vec2 pos,
+                               float scale)
+{
+    if (cursor == ImGuiMouseCursor_None)
+        return;
+    sx_assert(cursor > ImGuiMouseCursor_None && cursor < ImGuiMouseCursor_COUNT);
+
+    const ImU32 col_shadow = sx_color4u(0, 0, 0, 48).n;
+    const ImU32 col_border = sx_color4u(0, 0, 0, 255).n;        // Black
+    const ImU32 col_fill = sx_color4u(255, 255, 255, 255).n;    // White
+
+    ImGuiIO* conf = the__imgui.GetIO();
+    sx_vec2 offset, size, uv[4];
+    if (the__imgui.ImFontAtlas_GetMouseCursorTexData(conf->Fonts, cursor, &offset, &size, &uv[0],
+                                                     &uv[2])) {
+        pos = sx_vec2_sub(pos, offset);
+        const ImTextureID tex_id = conf->Fonts->TexID;
+        the__imgui.ImDrawList_PushTextureID(drawlist, tex_id);
+        the__imgui.ImDrawList_AddImage(
+            drawlist, tex_id, sx_vec2_add(pos, sx_vec2_mulf(sx_vec2f(1, 0), scale)),
+            sx_vec2_add(sx_vec2_add(pos, sx_vec2_mulf(sx_vec2f(1, 0), scale)),
+                        sx_vec2_mulf(size, scale)),
+            uv[2], uv[3], col_shadow);
+        the__imgui.ImDrawList_AddImage(
+            drawlist, tex_id, sx_vec2_add(pos, sx_vec2_mulf(sx_vec2f(2, 0), scale)),
+            sx_vec2_add(sx_vec2_add(pos, sx_vec2_mulf(sx_vec2f(2, 0), scale)),
+                        sx_vec2_mulf(size, scale)),
+            uv[2], uv[3], col_shadow);
+        the__imgui.ImDrawList_AddImage(drawlist, tex_id, pos,
+                                       sx_vec2_add(pos, sx_vec2_mulf(size, scale)), uv[2], uv[3],
+                                       col_border);
+        the__imgui.ImDrawList_AddImage(drawlist, tex_id, pos,
+                                       sx_vec2_add(pos, sx_vec2_mulf(size, scale)), uv[0], uv[1],
+                                       col_fill);
+        the__imgui.ImDrawList_PopTextureID(drawlist);
+    }
+}
+
 static sx_vec2 imgui__project_to_screen(const sx_vec3 pt, const sx_mat4* mvp, const sx_rect* vp)
 {
     sx_vec4 trans = sx_vec4f(pt.x, pt.y, pt.z, 1.0f);
@@ -1416,6 +1454,7 @@ static rizz_api_imgui_extra the__imgui_debug_tools = {
     .memory_debugger = imgui__memory_debugger,
     .graphics_debugger = imgui__graphics_debugger,
     .begin_fullscreen_draw = imgui__begin_fullscreen_draw,
+    .draw_cursor = imgui__draw_cursor,
     .project_to_screen = imgui__project_to_screen,
     .gizmo_hover = ImGuizmo_IsOver,
     .gizmo_using = ImGuizmo_IsUsing,
@@ -1469,6 +1508,10 @@ rizz_plugin_decl_event_handler(imgui, e)
         break;
     case RIZZ_APP_EVENTTYPE_UPDATE_CURSOR:
         imgui__update_cursor();
+        break;
+    case RIZZ_APP_EVENTTYPE_RESIZED:
+        io->DisplaySize = the_app->sizef();
+        ImGuizmo_SetRect(0, 0, io->DisplaySize.x, io->DisplaySize.y);
         break;
     default:
         break;

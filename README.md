@@ -49,8 +49,8 @@ This is not a game engine, it's a relatively low-level framework for programmers
 - *Linux*
 - *MacOS*
 - *Android*
+- *RaspberryPI*
 - *iOS*: WIP v0.2
-- *RaspberryPI*: WIP v0.2
 
 ## Build
 _rizz_ is designed to run on all major mobile (iOS, android), PC (Windows, Linux, MacOS) and web (WebASM) platforms. 
@@ -66,6 +66,8 @@ But as the engine is in it's early age, the current platforms are built and test
 - __Android__: For android, there is a python script [android.py](scripts/build-tools/android.py) 
                which takes care of preparing android project structure, building the code and 
                packaging the final APK. please read the begining of ```android.py```.
+- __RaspberryPI__: Tested on RPi1 ModelB Ubuntu-jessie (gcc Raspbian 4.9.2). Package requirements:
+  - libasound2-dev (if you are planning to build `sound` plugin)
 
 #### CMake options
 - **BUNDLE** (default=0, android/ios=1):  

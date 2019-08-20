@@ -4,10 +4,10 @@
 //
 
 #include "rizz/app.h"
+#include "rizz/android.h"
 #include "rizz/core.h"
 #include "rizz/entry.h"
 #include "rizz/graphics.h"
-#include "rizz/android.h"
 
 #include "sx/allocator.h"
 #include "sx/cmdline.h"
@@ -98,6 +98,10 @@ static void rizz__app_init(void)
     g_app.conf.cache_path = default_cache_path;
 
     rizz_android_window_size(&g_app.conf.window_width, &g_app.conf.window_height);
+    g_app.window_size = sx_vec2f(g_app.conf.window_width, g_app.conf.window_height);
+#elif SX_PLATFORM_RPI
+    g_app.conf.window_width = the__app.width();
+    g_app.conf.window_height = the__app.height();
     g_app.window_size = sx_vec2f(g_app.conf.window_width, g_app.conf.window_height);
 #endif
 
@@ -426,4 +430,7 @@ rizz_api_app the__app = { .width = sapp_width,
                           .show_keyboard = sapp_show_keyboard,
                           .keyboard_shown = sapp_keyboard_shown,
                           .name = rizz__app_name,
-                          .key_pressed = rizz__app_key_pressed };
+                          .key_pressed = rizz__app_key_pressed,
+                          .quit = sapp_quit,
+                          .request_quit = sapp_request_quit,
+                          .cancel_quit = sapp_cancel_quit };

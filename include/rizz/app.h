@@ -224,6 +224,9 @@ typedef struct rizz_api_app {
     void (*show_keyboard)(bool show);
     bool (*keyboard_shown)();
     bool (*key_pressed)(rizz_keycode key);
+    void (*quit)();
+    void (*request_quit)();
+    void (*cancel_quit)();
     const char* (*name)();
 } rizz_api_app;
 

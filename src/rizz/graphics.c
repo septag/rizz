@@ -840,9 +840,6 @@ static void rizz__texture_init()
     rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC4_R);
     rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC4_RSN);
     rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC5_RG);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC4_R);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC4_RSN);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC5_RG);
     rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC5_RGSN);
     rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC6H_RGBF);
     rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC6H_RGBUF);

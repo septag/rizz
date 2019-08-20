@@ -16,6 +16,7 @@
 #ifndef RIZZ_BUNDLE
 #    define CR_MAIN_FUNC "rizz_plugin_main"
 #    define CR_EVENT_FUNC "rizz_plugin_event_handler"
+//#define CR_DEBUG 1
 #    if CR_DEBUG
 #        define CR_LOG(...) the__core.print_debug(__VA_ARGS__)
 #    else

@@ -73,7 +73,6 @@ rizz_plugin_decl_main(hello, plugin, e)
         the_gfx = plugin->api->get_api(RIZZ_API_GFX, 0);
         the_app = plugin->api->get_api(RIZZ_API_APP, 0);
         the_imgui = plugin->api->get_api_byname("imgui", 0);
-        the_imguix = plugin->api->get_api_byname("imgui_extra", 0);
 
         init();
         break;

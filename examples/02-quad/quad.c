@@ -124,7 +124,6 @@ static bool init()
     // projection: setup for ortho, total-width = 10 units
     // view: Z-UP Y-Forward (like blender)
     sx_vec2 screen_size = the_app->sizef();
-    rizz_log_debug(the_core, "%.0f %.0f", screen_size.x, screen_size.y);
     const float view_width = 5.0f;
     const float view_height = screen_size.y * view_width / screen_size.x;
     the_camera->fps_init(&g_quad.cam, 50.0f,
@@ -155,7 +154,6 @@ static void render()
 {
     sg_pass_action pass_action = { .colors[0] = { SG_ACTION_CLEAR, { 0.25f, 0.5f, 0.75f, 1.0f } },
                                    .depth = { SG_ACTION_CLEAR, 1.0f } };
-
 
     the_gfx->staged.begin(g_quad.stage);
     the_gfx->staged.begin_default_pass(&pass_action, the_app->width(), the_app->height());
