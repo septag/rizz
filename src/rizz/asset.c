@@ -367,9 +367,9 @@ static void rizz__asset_meta_read_item(const rizz_refl_field* f, sjson_node* jme
         } else if (r->flags & RIZZ_REFL_FLAG_IS_STRUCT) {
             if (r->flags & RIZZ_REFL_FLAG_IS_ARRAY) {
                 for (int i = 0; i < r->array_size; i++) {
-                    int num_fields =
-                        the__refl.get_fields(r->type, (uint8_t*)value + i * r->stride, fields,
-                                             sizeof(fields) / sizeof(rizz_refl_field));
+                    int num_fields = the__refl.get_fields(
+                        r->type, (uint8_t*)value + (size_t)i * (size_t)r->stride, fields,
+                        sizeof(fields) / sizeof(rizz_refl_field));
                     for (int fi = 0; fi < num_fields; fi++) {
                         rizz__asset_meta_read_item(&fields[fi], sjson_find_element(jfield, i));
                     }
@@ -413,8 +413,8 @@ static void rizz__asset_meta_write_item(const rizz_refl_field* field, sjson_cont
             for (int i = 0; i < r->array_size; i++) {
                 sjson_node* jitem = sjson_mkobject(jctx);
                 int num_fields =
-                    the__refl.get_fields(r->type, (uint8_t*)value + i * r->stride, fields,
-                                         sizeof(fields) / sizeof(rizz_refl_field));
+                    the__refl.get_fields(r->type, (uint8_t*)value + (size_t)i * (size_t)r->stride,
+                                         fields, sizeof(fields) / sizeof(rizz_refl_field));
                 for (int fi = 0; fi < num_fields; fi++) {
                     rizz__asset_meta_write_item(&fields[fi], jctx, jitem);
                 }
@@ -477,7 +477,7 @@ static bool rizz__asset_load_meta_cache()
             if (lastmod == 0 || cur_lastmod != lastmod)
                 continue;
             rs.last_modified = cur_lastmod;
-#endif // !SX_PLATFORM_ANDROID && !SX_PLATFORM_IOS
+#endif    // !SX_PLATFORM_ANDROID && !SX_PLATFORM_IOS
 
             sx_strcpy(rs.path, sizeof(rs.path), name);
             sx_strcpy(rs.real_path, sizeof(rs.real_path), sjson_get_string(jitem, "path", name));
@@ -683,8 +683,10 @@ static void rizz__asset_destroy_delete(rizz_asset a, rizz__asset_mgr* amgr)
                 }
             }
 
+            sx_assert(amgr->params_buff);
             sx_memcpy(&amgr->params_buff[offset], &amgr->params_buff[last_offset], params_size);
         }
+        sx_assert(amgr->params_buff);
         sx_array_pop_lastn(amgr->params_buff, params_size);
     }
 
@@ -1318,8 +1320,9 @@ static int rizz__asset_gather_by_type(const char* name, rizz_asset* out_handles,
             sx_handle_t handle = sx_handle_at(g_asset.asset_handles, i);
             rizz__asset* a = &g_asset.assets[sx_handle_index(handle)];
             if (a->asset_mgr_id == asset_mgr_id) {
-                if (out_handles)
+                if (out_handles) {
                     out_handles[count] = (rizz_asset){ handle };
+                }
                 count++;
             }
         }
@@ -1378,8 +1381,9 @@ static int rizz__asset_gather_by_tags(uint32_t tags, rizz_asset* out_handles, in
         sx_handle_t handle = sx_handle_at(g_asset.asset_handles, i);
         rizz__asset* a = &g_asset.assets[sx_handle_index(handle)];
         if (a->tags & tags) {
-            if (out_handles)
+            if (out_handles) {
                 out_handles[count] = (rizz_asset){ handle };
+            }
             count++;
         }
     }

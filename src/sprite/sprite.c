@@ -573,29 +573,32 @@ static rizz_sprite_animctrl sprite__animctrl_create(const rizz_sprite_animctrl_d
     sx_assert(desc->start_state);
 
     const sx_alloc* alloc = desc->alloc ? desc->alloc : g_spr.alloc;
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
     sx_handle_t handle = sx_handle_new_and_grow(g_spr.animctrl_handles, g_spr.alloc);
     sx_assert(handle);
     int num_states = desc->num_states;
     int num_transitions = desc->num_transitions;
 
-    uint32_t* hashes = alloca(sizeof(uint32_t) * num_states);
+    uint32_t* hashes = sx_malloc(tmp_alloc, sizeof(uint32_t) * num_states);
     sx_assert(hashes);
-    for (int i = 0; i < num_states; i++) hashes[i] = sx_hash_fnv32_str(desc->states[i].name);
+    for (int i = 0; i < num_states; i++)
+        hashes[i] = sx_hash_fnv32_str(desc->states[i].name);
 
     // each element is count of transitions for each state
-    int* transition_counts = alloca(sizeof(int) * num_states);
+    int* transition_counts = sx_malloc(tmp_alloc, sizeof(int) * num_states);
     sx_assert(transition_counts);
     sx_memset(transition_counts, 0x0, sizeof(int) * num_states);
 
     // each element is index to states array
-    int* transition_map = alloca(sizeof(int) * num_transitions);
+    int* transition_map = sx_malloc(tmp_alloc, sizeof(int) * num_transitions);
     sx_assert(transition_map);
 
     int total_sz = sizeof(sprite__animctrl_state) * num_states +
                    sizeof(sprite__animctrl_transition) * num_transitions;
     uint8_t* buff = sx_malloc(alloc, total_sz);
     if (!buff) {
+        the_core->tmp_alloc_pop();
         sx_out_of_memory();
         return (rizz_sprite_animctrl){ 0 };
     }
@@ -612,7 +615,8 @@ static rizz_sprite_animctrl sprite__animctrl_create(const rizz_sprite_animctrl_d
     }
 
     // allocate states
-    sprite__animctrl_state** states = alloca(sizeof(sprite__animctrl_state) * num_states);
+    sprite__animctrl_state** states =
+        sx_malloc(tmp_alloc, sizeof(sprite__animctrl_state) * num_states);
     sx_assert(states);
 
     for (int i = 0; i < num_states; i++) {
@@ -677,6 +681,7 @@ static rizz_sprite_animctrl sprite__animctrl_create(const rizz_sprite_animctrl_d
 
     sx_array_push_byindex(g_spr.alloc, g_spr.animctrls, ctrl, sx_handle_index(handle));
 
+    the_core->tmp_alloc_pop();
     return (rizz_sprite_animctrl){ handle };
 }
 
@@ -809,8 +814,9 @@ static void sprite__animctrl_trigger_transition(sprite__animctrl* ctrl, int tran
 static void sprite__animctrl_update_batch(const rizz_sprite_animctrl* handles, int num_ctrls,
                                           float dt)
 {
-    rizz_sprite_animclip* clips = alloca(sizeof(rizz_sprite_animclip) * num_ctrls);
-    sprite__animctrl** ctrls = alloca(sizeof(sprite__animctrl*) * num_ctrls);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_sprite_animclip* clips = sx_malloc(tmp_alloc, sizeof(rizz_sprite_animclip) * num_ctrls);
+    sprite__animctrl** ctrls = sx_malloc(tmp_alloc, sizeof(sprite__animctrl*) * num_ctrls);
     sx_assert(clips && ctrls);
 
     for (int i = 0; i < num_ctrls; i++) {
@@ -856,6 +862,8 @@ static void sprite__animctrl_update_batch(const rizz_sprite_animctrl* handles, i
                 p->value.b = false;
         }
     }
+
+    the_core->tmp_alloc_pop();
 }
 
 static void sprite__animctrl_update(rizz_sprite_animctrl handle, float dt)
@@ -1005,7 +1013,7 @@ static bool atlas__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
 
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
-    char* buff = sx_malloc(tmp_alloc, mem->size + 1);
+    char* buff = sx_malloc(tmp_alloc, (size_t)mem->size + 1);
     if (!buff) {
         sx_out_of_memory();
         return false;
@@ -1161,7 +1169,7 @@ static void atlas__on_read_metadata(void* metadata, const rizz_asset_load_params
     atlas__metadata* meta = metadata;
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
-    char* buff = sx_malloc(tmp_alloc, mem->size + 1);
+    char* buff = sx_malloc(tmp_alloc, (size_t)mem->size + 1);
     if (!buff) {
         sx_out_of_memory();
         return;
@@ -1591,7 +1599,9 @@ static rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs
     sx_assert(num_sprites > 0);
     sx_assert(sprs);
 
-    uint64_t* keys = alloca(sizeof(uint64_t) * num_sprites);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+
+    uint64_t* keys = sx_malloc(tmp_alloc, sizeof(uint64_t) * num_sprites);
     sx_assert(keys);
 
     // count final vertices and indices,
@@ -1639,6 +1649,7 @@ static rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs
                    (sizeof(rizz_sprite_drawbatch) + sizeof(rizz_sprite_drawsprite)) * num_sprites;
     rizz_sprite_drawdata* dd = sx_malloc(alloc, total_sz);
     if (!dd) {
+        the_core->tmp_alloc_pop();
         sx_out_of_memory();
         return NULL;
     }
@@ -1758,6 +1769,8 @@ static rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs
     dd->num_verts = num_verts;
     dd->num_batches = num_batches;
     dd->num_sprites = num_sprites;
+
+    the_core->tmp_alloc_pop();
     return dd;
 }
 

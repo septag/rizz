@@ -490,7 +490,8 @@ static void rizz__rmt_input_handler(const char* text, void* context)
     if (argc == 0)
         return;
 
-    char** argv = alloca(sizeof(char*) * argc);
+    const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
+    char** argv = sx_malloc(tmp_alloc, sizeof(char*) * argc);
     sx_assert(argv);
 
     cline = sx_skip_whitespace(text);
@@ -503,7 +504,7 @@ static void rizz__rmt_input_handler(const char* text, void* context)
         }
         arg[char_idx] = '\0';
         cline = sx_skip_whitespace(cline);
-        argv[arg_idx] = alloca(strlen(arg) + 1);
+        argv[arg_idx] = sx_malloc(tmp_alloc, (size_t)strlen(arg) + 1);
         sx_assert(argv);
         sx_strcpy(argv[arg_idx++], sizeof(arg), arg);
     }
@@ -520,6 +521,8 @@ static void rizz__rmt_input_handler(const char* text, void* context)
             break;
         }
     }
+
+    the__core.tmp_alloc_pop();
 }
 
 static const sx_alloc* rizz__alloc(rizz_mem_id id)

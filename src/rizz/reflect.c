@@ -133,7 +133,7 @@ static void* rizz__refl_get_field(const char* base_type, void* obj, const char* 
     char* base_name = (char*)alloca(len);
     sx_assert(base_name);
     sx_snprintf(base_name, len, "%s.%s", base_type, name);
-    int index = sx_hashtbl_find_get(g_reflect.reg_tbl, sx_hash_fnv32(name, len - 1), -1);
+    int index = sx_hashtbl_find_get(g_reflect.reg_tbl, sx_hash_fnv32(name, (size_t)len - 1), -1);
     return (index != -1) ? ((uint8_t*)obj + g_reflect.regs[index].r.offset) : NULL;
 }
 
@@ -318,6 +318,7 @@ static int rizz__refl_get_fields(const char* base_type, void* obj, rizz_refl_fie
         rizz__refl_data* r = &g_reflect.regs[i];
         if (r->r.internal_type == RIZZ_REFL_FIELD && sx_strequal(r->base, base_type)) {
             sx_assert(r->base_id < sx_array_count(g_reflect.structs));
+            sx_assert(g_reflect.structs);
             rizz__refl_struct* s = &g_reflect.structs[r->base_id];
 
             if (fields && num_fields < max_fields) {

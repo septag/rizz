@@ -736,7 +736,8 @@ static rizz_texture rizz__texture_create_checker(int checker_size, int size,
     int tiles_y = size / checker_size;
     int num_tiles = tiles_x * tiles_y;
 
-    sx_ivec2* poss = alloca(sizeof(sx_ivec2) * num_tiles);
+    const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
+    sx_ivec2* poss = sx_malloc(tmp_alloc, sizeof(sx_ivec2) * num_tiles);
     sx_assert(poss);
     int _x = 0, _y = 0;
     for (int i = 0; i < num_tiles; i++) {
@@ -782,6 +783,7 @@ static rizz_texture rizz__texture_create_checker(int checker_size, int size,
                                                      .bpp = 32 } };
 
     sx_free(g_gfx_alloc, pixels);
+    the__core.tmp_alloc_pop();
     return tex;
 }
 
@@ -2058,6 +2060,8 @@ static rizz_asset_load_data rizz__font_on_prepare(const rizz_asset_load_params* 
 static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params,
                                const sx_mem_block* mem)
 {
+    const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
+
     rizz__font* font = data->obj.ptr;
     sx_mem_reader rd;
     sx_mem_init_reader(&rd, mem->data, mem->size);
@@ -2109,7 +2113,7 @@ static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load
         sx_mem_read(&rd, &block, sizeof(block));
         sx_assert(block.id == 4);
         int num_glyphs = block.size / sizeof(rizz__fnt_char);
-        rizz__fnt_char* chars = alloca(sizeof(rizz__fnt_char) * num_glyphs);
+        rizz__fnt_char* chars = sx_malloc(tmp_alloc, sizeof(rizz__fnt_char) * num_glyphs);
         sx_assert(chars);
         sx_mem_read(&rd, chars, block.size);
 
@@ -2118,7 +2122,7 @@ static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load
         int num_kerns = block.size / sizeof(rizz__fnt_kern);
         rizz__fnt_kern* kerns = NULL;
         if (block.id == 5 && num_kerns > 0 && last_r == sizeof(block)) {
-            kerns = alloca(sizeof(rizz__fnt_kern) * num_kerns);
+            kerns = sx_malloc(tmp_alloc, sizeof(rizz__fnt_kern) * num_kerns);
             sx_assert(kerns);
             sx_mem_read(&rd, kerns, block.size);
         }
@@ -2172,14 +2176,12 @@ static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load
                 font->kerns[i].amount = (float)kern->amount;
             }
         }
-
-        return true;
     } else {
         // text
         // read line by line and parse needed information
-        const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
-        char* buff = sx_malloc(tmp_alloc, mem->size + 1);
+        char* buff = sx_malloc(tmp_alloc, (size_t)mem->size + 1);
         if (!buff) {
+            the__core.tmp_alloc_pop();
             sx_out_of_memory();
             return false;
         }
@@ -2188,6 +2190,7 @@ static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load
 
         if (!rizz__fnt_text_check(buff, mem->size)) {
             rizz_log_warn("loading font '%s' failed: not a valid fnt text file", params->path);
+            the__core.tmp_alloc_pop();
             return false;
         }
 
@@ -2230,9 +2233,10 @@ static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load
 
             buff = (char*)sx_skip_whitespace(eol);
         }
-
-        return true;
     }    // if (binary)
+
+    the__core.tmp_alloc_pop();
+    return true;
 }
 
 static void rizz__font_on_finalize(rizz_asset_load_data* data, const rizz_asset_load_params* params,
@@ -2327,7 +2331,7 @@ static void rizz__font_on_read_metadata(void* metadata, const rizz_asset_load_pa
         // text
         // read line by line and parse needed information
         const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
-        char* buff = sx_malloc(tmp_alloc, mem->size + 1);
+        char* buff = sx_malloc(tmp_alloc, (size_t)mem->size + 1);
         if (!buff) {
             sx_out_of_memory();
             return;
@@ -2454,7 +2458,7 @@ static void rizz__trace_make_image(const sg_image_desc* desc, sg_image result, v
                            ? 4
                            : _sg_pixelformat_bytesize(desc->pixel_format);
         int pixels = desc->width * desc->height * desc->layers;
-        int64_t size = pixels * bytesize;
+        int64_t size = (int64_t)pixels * bytesize;
         g_gfx.trace.t.render_target_size += size;
         g_gfx.trace.t.render_target_peak =
             sx_max(g_gfx.trace.t.render_target_peak, g_gfx.trace.t.render_target_size);
@@ -2526,7 +2530,7 @@ static void rizz__trace_destroy_image(sg_image img_id, void* user_data)
                            ? 4
                            : _sg_pixelformat_bytesize(img->pixel_format);
         int pixels = img->width * img->height * img->depth;
-        int64_t size = pixels * bytesize;
+        int64_t size = (int64_t)pixels * bytesize;
         g_gfx.trace.t.render_target_size -= size;
     }
     --g_gfx.trace.t.num_images;
@@ -2682,6 +2686,17 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
 
 void rizz__gfx_release()
 {
+
+    // debug
+    if (g_gfx.dbg.pip_wire.id)
+        the__gfx.imm.destroy_pipeline(g_gfx.dbg.pip_wire);
+    if (g_gfx.dbg.shader.id)
+        the__gfx.imm.destroy_shader(g_gfx.dbg.shader);
+    if (g_gfx.dbg.vb.id)
+        the__gfx.imm.destroy_buffer(g_gfx.dbg.vb);
+    if (g_gfx.dbg.ib.id)
+        the__gfx.imm.destroy_buffer(g_gfx.dbg.ib);
+
     for (int i = 0; i < sx_array_count(g_gfx.cmd_buffers); i++) {
         sx_assert(g_gfx.cmd_buffers[i]);
         rizz__gfx_cmdbuffer* cb = g_gfx.cmd_buffers[i];
@@ -2707,16 +2722,6 @@ void rizz__gfx_release()
             rmt_UnbindOpenGL();
         }
     }
-
-    // debug
-    if (g_gfx.dbg.pip_wire.id)
-        the__gfx.imm.destroy_pipeline(g_gfx.dbg.pip_wire);
-    if (g_gfx.dbg.shader.id)
-        the__gfx.imm.destroy_shader(g_gfx.dbg.shader);
-    if (g_gfx.dbg.vb.id)
-        the__gfx.imm.destroy_buffer(g_gfx.dbg.vb);
-    if (g_gfx.dbg.ib.id)
-        the__gfx.imm.destroy_buffer(g_gfx.dbg.ib);
 
     sg_shutdown();
 }
@@ -3290,6 +3295,7 @@ static uint8_t* rizz__cb_run_append_buffer(uint8_t* buff)
     buff += sizeof(int);
 
     sx_assert(stream_index < sx_array_count(g_gfx.stream_buffs));
+    sx_assert(g_gfx.stream_buffs);
     rizz__gfx_stream_buffer* sbuff = &g_gfx.stream_buffs[stream_index];
     sx_assert(sbuff->buf.id == buf.id &&
               "streaming buffers probably destroyed during render/update");
@@ -3768,7 +3774,8 @@ static void rizz__debug_grid_xzplane(float spacing, float spacing_bold, const sx
 
     // draw
     int data_size = num_verts * sizeof(rizz__debug_vertex);
-    rizz__debug_vertex* verts = alloca(data_size);
+    const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
+    rizz__debug_vertex* verts = sx_malloc(tmp_alloc, data_size);
     sx_assert(verts);
 
     int i = 0;
@@ -3794,6 +3801,7 @@ static void rizz__debug_grid_xzplane(float spacing, float spacing_bold, const sx
         verts[i].pos.z = snapbox.zmin;
 
         int ni = i + 1;
+        sx_assert(ni < num_verts);
         verts[ni].pos.x = xoffset;
         verts[ni].pos.y = 0;
         verts[ni].pos.z = snapbox.zmax;
@@ -3812,6 +3820,8 @@ static void rizz__debug_grid_xzplane(float spacing, float spacing_bold, const sx
     the__gfx.staged.apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniforms));
     the__gfx.staged.apply_bindings(&bind);
     the__gfx.staged.draw(0, num_verts, 1);
+
+    the__core.tmp_alloc_pop();
 }
 
 void rizz__debug_grid_xyplane(float spacing, float spacing_bold, const sx_mat4* vp,
@@ -3851,7 +3861,8 @@ void rizz__debug_grid_xyplane(float spacing, float spacing_bold, const sx_mat4* 
 
     // draw
     int data_size = num_verts * sizeof(rizz__debug_vertex);
-    rizz__debug_vertex* verts = alloca(data_size);
+    const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
+    rizz__debug_vertex* verts = sx_malloc(tmp_alloc, data_size);
     sx_assert(verts);
 
     int i = 0;
@@ -3877,6 +3888,7 @@ void rizz__debug_grid_xyplane(float spacing, float spacing_bold, const sx_mat4* 
         verts[i].pos.z = 0;
 
         int ni = i + 1;
+        sx_assert(ni < num_verts);
         verts[ni].pos.x = xoffset;
         verts[ni].pos.y = snapbox.ymax;
         verts[ni].pos.z = 0;
@@ -3895,6 +3907,7 @@ void rizz__debug_grid_xyplane(float spacing, float spacing_bold, const sx_mat4* 
     the__gfx.staged.apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniforms));
     the__gfx.staged.apply_bindings(&bind);
     the__gfx.staged.draw(0, num_verts, 1);
+    the__core.tmp_alloc_pop();
 }
 
 static void rizz__get_internal_state(void** make_cmdbuff, int* make_cmdbuff_sz)

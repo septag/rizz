@@ -452,7 +452,7 @@ struct cr_plugin {
     unsigned int last_working_version;
 };
 
-#if !defined(CR_HOST)
+#ifndef CR_HOST
 
 // Guest specific compiler defines/customizations
 #if defined(_MSC_VER)
@@ -1620,6 +1620,11 @@ static void cr_signal_handler(int sig, siginfo_t *si, void *uap) {
 
 static void cr_plat_init() {
     CR_TRACE
+    static bool initialized = false;
+    if (initialized) {
+        return;
+    }
+    initialized = true;
     struct sigaction sa;
     sa.sa_flags = SA_SIGINFO | SA_RESTART | SA_NODEFER;
     sigemptyset(&sa.sa_mask);
@@ -1724,13 +1729,7 @@ static bool cr_plugin_load_internal(cr_plugin &ctx, bool rollback) {
 
         auto new_dll = cr_so_load(new_file);
         if (!new_dll) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            // we may want set a failure reason and avoid sleeping ourselves.
-            // this may happen mostly due to compiler still writing the binary
-            // to the disk, so for now we just sleep a bit, but ideally we
-            // may want to report this to the user to deal with it.
             ctx.failure = CR_BAD_IMAGE;
-            CR_LOG("waiting...\n");
             return false;
         }
 
@@ -2013,6 +2012,9 @@ extern "C" bool cr_plugin_load(cr_plugin &ctx, const char *fullpath,
                                cr_plugin_reload_func reload_fn = nullptr) {
     CR_TRACE                                   
     CR_ASSERT(fullpath);
+    if (!cr_exists(fullpath)) {
+        return false;
+    }
     auto p = new(CR_MALLOC(sizeof(cr_internal))) cr_internal;
     p->mode = CR_OP_MODE;
     p->fullname = fullpath;
