@@ -76,9 +76,13 @@ But as the engine is in it's early age, the current platforms are built and test
     where you need reduced binary sizes and live-reloading of game code and plugins.  
     - `BUNDLE=1` Builds _rizz_ as static library. To link and bundle _rizz_ and other plugins with a 
     single stand-alone executable, so there will be only one executable and bundles _rizz_ and all the
-    plugins you specify. to build the bundle properly, you should set it as _executable_ (*add_executable*) 
-    and call `rizz_set_executable` on the target. see the end of the main `CMakeLists.txt` file for an
-    example.
+    plugins you specify. to build the bundle properly, you should set these cmake arguments on configure:
+		- **BUNDLE_TARGET**: target name of the executable you are trying to build (first example: `-DBUNDLE_TARGET=01-hello`)
+		- **BUNDLE_TARGET_NAME**: if the _cmake_ target and the actual name of your application differs, use 
+		                          argument to address that. (first example: `-DBUNDLE_TARGET_NAME=hello`)
+		- **BUNDLE_PLUGINS**: list the plugins that is required by your application, separated by semicolon. 
+		                      (first example: `-DBUNDLE_PLUGINS=imgui`)
+								 
 - **ENABLE_HOT_LOADING** (default=1, android/ios=0)
   Enables hot reloading of assets and monitoring the assets directories. Doesn't work on mobile OSes.
 - **ENABLE_PROFILER** (default=0/debug, default=1/release)
