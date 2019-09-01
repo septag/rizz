@@ -1599,11 +1599,6 @@ static rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs
     sx_assert(num_sprites > 0);
     sx_assert(sprs);
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
-
-    uint64_t* keys = sx_malloc(tmp_alloc, sizeof(uint64_t) * num_sprites);
-    sx_assert(keys);
-
     // count final vertices and indices,
     int num_verts = 0;
     int num_indices = 0;
@@ -1612,8 +1607,6 @@ static rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs
 
         int index = sx_handle_index(sprs[i].id);
         sprite__data* spr = &g_spr.sprites[index];
-
-        keys[i] = ((uint64_t)spr->texture.id << 32) | (uint64_t)index;
 
         // check clip/controller handle validity and fetch rendering frame
         if (spr->ctrl.id) {
@@ -1637,22 +1630,36 @@ static rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs
         }
     }
 
-    // sort sprites:
-    //      high-bits (32): texture handle. main batching
-    //      low-bits  (32): sprite index. cache coherence
-    if (num_sprites > 1)
-        sprite__sort_tim_sort(keys, num_sprites);
-
     // assume that every sprite is a batch, so we can pre-allocate loosely
     int total_sz = sizeof(rizz_sprite_drawdata) + num_verts * sizeof(rizz_sprite_vertex) +
                    num_indices * sizeof(uint16_t) +
                    (sizeof(rizz_sprite_drawbatch) + sizeof(rizz_sprite_drawsprite)) * num_sprites;
     rizz_sprite_drawdata* dd = sx_malloc(alloc, total_sz);
     if (!dd) {
-        the_core->tmp_alloc_pop();
         sx_out_of_memory();
         return NULL;
     }
+
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+
+    uint64_t* keys = sx_malloc(tmp_alloc, sizeof(uint64_t) * num_sprites);
+    sx_assert(keys);
+
+    for (int i = 0; i < num_sprites; i++) {
+        sx_assert_rel(sx_handle_valid(g_spr.sprite_handles, sprs[i].id));
+
+        int index = sx_handle_index(sprs[i].id);
+        sprite__data* spr = &g_spr.sprites[index];
+
+        keys[i] = ((uint64_t)spr->texture.id << 32) | (uint64_t)index;
+    }
+
+    // sort sprites:
+    //      high-bits (32): texture handle. main batching
+    //      low-bits  (32): sprite index. cache coherence
+    if (num_sprites > 1)
+        sprite__sort_tim_sort(keys, num_sprites);
+
     memset(dd, 0x0, sizeof(rizz_sprite_drawdata));
     uint8_t* buff = (uint8_t*)(dd + 1);
     dd->sprites = (rizz_sprite_drawsprite*)buff;

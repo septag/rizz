@@ -25,13 +25,14 @@ static void rizz__cam_init(rizz_camera* cam, float fov_deg, const sx_rect viewpo
 static void rizz__cam_lookat(rizz_camera* cam, const sx_vec3 pos, const sx_vec3 target,
                              const sx_vec3 up)
 {
+    // TODO: figure UP vector out, I hacked up vector (in the matrix) to make it work correctly
     cam->forward = sx_vec3_norm(sx_vec3_sub(target, pos));
     cam->right = sx_vec3_norm(sx_vec3_cross(cam->forward, up));
-    cam->up = sx_vec3_cross(cam->forward, cam->right);
+    cam->up = sx_vec3_cross(cam->right, cam->forward);
     cam->pos = pos;
 
     sx_mat4 m = sx_mat4v(sx_vec4f(cam->right.x, cam->right.y, cam->right.z, 0),
-                         sx_vec4f(cam->up.x, cam->up.y, cam->up.z, 0),
+                         sx_vec4f(-cam->up.x, -cam->up.y, -cam->up.z, 0),
                          sx_vec4f(cam->forward.x, cam->forward.y, cam->forward.z, 0), SX_VEC4_ZERO);
     cam->quat = sx_mat4_quat(&m);
 }
@@ -51,11 +52,11 @@ static sx_mat4 rizz__cam_ortho_mat(const rizz_camera* cam)
                          the__gfx.imm.GL_family());
 }
 
-static sx_mat4 rizz__cam_view_mat(const rizz_camera* cam, const sx_vec3 up)
+static sx_mat4 rizz__cam_view_mat(const rizz_camera* cam)
 {
     sx_vec3 zaxis = cam->forward;
-    sx_vec3 xaxis = sx_vec3_norm(sx_vec3_cross(zaxis, up));
-    sx_vec3 yaxis = sx_vec3_cross(xaxis, zaxis);
+    sx_vec3 xaxis = cam->right; // sx_vec3_norm(sx_vec3_cross(zaxis, up));
+    sx_vec3 yaxis = cam->up;    // sx_vec3_cross(xaxis, zaxis);
 
     // clang-format off
     return sx_mat4f(xaxis.x, xaxis.y, xaxis.z, -sx_vec3_dot(xaxis, cam->pos), 
@@ -110,7 +111,6 @@ static void rizz__calc_frustum_points(const rizz_camera* cam, sx_vec3 frustum[8]
 {
     rizz__calc_frustum_points_range(cam, frustum, cam->fnear, cam->ffar);
 }
-
 
 static void rizz__cam_fps_init(rizz_camera_fps* cam, float fov_deg, const sx_rect viewport,
                                float fnear, float ffar)

@@ -66,14 +66,25 @@ function(join_array output glue values)
 endfunction()        
 
 function(glslcc__target_compile_shaders target_name file_type source_files)
-    foreach(source_file ${source_files})
-        get_source_file_property(defs ${source_file} COMPILE_DEFINITIONS) 
-        get_source_file_property(include_dirs ${source_file} INCLUDE_DIRECTORIES) 
-        get_source_file_property(output_dir ${source_file} GLSLCC_OUTPUT_DIRECTORY)
-        get_source_file_property(shader_lang ${source_file} GLSLCC_SHADER_LANG)
-        get_source_file_property(shader_ver ${source_file} GLSLCC_SHADER_VERSION)
-        get_source_file_property(output_filename ${source_file} GLSLCC_OUTPUT_FILENAME)
-        get_source_file_property(compile_flags ${source_file} GLSLCC_COMPILE_FLAGS)
+    foreach(source_file_base ${source_files})
+        string(REPLACE "," ";" source_files_sub ${source_file_base})
+
+        # get file properties
+        list(GET source_files_sub 0 first_file)
+        list(LENGTH source_files_sub source_files_count)
+
+        if (${source_files_count} GREATER 1 AND NOT ${file_type} STREQUAL "sgs")
+            message(FATAL_ERROR "only 'sgs' shader types support multiple shader stages")
+        endif()
+
+
+        get_source_file_property(defs ${first_file} COMPILE_DEFINITIONS) 
+        get_source_file_property(include_dirs ${first_file} INCLUDE_DIRECTORIES) 
+        get_source_file_property(output_dir ${first_file} GLSLCC_OUTPUT_DIRECTORY)
+        get_source_file_property(shader_lang ${first_file} GLSLCC_SHADER_LANG)
+        get_source_file_property(shader_ver ${first_file} GLSLCC_SHADER_VERSION)
+        get_source_file_property(output_filename ${first_file} GLSLCC_OUTPUT_FILENAME)
+        get_source_file_property(compile_flags ${first_file} GLSLCC_COMPILE_FLAGS)
 
         if (include_dirs)
             set(include_dirs_abs)
@@ -142,7 +153,7 @@ function(glslcc__target_compile_shaders target_name file_type source_files)
             endif()
             get_filename_component(output_dir ${output_dir} ABSOLUTE)
         else()
-            message(FATAL_ERROR "GLSLCC_OUTPUT_DIRECTORY not set for file: ${source_file}")
+            message(FATAL_ERROR "GLSLCC_OUTPUT_DIRECTORY not set for file: ${first_file}")
         endif()
 
         # use --flatten-ubos all GLSL (gles/glsl) shaders
@@ -155,37 +166,59 @@ function(glslcc__target_compile_shaders target_name file_type source_files)
         endif()
 
         # determine the file from the extension
-        get_filename_component(file_ext ${source_file} EXT)
-        get_filename_component(file_name ${source_file} NAME_WE)
-        if (${output_filename} STREQUAL "NOTFOUND")
-            if (NOT file_type)
-                set(output_filename "${file_name}${file_ext}.${shader_lang}")
+        get_filename_component(file_ext ${first_file} EXT)
+        get_filename_component(file_name ${first_file} NAME_WE)
+        if (${source_files_count} EQUAL 1)
+            if (${output_filename} STREQUAL "NOTFOUND")
+                if (NOT file_type)
+                    set(output_filename "${file_name}${file_ext}.${shader_lang}")
+                else()
+                    set(output_filename "${file_name}${file_ext}.${file_type}")
+                endif()
             else()
-                set(output_filename "${file_name}${file_ext}.${file_type}")
+                set(file_name "${output_filename}")
+                if (NOT file_type)
+                    set(output_filename "${output_filename}${file_ext}.${shader_lang}")
+                else()
+                    set(output_filename "${output_filename}${file_ext}.${file_type}")
+                endif()  
             endif()
         else()
-            set(file_name "${output_filename}")
-            if (NOT file_type)
-                set(output_filename "${output_filename}${file_ext}.${shader_lang}")
+            if (${output_filename} STREQUAL "NOTFOUND")
+                if (NOT file_type)
+                    set(output_filename "${file_name}.${shader_lang}")
+                else()
+                    set(output_filename "${file_name}.${file_type}")
+                endif()
             else()
-                set(output_filename "${output_filename}${file_ext}.${file_type}")
-            endif()  
+                set(file_name "${output_filename}")
+                if (NOT file_type)
+                    set(output_filename "${output_filename}.${shader_lang}")
+                else()
+                    set(output_filename "${output_filename}.${file_type}")
+                endif()  
+            endif()            
         endif()
 
         set(output_filepath "${output_dir}/${output_filename}")
         
-
         # make the final args
         set(args)
-        if (${file_ext} STREQUAL ".vert")
-            set(args --vert=${source_file})
-        elseif (${file_ext} STREQUAL ".frag")
-            set(args --frag=${source_file})
-        elseif (${file_ext} STREQUAL ".comp")
-            set(args --comp=${source_file})
-        else()
-            message(FATAL_ERROR "Unknown shader file extension: ${source_file}")
-        endif()
+
+        # source files
+        foreach (source_file ${source_files_sub})
+            get_filename_component(file_ext ${source_file} EXT)
+            
+            if (${file_ext} STREQUAL ".vert")
+                set(args ${args} --vert=${source_file})
+            elseif (${file_ext} STREQUAL ".frag")
+                set(args ${args} --frag=${source_file})
+            elseif (${file_ext} STREQUAL ".comp")
+                set(args ${args} --comp=${source_file})
+            else()
+                message(FATAL_ERROR "Unknown shader file extension: ${source_file}")
+            endif()
+        endforeach()
         
         set(args ${args} --silent)
         set(args ${args} --lang=${shader_lang})
@@ -222,24 +255,26 @@ function(glslcc__target_compile_shaders target_name file_type source_files)
             OUTPUT ${output_filepath}
             COMMAND ${glslcc_path}
             ARGS ${args}
-            DEPENDS ${source_file}
+            DEPENDS ${source_files_sub}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             COMMENT "Compiling ${shader_lang_upper}: ${output_relpath}"
             VERBATIM)
 
         # add to source files
-        target_sources(${target_name} PRIVATE ${source_file} ${output_relpath})
+        target_sources(${target_name} PRIVATE "${source_files_sub}" ${output_relpath})
     endforeach()    
 endfunction()
 
 function(glslcc_target_compile_shaders target_name source_files)
-   glslcc__target_compile_shaders(${target_name} "" "${source_files}")
+    glslcc__target_compile_shaders(${target_name} "" "${source_files}")
 endfunction()
 
 function(glslcc_target_compile_shaders_h target_name source_files)
-   glslcc__target_compile_shaders(${target_name} "h" "${source_files}")
+    glslcc__target_compile_shaders(${target_name} "h" "${source_files}")
 endfunction()
 
 function(glslcc_target_compile_shaders_sgs target_name source_files)
-   glslcc__target_compile_shaders(${target_name} "sgs" "${source_files}")
+    # for sgs files, we assume that all of source_files are stages of one single sgs shader
+    join_array(source_files_joined "," "${source_files}")
+    glslcc__target_compile_shaders(${target_name} "sgs" ${source_files_joined})
 endfunction()

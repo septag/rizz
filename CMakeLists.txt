@@ -42,6 +42,7 @@ endfunction()
 
 function(rizz__add_example proj_name)
     string(SUBSTRING ${proj_name} 3 -1 source_file)
+
     if (BUNDLE AND NOT ANDROID) 
         add_executable(${proj_name} ${EXEC_TYPE} examples/${proj_name}/${source_file}.c)
     else()
@@ -57,6 +58,15 @@ function(rizz__add_example proj_name)
     
     target_link_libraries(${proj_name} PRIVATE sx)
     add_dependencies(${proj_name} rizz)
+
+    # compile default shaders
+    if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/${proj_name}/${source_file}.vert AND 
+        EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/${proj_name}/${source_file}.frag)
+        set(shaders examples/${proj_name}/${source_file}.vert 
+                    examples/${proj_name}/${source_file}.frag)
+        set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "examples/assets/shaders")
+        glslcc_target_compile_shaders_sgs(${proj_name} "${shaders}")
+    endif()
 endfunction()
 
 function(rizz_add_executable proj_name source_files)
@@ -156,7 +166,8 @@ set(example_projects 01-hello
                      02-quad 
                      03-drawsprite 
                      04-animsprite
-                     05-playsound)
+                     05-playsound
+					 06-sdf)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 

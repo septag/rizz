@@ -31,11 +31,6 @@ static inline float rizz_tween_update(rizz_tween* tween, float dt, float max_tm)
     return t;
 }
 
-static inline bool rizz_tween_done(rizz_tween* tween)
-{
-    return tween->tm >= 1.0f;
-}
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // rizz_event_queue: small _circular_ stack-based event queue.
 // useful for pushing and polling gameplay events to components/objects

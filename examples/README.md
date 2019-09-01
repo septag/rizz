@@ -33,3 +33,10 @@ Demonstrates basic application setup. Just clears the view with blue color.
 - Sound system debugger
 
 ![05-playsound](screenshots/05-playsound.png)
+
+### [SDF](06-sdf/sdf.c)
+- Raymarching with SDF shapes
+- Basic orbit camera (hold mouse and drag)
+- Simple parametric animations
+
+![06-sdf](screenshots/06-sdf.png)

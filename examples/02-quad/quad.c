@@ -22,7 +22,6 @@ RIZZ_STATE static rizz_api_gfx* the_gfx;
 RIZZ_STATE static rizz_api_app* the_app;
 RIZZ_STATE static rizz_api_imgui* the_imgui;
 RIZZ_STATE static rizz_api_asset* the_asset;
-RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
 RIZZ_STATE static rizz_api_camera* the_camera;
 RIZZ_STATE static rizz_api_vfs* the_vfs;
 
@@ -161,7 +160,7 @@ static void render()
     // draw textured quad
     {
         sx_mat4 proj = the_camera->ortho_mat(&g_quad.cam.cam);
-        sx_mat4 view = the_camera->view_mat(&g_quad.cam.cam, SX_VEC3_UNITZ);
+        sx_mat4 view = the_camera->view_mat(&g_quad.cam.cam);
 
         quad_matrices mats = { .mvp = sx_mat4_mul(&proj, &view) };
 

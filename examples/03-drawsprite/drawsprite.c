@@ -293,7 +293,7 @@ static void render()
 
     // draw sprite
     sx_mat4 proj = the_camera->ortho_mat(&g_ds.cam.cam);
-    sx_mat4 view = the_camera->view_mat(&g_ds.cam.cam, SX_VEC3_UNITY);
+    sx_mat4 view = the_camera->view_mat(&g_ds.cam.cam);
     sx_mat4 vp = sx_mat4_mul(&proj, &view);
 
     drawsprite_params params = {
