@@ -335,6 +335,9 @@ rizz_plugin_decl_event_handler(sdf, e)
             orbit_camera();
         }
         break;
+
+    default:
+        break;
     }
 }
 
