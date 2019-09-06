@@ -1,24 +1,24 @@
 #version 450
 
-layout (location = TEXCOORD0) in vec2 f_coord;
-layout (location = TEXCOORD1) in vec3 f_ray;
+layout (location = TEXCOORD0) in vec3 f_ray;
 
 layout (location = SV_Target0) out vec4 frag_color; 
 
-layout (binding=0, std140) uniform vars {
+layout (binding=0, std140) uniform fs_vars {
     vec4 camera_pos;
     vec4 sphere1;
     vec4 box1;
     vec4 light;
     vec4 anim;
     mat4 shape_mat;
-    vec3 back_light_dir;
+    vec4 back_light_dir_;
 };
 
 #define anim_tm anim.x
 #define shape_transition anim.y
 #define shape_f1 anim.z
 #define shape_f2 anim.w
+#define back_light_dir back_light_dir_.xyz
 
 const vec4 bg_color = vec4(0.25f, 0.5f, 0.75f, 1.0f);
 

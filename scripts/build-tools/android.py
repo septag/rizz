@@ -562,6 +562,7 @@ def build_android(args):
                     '-DCMAKE_EXPORT_COMPILE_COMMANDS=1',
                     '-DCMAKE_RUNTIME_OUTPUT_DIRECTORY=.',
                     '-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=.',
+                    '-DBUNDLE=1',
                     '-DBUNDLE_TARGET=' + args.cmake_target,
                     '-DBUNDLE_TARGET_NAME=' + args.name,
                     '-DCMAKE_BUILD_TYPE=' + args.build_type,
@@ -861,8 +862,8 @@ if __name__ == "__main__":
     arg_parser.add_argument('--verbose', help='enable verbose output', action='store_const', const=True)
     args = arg_parser.parse_args(sys.argv[1:])
 
-    if (not args.cmake_source or not os.path.isdir(args.cmake_source) and args.command == 'configure'):
-        logging.error('--cmake-source directory is invalid: %s' % args.cmake_source if args.cmake_source else '[unknown]')
+    if ((not args.cmake_source or not os.path.isdir(args.cmake_source)) and args.command == 'configure'):
+        logging.error('--cmake-source directory is invalid: %s' % (args.cmake_source if args.cmake_source else ''))
         exit(-1)
     args.cmake_source = os.path.normpath(args.cmake_source)
 

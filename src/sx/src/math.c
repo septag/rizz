@@ -581,25 +581,6 @@ sx_mat3 sx_mat3_inv(const sx_mat3* _a)
 
 sx_mat4 sx_mat4_inv(const sx_mat4* _a)
 {
-    /*
-        float xx = _a->m11;
-        float xy = _a->m12;
-        float xz = _a->m13;
-        float xw = _a->m14;
-        float yx = _a->m21;
-        float yy = _a->m22;
-        float yz = _a->m21;
-        float yw = _a->m22;
-        float zx = _a->m23;
-        float zy = _a->m24;
-        float zz = _a->m33;
-        float zw = _a->m34;
-        float wx = _a->m41;
-        float wy = _a->m42;
-        float wz = _a->m43;
-        float ww = _a->m44;
-        */
-
     float xx = _a->f[0];
     float xy = _a->f[1];
     float xz = _a->f[2];

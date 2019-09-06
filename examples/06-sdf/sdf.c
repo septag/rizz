@@ -29,18 +29,17 @@ RIZZ_STATE static rizz_api_vfs* the_vfs;
 
 typedef struct {
     sx_vec2 pos;
-    sx_vec2 uv;
 } sdf_vertex;
 
 static rizz_vertex_layout k_sdf_vertex_layout = {
-    .attrs[0] = { .semantic = "POSITION", .offset = offsetof(sdf_vertex, pos) },
-    .attrs[1] = { .semantic = "TEXCOORD", .offset = offsetof(sdf_vertex, uv) }
+    .attrs[0] = { .semantic = "POSITION", .offset = offsetof(sdf_vertex, pos) }
 };
 
 // vertex-shader uniforms
 typedef struct sdf_vs_vars {
     sx_vec4 camera_corners[4];
     sx_vec4 camera_pos;    // w = aspect ratio (x/y)
+    sx_vec4 screen;
 } sdf_vs_vars;
 
 // fragment-shader uniforms
@@ -51,7 +50,7 @@ typedef struct sdf_fs_vars {
     sx_vec4 light;    // w = shadow penumbra
     sx_vec4 anim;
     sx_mat4 shape_mat;
-    sx_vec3 back_light_dir;
+    sx_vec4 back_light_dir;
 } sdf_fs_vars;
 
 typedef struct {
@@ -118,10 +117,10 @@ static bool init()
 
     // clang-format off
     sdf_vertex vertices[] = { 
-        {{-1.0f, -1.0f},     {0.0f, 1.0f}}, 
-        {{1.0f,  -1.0f},     {1.0f, 1.0f}},
-        {{1.0f,  1.0f},      {1.0f, 0.0f}}, 
-        {{-1.0f, 1.0f},      {0.0f, 0.0f}} 
+        {{-1.0f, -1.0f}}, 
+        {{1.0f,  -1.0f}},
+        {{1.0f,  1.0f}}, 
+        {{-1.0f, 1.0f}} 
     };
     // clang-format on
 
@@ -223,7 +222,6 @@ static void update(float dt)
         the_imgui->SliderFloat("duration", &g_sdf.anim_duration, 1.0f, 10.0f, "%.1f", 1.0f);
     }
     the_imgui->End();
-
 }
 
 static void render()
@@ -245,13 +243,16 @@ static void render()
     vs_vars.camera_corners[2] = sx_vec4v3(frustum[2], 0);
     vs_vars.camera_corners[3] = sx_vec4v3(frustum[3], 0);
 
-    vs_vars.camera_pos = sx_vec4v3(g_sdf.cam.cam.pos, sizef.x / sizef.y);
+    vs_vars.camera_pos = sx_vec4v3(g_sdf.cam.cam.pos, 0);
+
+    vs_vars.screen = sx_vec4f(sizef.x < sizef.y ? (1.0f + (sizef.x / sizef.y)) : 1.0f,
+                              sizef.x > sizef.y ? (sizef.x / sizef.y) : 1.0f, 0, 0);
     fs_vars.camera_pos = sx_vec4v3(g_sdf.cam.cam.pos, 1.0f);
     fs_vars.sphere1 = g_sdf.sphere1;
     fs_vars.box1 = g_sdf.box1;
     fs_vars.light =
         sx_vec4f(g_sdf.light_dir.x, g_sdf.light_dir.y, g_sdf.light_dir.z, g_sdf.shadow_penumbra);
-    fs_vars.back_light_dir = g_sdf.back_light_dir;
+    fs_vars.back_light_dir = sx_vec4v3(g_sdf.back_light_dir, 0);
     fs_vars.anim = sx_vec4f(g_sdf.anim_tm, g_sdf.shape_transition, g_sdf.shape_f1, g_sdf.shape_f2);
     {
         sx_mat4 rot = sx_mat4_rotateX(SX_PIHALF);
@@ -322,9 +323,25 @@ rizz_plugin_decl_event_handler(sdf, e)
         mouse_down = true;
         last_mouse_x = e->mouse_x;
         break;
+
+    case RIZZ_APP_EVENTTYPE_TOUCHES_BEGAN:
+        sx_assert(e->num_touches > 0);
+        mouse_down = true;
+        last_mouse_x = e->touches[0].pos_x;
+        break;
+
+    case RIZZ_APP_EVENTTYPE_TOUCHES_ENDED:
     case RIZZ_APP_EVENTTYPE_MOUSE_UP:
     case RIZZ_APP_EVENTTYPE_MOUSE_LEAVE:
         mouse_down = false;
+        break;
+
+    case RIZZ_APP_EVENTTYPE_TOUCHES_MOVED:
+        sx_assert(e->num_touches > 0);
+        float dx = sx_torad(e->touches[0].pos_x - last_mouse_x) * rotate_speed * dt;
+        last_mouse_x = e->touches[0].pos_x;
+        g_sdf.camera_orbit += dx;
+        orbit_camera();
         break;
 
     case RIZZ_APP_EVENTTYPE_MOUSE_MOVE:
@@ -346,8 +363,8 @@ rizz_game_decl_config(conf)
     conf->app_name = "sdf";
     conf->app_version = 1000;
     conf->app_title = "06 - SDF";
-    conf->window_width = 800;
-    conf->window_height = 600;
+    conf->window_width = 300;
+    conf->window_height = 800;
     conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;
     conf->multisample_count = 1;
     conf->swap_interval = 2;
