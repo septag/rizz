@@ -103,15 +103,14 @@ static bool init()
     g_ds.stage = the_gfx->stage_register("main", (rizz_gfx_stage){ .id = 0 });
     sx_assert(g_ds.stage.id);
 
-    g_ds.vbuff = the_gfx->imm.make_buffer(
-        &(sg_buffer_desc){ .usage = SG_USAGE_STREAM,
-                           .type = SG_BUFFERTYPE_VERTEXBUFFER,
-                           .size = sizeof(drawsprite_vertex) * MAX_VERTICES });
+    g_ds.vbuff =
+        the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_STREAM,
+                                                .type = SG_BUFFERTYPE_VERTEXBUFFER,
+                                                .size = sizeof(drawsprite_vertex) * MAX_VERTICES });
 
-    g_ds.ibuff =
-        the_gfx->imm.make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_STREAM,
-                                                    .type = SG_BUFFERTYPE_INDEXBUFFER,
-                                                    .size = sizeof(uint16_t) * MAX_INDICES });
+    g_ds.ibuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_STREAM,
+                                                         .type = SG_BUFFERTYPE_INDEXBUFFER,
+                                                         .size = sizeof(uint16_t) * MAX_INDICES });
 
     char shader_path[RIZZ_MAX_PATH];
     g_ds.shader = the_asset->load(
@@ -132,7 +131,7 @@ static bool init()
                    .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
                    .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA }
     };
-    g_ds.pip = the_gfx->imm.make_pipeline(the_gfx->shader_bindto_pipeline(
+    g_ds.pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
         the_asset->obj(g_ds.shader).ptr, &pip_desc, &k_vertex_layout));
 
     // pipeline
@@ -143,7 +142,7 @@ static bool init()
                    .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
                    .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA },
     };
-    g_ds.pip_wire = the_gfx->imm.make_pipeline(the_gfx->shader_bindto_pipeline(
+    g_ds.pip_wire = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
         the_asset->obj(g_ds.shader_wire).ptr, &pip_desc_wire, &k_vertex_layout_wire));
 
     // camera
@@ -181,9 +180,9 @@ static void shutdown()
         }
     }
     if (g_ds.vbuff.id)
-        the_gfx->imm.destroy_buffer(g_ds.vbuff);
+        the_gfx->destroy_buffer(g_ds.vbuff);
     if (g_ds.ibuff.id)
-        the_gfx->imm.destroy_buffer(g_ds.ibuff);
+        the_gfx->destroy_buffer(g_ds.ibuff);
     if (g_ds.atlas.id)
         the_asset->unload(g_ds.atlas);
     if (g_ds.shader.id)
@@ -191,7 +190,7 @@ static void shutdown()
     if (g_ds.shader_wire.id)
         the_asset->unload(g_ds.shader_wire);
     if (g_ds.pip_wire.id)
-        the_gfx->imm.destroy_pipeline(g_ds.pip_wire);
+        the_gfx->destroy_pipeline(g_ds.pip_wire);
 }
 
 static void update(float dt) {}

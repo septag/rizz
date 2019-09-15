@@ -84,15 +84,15 @@ static bool init()
     uint16_t indices[] = { 0, 2, 1, 3, 0, 2 };
 
     // buffers
-    g_quad.vbuff = the_gfx->imm.make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
-                                                               .type = SG_BUFFERTYPE_VERTEXBUFFER,
-                                                               .size = sizeof(vertices),
-                                                               .content = vertices });
+    g_quad.vbuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
+                                                           .type = SG_BUFFERTYPE_VERTEXBUFFER,
+                                                           .size = sizeof(vertices),
+                                                           .content = vertices });
 
-    g_quad.ibuff = the_gfx->imm.make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
-                                                               .type = SG_BUFFERTYPE_INDEXBUFFER,
-                                                               .size = sizeof(indices),
-                                                               .content = indices });
+    g_quad.ibuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
+                                                           .type = SG_BUFFERTYPE_INDEXBUFFER,
+                                                           .size = sizeof(indices),
+                                                           .content = indices });
 
     // shader
     // this shader is built with `glslcc` that reside in `/tools` directory.
@@ -109,7 +109,7 @@ static bool init()
         .index_type = SG_INDEXTYPE_UINT16,
         .rasterizer = { .cull_mode = SG_CULLMODE_NONE, .sample_count = 4 }
     };
-    g_quad.pip = the_gfx->imm.make_pipeline(the_gfx->shader_bindto_pipeline(
+    g_quad.pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
         the_asset->obj(g_quad.shader).ptr, &pip_desc, &k_vertex_layout));
 
     // bindings
@@ -136,15 +136,15 @@ static bool init()
 static void shutdown()
 {
     if (g_quad.vbuff.id)
-        the_gfx->imm.destroy_buffer(g_quad.vbuff);
+        the_gfx->destroy_buffer(g_quad.vbuff);
     if (g_quad.ibuff.id)
-        the_gfx->imm.destroy_buffer(g_quad.ibuff);
+        the_gfx->destroy_buffer(g_quad.ibuff);
     if (g_quad.img.id)
         the_asset->unload(g_quad.img);
     if (g_quad.shader.id)
         the_asset->unload(g_quad.shader);
     if (g_quad.pip.id)
-        the_gfx->imm.destroy_pipeline(g_quad.pip);
+        the_gfx->destroy_pipeline(g_quad.pip);
 }
 
 static void update(float dt) {}

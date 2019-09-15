@@ -125,14 +125,14 @@ static bool init()
     // clang-format on
 
     uint16_t indices[] = { 0, 2, 1, 0, 3, 2 };
-    g_sdf.vbuff = the_gfx->imm.make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
-                                                              .type = SG_BUFFERTYPE_VERTEXBUFFER,
-                                                              .size = sizeof(vertices),
-                                                              .content = vertices });
-    g_sdf.ibuff = the_gfx->imm.make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
-                                                              .type = SG_BUFFERTYPE_INDEXBUFFER,
-                                                              .size = sizeof(indices),
-                                                              .content = indices });
+    g_sdf.vbuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
+                                                          .type = SG_BUFFERTYPE_VERTEXBUFFER,
+                                                          .size = sizeof(vertices),
+                                                          .content = vertices });
+    g_sdf.ibuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
+                                                          .type = SG_BUFFERTYPE_INDEXBUFFER,
+                                                          .size = sizeof(indices),
+                                                          .content = indices });
 
     char shader_path[RIZZ_MAX_PATH];
     g_sdf.shader = the_asset->load(
@@ -144,7 +144,7 @@ static bool init()
                                   .index_type = SG_INDEXTYPE_UINT16,
                                   .rasterizer = { .cull_mode = SG_CULLMODE_BACK,
                                                   .sample_count = 1 } };
-    g_sdf.pip = the_gfx->imm.make_pipeline(the_gfx->shader_bindto_pipeline(
+    g_sdf.pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
         the_asset->obj(g_sdf.shader).ptr, &pip_desc, &k_sdf_vertex_layout));
 
     // camera
@@ -168,13 +168,13 @@ static bool init()
 static void shutdown()
 {
     if (g_sdf.vbuff.id)
-        the_gfx->imm.destroy_buffer(g_sdf.vbuff);
+        the_gfx->destroy_buffer(g_sdf.vbuff);
     if (g_sdf.ibuff.id)
-        the_gfx->imm.destroy_buffer(g_sdf.ibuff);
+        the_gfx->destroy_buffer(g_sdf.ibuff);
     if (g_sdf.shader.id)
         the_asset->unload(g_sdf.shader);
     if (g_sdf.pip.id)
-        the_gfx->imm.destroy_pipeline(g_sdf.pip);
+        the_gfx->destroy_pipeline(g_sdf.pip);
 }
 
 static void update(float dt)
@@ -363,8 +363,8 @@ rizz_game_decl_config(conf)
     conf->app_name = "sdf";
     conf->app_version = 1000;
     conf->app_title = "06 - SDF";
-    conf->window_width = 300;
-    conf->window_height = 800;
+    conf->window_width = 800;
+    conf->window_height = 600;
     conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;
     conf->multisample_count = 1;
     conf->swap_interval = 2;

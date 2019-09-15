@@ -666,11 +666,11 @@ static bool imgui__setup()
     }
 
     g_imgui.bind.vertex_buffers[0] =
-        the_gfx->imm.make_buffer(&(sg_buffer_desc){ .type = SG_BUFFERTYPE_VERTEXBUFFER,
+        the_gfx->make_buffer(&(sg_buffer_desc){ .type = SG_BUFFERTYPE_VERTEXBUFFER,
                                                     .usage = SG_USAGE_STREAM,
                                                     .size = sizeof(ImDrawVert) * MAX_VERTS });
     g_imgui.bind.index_buffer =
-        the_gfx->imm.make_buffer(&(sg_buffer_desc){ .type = SG_BUFFERTYPE_INDEXBUFFER,
+        the_gfx->make_buffer(&(sg_buffer_desc){ .type = SG_BUFFERTYPE_INDEXBUFFER,
                                                     .usage = SG_USAGE_STREAM,
                                                     .size = sizeof(uint16_t) * MAX_INDICES });
 
@@ -678,7 +678,7 @@ static bool imgui__setup()
     int font_width, font_height, bpp;
     the__imgui.ImFontAtlas_GetTexDataAsRGBA32(conf->Fonts, &font_pixels, &font_width, &font_height,
                                               &bpp);
-    g_imgui.font_tex = the_gfx->imm.make_image(
+    g_imgui.font_tex = the_gfx->make_image(
         &(sg_image_desc){ .width = font_width,
                           .height = font_height,
                           .pixel_format = SG_PIXELFORMAT_RGBA8,
@@ -705,7 +705,7 @@ static bool imgui__setup()
                                              .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
                                              .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
                                              .color_write_mask = SG_COLORMASK_RGB } };
-    g_imgui.pip = the_gfx->imm.make_pipeline(
+    g_imgui.pip = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader, &pip_desc, &k__imgui_vertex));
 
     g_imgui.pass_action = (sg_pass_action){ .colors[0] = { .action = SG_ACTION_DONTCARE },
@@ -725,15 +725,15 @@ static void imgui__release()
         the__imgui.DestroyContext(g_imgui.ctx);
 
     if (g_imgui.pip.id)
-        the_gfx->imm.destroy_pipeline(g_imgui.pip);
+        the_gfx->destroy_pipeline(g_imgui.pip);
     if (g_imgui.bind.vertex_buffers[0].id)
-        the_gfx->imm.destroy_buffer(g_imgui.bind.vertex_buffers[0]);
+        the_gfx->destroy_buffer(g_imgui.bind.vertex_buffers[0]);
     if (g_imgui.bind.index_buffer.id)
-        the_gfx->imm.destroy_buffer(g_imgui.bind.index_buffer);
+        the_gfx->destroy_buffer(g_imgui.bind.index_buffer);
     if (g_imgui.shader.id)
-        the_gfx->imm.destroy_shader(g_imgui.shader);
+        the_gfx->destroy_shader(g_imgui.shader);
     if (g_imgui.font_tex.id)
-        the_gfx->imm.destroy_image(g_imgui.font_tex);
+        the_gfx->destroy_image(g_imgui.font_tex);
     if (g_imgui.verts)
         sx_free(alloc, g_imgui.verts);
     if (g_imgui.indices)
@@ -1603,9 +1603,9 @@ rizz_plugin_decl_main(imgui, plugin, e)
 
         void* make_cmdbuff;
         int make_cmdbuff_sz;
-        the_gfx->imm._get_internal_state(&make_cmdbuff, &make_cmdbuff_sz);
+        the_gfx->internal_state(&make_cmdbuff, &make_cmdbuff_sz);
 
-        sg_imgui_init(&g_imgui.sg_imgui, &the_gfx->imm);
+        sg_imgui_init(&g_imgui.sg_imgui, the_gfx);
 
         // submit all make commands to the imgui
         if (make_cmdbuff_sz) {

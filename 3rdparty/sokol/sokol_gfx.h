@@ -2304,6 +2304,7 @@ typedef struct {
     uint32_t map_frame_index;
     int num_slots;
     int active_slot;
+    int64_t used_frame;
 } _sg_buffer_t;
 
 typedef struct {
@@ -2326,6 +2327,7 @@ typedef struct {
     uint32_t upd_frame_index;
     int num_slots;
     int active_slot;
+    int64_t used_frame;
 } _sg_image_t;
 
 typedef struct {
@@ -2346,6 +2348,7 @@ typedef struct {
 typedef struct {
     _sg_slot_t slot;
     _sg_shader_stage_t stage[SG_NUM_SHADER_STAGES];
+    int64_t used_frame;
 } _sg_shader_t;
 
 typedef struct {
@@ -2362,6 +2365,7 @@ typedef struct {
     float depth_bias_clamp;
     sg_index_type index_type;
     float blend_color[4];
+    int64_t used_frame;
 } _sg_pipeline_t;
 
 typedef struct {
@@ -2376,6 +2380,7 @@ typedef struct {
     int num_color_atts;
     _sg_attachment_t color_atts[SG_MAX_COLOR_ATTACHMENTS];
     _sg_attachment_t ds_att;
+    int64_t used_frame;
 } _sg_pass_t;
 
 typedef struct {
@@ -2398,6 +2403,7 @@ typedef struct {
     int active_slot;
     GLuint gl_buf[SG_NUM_INFLIGHT_FRAMES];
     bool ext_buffers;   /* if true, external buffers were injected with sg_buffer_desc.gl_buffers */
+    int64_t used_frame;
 } _sg_buffer_t;
 
 typedef struct {
@@ -2425,6 +2431,7 @@ typedef struct {
     int active_slot;
     GLuint gl_tex[SG_NUM_INFLIGHT_FRAMES];
     bool ext_textures;  /* if true, external textures were injected with sg_image_desc.gl_textures */
+    int64_t used_frame;
 } _sg_image_t;
 
 typedef struct {
@@ -2462,6 +2469,7 @@ typedef struct {
     GLuint gl_prog;
     _sg_shader_attr_t attrs[SG_MAX_VERTEX_ATTRIBUTES];
     _sg_shader_stage_t stage[SG_NUM_SHADER_STAGES];
+    int64_t used_frame;
 } _sg_shader_t;
 
 typedef struct {
@@ -2489,6 +2497,7 @@ typedef struct {
     sg_depth_stencil_state depth_stencil;
     sg_blend_state blend;
     sg_rasterizer_state rast;
+    int64_t used_frame;
 } _sg_pipeline_t;
 
 typedef struct {
@@ -2505,6 +2514,7 @@ typedef struct {
     int num_color_atts;
     _sg_attachment_t color_atts[SG_MAX_COLOR_ATTACHMENTS];
     _sg_attachment_t ds_att;
+    int64_t used_frame;
 } _sg_pass_t;
 
 typedef struct {
@@ -2573,6 +2583,7 @@ typedef struct {
     uint32_t append_frame_index;
     uint32_t map_frame_index;
     ID3D11Buffer* d3d11_buf;
+    int64_t used_frame;
 } _sg_buffer_t;
 
 typedef struct {
@@ -2600,6 +2611,7 @@ typedef struct {
     ID3D11Texture2D* d3d11_texmsaa;
     ID3D11ShaderResourceView* d3d11_srv;
     ID3D11SamplerState* d3d11_smp;
+    int64_t used_frame;
 } _sg_image_t;
 
 typedef struct {
@@ -2632,6 +2644,7 @@ typedef struct {
     ID3D11PixelShader* d3d11_fs;
     void* d3d11_vs_blob;
     int d3d11_vs_blob_length;
+    int64_t used_frame;
 } _sg_shader_t;
 
 typedef struct {
@@ -2653,6 +2666,7 @@ typedef struct {
     ID3D11RasterizerState* d3d11_rs;
     ID3D11DepthStencilState* d3d11_dss;
     ID3D11BlendState* d3d11_bs;
+    int64_t used_frame;
 } _sg_pipeline_t;
 
 typedef struct {
@@ -2669,6 +2683,7 @@ typedef struct {
     _sg_attachment_t ds_att;
     ID3D11RenderTargetView* d3d11_rtvs[SG_MAX_COLOR_ATTACHMENTS];
     ID3D11DepthStencilView* d3d11_dsv;
+    int64_t used_frame;
 } _sg_pass_t;
 
 typedef struct {
@@ -2769,6 +2784,7 @@ typedef struct {
     int num_slots;
     int active_slot;
     uint32_t mtl_buf[SG_NUM_INFLIGHT_FRAMES];  /* index intp _sg_mtl_pool */
+    int64_t used_frame;
 } _sg_buffer_t;
 
 typedef struct {
@@ -2795,6 +2811,7 @@ typedef struct {
     uint32_t mtl_depth_tex;
     uint32_t mtl_msaa_tex;
     uint32_t mtl_sampler_state;
+    int64_t used_frame;
 } _sg_image_t;
 
 typedef struct {
@@ -2817,6 +2834,7 @@ typedef struct {
 typedef struct {
     _sg_slot_t slot;
     _sg_shader_stage_t stage[SG_NUM_SHADER_STAGES];
+    int64_t used_frame;
 } _sg_shader_t;
 
 typedef struct {
@@ -2841,6 +2859,7 @@ typedef struct {
     uint32_t mtl_stencil_ref;
     uint32_t mtl_rps;
     uint32_t mtl_dss;
+    int64_t used_frame;
 } _sg_pipeline_t;
 
 typedef struct {
@@ -2855,6 +2874,7 @@ typedef struct {
     int num_color_atts;
     _sg_attachment_t color_atts[SG_MAX_COLOR_ATTACHMENTS];
     _sg_attachment_t ds_att;
+    int64_t used_frame;
 } _sg_pass_t;
 
 typedef struct {

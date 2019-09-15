@@ -16,6 +16,8 @@ I will try to stick to these as much as possible, and I recommend every programm
 This is not a game engine, it's a relatively low-level framework for programmers to build their own engine/renderer/physics on top of it. The core of _rizz_ does not and will not implement any rendering techniques/physics or impose any specific entity system to the user. It just provides the basic building blocks for game developers. Other features will be implemented as plugins.
   
 ## Features
+see [CHANGELOG](CHANGES.md) for latest changes, new features and bug fixes.
+
 #### Core
 - *Portable C code*: C11 (gcc/clang), C99 (msvc) compatible code, designed with data-oriented mindset. 
 - *Plugin system*: Engine has a small core. Many functionalities are implemented through plugins.
@@ -30,8 +32,8 @@ This is not a game engine, it's a relatively low-level framework for programmers
 
 #### Graphics
 - *Multiple graphics API support*: Metal (iOS, MacOS). OpenGL-ES 2/3 (Android). Direct3D11 (Windows), OpenGL 3.3 (Linux)
-- *Portable shaders*: Write shaders once in GLSL, toolset will translate the shader to other platform APIs.
-- *Multi-threaded GPU command-buffer*: Draw commands can be submitted by multiple threads.
+- *Portable shaders*: Write shaders once in GLSL, toolset will automatically translate the shader to other APIs.
+- *Multi-threaded GPU command-buffer*: Draw commands can be submitted by multiple threads with _staged_ API.
 
 #### Plugins
 - [imgui](src/imgui): Dear-imgui plugin with some utility API
@@ -50,7 +52,7 @@ This is not a game engine, it's a relatively low-level framework for programmers
 - *MacOS*
 - *Android*
 - *RaspberryPI*
-- *iOS*: WIP v0.2
+- *iOS*: WIP
 
 ## Build
 _rizz_ is designed to run on all major mobile (iOS, android), PC (Windows, Linux, MacOS) and web (WebASM) platforms. 

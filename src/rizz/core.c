@@ -879,7 +879,7 @@ bool rizz__core_init(const rizz_config* conf)
         sx_assert(g_core.gfx_cmdbuffers[i]);
     }
     sx_tls_set(g_core.cmdbuffer_tls, g_core.gfx_cmdbuffers[0]);
-    rizz_log_info("(init) graphics: %s", k__gfx_driver_names[the__gfx.imm.backend()]);
+    rizz_log_info("(init) graphics: %s", k__gfx_driver_names[the__gfx.backend()]);
 
     // job dispatcher
     g_core.jobs = sx_job_create_context(
@@ -1049,7 +1049,7 @@ void rizz__core_frame()
         the_imgui->Render();
 
     // commit render (metal only)
-    the__gfx.imm.commit();
+    rizz__gfx_commit();
 
     // reset temp allocators
     for (int i = 0, c = g_core.num_workers; i < c; i++) {
@@ -1060,6 +1060,7 @@ void rizz__core_frame()
     rizz__http_update();
     rizz__vfs_async_update();
     rizz__asset_update();
+    rizz__gfx_update();
     sx_coro_update(g_core.coro, dt);
 
     // update plugins and application

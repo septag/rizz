@@ -30,7 +30,8 @@ set(INCLUDE_FILES "../../include/rizz/types.h"
                   "../../include/rizz/android.h")
 
 set(TEXT_FILES     "../../README.md"
-                   "../../TODO.md")
+                   "../../TODO.md"
+                   "../../CHANGES.md")
 
 set(EXTERNAL_INCLUDES ../../3rdparty/sokol/sokol_app.h 
                       ../../3rdparty/sokol/sokol_gfx.h

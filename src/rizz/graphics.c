@@ -128,6 +128,17 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 #include rizz_shader_path(shaders_h, debug.vert.h)
 #include rizz_shader_path(shaders_h, debug.frag.h)
 
+#ifdef _DEBUG
+#    define rizz__queue_destroy(_a, _id, _alloc)                        \
+        for (int __i = 0, __c = sx_array_count(_a); __i < __c; __i++) { \
+            sx_assert(_a[__i].id != _id.id);                            \
+        }                                                               \
+        sx_array_push(_alloc, _a, _id)
+#else
+#   define rizz__queue_destroy(_a, _id, _alloc) \
+    sx_array_push(_alloc, _a, _id)
+#endif
+
 // clang-format on
 
 typedef struct rizz__gfx_texture_mgr {
@@ -261,9 +272,14 @@ typedef struct rizz__gfx {
 #else
     sg_pipeline* pips;
 #endif
-    rizz__gfx_stream_buffer*
-        stream_buffs;    // sx_array: keep track of streaming buffers for append_buffers
+    rizz__gfx_stream_buffer* stream_buffs;    // sx_array: streaming buffers for append_buffers
     rizz__gfx_debug dbg;
+
+    sg_buffer* destroy_buffers;
+    sg_shader* destroy_shaders;
+    sg_pipeline* destroy_pips;
+    sg_pass* destroy_passes;
+    sg_image* destroy_images;
 
     rizz__trace_gfx trace;
     bool enable_profile;
@@ -534,7 +550,7 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
         sx_out_of_memory();
         return (rizz_asset_load_data){ .obj = { 0 } };
     }
-    tex->img = the__gfx.imm.alloc_image();
+    tex->img = the__gfx.alloc_image();
     sx_memcpy(&tex->info, info, sizeof(*info));
 
     return (rizz_asset_load_data){ .obj = { .ptr = tex },
@@ -642,7 +658,7 @@ static void rizz__texture_on_finalize(rizz_asset_load_data* data,
 
     char ext[32];
     sx_os_path_ext(ext, sizeof(ext), params->path);
-    the__gfx.imm.init_image(tex->img, desc);
+    the__gfx.init_image(tex->img, desc);
     if (!sx_strequalnocase(ext, ".dds") && !sx_strequalnocase(ext, ".ktx")) {
         sx_assert(desc->content.subimage[0][0].ptr);
         stbi_image_free((void*)desc->content.subimage[0][0].ptr);
@@ -671,7 +687,7 @@ static void rizz__texture_on_release(rizz_asset_obj obj, const sx_alloc* alloc)
         alloc = g_gfx_alloc;
 
     if (tex->img.id)
-        the__gfx.imm.destroy_image(tex->img);
+        the__gfx.destroy_image(tex->img);
     sx_free(alloc, tex);
 }
 
@@ -766,7 +782,7 @@ static rizz_texture rizz__texture_create_checker(int checker_size, int size,
     }
 
     rizz_texture tex =
-        (rizz_texture){ .img = the__gfx.imm.make_image(&(sg_image_desc){
+        (rizz_texture){ .img = the__gfx.make_image(&(sg_image_desc){
                             .width = size,
                             .height = size,
                             .num_mipmaps = 1,
@@ -865,7 +881,7 @@ static void rizz__texture_init()
     static uint32_t k_white_pixel = 0xffffffff;
     static uint32_t k_black_pixel = 0xff000000;
     g_gfx.tex_mgr.white_tex = (rizz_texture){
-        .img = the__gfx.imm.make_image(&(sg_image_desc){
+        .img = the__gfx.make_image(&(sg_image_desc){
             .width = 1,
             .height = 1,
             .num_mipmaps = 1,
@@ -883,7 +899,7 @@ static void rizz__texture_init()
     };
 
     g_gfx.tex_mgr.black_tex = (rizz_texture){
-        .img = the__gfx.imm.make_image(&(sg_image_desc){
+        .img = the__gfx.make_image(&(sg_image_desc){
             .width = 1,
             .height = 1,
             .num_mipmaps = 1,
@@ -921,11 +937,11 @@ static void rizz__texture_init()
 static void rizz__texture_release()
 {
     if (g_gfx.tex_mgr.white_tex.img.id)
-        the__gfx.imm.destroy_image(g_gfx.tex_mgr.white_tex.img);
+        the__gfx.destroy_image(g_gfx.tex_mgr.white_tex.img);
     if (g_gfx.tex_mgr.black_tex.img.id)
-        the__gfx.imm.destroy_image(g_gfx.tex_mgr.black_tex.img);
+        the__gfx.destroy_image(g_gfx.tex_mgr.black_tex.img);
     if (g_gfx.tex_mgr.checker_tex.img.id)
-        the__gfx.imm.destroy_image(g_gfx.tex_mgr.checker_tex.img);
+        the__gfx.destroy_image(g_gfx.tex_mgr.checker_tex.img);
 }
 
 static sg_image rizz__texture_white()
@@ -1434,7 +1450,7 @@ static rizz_shader rizz__shader_make_with_data(const sx_alloc* alloc, uint32_t v
         rizz__shader_parse_reflect_json(alloc, (const char*)fs_refl_json, jctx);
     sjson_destroy_context(jctx);
 
-    rizz_shader s = { .shd = the__gfx.imm.make_shader(
+    rizz_shader s = { .shd = the__gfx.make_shader(
                           rizz__shader_setup_desc(&shader_desc, vs_refl, vs_data, (int)vs_data_size,
                                                   fs_refl, fs_data, (int)fs_data_size)) };
 
@@ -1505,7 +1521,7 @@ static rizz_asset_load_data rizz__shader_on_prepare(const rizz_asset_load_params
     rizz_shader* shader = sx_malloc(alloc, sizeof(rizz_shader));
     if (!shader)
         return (rizz_asset_load_data){ .obj = { 0 } };
-    shader->shd = the__gfx.imm.alloc_shader();
+    shader->shd = the__gfx.alloc_shader();
     sx_memcpy(&shader->info, info, sizeof(*info));
 
     return (rizz_asset_load_data){ .obj = { .ptr = shader },
@@ -1607,7 +1623,7 @@ static void rizz__shader_on_finalize(rizz_asset_load_data* data,
     sg_shader_desc* desc = data->user;
     sx_assert(desc);
 
-    the__gfx.imm.init_shader(shader->shd, desc);
+    the__gfx.init_shader(shader->shd, desc);
 
     sx_free(g_gfx_alloc, data->user);
 }
@@ -1640,7 +1656,7 @@ static void rizz__shader_on_release(rizz_asset_obj obj, const sx_alloc* alloc)
         alloc = g_gfx_alloc;
 
     if (shader->shd.id)
-        the__gfx.imm.destroy_shader(shader->shd);
+        the__gfx.destroy_shader(shader->shd);
     sx_free(alloc, shader);
 }
 
@@ -2601,6 +2617,96 @@ void rizz__gfx_trace_reset_frame_stats()
     g_gfx.trace.t.num_apply_passes = 0;
 }
 
+static void rizz__gfx_collect_garbage(int64_t frame)
+{
+    // check frames and destroy objects if they are past 1 frame
+    // the reason is because the _staged_ API executes commands one frame after their calls:
+    //          frame #1
+    // <--------------------->
+    //      staged->destroy
+    //    execute queued cmds |->      frame #2
+    //                        <---------------------->
+    //
+
+    // buffers
+    for (int i = 0, c = sx_array_count(g_gfx.destroy_buffers); i < c; i++) {
+        sg_buffer buf_id = g_gfx.destroy_buffers[i];
+        _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, buf_id.id);
+        if (frame > buf->used_frame + 1) {
+            if (buf->usage == SG_USAGE_STREAM) {
+                for (int ii = 0, cc = sx_array_count(g_gfx.stream_buffs); ii < cc; ii++) {
+                    if (g_gfx.stream_buffs[ii].buf.id == buf_id.id) {
+                        sx_array_pop(g_gfx.stream_buffs, ii);
+                        break;
+                    }
+                }
+            }
+            sg_destroy_buffer(buf_id);
+            sx_array_pop(g_gfx.destroy_buffers, i);
+            i--;
+            c--;
+        }
+    }
+
+    // shaders
+    for (int i = 0, c = sx_array_count(g_gfx.destroy_shaders); i < c; i++) {
+        _sg_pipeline_t* shd = _sg_lookup_pipeline(&_sg.pools, g_gfx.destroy_shaders[i].id);
+        if (frame > shd->used_frame + 1) {
+            sg_destroy_shader(g_gfx.destroy_shaders[i]);
+            sx_array_pop(g_gfx.destroy_shaders, i);
+            i--;
+            c--;
+        }
+    }
+
+    // pipelines
+    for (int i = 0, c = sx_array_count(g_gfx.destroy_pips); i < c; i++) {
+        sg_pipeline pip_id = g_gfx.destroy_pips[i];
+        _sg_pipeline_t* pip = _sg_lookup_pipeline(&_sg.pools, pip_id.id);
+        if (frame > pip->used_frame + 1) {
+#if RIZZ_CONFIG_HOT_LOADING
+            for (int ii = 0, cc = sx_array_count(g_gfx.pips); ii < cc; ii++) {
+#    if defined(SOKOL_METAL)
+                sg_pipeline _pip = g_gfx.pips[ii].pip;
+#    else
+                sg_pipeline _pip = g_gfx.pips[ii];
+#    endif
+                if (_pip.id == pip_id.id) {
+                    sx_array_pop(g_gfx.pips, ii);
+                    break;
+                }
+            }
+#endif
+            sg_destroy_pipeline(pip_id);
+            sx_array_pop(g_gfx.destroy_pips, i);
+            i--;
+            c--;
+        }
+    }
+
+    // passes
+    for (int i = 0, c = sx_array_count(g_gfx.destroy_passes); i < c; i++) {
+        _sg_pass_t* pass = _sg_lookup_pass(&_sg.pools, g_gfx.destroy_passes[i].id);
+        if (frame > pass->used_frame + 1) {
+            sg_destroy_pass(g_gfx.destroy_passes[i]);
+            sx_array_pop(g_gfx.destroy_passes, i);
+            i--;
+            c--;
+        }
+    }
+
+    // images
+    for (int i = 0, c = sx_array_count(g_gfx.destroy_images); i < c; i++) {
+        _sg_image_t* img = _sg_lookup_image(&_sg.pools, g_gfx.destroy_images[i].id);
+        if (frame > img->used_frame + 1) {
+            sg_destroy_image(g_gfx.destroy_images[i]);
+            sx_array_pop(g_gfx.destroy_images, i);
+            i--;
+            c--;
+        }
+    }
+}
+
 //
 bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_profile)
 {
@@ -2652,11 +2758,11 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
 
     // debug draw
     {
-        g_gfx.dbg.vb = the__gfx.imm.make_buffer(&(sg_buffer_desc){
+        g_gfx.dbg.vb = the__gfx.make_buffer(&(sg_buffer_desc){
             .type = SG_BUFFERTYPE_VERTEXBUFFER,
             .usage = SG_USAGE_STREAM,
             .size = sizeof(rizz__debug_vertex) * RIZZ_CONFIG_MAX_DEBUG_VERTICES });
-        g_gfx.dbg.ib = the__gfx.imm.make_buffer(&(sg_buffer_desc){
+        g_gfx.dbg.ib = the__gfx.make_buffer(&(sg_buffer_desc){
             .type = SG_BUFFERTYPE_INDEXBUFFER,
             .usage = SG_USAGE_STREAM,
             .size = sizeof(rizz__debug_vertex) * RIZZ_CONFIG_MAX_DEBUG_INDICES });
@@ -2677,7 +2783,7 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
                                                                   SG_COMPAREFUNC_LESS_EQUAL } };
         the__gfx.shader_bindto_pipeline(&shader, &pip_desc_wire, &k__debug_vertex);
 
-        g_gfx.dbg.pip_wire = the__gfx.imm.make_pipeline(&pip_desc_wire);
+        g_gfx.dbg.pip_wire = the__gfx.make_pipeline(&pip_desc_wire);
         the__core.tmp_alloc_pop();
     }
 
@@ -2686,16 +2792,26 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
 
 void rizz__gfx_release()
 {
-
     // debug
     if (g_gfx.dbg.pip_wire.id)
-        the__gfx.imm.destroy_pipeline(g_gfx.dbg.pip_wire);
+        the__gfx.destroy_pipeline(g_gfx.dbg.pip_wire);
     if (g_gfx.dbg.shader.id)
-        the__gfx.imm.destroy_shader(g_gfx.dbg.shader);
+        the__gfx.destroy_shader(g_gfx.dbg.shader);
     if (g_gfx.dbg.vb.id)
-        the__gfx.imm.destroy_buffer(g_gfx.dbg.vb);
+        the__gfx.destroy_buffer(g_gfx.dbg.vb);
     if (g_gfx.dbg.ib.id)
-        the__gfx.imm.destroy_buffer(g_gfx.dbg.ib);
+        the__gfx.destroy_buffer(g_gfx.dbg.ib);
+
+    rizz__texture_release();
+
+    // deferred destroys
+    rizz__gfx_collect_garbage(the__core.frame_index() + 100);
+
+    sx_array_free(g_gfx_alloc, g_gfx.destroy_buffers);
+    sx_array_free(g_gfx_alloc, g_gfx.destroy_images);
+    sx_array_free(g_gfx_alloc, g_gfx.destroy_passes);
+    sx_array_free(g_gfx_alloc, g_gfx.destroy_pips);
+    sx_array_free(g_gfx_alloc, g_gfx.destroy_shaders);
 
     for (int i = 0; i < sx_array_count(g_gfx.cmd_buffers); i++) {
         sx_assert(g_gfx.cmd_buffers[i]);
@@ -2710,8 +2826,6 @@ void rizz__gfx_release()
     sx_array_free(g_gfx_alloc, g_gfx.stages);
     sx_array_free(g_gfx_alloc, g_gfx.pips);
 
-    rizz__texture_release();
-
     sx_mem_release_writer(&g_gfx.trace.make_cmds_writer);
 
     // profiler
@@ -2724,6 +2838,16 @@ void rizz__gfx_release()
     }
 
     sg_shutdown();
+}
+
+void rizz__gfx_update()
+{
+    rizz__gfx_collect_garbage(the__core.frame_index());
+}
+
+void rizz__gfx_commit() 
+{
+    sg_commit();
 }
 
 static rizz_gfx_backend rizz__gfx_backend(void)
@@ -2912,6 +3036,9 @@ static void rizz__cb_begin_pass(sg_pass pass, const sg_pass_action* pass_action)
     sx_memcpy(buff, pass_action, sizeof(*pass_action));
     buff += sizeof(*pass_action);
     *((sg_pass*)buff) = pass;
+
+    _sg_pass_t* _pass = _sg_lookup_pass(&_sg.pools, pass.id);
+    _pass->used_frame = the__core.frame_index();
 }
 
 static uint8_t* rizz__cb_run_begin_pass(uint8_t* buff)
@@ -3044,13 +3171,17 @@ static void rizz__cb_apply_pipeline(sg_pipeline pip)
     ++cb->cmd_idx;
 
     *((sg_pipeline*)buff) = pip;
+
+    _sg_pipeline_t* _pip = _sg_lookup_pipeline(&_sg.pools, pip.id);
+    _pip->used_frame = _pip->shader->used_frame = the__core.frame_index();
 }
 
 static uint8_t* rizz__cb_run_apply_pipeline(uint8_t* buff)
 {
-    sg_pipeline pip = *((sg_pipeline*)buff);
-    sg_apply_pipeline(pip);
+    sg_pipeline pip_id = *((sg_pipeline*)buff);
+    sg_apply_pipeline(pip_id);
     buff += sizeof(sg_pipeline);
+
     return buff;
 }
 
@@ -3076,12 +3207,48 @@ static void rizz__cb_apply_bindings(const sg_bindings* bind)
     ++cb->cmd_idx;
 
     sx_memcpy(buff, bind, sizeof(*bind));
+
+    // frame update
+    int64_t frame_idx = the__core.frame_index();
+    for (int i = 0; i < SG_MAX_SHADERSTAGE_BUFFERS; i++) {
+        if (bind->vertex_buffers[i].id) {
+            _sg_buffer_t* vb = _sg_lookup_buffer(&_sg.pools, bind->vertex_buffers[i].id);
+            vb->used_frame = frame_idx;
+        } else {
+            break;
+        }
+    }
+
+    if (bind->index_buffer.id) {
+        _sg_buffer_t* ib = _sg_lookup_buffer(&_sg.pools, bind->index_buffer.id);
+        ib->used_frame = frame_idx;
+    }
+
+    for (int i = 0; i < SG_MAX_SHADERSTAGE_IMAGES; i++) {
+        if (bind->vs_images[i].id) {
+            _sg_image_t* img = _sg_lookup_image(&_sg.pools, bind->vs_images[i].id);
+            img->used_frame = frame_idx;
+        } else {
+            break;
+        }
+    }
+
+    for (int i = 0; i < SG_MAX_SHADERSTAGE_IMAGES; i++) {
+        if (bind->fs_images[i].id) {
+            _sg_image_t* img = _sg_lookup_image(&_sg.pools, bind->fs_images[i].id);
+            img->used_frame = frame_idx;
+        } else {
+            break;
+        }
+    }
 }
 
 static uint8_t* rizz__cb_run_apply_bindings(uint8_t* buff)
 {
-    sg_apply_bindings((const sg_bindings*)buff);
+    const sg_bindings* bindings = (const sg_bindings*)buff;
+    sg_apply_bindings(bindings);
     buff += sizeof(sg_bindings);
+
     return buff;
 }
 
@@ -3221,6 +3388,9 @@ static void rizz__cb_update_buffer(sg_buffer buf, const void* data_ptr, int data
     *((int*)buff) = data_size;
     buff += sizeof(int);
     sx_memcpy(buff, data_ptr, data_size);
+
+    _sg_buffer_t* _buff = _sg_lookup_buffer(&_sg.pools, buf.id);
+    _buff->used_frame = the__core.frame_index();
 }
 
 static uint8_t* rizz__cb_run_update_buffer(uint8_t* buff)
@@ -3231,6 +3401,7 @@ static uint8_t* rizz__cb_run_update_buffer(uint8_t* buff)
     buff += sizeof(int);
     sg_update_buffer(buf, buff, data_size);
     buff += data_size;
+
     return buff;
 }
 
@@ -3280,6 +3451,9 @@ static int rizz__cb_append_buffer(sg_buffer buf, const void* data_ptr, int data_
     buff += sizeof(int);
     sx_memcpy(buff, data_ptr, data_size);
 
+    _sg_buffer_t* _buff = _sg_lookup_buffer(&_sg.pools, buf.id);
+    _buff->used_frame = the__core.frame_index();
+
     return stream_offset;
 }
 
@@ -3301,6 +3475,7 @@ static uint8_t* rizz__cb_run_append_buffer(uint8_t* buff)
               "streaming buffers probably destroyed during render/update");
     sg_map_buffer(buf, stream_offset, buff, data_size);
     buff += data_size;
+
     return buff;
 }
 
@@ -3352,11 +3527,14 @@ static void rizz__cb_update_image(sg_image img, const sg_image_content* data)
             }
         }
     }
+
+    _sg_image_t* _img = _sg_lookup_image(&_sg.pools, img.id);
+    _img->used_frame = the__core.frame_index();
 }
 
 static uint8_t* rizz__cb_run_update_image(uint8_t* buff)
 {
-    sg_image img = *((sg_image*)buff);
+    sg_image img_id = *((sg_image*)buff);
     buff += sizeof(sg_image);
     sg_image_content data = *((sg_image_content*)buff);
     buff += sizeof(sg_image_content);
@@ -3372,7 +3550,8 @@ static uint8_t* rizz__cb_run_update_image(uint8_t* buff)
         }
     }
 
-    sg_update_image(img, &data);
+    sg_update_image(img_id, &data);
+
     return buff;
 }
 
@@ -3669,25 +3848,28 @@ static sg_pipeline rizz__make_pipeline(const sg_pipeline_desc* desc)
     sx_array_push(g_gfx_alloc, g_gfx.pips, pip_id);
 #    endif
 #endif
+
     return pip_id;
 }
 
 static void rizz__destroy_pipeline(sg_pipeline pip_id)
 {
-#if RIZZ_CONFIG_HOT_LOADING
-    for (int i = 0, c = sx_array_count(g_gfx.pips); i < c; i++) {
-#    if defined(SOKOL_METAL)
-        sg_pipeline _pip = g_gfx.pips[i].pip;
-#    else
-        sg_pipeline _pip = g_gfx.pips[i];
-#    endif
-        if (_pip.id == pip_id.id) {
-            sx_array_pop(g_gfx.pips, i);
-            break;
-        }
-    }
-#endif
-    sg_destroy_pipeline(pip_id);
+    rizz__queue_destroy(g_gfx.destroy_pips, pip_id, g_gfx_alloc);
+}
+
+static void rizz__destroy_shader(sg_shader shd_id)
+{
+    rizz__queue_destroy(g_gfx.destroy_shaders, shd_id, g_gfx_alloc);
+}
+
+static void rizz__destroy_pass(sg_pass pass_id)
+{
+    rizz__queue_destroy(g_gfx.destroy_passes, pass_id, g_gfx_alloc);
+}
+
+static void rizz__destroy_image(sg_image img_id)
+{
+    rizz__queue_destroy(g_gfx.destroy_images, img_id, g_gfx_alloc);
 }
 
 static void rizz__init_buffer(sg_buffer buf_id, const sg_buffer_desc* desc)
@@ -3712,16 +3894,7 @@ static sg_buffer rizz__make_buffer(const sg_buffer_desc* desc)
 static void rizz__destroy_buffer(sg_buffer buf_id)
 {
     _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, buf_id.id);
-    if (buf->usage == SG_USAGE_STREAM) {
-        for (int i = 0, c = sx_array_count(g_gfx.stream_buffs); i < c; i++) {
-            if (g_gfx.stream_buffs[i].buf.id == buf_id.id) {
-                sx_array_pop(g_gfx.stream_buffs, i);
-                break;
-            }
-        }
-    }
-
-    sg_destroy_buffer(buf_id);
+    rizz__queue_destroy(g_gfx.destroy_buffers, buf_id, g_gfx_alloc);
 }
 
 static void rizz__begin_profile_sample(const char* name, uint32_t* hash_cache)
@@ -3910,7 +4083,7 @@ void rizz__debug_grid_xyplane(float spacing, float spacing_bold, const sx_mat4* 
     the__core.tmp_alloc_pop();
 }
 
-static void rizz__get_internal_state(void** make_cmdbuff, int* make_cmdbuff_sz)
+static void rizz__internal_state(void** make_cmdbuff, int* make_cmdbuff_sz)
 {
     *make_cmdbuff = g_gfx.trace.make_cmds_writer.data;
     *make_cmdbuff_sz = (int)g_gfx.trace.make_cmds_writer.pos;
@@ -3924,75 +4097,21 @@ static const rizz_gfx_trace_info* rizz__trace_info()
 
 // clang-format off
 rizz_api_gfx the__gfx = {
-    .imm = { .backend           = rizz__gfx_backend,
-             .GL_family         = rizz__gfx_GL_family,
-             .reset_state_cache = sg_reset_state_cache,
-
-             .make_buffer           = rizz__make_buffer,
-             .make_image            = sg_make_image,
-             .make_shader           = sg_make_shader,
-             .make_pipeline         = rizz__make_pipeline,
-             .make_pass             = sg_make_pass,
-             .destroy_buffer        = rizz__destroy_buffer,
-             .destroy_image         = sg_destroy_image,
-             .destroy_shader        = sg_destroy_shader,
-             .destroy_pipeline      = rizz__destroy_pipeline,
-             .destroy_pass          = sg_destroy_pass,
+    .imm = { 
              .update_buffer         = sg_update_buffer,
              .update_image          = sg_update_image,
              .append_buffer         = sg_append_buffer,
-             .query_buffer_overflow = sg_query_buffer_overflow,
-
-             .query_buffer_state   = sg_query_buffer_state,
-             .query_image_state    = sg_query_image_state,
-             .query_shader_state   = sg_query_shader_state,
-             .query_pipeline_state = sg_query_pipeline_state,
-             .query_pass_state     = sg_query_pass_state,
-
-             .begin_default_pass = sg_begin_default_pass,
-             .begin_pass         = sg_begin_pass,
-             .apply_viewport     = sg_apply_viewport,
-             .apply_scissor_rect = sg_apply_scissor_rect,
-             .apply_pipeline      = sg_apply_pipeline,
-             .apply_bindings     = sg_apply_bindings,
-             .apply_uniforms     = sg_apply_uniforms,
-             .draw               = sg_draw,
-             .end_pass           = sg_end_pass,
-             .commit             = sg_commit,
-
-             .alloc_buffer   = sg_alloc_buffer,
-             .alloc_image    = sg_alloc_image,
-             .alloc_shader   = sg_alloc_shader,
-             .alloc_pipeline = sg_alloc_pipeline,
-             .alloc_pass     = sg_alloc_pass,
-             .init_buffer    = rizz__init_buffer,
-             .init_image     = sg_init_image,
-             .init_shader    = sg_init_shader,
-             .init_pipeline  = rizz__init_pipeline,
-             .init_pass      = sg_init_pass,
-             .fail_buffer    = sg_fail_buffer,
-             .fail_image     = sg_fail_image,
-             .fail_shader    = sg_fail_shader,
-             .fail_pipeline  = sg_fail_pipeline,
-             .fail_pass      = sg_fail_pass,
-
-             .begin_profile_sample = rizz__begin_profile_sample,
-             .end_profile_sample   = rizz__end_profile_sample,
-
-             .setup_context    = sg_setup_context,
-             .activate_context = sg_activate_context,
-             .discard_context  = sg_discard_context,
-             .install_trace_hooks = sg_install_trace_hooks,
-             .query_desc = sg_query_desc,
-             .query_buffer_info = sg_query_buffer_info,
-             .query_image_info = sg_query_image_info,
-             .query_shader_info = sg_query_shader_info,
-             .query_pipeline_info = sg_query_pipeline_info,
-             .query_pass_info = sg_query_pass_info,
-             .query_features = sg_query_features,
-             .query_limits = sg_query_limits,
-             .query_pixelformat = sg_query_pixelformat,
-             ._get_internal_state = rizz__get_internal_state, },
+             .begin_default_pass    = sg_begin_default_pass,
+             .begin_pass            = sg_begin_pass,
+             .apply_viewport        = sg_apply_viewport,
+             .apply_scissor_rect    = sg_apply_scissor_rect,
+             .apply_pipeline        = sg_apply_pipeline,
+             .apply_bindings        = sg_apply_bindings,
+             .apply_uniforms        = sg_apply_uniforms,
+             .draw                  = sg_draw,
+             .end_pass              = sg_end_pass,
+             .begin_profile_sample  = rizz__begin_profile_sample,
+             .end_profile_sample    = rizz__end_profile_sample },
     .staged = { .begin                = rizz__cb_begin_stage,
                 .end                  = rizz__cb_end_stage,
                 .begin_default_pass   = rizz__cb_begin_default_pass,
@@ -4009,6 +4128,55 @@ rizz_api_gfx the__gfx = {
                 .update_image         = rizz__cb_update_image,
                 .begin_profile_sample = rizz__cb_begin_profile_sample,
                 .end_profile_sample   = rizz__cb_end_profile_sample },
+    .backend                    = rizz__gfx_backend,
+    .GL_family                  = rizz__gfx_GL_family,
+    .reset_state_cache          = sg_reset_state_cache,
+    .make_buffer                = rizz__make_buffer,
+    .make_image                 = sg_make_image,
+    .make_shader                = sg_make_shader,
+    .make_pipeline              = rizz__make_pipeline,
+    .make_pass                  = sg_make_pass,
+    .destroy_buffer             = rizz__destroy_buffer,
+    .destroy_image              = rizz__destroy_image,
+    .destroy_shader             = rizz__destroy_shader,
+    .destroy_pipeline           = rizz__destroy_pipeline,
+    .destroy_pass               = rizz__destroy_pass,
+    .query_buffer_overflow      = sg_query_buffer_overflow,
+    .query_buffer_state         = sg_query_buffer_state,
+    .query_image_state          = sg_query_image_state,
+    .query_shader_state         = sg_query_shader_state,
+    .query_pipeline_state       = sg_query_pipeline_state,
+    .query_pass_state           = sg_query_pass_state,
+    .alloc_buffer               = sg_alloc_buffer,
+    .alloc_image                = sg_alloc_image,
+    .alloc_shader               = sg_alloc_shader,
+    .alloc_pipeline             = sg_alloc_pipeline,
+    .alloc_pass                 = sg_alloc_pass,
+    .init_buffer                = rizz__init_buffer,
+    .init_image                 = sg_init_image,
+    .init_shader                = sg_init_shader,
+    .init_pipeline              = rizz__init_pipeline,
+    .init_pass                  = sg_init_pass,
+    .fail_buffer                = sg_fail_buffer,
+    .fail_image                 = sg_fail_image,
+    .fail_shader                = sg_fail_shader,
+    .fail_pipeline              = sg_fail_pipeline,
+    .fail_pass                  = sg_fail_pass,
+    .setup_context              = sg_setup_context,
+    .activate_context           = sg_activate_context,
+    .discard_context            = sg_discard_context,
+    .install_trace_hooks        = sg_install_trace_hooks,
+    .query_desc                 = sg_query_desc,
+    .query_buffer_info          = sg_query_buffer_info,
+    .query_image_info           = sg_query_image_info,
+    .query_shader_info          = sg_query_shader_info,
+    .query_pipeline_info        = sg_query_pipeline_info,
+    .query_pass_info            = sg_query_pass_info,
+    .query_features             = sg_query_features,
+    .query_limits               = sg_query_limits,
+    .query_pixelformat          = sg_query_pixelformat,
+    .internal_state             = rizz__internal_state,
+
     .stage_register             = rizz__stage_register,
     .stage_enable               = rizz__stage_enable,
     .stage_disable              = rizz__stage_disable,

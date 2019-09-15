@@ -42,14 +42,14 @@ static sx_mat4 rizz__cam_perspective_mat(const rizz_camera* cam)
     float w = cam->viewport.xmax - cam->viewport.xmin;
     float h = cam->viewport.ymax - cam->viewport.ymin;
     return sx_mat4_perspectiveFOV(sx_torad(cam->fov), w / h, cam->fnear, cam->ffar,
-                                  the__gfx.imm.GL_family());
+                                  the__gfx.GL_family());
 }
 
 static sx_mat4 rizz__cam_ortho_mat(const rizz_camera* cam)
 {
     return sx_mat4_ortho(cam->viewport.xmax - cam->viewport.xmin,
                          cam->viewport.ymax - cam->viewport.ymin, cam->fnear, cam->ffar, 0,
-                         the__gfx.imm.GL_family());
+                         the__gfx.GL_family());
 }
 
 static sx_mat4 rizz__cam_view_mat(const rizz_camera* cam)

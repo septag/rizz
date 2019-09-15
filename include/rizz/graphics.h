@@ -201,98 +201,17 @@ typedef struct rizz_gfx_trace_info {
 
 typedef struct sjson_context sjson_context;    // shader_parse_reflection
 
+// There are two kinds of drawing APIs:
+//
 // Immediate API: access directly to GPU graphics API. this is actually a thin wrapper over backend
-//                Calls are executed immediately and sequentially, unlike deferred API (see below)
+//                Calls are executed immediately and sequentially, unlike _staged_ API (see below)
 // Note: this API is NOT multi-threaded
 //       Immediate mode is more of a lower-level graphics API
-//       It is recommended to use retained-mode API mentioned below,
+//       It is recommended to use staged API mentioned below,
 //       because most of graphics primitives like sprites and text uses retained-mode API for it's
 //       muti-threading capabilities
-typedef struct rizz_api_gfx_immediate {
-    rizz_gfx_backend (*backend)(void);
-    bool (*GL_family)();
-    void (*reset_state_cache)(void);
-
-    // resource creation, destruction and updating
-    sg_buffer (*make_buffer)(const sg_buffer_desc* desc);
-    sg_image (*make_image)(const sg_image_desc* desc);
-    sg_shader (*make_shader)(const sg_shader_desc* desc);
-    sg_pipeline (*make_pipeline)(const sg_pipeline_desc* desc);
-    sg_pass (*make_pass)(const sg_pass_desc* desc);
-
-    void (*destroy_buffer)(sg_buffer buf);
-    void (*destroy_image)(sg_image img);
-    void (*destroy_shader)(sg_shader shd);
-    void (*destroy_pipeline)(sg_pipeline pip);
-    void (*destroy_pass)(sg_pass pass);
-
-    void (*update_buffer)(sg_buffer buf, const void* data_ptr, int data_size);
-    void (*update_image)(sg_image img, const sg_image_content* data);
-    int (*append_buffer)(sg_buffer buf, const void* data_ptr, int data_size);
-    bool (*query_buffer_overflow)(sg_buffer buf);
-
-    // get resource state (initial, alloc, valid, failed)
-    sg_resource_state (*query_buffer_state)(sg_buffer buf);
-    sg_resource_state (*query_image_state)(sg_image img);
-    sg_resource_state (*query_shader_state)(sg_shader shd);
-    sg_resource_state (*query_pipeline_state)(sg_pipeline pip);
-    sg_resource_state (*query_pass_state)(sg_pass pass);
-
-    // rendering functions
-    void (*begin_default_pass)(const sg_pass_action* pass_action, int width, int height);
-    void (*begin_pass)(sg_pass pass, const sg_pass_action* pass_action);
-    void (*apply_viewport)(int x, int y, int width, int height, bool origin_top_left);
-    void (*apply_scissor_rect)(int x, int y, int width, int height, bool origin_top_left);
-    void (*apply_pipeline)(sg_pipeline pip);
-    void (*apply_bindings)(const sg_bindings* bind);
-    void (*apply_uniforms)(sg_shader_stage stage, int ub_index, const void* data, int num_bytes);
-    void (*draw)(int base_element, int num_elements, int num_instances);
-    void (*end_pass)(void);
-    void (*commit)();
-
-    // separate resource allocation and initialization (for async setup)
-    sg_buffer (*alloc_buffer)(void);
-    sg_image (*alloc_image)(void);
-    sg_shader (*alloc_shader)(void);
-    sg_pipeline (*alloc_pipeline)(void);
-    sg_pass (*alloc_pass)(void);
-
-    void (*init_buffer)(sg_buffer buf_id, const sg_buffer_desc* desc);
-    void (*init_image)(sg_image img_id, const sg_image_desc* desc);
-    void (*init_shader)(sg_shader shd_id, const sg_shader_desc* desc);
-    void (*init_pipeline)(sg_pipeline pip_id, const sg_pipeline_desc* desc);
-    void (*init_pass)(sg_pass pass_id, const sg_pass_desc* desc);
-    void (*fail_buffer)(sg_buffer buf_id);
-    void (*fail_image)(sg_image img_id);
-    void (*fail_shader)(sg_shader shd_id);
-    void (*fail_pipeline)(sg_pipeline pip_id);
-    void (*fail_pass)(sg_pass pass_id);
-
-    // profile
-    void (*begin_profile_sample)(const char* name, uint32_t* hash_cache);
-    void (*end_profile_sample)();
-
-    // rendering contexts for multi-window rendering (optional)
-    sg_context (*setup_context)(void);
-    void (*activate_context)(sg_context ctx_id);
-    void (*discard_context)(sg_context ctx_id);
-
-    sg_trace_hooks (*install_trace_hooks)(const sg_trace_hooks* trace_hooks);
-    sg_desc (*query_desc)(void);
-    sg_buffer_info (*query_buffer_info)(sg_buffer buf);
-    sg_image_info (*query_image_info)(sg_image img);
-    sg_shader_info (*query_shader_info)(sg_shader shd);
-    sg_pipeline_info (*query_pipeline_info)(sg_pipeline pip);
-    sg_pass_info (*query_pass_info)(sg_pass pass);
-    sg_features (*query_features)(void);
-    sg_limits (*query_limits)(void);
-    sg_pixelformat_info (*query_pixelformat)(sg_pixel_format fmt);
-
-    // internal use (imgui plugin)
-    void (*_get_internal_state)(void** make_cmdbuff, int* make_cmdbuff_sz);
-} rizz_api_gfx_immediate;
-
-// Staged API:   staged, multi-threaded API.
+//
+// Staged API:   staged (defrred calls), multi-threaded API.
 //               Contains only a selection of async drawing functions
 //               Can be called within worker threads spawned by `job_dispatch`, but with some rules
 //               and restrictions
@@ -335,7 +254,6 @@ typedef struct rizz_api_gfx_immediate {
 //              }
 //
 // Rule #3: Do not destroy graphics objects (buffers/shaders/textures) during rendering work
-//          Only destroy at the begining of the frame before any rendering starts
 //          This is actually like the multi-threaded asset usage pattern (see asset.h)
 //          You should only destroy graphics objects when they are not being rendered or used
 //
@@ -355,8 +273,19 @@ typedef struct rizz_api_gfx_immediate {
 // frame with the render-data submitted from the previous frame.
 // So it's your responsibility to not destroy graphics resources where they are used in the
 // current frame
+// 
+// Note: Difference between immediate and staged API is that staged API queues the draw commands
+//       and submits them to the GPU at the begining of the _next_ frame. So the rendering will have
+//       one frame latency, but the work load will be more balanced between CPU and GPU.
+//       But immediate mode API sends commands directly to the GPU to and will be synced at the 
+//       end of the current frame. So latency is lower, but it does not have multi-threading
+//       capabilities.
+//       The trade-off is that in theory, staged API will perform better in high detail scenes where 
+//       there is lots of draws, especially if you use multi-threaded rendering. But in immediate 
+//       API, the rendering latency is lower but would waste cycles waiting for GPU thus perform 
+//       worse in high complexity scenes.
 //
-typedef struct rizz_api_gfx_staged {
+typedef struct rizz_api_gfx_draw {
     bool (*begin)(rizz_gfx_stage stage);
     void (*end)();
 
@@ -377,11 +306,75 @@ typedef struct rizz_api_gfx_staged {
     // profile
     void (*begin_profile_sample)(const char* name, uint32_t* hash_cache);
     void (*end_profile_sample)();
-} rizz_api_gfx_staged;
+} rizz_api_gfx_draw;
 
 typedef struct rizz_api_gfx {
-    rizz_api_gfx_immediate imm;
-    rizz_api_gfx_staged staged;
+    rizz_api_gfx_draw imm;      // immediate draw API
+    rizz_api_gfx_draw staged;   // staged (deferred calls) draw API
+
+    rizz_gfx_backend (*backend)(void);
+    bool (*GL_family)();
+    void (*reset_state_cache)(void);
+
+    // resource creation, destruction and updating
+    sg_buffer (*make_buffer)(const sg_buffer_desc* desc);
+    sg_image (*make_image)(const sg_image_desc* desc);
+    sg_shader (*make_shader)(const sg_shader_desc* desc);
+    sg_pipeline (*make_pipeline)(const sg_pipeline_desc* desc);
+    sg_pass (*make_pass)(const sg_pass_desc* desc);
+
+    // destroys (destroys are deferred calls, they execute after 1 frame, if object is not used)
+    void (*destroy_buffer)(sg_buffer buf);
+    void (*destroy_image)(sg_image img);
+    void (*destroy_shader)(sg_shader shd);
+    void (*destroy_pipeline)(sg_pipeline pip);
+    void (*destroy_pass)(sg_pass pass);
+
+    // get resource state (initial, alloc, valid, failed)
+    bool (*query_buffer_overflow)(sg_buffer buf);
+    sg_resource_state (*query_buffer_state)(sg_buffer buf);
+    sg_resource_state (*query_image_state)(sg_image img);
+    sg_resource_state (*query_shader_state)(sg_shader shd);
+    sg_resource_state (*query_pipeline_state)(sg_pipeline pip);
+    sg_resource_state (*query_pass_state)(sg_pass pass);
+
+    // separate resource allocation and initialization (for async setup)
+    sg_buffer (*alloc_buffer)(void);
+    sg_image (*alloc_image)(void);
+    sg_shader (*alloc_shader)(void);
+    sg_pipeline (*alloc_pipeline)(void);
+    sg_pass (*alloc_pass)(void);
+
+    // init/fail objects
+    void (*init_buffer)(sg_buffer buf_id, const sg_buffer_desc* desc);
+    void (*init_image)(sg_image img_id, const sg_image_desc* desc);
+    void (*init_shader)(sg_shader shd_id, const sg_shader_desc* desc);
+    void (*init_pipeline)(sg_pipeline pip_id, const sg_pipeline_desc* desc);
+    void (*init_pass)(sg_pass pass_id, const sg_pass_desc* desc);
+    void (*fail_buffer)(sg_buffer buf_id);
+    void (*fail_image)(sg_image img_id);
+    void (*fail_shader)(sg_shader shd_id);
+    void (*fail_pipeline)(sg_pipeline pip_id);
+    void (*fail_pass)(sg_pass pass_id);
+
+    // rendering contexts for multi-window rendering (optional)
+    sg_context (*setup_context)(void);
+    void (*activate_context)(sg_context ctx_id);
+    void (*discard_context)(sg_context ctx_id);
+
+    sg_trace_hooks (*install_trace_hooks)(const sg_trace_hooks* trace_hooks);
+    sg_desc (*query_desc)(void);
+    sg_buffer_info (*query_buffer_info)(sg_buffer buf);
+    sg_image_info (*query_image_info)(sg_image img);
+    sg_shader_info (*query_shader_info)(sg_shader shd);
+    sg_pipeline_info (*query_pipeline_info)(sg_pipeline pip);
+    sg_pass_info (*query_pass_info)(sg_pass pass);
+    sg_features (*query_features)(void);
+    sg_limits (*query_limits)(void);
+    sg_pixelformat_info (*query_pixelformat)(sg_pixel_format fmt);
+
+    // internal use (imgui plugin)
+    void (*internal_state)(void** make_cmdbuff, int* make_cmdbuff_sz);
 
     // Stage:
     //     To performed deferred drawing calls, you should setup rendering stages on application
@@ -438,6 +431,8 @@ void rizz__gfx_trace_reset_frame_stats();
 rizz__gfx_cmdbuffer* rizz__gfx_create_command_buffer(const sx_alloc* alloc);
 void rizz__gfx_destroy_command_buffer(rizz__gfx_cmdbuffer* cb);
 void rizz__gfx_execute_command_buffers();
+void rizz__gfx_update();
+void rizz__gfx_commit();
 
 RIZZ_API rizz_api_gfx the__gfx;
 #endif

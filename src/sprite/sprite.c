@@ -1220,11 +1220,11 @@ static bool sprite__resize_draw_limits(int max_verts, int max_indices)
     // recreate vertex/index buffers
     sprite__draw_context* dc = &g_spr.drawctx;
     if (dc->vbuff[0].id)
-        the_gfx->imm.destroy_buffer(dc->vbuff[0]);
+        the_gfx->destroy_buffer(dc->vbuff[0]);
     if (dc->vbuff[1].id)
-        the_gfx->imm.destroy_buffer(dc->vbuff[1]);
+        the_gfx->destroy_buffer(dc->vbuff[1]);
     if (dc->ibuff.id)
-        the_gfx->imm.destroy_buffer(dc->ibuff);
+        the_gfx->destroy_buffer(dc->ibuff);
 
     if (max_verts == 0 || max_indices == 0) {
         dc->vbuff[0] = dc->vbuff[1] = dc->ibuff = (sg_buffer){ 0 };
@@ -1232,16 +1232,16 @@ static bool sprite__resize_draw_limits(int max_verts, int max_indices)
     }
 
     dc->vbuff[0] =
-        the_gfx->imm.make_buffer(&(sg_buffer_desc){ .size = sizeof(rizz_sprite_vertex) * max_verts,
-                                                    .usage = SG_USAGE_STREAM,
-                                                    .type = SG_BUFFERTYPE_VERTEXBUFFER });
-    dc->vbuff[1] = the_gfx->imm.make_buffer(
+        the_gfx->make_buffer(&(sg_buffer_desc){ .size = sizeof(rizz_sprite_vertex) * max_verts,
+                                                .usage = SG_USAGE_STREAM,
+                                                .type = SG_BUFFERTYPE_VERTEXBUFFER });
+    dc->vbuff[1] = the_gfx->make_buffer(
         &(sg_buffer_desc){ .size = sizeof(sprite__vertex_transform) * max_verts,
                            .usage = SG_USAGE_STREAM,
                            .type = SG_BUFFERTYPE_VERTEXBUFFER });
-    dc->ibuff = the_gfx->imm.make_buffer(&(sg_buffer_desc){ .size = sizeof(uint16_t) * max_indices,
-                                                            .usage = SG_USAGE_STREAM,
-                                                            .type = SG_BUFFERTYPE_INDEXBUFFER });
+    dc->ibuff = the_gfx->make_buffer(&(sg_buffer_desc){ .size = sizeof(uint16_t) * max_indices,
+                                                        .usage = SG_USAGE_STREAM,
+                                                        .type = SG_BUFFERTYPE_INDEXBUFFER });
 
     return dc->vbuff[0].id && dc->vbuff[1].id && dc->ibuff.id;
 }
@@ -1310,7 +1310,7 @@ static bool sprite__init()
                                        .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
                                        .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA } };
 
-    g_spr.drawctx.pip = the_gfx->imm.make_pipeline(
+    g_spr.drawctx.pip = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader, &pip_desc, &k_sprite_vertex_layout));
 
     // wireframe pipeline
@@ -1320,7 +1320,7 @@ static bool sprite__init()
         k_sprite_wire_fs_refl_size, k_sprite_wire_fs_refl_data);
     g_spr.drawctx.shader = shader_wire.shd;
     pip_desc.index_type = SG_INDEXTYPE_NONE;
-    g_spr.drawctx.pip_wire = the_gfx->imm.make_pipeline(
+    g_spr.drawctx.pip_wire = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader_wire, &pip_desc, &k_sprite_wire_vertex_layout));
 
     the_core->tmp_alloc_pop();
@@ -1336,19 +1336,19 @@ static void sprite__release()
     {
         const sprite__draw_context* dc = &g_spr.drawctx;
         if (dc->vbuff[0].id)
-            the_gfx->imm.destroy_buffer(dc->vbuff[0]);
+            the_gfx->destroy_buffer(dc->vbuff[0]);
         if (dc->vbuff[1].id)
-            the_gfx->imm.destroy_buffer(dc->vbuff[1]);
+            the_gfx->destroy_buffer(dc->vbuff[1]);
         if (dc->ibuff.id)
-            the_gfx->imm.destroy_buffer(dc->ibuff);
+            the_gfx->destroy_buffer(dc->ibuff);
         if (dc->shader.id)
-            the_gfx->imm.destroy_shader(dc->shader);
+            the_gfx->destroy_shader(dc->shader);
         if (dc->shader_wire.id)
-            the_gfx->imm.destroy_shader(dc->shader_wire);
+            the_gfx->destroy_shader(dc->shader_wire);
         if (dc->pip.id)
-            the_gfx->imm.destroy_pipeline(dc->pip);
+            the_gfx->destroy_pipeline(dc->pip);
         if (dc->pip_wire.id)
-            the_gfx->imm.destroy_pipeline(dc->pip_wire);
+            the_gfx->destroy_pipeline(dc->pip_wire);
     }
 
     if (g_spr.sprite_handles) {

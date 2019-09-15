@@ -551,10 +551,10 @@ typedef struct {
     sg_imgui_caps_t caps;
     sg_pipeline cur_pipeline;
     sg_trace_hooks hooks;
-    rizz_api_gfx_immediate* api;
+    rizz_api_gfx* api;
 } sg_imgui_t;
 
-SOKOL_API_DECL void sg_imgui_init(sg_imgui_t* ctx, rizz_api_gfx_immediate* api);
+SOKOL_API_DECL void sg_imgui_init(sg_imgui_t* ctx, rizz_api_gfx* api);
 SOKOL_API_DECL void sg_imgui_discard(sg_imgui_t* ctx);
 SOKOL_API_DECL void sg_imgui_draw(sg_imgui_t* ctx);
 
@@ -3246,7 +3246,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_caps_panel(sg_imgui_t* ctx) {
 }
 
 /*--- PUBLIC FUNCTIONS -------------------------------------------------------*/
-SOKOL_API_IMPL void sg_imgui_init(sg_imgui_t* ctx, rizz_api_gfx_immediate* api) {
+SOKOL_API_IMPL void sg_imgui_init(sg_imgui_t* ctx, rizz_api_gfx* api) {
     SOKOL_ASSERT(ctx);
     SOKOL_ASSERT(api);
 
