@@ -329,7 +329,7 @@ static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params
     sx_handle_t handle = sx_handle_new_and_grow(g_snd.source_handles, g_snd_alloc);
     if (!handle) {
         sx_out_of_memory();
-        return (rizz_asset_load_data){ 0 };
+        return (rizz_asset_load_data){{ 0 }};
     }
 
     snd__source_flags flags = (sparams->looping ? SND_SOURCEFLAG_LOOPING : 0) |
@@ -350,7 +350,7 @@ static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params
     void* data = sx_malloc(alloc, total_sz);
     if (!data) {
         sx_out_of_memory();
-        return (rizz_asset_load_data){ 0 };
+        return (rizz_asset_load_data){{ 0 }};
     }
     src.data = data;
     uint8_t* buff = (uint8_t*)data;
@@ -805,7 +805,6 @@ static void snd__queue_play(rizz_snd_instance insthandle)
 
     sx_assert_rel(sx_handle_valid(g_snd.source_handles, inst->srchandle.id));
 
-    int index = sx_handle_index(inst->srchandle.id);
     snd__source* src = &g_snd.sources[sx_handle_index(inst->srchandle.id)];
     sx_assert(src->samples);
 
@@ -1175,7 +1174,6 @@ static void snd__plot_samples_wav(const char* label, const float* samples, int n
     sx_assert(values);
     int block_sz = num_samples / num_values;
     const float* plot_samples = samples;
-    float block_sz_rcp = 1.0f / (float)block_sz;
     for (int i = 0; i < num_values; i++) {
         float _max = -FLT_MAX;
         float _min = FLT_MAX;
@@ -1480,8 +1478,6 @@ static float snd__source_volume(rizz_snd_source srchandle)
 static void snd__source_stop(rizz_snd_source srchandle)
 {
     sx_assert_rel(sx_handle_valid(g_snd.source_handles, srchandle.id));
-
-    snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
 
     int c = g_snd.num_plays;
     for (int i = 0; i < c; i++) {

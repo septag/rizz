@@ -1581,7 +1581,6 @@ static void imgui__submit_make_commands(const void* cmdbuff, int cmdbuff_sz)
 
 rizz_plugin_decl_main(imgui, plugin, e)
 {
-    static sg_trace_hooks hooks_nil = { .user_data = NULL };
     switch (e) {
     case RIZZ_PLUGIN_EVENT_STEP:
         imgui__frame();

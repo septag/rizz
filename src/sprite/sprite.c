@@ -226,6 +226,7 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4267)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4244)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4146)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wshorten-64-to-32")
 #include "sort/sort.h"
 SX_PRAGMA_DIAGNOSTIC_POP()
 
@@ -822,7 +823,6 @@ static void sprite__animctrl_update_batch(const rizz_sprite_animctrl* handles, i
     for (int i = 0; i < num_ctrls; i++) {
         sx_assert_rel(sx_handle_valid(g_spr.animctrl_handles, handles[i].id));
         sprite__animctrl* ctrl = &g_spr.animctrls[sx_handle_index(handles[i].id)];
-        sprite__animctrl_state* state = ctrl->state;
 
         ctrls[i] = ctrl;
         clips[i] = ctrl->state->clip;
@@ -1886,7 +1886,7 @@ static void sprite__draw_wireframe_batch(const rizz_sprite* sprs, int num_sprite
     sprite__vertex_transform* tverts = sx_malloc(tmp_alloc, 
                                                  sizeof(sprite__vertex_transform)*dd->num_indices);
     sx_assert(tverts);
-    const sx_vec3 bcs[] = { { 1.0f, 0, 0 }, { 0, 1.0f, 0 }, { 0, 0, 1.0f } };
+    const sx_vec3 bcs[] = { {{ 1.0f, 0, 0 }}, {{ 0, 1.0f, 0 }}, {{ 0, 0, 1.0f }} };
 
     // put transforms into another vbuff
     int v = 0;

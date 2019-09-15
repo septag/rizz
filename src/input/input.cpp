@@ -20,6 +20,7 @@
 
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4267)
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wshorten-64-to-32")
 #include "gainput/gainput.h"
 SX_PRAGMA_DIAGNOSTIC_POP()
 #include "gainput/GainputDebugRenderer.h"
@@ -368,7 +369,6 @@ static void input__show_debugger(bool* p_open)
     auto draw_debug_items = [convert_debug_coords](const input__debug_item* items, int count,
                                                    sx_vec2 window_size, sx_vec2 window_pos,
                                                    ImDrawList* drawlist, bool invert_y) {
-        sx_vec2 size = the_imgui->GetIO()->DisplaySize;
         for (int i = 0; i < count; i++) {
             const input__debug_item& item = items[i];
             switch (item.type) {

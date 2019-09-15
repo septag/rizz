@@ -282,10 +282,9 @@ sapp_desc sokol_main(int argc, char* argv[])
     static char default_name[64];
     static char default_title[64];
     static char default_html5_canvas[64] = { 0 };
-    static char default_version[64] = { 0 };
     static char default_plugin_path[256] = { 0 };
     static char default_cache_path[256] = { 0 };
-    static char default_plugins[32][RIZZ_CONFIG_MAX_PLUGINS] = { 0 };
+    static char default_plugins[32][RIZZ_CONFIG_MAX_PLUGINS] = {{ 0 }};
 
     char ext[16];
     sx_os_path_basename(default_name, sizeof(default_name), game_filepath);

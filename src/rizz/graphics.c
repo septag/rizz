@@ -297,6 +297,7 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4267)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4244)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4146)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wshorten-64-to-32")
 #include "sort/sort.h"
 SX_PRAGMA_DIAGNOSTIC_POP()
 
@@ -1439,7 +1440,7 @@ static rizz_shader rizz__shader_make_with_data(const sx_alloc* alloc, uint32_t v
 
     sjson_context* jctx = sjson_create_context(0, 0, (void*)alloc);
     if (!jctx) {
-        return (rizz_shader){ 0 };
+        return (rizz_shader){{ 0 }};
     }
 
     sg_shader_desc shader_desc = { 0 };
@@ -2102,7 +2103,7 @@ static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load
         sx_mem_read(&rd, &block, sizeof(block));
         sx_assert(block.id == 1);
         sx_mem_read(&rd, &info, sizeof(info));
-        sx_mem_read(&rd, font->f.name, sx_min(sizeof(font->f.name), block.size - sizeof(info)));
+        sx_mem_read(&rd, font->f.name, (int)sx_min(sizeof(font->f.name), block.size - sizeof(info)));
 
         // Common
         sx_mem_read(&rd, &block, sizeof(block));
@@ -3893,7 +3894,6 @@ static sg_buffer rizz__make_buffer(const sg_buffer_desc* desc)
 
 static void rizz__destroy_buffer(sg_buffer buf_id)
 {
-    _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, buf_id.id);
     rizz__queue_destroy(g_gfx.destroy_buffers, buf_id, g_gfx_alloc);
 }
 

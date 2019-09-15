@@ -19,10 +19,18 @@ if (NOT GLSLCC_BIN AND NOT glslcc_path)
         set(tools_dir "${PROJECT_SOURCE_DIR}/tools/linux")
     endif()
 
+    if (IOS)
+        set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+    endif()
+
     find_program(glslcc_path 
-                 NAMES glslcc
-                 PATHS ${tools_dir} ENV PATH
-                 DOC "path to glslcc binary")
+                NAMES glslcc
+                PATHS ${tools_dir} ENV PATH
+                DOC "path to glslcc binary")
+
+    if (IOS)
+        set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM ONLY)
+    endif()
 
     if (glslcc_path)
         message(STATUS "Found glslcc: ${glslcc_path}")

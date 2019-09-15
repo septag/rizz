@@ -208,7 +208,7 @@ static sx_mem_block* rizz__vfs_read(const char* path, rizz_vfs_flags flags, cons
 
 static int rizz__vfs_write(const char* path, const sx_mem_block* mem, rizz_vfs_flags flags)
 {
-#if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
+#if SX_PLATFORM_ANDROID
     if (sx_strnequal(path, g_vfs.assets_alias, g_vfs.assets_alias_len)) {
         sx_assert(0 && "cannot write to assets on mobile platform");
         return -1;

@@ -783,7 +783,7 @@ bool rizz__core_init(const rizz_config* conf)
         sx_out_of_memory();
         return false;
     }
-    int tmp_size = sx_align_mask(
+    int tmp_size = (int)sx_align_mask(
         conf->tmp_mem_max > 0 ? conf->tmp_mem_max * 1024 : DEFAULT_TMP_SIZE, sx_os_pagesz() - 1);
 
     g_core.tmp_allocs_tls = sx_tls_create();

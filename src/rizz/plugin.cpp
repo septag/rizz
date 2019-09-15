@@ -88,6 +88,7 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4267)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4244)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4146)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wshorten-64-to-32")
 #include "sort/sort.h"
 
 bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path)

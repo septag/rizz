@@ -611,10 +611,10 @@ SOKOL_API_DECL void sg_imgui_draw_capabilities_window(sg_imgui_t* ctx);
 
 #define _SG_IMGUI_SLOT_MASK (0xFFFF)
 #define _SG_IMGUI_LIST_WIDTH (192)
-#define _SG_IMGUI_COLOR_OTHER the__imgui.ColorConvertFloat4ToU32((ImVec4) {0.75f, 0.75f, 0.75f, 1.0f})
-#define _SG_IMGUI_COLOR_RSRC the__imgui.ColorConvertFloat4ToU32((ImVec4){1.0f, 1.0f, 0.0f, 1.0f})
-#define _SG_IMGUI_COLOR_DRAW the__imgui.ColorConvertFloat4ToU32((ImVec4){0.0f, 1.0f, 0.0f, 1.0f})
-#define _SG_IMGUI_COLOR_ERR the__imgui.ColorConvertFloat4ToU32((ImVec4){1.0f, 0.5f, 0.5f, 1.0f})
+#define _SG_IMGUI_COLOR_OTHER the__imgui.ColorConvertFloat4ToU32((ImVec4) {{0.75f, 0.75f, 0.75f, 1.0f}})
+#define _SG_IMGUI_COLOR_RSRC the__imgui.ColorConvertFloat4ToU32((ImVec4){{1.0f, 1.0f, 0.0f, 1.0f}})
+#define _SG_IMGUI_COLOR_DRAW the__imgui.ColorConvertFloat4ToU32((ImVec4){{0.0f, 1.0f, 0.0f, 1.0f}})
+#define _SG_IMGUI_COLOR_ERR the__imgui.ColorConvertFloat4ToU32((ImVec4){{1.0f, 0.5f, 0.5f, 1.0f}})
 
 /*--- UTILS ------------------------------------------------------------------*/
 _SOKOL_PRIVATE int _sg_imgui_slot_index(uint32_t id) {

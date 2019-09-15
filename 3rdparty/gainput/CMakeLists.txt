@@ -13,6 +13,9 @@ else()
 	endif()
 endif()
 
+rizz__remove_compile_options(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}" "-fobjc-arc")
+rizz__remove_compile_options(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" "-fobjc-arc")
+
 if(ANDROID)
 	include(AndroidNdkModules)
 	android_ndk_import_module_native_app_glue()
