@@ -17,7 +17,7 @@
 #define HTTP_FREE(ctx, ptr) (sx_free((const sx_alloc*)ctx, ptr))
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-variable")
-SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wshorten-64-to-32")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG("-Wshorten-64-to-32")
 #if SX_PLATFORM_ANDROID
 #    include <linux/in.h>
 #endif
