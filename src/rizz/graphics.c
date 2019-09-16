@@ -156,6 +156,7 @@ typedef enum rizz__gfx_command {
     GFX_COMMAND_APPLY_BINDINGS,
     GFX_COMMAND_APPLY_UNIFORMS,
     GFX_COMMAND_DRAW,
+    GFX_COMMAND_DISPATCH,
     GFX_COMMAND_END_PASS,
     GFX_COMMAND_UPDATE_BUFFER,
     GFX_COMMAND_UPDATE_IMAGE,
@@ -1429,6 +1430,61 @@ static sg_shader_desc* rizz__shader_setup_desc(sg_shader_desc* desc,
     return desc;
 }
 
+static sg_shader_desc* rizz__shader_setup_desc_cs(sg_shader_desc* desc,
+                                                  const rizz_shader_refl* cs_refl, const void* cs,
+                                                  int cs_size)
+{
+    sx_memset(desc, 0x0, sizeof(sg_shader_desc));
+    const int num_stages = 1;
+    rizz__shader_setup_desc_stage stages[] = {
+        { .refl = cs_refl, .code = cs, .code_size = cs_size }
+    };
+
+    for (int i = 0; i < num_stages; i++) {
+        const rizz__shader_setup_desc_stage* stage = &stages[i];
+        sg_shader_stage_desc* stage_desc = NULL;
+        // clang-format off
+        switch (stage->refl->stage) {
+        case RIZZ_SHADER_STAGE_CS:   stage_desc = &desc->cs;             break;
+        default:                     sx_assert(0 && "not implemented");  break;
+        }
+        // clang-format on
+
+        if (SX_PLATFORM_APPLE)
+            stage_desc->entry = "main0";
+
+        if (stage->refl->code_type == RIZZ_SHADER_CODE_BYTECODE) {
+            stage_desc->byte_code = (const uint8_t*)stage->code;
+            stage_desc->byte_code_size = stage->code_size;
+        } else if (stage->refl->code_type == RIZZ_SHADER_CODE_SOURCE) {
+            stage_desc->source = (const char*)stage->code;
+        }
+
+        // uniform blocks
+        for (int iub = 0; iub < stage->refl->num_uniform_buffers; iub++) {
+            rizz_shader_refl_uniform_buffer* rub = &stage->refl->uniform_buffers[iub];
+            sg_shader_uniform_block_desc* ub = &stage_desc->uniform_blocks[rub->binding];
+            ub->size = rub->size_bytes;
+            if (stage->refl->flatten_ubos) {
+                ub->uniforms[0].array_count = rub->array_size;
+                ub->uniforms[0].name = rub->name;
+                ub->uniforms[0].type = SG_UNIFORMTYPE_FLOAT4;
+            }
+
+            // NOTE: individual uniform names are supported by reflection json
+            //       But we are not parsing and using them here, because the d3d/metal shaders don't
+            //       need them And for GL/GLES, we always flatten them
+        }    // foreach uniform-block
+
+        for (int itex = 0; itex < stage->refl->num_textures; itex++) {
+            rizz_shader_refl_texture* rtex = &stage->refl->textures[itex];
+            sg_shader_image_desc* img = &stage_desc->images[rtex->binding];
+            img->name = rtex->name;
+            img->type = rtex->type;
+        }
+    }
+    return desc;
+}
 static rizz_shader rizz__shader_make_with_data(const sx_alloc* alloc, uint32_t vs_data_size,
                                                const uint32_t* vs_data, uint32_t vs_refl_size,
                                                const uint32_t* vs_refl_json, uint32_t fs_data_size,
@@ -1440,7 +1496,7 @@ static rizz_shader rizz__shader_make_with_data(const sx_alloc* alloc, uint32_t v
 
     sjson_context* jctx = sjson_create_context(0, 0, (void*)alloc);
     if (!jctx) {
-        return (rizz_shader){{ 0 }};
+        return (rizz_shader){ { 0 } };
     }
 
     sg_shader_desc shader_desc = { 0 };
@@ -1537,9 +1593,9 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
     const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
     sg_shader_desc* shader_desc = data->user;
 
-    rizz_shader_refl *vs_refl = NULL, *fs_refl = NULL;
-    const uint8_t *vs_data = NULL, *fs_data = NULL;
-    int vs_size = 0, fs_size = 0;
+    rizz_shader_refl *vs_refl = NULL, *fs_refl = NULL, *cs_refl = NULL;
+    const uint8_t *vs_data = NULL, *fs_data = NULL, *cs_data = NULL;
+    int vs_size = 0, fs_size = 0, cs_size = 0;
 
     sx_mem_reader reader;
     sx_mem_init_reader(&reader, mem->data, mem->size);
@@ -1578,6 +1634,10 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
             fs_data = reader.data + code_chunk.pos;
             fs_size = code_chunk.size;
             stage = RIZZ_SHADER_STAGE_FS;
+        } else if (stage_type == SGS_STAGE_COMPUTE) {
+            cs_data = reader.data + code_chunk.pos;
+            cs_size = code_chunk.size;
+            stage = RIZZ_SHADER_STAGE_CS;
         } else {
             sx_assert(0 && "not implemented");
             stage = _RIZZ_SHADER_STAGE_COUNT;
@@ -1599,6 +1659,8 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
                 vs_refl = refl;
             } else if (stage_type == SGS_STAGE_FRAGMENT) {
                 fs_refl = refl;
+            } else if (stage_type == SGS_STAGE_COMPUTE) {
+                cs_refl = refl;
             }
             sx_mem_seekr(&reader, reflect_chunk.size, SX_WHENCE_CURRENT);
         }
@@ -1607,8 +1669,12 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
         stage_chunk = sx_mem_get_iff_chunk(&reader, 0, SGS_CHUNK_STAG);
     }
 
-    sx_assert(vs_refl && fs_refl);
-    rizz__shader_setup_desc(shader_desc, vs_refl, vs_data, vs_size, fs_refl, fs_data, fs_size);
+    if (cs_refl && cs_data) {
+        rizz__shader_setup_desc_cs(shader_desc, cs_refl, cs_data, cs_size);
+    } else {
+	    sx_assert(vs_refl && fs_refl);
+        rizz__shader_setup_desc(shader_desc, vs_refl, vs_data, vs_size, fs_refl, fs_data, fs_size);
+	}
 
     the__core.tmp_alloc_pop();
     return true;
@@ -2103,7 +2169,8 @@ static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load
         sx_mem_read(&rd, &block, sizeof(block));
         sx_assert(block.id == 1);
         sx_mem_read(&rd, &info, sizeof(info));
-        sx_mem_read(&rd, font->f.name, (int)sx_min(sizeof(font->f.name), block.size - sizeof(info)));
+        sx_mem_read(&rd, font->f.name,
+                    (int)sx_min(sizeof(font->f.name), block.size - sizeof(info)));
 
         // Common
         sx_mem_read(&rd, &block, sizeof(block));
@@ -2846,7 +2913,7 @@ void rizz__gfx_update()
     rizz__gfx_collect_garbage(the__core.frame_index());
 }
 
-void rizz__gfx_commit() 
+void rizz__gfx_commit()
 {
     sg_commit();
 }
@@ -3338,6 +3405,47 @@ static uint8_t* rizz__cb_run_draw(uint8_t* buff)
     return buff;
 }
 
+static void rizz__cb_dispatch(int thread_group_x, int thread_group_y, int thread_group_z)
+{
+    rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
+
+    sx_assert(cb->running_stage.id &&
+              "draw related calls must come between begin_stage..end_stage");
+    sx_assert(cb->cmd_idx < UINT16_MAX);
+
+    int offset;
+    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(int) * 3, &offset);
+    sx_assert(buff);
+
+    rizz__gfx_cmdbuffer_ref ref = { .key =
+                                        (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
+                                    .cmdbuffer_idx = cb->index,
+                                    .cmd = GFX_COMMAND_DISPATCH,
+                                    .params_offset = offset };
+    sx_array_push(cb->alloc, cb->refs, ref);
+
+    ++cb->cmd_idx;
+
+    *((int*)buff) = thread_group_x;
+    buff += sizeof(int);
+    *((int*)buff) = thread_group_y;
+    buff += sizeof(int);
+    *((int*)buff) = thread_group_z;
+}
+
+static uint8_t* rizz__cb_run_dispatch(uint8_t* buff)
+{
+    int thread_group_x = *((int*)buff);
+    buff += sizeof(int);
+    int thread_group_y = *((int*)buff);
+    buff += sizeof(int);
+    int thread_group_z = *((int*)buff);
+    buff += sizeof(int);
+    sg_dispatch(thread_group_x, thread_group_y, thread_group_z);
+    return buff;
+}
+
+
 static void rizz__cb_end_pass()
 {
     rizz__gfx_cmdbuffer* cb = (rizz__gfx_cmdbuffer*)rizz__core_gfx_cmdbuffer();
@@ -3653,6 +3761,7 @@ static const rizz__run_command_cb k_run_cbs[_GFX_COMMAND_COUNT] = {
     rizz__cb_run_apply_bindings,
     rizz__cb_run_apply_uniforms,
     rizz__cb_run_draw,
+    rizz__cb_run_dispatch, 
     rizz__cb_run_end_pass,
     rizz__cb_run_update_buffer,
     rizz__cb_run_update_image,
@@ -4122,6 +4231,7 @@ rizz_api_gfx the__gfx = {
                 .apply_bindings       = rizz__cb_apply_bindings,
                 .apply_uniforms       = rizz__cb_apply_uniforms,
                 .draw                 = rizz__cb_draw,
+                .dispatch             = rizz__cb_dispatch,
                 .end_pass             = rizz__cb_end_pass,
                 .update_buffer        = rizz__cb_update_buffer,
                 .append_buffer        = rizz__cb_append_buffer,

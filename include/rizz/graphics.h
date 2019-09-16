@@ -297,6 +297,7 @@ typedef struct rizz_api_gfx_draw {
     void (*apply_bindings)(const sg_bindings* bind);
     void (*apply_uniforms)(sg_shader_stage stage, int ub_index, const void* data, int num_bytes);
     void (*draw)(int base_element, int num_elements, int num_instances);
+    void (*dispatch)(int thread_group_x, int thread_group_y, int thread_group_z);
     void (*end_pass)();
 
     void (*update_buffer)(sg_buffer buf, const void* data_ptr, int data_size);

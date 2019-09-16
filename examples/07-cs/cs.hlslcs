@@ -1,0 +1,28 @@
+static const uint3 gl_WorkGroupSize = uint3(16u, 16u, 1u);
+
+Texture2D<float4> input_rgb : register(t0);
+SamplerState _input_rgb_sampler : register(s0);
+RWTexture2D<unorm float4> output_l : register(u1);
+
+static uint3 gl_GlobalInvocationID;
+struct SPIRV_Cross_Input
+{
+    uint3 gl_GlobalInvocationID : SV_DispatchThreadID;
+};
+
+void comp_main()
+{
+    int3 gid = int3(gl_GlobalInvocationID);
+    //float4 col = input_rgb.SampleLevel(_input_rgb_sampler, float2(gid.xy), 0.0f);
+    float4 col = input_rgb[gid.xy];
+    float grey = dot(col.xyz, float3(0.2125999927520751953125f, 0.715200006961822509765625f, 0.072200000286102294921875f));
+    output_l[gid.xy] = float4(grey, grey, grey, 1.0f);
+}
+
+[numthreads(16, 16, 1)]
+void main(SPIRV_Cross_Input stage_input)
+{
+    gl_GlobalInvocationID = stage_input.gl_GlobalInvocationID;
+    comp_main();
+}
+

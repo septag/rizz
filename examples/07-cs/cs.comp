@@ -1,0 +1,20 @@
+#version 450
+
+layout (binding = 0) uniform sampler2D input_rgb;
+layout (binding = 1, rgba8) uniform image2D  output_l;
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+void main()
+{
+    ivec3 gid = ivec3(gl_GlobalInvocationID);
+
+    vec4 col = texture(input_rgb, gid.xy);
+    //vec4 col = texture(input_rgb, ivec2(128, 128));
+    float grey = dot(col.rgb, vec3(0.2126, 0.7152, 0.0722));
+    //float grey = 0.6;
+	//float grey = ((gid.y * 512 + gid.x) % 255) / 255.0;
+
+    imageStore(output_l, gid.xy, vec4(grey, grey, grey, 1.0));
+	//imageStore(output_l, gid.xy, vec4(1.0, 0.5, 0.1, 1.0));
+}
