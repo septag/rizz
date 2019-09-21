@@ -3829,7 +3829,8 @@ _SOKOL_PRIVATE void _sg_apply_pipeline(_sg_pipeline_t* pip)
 _SOKOL_PRIVATE void _sg_apply_bindings(_sg_pipeline_t* pip, _sg_buffer_t** vbs,
                                        const int* vb_offsets, int num_vbs, _sg_buffer_t* ib,
                                        int ib_offset, _sg_image_t** vs_imgs, int num_vs_imgs,
-                                       _sg_image_t** fs_imgs, int num_fs_imgs)
+                                       _sg_image_t** fs_imgs, int num_fs_imgs, 
+									   _sg_image_t** cs_imgs, int num_cs_imgs)
 {
     SOKOL_ASSERT(pip);
     SOKOL_ASSERT(vbs && vb_offsets);
@@ -3845,6 +3846,8 @@ _SOKOL_PRIVATE void _sg_apply_bindings(_sg_pipeline_t* pip, _sg_buffer_t** vbs,
     _SOKOL_UNUSED(num_vs_imgs);
     _SOKOL_UNUSED(fs_imgs);
     _SOKOL_UNUSED(num_fs_imgs);
+    _SOKOL_UNUSED(cs_imgs);
+    _SOKOL_UNUSED(num_cs_imgs);
 }
 
 _SOKOL_PRIVATE void _sg_apply_uniforms(sg_shader_stage stage_index, int ub_index, const void* data,
@@ -3864,6 +3867,13 @@ _SOKOL_PRIVATE void _sg_draw(int base_element, int num_elements, int num_instanc
     _SOKOL_UNUSED(base_element);
     _SOKOL_UNUSED(num_elements);
     _SOKOL_UNUSED(num_instances);
+}
+
+_SOKOL_PRIVATE void _sg_dispatch(int thread_group_x, int thread_group_y, int thread_group_z)
+{
+    _SOKOL_UNUSED(thread_group_x);
+    _SOKOL_UNUSED(thread_group_y);
+    _SOKOL_UNUSED(thread_group_z);
 }
 
 _SOKOL_PRIVATE void _sg_update_buffer(_sg_buffer_t* buf, const void* data, int data_size)
@@ -6351,7 +6361,8 @@ _SOKOL_PRIVATE void _sg_apply_pipeline(_sg_pipeline_t* pip)
 _SOKOL_PRIVATE void _sg_apply_bindings(_sg_pipeline_t* pip, _sg_buffer_t** vbs,
                                        const int* vb_offsets, int num_vbs, _sg_buffer_t* ib,
                                        int ib_offset, _sg_image_t** vs_imgs, int num_vs_imgs,
-                                       _sg_image_t** fs_imgs, int num_fs_imgs)
+                                       _sg_image_t** fs_imgs, int num_fs_imgs, 
+									   _sg_image_t** cs_imgs, int num_cs_imgs)
 {
     SOKOL_ASSERT(pip);
     _SOKOL_UNUSED(num_fs_imgs);
@@ -6433,6 +6444,13 @@ _SOKOL_PRIVATE void _sg_apply_bindings(_sg_pipeline_t* pip, _sg_buffer_t** vbs,
         }
     }
     _SG_GL_CHECK_ERROR();
+    
+    // TODO: compute shader images */
+    if (cs_imgs && num_cs_imgs) {
+        _SOKOL_UNUSED(cs_imgs);
+        _SOKOL_UNUSED(num_cs_imgs);
+        SOKOL_ASSERT(0);
+    }
 }
 
 _SOKOL_PRIVATE void _sg_apply_uniforms(sg_shader_stage stage_index, int ub_index, const void* data,
@@ -6507,6 +6525,14 @@ _SOKOL_PRIVATE void _sg_draw(int base_element, int num_elements, int num_instanc
             }
         }
     }
+}
+
+_SOKOL_PRIVATE void _sg_dispatch(int thread_group_x, int thread_group_y, int thread_group_z)
+{
+    _SOKOL_UNUSED(thread_group_x);
+    _SOKOL_UNUSED(thread_group_y);
+    _SOKOL_UNUSED(thread_group_z);
+    SOKOL_ASSERT(0);
 }
 
 _SOKOL_PRIVATE void _sg_commit(void)
@@ -10135,7 +10161,8 @@ _SOKOL_PRIVATE void _sg_apply_pipeline(_sg_pipeline_t* pip)
 _SOKOL_PRIVATE void _sg_apply_bindings(_sg_pipeline_t* pip, _sg_buffer_t** vbs,
                                        const int* vb_offsets, int num_vbs, _sg_buffer_t* ib,
                                        int ib_offset, _sg_image_t** vs_imgs, int num_vs_imgs,
-                                       _sg_image_t** fs_imgs, int num_fs_imgs)
+                                       _sg_image_t** fs_imgs, int num_fs_imgs, 
+									   _sg_image_t** cs_imgs, int num_cs_imgs)
 {
     SOKOL_ASSERT(_sg.mtl.in_pass);
     if (!_sg.mtl.pass_valid) {
@@ -10202,6 +10229,13 @@ _SOKOL_PRIVATE void _sg_apply_bindings(_sg_pipeline_t* pip, _sg_buffer_t** vbs,
             [_sg_mtl_cmd_encoder setFragmentSamplerState:_sg_mtl_idpool[img->mtl_sampler_state]
                                                  atIndex:slot];
         }
+    }
+
+    /* TODO: apply compute shader images */
+    if (cs_imgs && num_cs_imgs > 0) {
+        _SOKOL_UNUSED(cs_imgs);
+        _SOKOL_UNUSED(num_cs_imgs);
+        SOKOL_ASSERT(0);
     }
 }
 
@@ -10274,6 +10308,15 @@ _SOKOL_PRIVATE void _sg_draw(int base_element, int num_elements, int num_instanc
                                 vertexCount:num_elements
                               instanceCount:num_instances];
     }
+}
+
+_SOKOL_PRIVATE void _sg_dispatch(int thread_group_x, int thread_group_y, int thread_group_z)
+{
+    /* TODO */
+    _SOKOL_UNUSED(thread_group_x);
+    _SOKOL_UNUSED(thread_group_y);
+    _SOKOL_UNUSED(thread_group_z);
+    SOKOL_ASSERT(0);
 }
 
 _SOKOL_PRIVATE void _sg_update_buffer(_sg_buffer_t* buf, const void* data, int data_size)

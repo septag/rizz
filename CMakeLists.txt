@@ -65,16 +65,18 @@ function(rizz__add_example proj_name)
         set(shaders examples/${proj_name}/${source_file}.vert 
                     examples/${proj_name}/${source_file}.frag)
         set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "examples/assets/shaders")
+	    if (CMAKE_BUILD_TYPE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set_source_files_properties(${shaders} PROPERTIES GLSLCC_COMPILE_FLAGS "--debug-bin")
+        endif()
         glslcc_target_compile_shaders_sgs(${proj_name} "${shaders}")
     endif()
 
     if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/${proj_name}/${source_file}.comp)
         set(shaders examples/${proj_name}/${source_file}.comp) 
         set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "examples/assets/shaders")
-
-		# debug
-        set_source_files_properties(${shaders} PROPERTIES GLSLCC_COMPILE_FLAGS "--debug-bin")
-
+	    if (CMAKE_BUILD_TYPE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set_source_files_properties(${shaders} PROPERTIES GLSLCC_COMPILE_FLAGS "--debug-bin")
+        endif()
         glslcc_target_compile_shaders_sgs(${proj_name} "${shaders}")
     endif()
 endfunction()

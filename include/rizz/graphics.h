@@ -69,6 +69,13 @@ typedef struct rizz_shader_refl_uniform_buffer {
                        // FLOAT4
 } rizz_shader_refl_uniform_buffer;
 
+typedef struct rizz_shader_refl_buffer {
+    char name[32];
+    int size_bytes;
+    int binding;
+    int array_stride;
+} rizz_shader_refl_buffer;
+
 typedef struct rizz_shader_refl_texture {
     char name[32];
     int binding;
@@ -84,6 +91,10 @@ typedef struct rizz_shader_refl {
     int num_inputs;
     rizz_shader_refl_texture* textures;
     int num_textures;
+    rizz_shader_refl_texture* storage_images;
+    int num_storage_images;
+    rizz_shader_refl_buffer* storage_buffers;
+    int num_storage_buffers;
     rizz_shader_refl_uniform_buffer* uniform_buffers;
     int num_uniform_buffers;
     rizz_shader_code_type code_type;

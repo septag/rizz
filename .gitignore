@@ -52,6 +52,7 @@ src/rizz/plugin_bundle_native.h
 android
 assets-db.json
 compile_commands.json
+examples/assets/shaders/**
 
 # temp
 scripts/generators/fake_libc_include

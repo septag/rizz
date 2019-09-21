@@ -39,7 +39,7 @@ typedef struct {
     sg_buffer ibuff;
     rizz_camera_fps cam;
 
-	//
+    //
     rizz_asset csshader_asset;
     sg_shader csshader;
 
@@ -89,26 +89,25 @@ static bool init()
         .attrs[1] = { .semantic = "TEXCOORD", .offset = 12 },
     };
 
-
     uint16_t indices[] = { 0, 2, 1, 3, 0, 2 };
 
     // buffers
     g_quad.vbuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
-                                                               .type = SG_BUFFERTYPE_VERTEXBUFFER,
-                                                               .size = sizeof(vertices),
-                                                               .content = vertices });
+                                                           .type = SG_BUFFERTYPE_VERTEXBUFFER,
+                                                           .size = sizeof(vertices),
+                                                           .content = vertices });
 
     g_quad.ibuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
-                                                               .type = SG_BUFFERTYPE_INDEXBUFFER,
-                                                               .size = sizeof(indices),
-                                                               .content = indices });
+                                                           .type = SG_BUFFERTYPE_INDEXBUFFER,
+                                                           .size = sizeof(indices),
+                                                           .content = indices });
 
     // shader
     // this shader is built with `glslcc` that reside in `/tools` directory.
     // see `glslcc --help` for details
     char shader_path[RIZZ_MAX_PATH];
     g_quad.shader = the_asset->load(
-        "shader", ex_shader_path(shader_path, sizeof(shader_path), "/assets/shaders", "cs.sgs"),
+        "shader", ex_shader_path(shader_path, sizeof(shader_path), "/assets/shaders", "quad.sgs"),
         NULL, 0, NULL, 0);
 
     // pipeline
@@ -126,46 +125,29 @@ static bool init()
         (sg_bindings){ .vertex_buffers[0] = g_quad.vbuff, .index_buffer = g_quad.ibuff };
 
     g_quad.img = the_asset->load("texture", "/assets/textures/texfmt_rgba8.png",
-                                 &(rizz_texture_load_params){ 0 },
-                                 0, NULL, 0);
-	//////////////////////////////////////////////////////////////////////////////////////////
-    sg_image_desc csout_desc = { 
-		.type = SG_IMAGETYPE_2D,
-        .usage = SG_USAGE_DEFAULT,
-        .bind_flag = SG_BIND_FLAG_SHADER_WRITE, 
-        .pixel_format = SG_PIXELFORMAT_RGBA8, 
-		.width = 512, .height = 512 };
+                                 &(rizz_texture_load_params){ 0 }, 0, NULL, 0);
+    //////////////////////////////////////////////////////////////////////////////////////////
+    sg_image_desc csout_desc = { .type = SG_IMAGETYPE_2D,
+                                 .usage = SG_USAGE_DEFAULT,
+                                 .bind_flag = SG_BIND_FLAG_SHADER_WRITE,
+                                 .pixel_format = SG_PIXELFORMAT_RGBA8,
+                                 .width = 512,
+                                 .height = 512 };
     g_quad.csout = the_gfx->make_image(&csout_desc);
 
     g_quad.csshader_asset = the_asset->load(
-        "shader", ex_shader_path(shader_path, sizeof(shader_path), "/assets/shaders", "cs.comp.sgs"),
-        NULL, 0, NULL, 0);
+        "shader",
+        ex_shader_path(shader_path, sizeof(shader_path), "/assets/shaders", "cs.comp.sgs"), NULL, 0,
+        NULL, 0);
 
-    char csshader_dir[RIZZ_MAX_PATH];
-    sx_os_path_join(csshader_dir, sizeof(csshader_dir), EXAMPLES_ROOT,
-                    "07-cs/cs.hlslcs");    // "/examples/assets"
-
-	sx_mem_block* csshader_memblock = the_vfs->read(csshader_dir, RIZZ_VFS_FLAG_TEXT_FILE, 0);
-    const char* cs_src = (const char*)csshader_memblock->data;
-    g_quad.csshader =
-        the_gfx->make_shader(&(sg_shader_desc){
-        .cs.images[0].type = SG_IMAGETYPE_2D,
-        .cs.images[1].type = SG_IMAGETYPE_2D,
-        .cs.source = cs_src,
-        .bind_flag = SG_BIND_FLAG_COMPUTE_SHADER
-    });
-    sx_mem_destroy_block(csshader_memblock);
-
-	sg_pipeline_desc cspip_desc = {
-        //.shader = ((rizz_shader*)the_asset->obj(g_quad.csshader_asset).ptr)->shd,
-        .shader = g_quad.csshader 
+    sg_pipeline_desc cspip_desc = {
+        .shader = ((rizz_shader*)the_asset->obj(g_quad.csshader_asset).ptr)->shd,
     };
     g_quad.cspip = the_gfx->make_pipeline(&cspip_desc);
 
-    g_quad.csbindings =
-        (sg_bindings){0};
+    g_quad.csbindings = (sg_bindings){ 0 };
 
-	//////////////////////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////////////////////
     // camera
     // projection: setup for ortho, total-width = 10 units
     // view: Z-UP Y-Forward (like blender)
@@ -205,7 +187,7 @@ static void render()
 
     the_gfx->staged.begin_default_pass(&pass_action, the_app->width(), the_app->height());
 
-    // dispatch cs to generate the texture 
+    // dispatch cs to generate the texture
     {
         g_quad.csbindings.cs_images[0] = ((rizz_texture*)the_asset->obj(g_quad.img).ptr)->img;
         g_quad.csbindings.cs_images[1] = g_quad.csout;
@@ -225,7 +207,6 @@ static void render()
 
         quad_matrices mats = { .mvp = sx_mat4_mul(&proj, &view) };
 
-        //g_quad.bindings.fs_images[0] = ((rizz_texture*)the_asset->obj(g_quad.img).ptr)->img;
         g_quad.bindings.fs_images[0] = g_quad.csout;
         the_gfx->staged.apply_pipeline(g_quad.pip);
         the_gfx->staged.apply_bindings(&g_quad.bindings);
@@ -236,9 +217,9 @@ static void render()
     the_gfx->staged.end_pass();
     the_gfx->staged.end();
 
-	// Use imgui UI
+    // Use imgui UI
     the_imgui->SetNextWindowContentSize(sx_vec2f(100.0f, 50.0f));
-    if (the_imgui->Begin("quad", NULL, 0)) {
+    if (the_imgui->Begin("cs", NULL, 0)) {
         the_imgui->LabelText("Fps", "%.3f", the_core->fps());
     }
     the_imgui->End();
@@ -301,7 +282,7 @@ rizz_game_decl_config(conf)
 {
     conf->app_name = "cs";
     conf->app_version = 1000;
-    conf->app_title = "pg - cs";
+    conf->app_title = "cs";
     conf->window_width = 800;
     conf->window_height = 600;
     conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;
