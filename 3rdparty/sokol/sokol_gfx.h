@@ -2432,6 +2432,7 @@ typedef struct {
 typedef struct {
     _sg_slot_t slot;
     _sg_shader_stage_t stage[SG_NUM_SHADER_STAGES];
+    sg_bind_flag bind_flag;
     int64_t used_frame;
 } _sg_shader_t;
 
@@ -2554,6 +2555,7 @@ typedef struct {
     GLuint gl_prog;
     _sg_shader_attr_t attrs[SG_MAX_VERTEX_ATTRIBUTES];
     _sg_shader_stage_t stage[SG_NUM_SHADER_STAGES];
+    sg_bind_flag bind_flag;
     int64_t used_frame;
 } _sg_shader_t;
 
@@ -2925,6 +2927,7 @@ typedef struct {
 typedef struct {
     _sg_slot_t slot;
     _sg_shader_stage_t stage[SG_NUM_SHADER_STAGES];
+    sg_bind_flag bind_flag;
     int64_t used_frame;
 } _sg_shader_t;
 

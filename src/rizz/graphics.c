@@ -4311,6 +4311,7 @@ static const rizz_gfx_trace_info* rizz__trace_info()
 
 static bool rizz__imm_begin(rizz_gfx_stage stage) 
 {
+    sx_unused(stage);
     return true;
 }
 
