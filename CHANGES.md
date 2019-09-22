@@ -23,6 +23,7 @@
 - [x] Android build
 - [x] Raspberry build
 - [ ] iOS build
+- [x] EXPERIMENTAL: D3D11 compute-shader support
 
 ### Changed
 - [x] BREAKING - gfx: immediate and staged APIs are now the same. creation/destroy/query functions 
@@ -31,6 +32,7 @@
 ### Fixed
 - [x] Deferred destroys. Now objects in use will never be destroyed even if the user calls _destroy_
 - [ ] Error handling for missing shaders
+- [x] immediate mode api conflicts with imgui
 
 ## [0.1]:
 ### Added

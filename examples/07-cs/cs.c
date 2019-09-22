@@ -89,7 +89,7 @@ static bool init()
         .attrs[1] = { .semantic = "TEXCOORD", .offset = 12 },
     };
 
-    uint16_t indices[] = { 0, 2, 1, 3, 0, 2 };
+    uint16_t indices[] = { 0, 2, 1, 2, 0, 3 };
 
     // buffers
     g_quad.vbuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
@@ -115,7 +115,7 @@ static bool init()
         .layout.buffers[0].stride = 20,    // sizeof each vertex (float[3] + float[2])
         .shader = ((rizz_shader*)the_asset->obj(g_quad.shader).ptr)->shd,
         .index_type = SG_INDEXTYPE_UINT16,
-        .rasterizer = { .cull_mode = SG_CULLMODE_NONE, .sample_count = 4 }
+        .rasterizer = { .cull_mode = SG_CULLMODE_BACK, .sample_count = 4 }
     };
     g_quad.pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
         the_asset->obj(g_quad.shader).ptr, &pip_desc, &k_vertex_layout));
@@ -126,9 +126,9 @@ static bool init()
 
     g_quad.img = the_asset->load("texture", "/assets/textures/texfmt_rgba8.png",
                                  &(rizz_texture_load_params){ 0 }, 0, NULL, 0);
-    //////////////////////////////////////////////////////////////////////////////////////////
+    
+    // compute-shader stuff
     sg_image_desc csout_desc = { .type = SG_IMAGETYPE_2D,
-                                 .usage = SG_USAGE_DEFAULT,
                                  .bind_flag = SG_BIND_FLAG_SHADER_WRITE,
                                  .pixel_format = SG_PIXELFORMAT_RGBA8,
                                  .width = 512,
@@ -182,12 +182,9 @@ static void render()
 {
     sg_pass_action pass_action = { .colors[0] = { SG_ACTION_CLEAR, { 0.25f, 0.5f, 0.75f, 1.0f } },
                                    .depth = { SG_ACTION_CLEAR, 1.0f } };
-
     the_gfx->staged.begin(g_quad.stage);
 
-    the_gfx->staged.begin_default_pass(&pass_action, the_app->width(), the_app->height());
-
-    // dispatch cs to generate the texture
+    // dispatch CS to generate the texture
     {
         g_quad.csbindings.cs_images[0] = ((rizz_texture*)the_asset->obj(g_quad.img).ptr)->img;
         g_quad.csbindings.cs_images[1] = g_quad.csout;
@@ -196,11 +193,9 @@ static void render()
         the_gfx->staged.dispatch(512 / 16, 512 / 16, 1);
     }
 
-    the_gfx->staged.end_pass();
-
     the_gfx->staged.begin_default_pass(&pass_action, the_app->width(), the_app->height());
 
-    // draw textured quad
+    // draw textured quad with the CS processed texture
     {
         sx_mat4 proj = the_camera->ortho_mat(&g_quad.cam.cam);
         sx_mat4 view = the_camera->view_mat(&g_quad.cam.cam);

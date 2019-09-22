@@ -10,27 +10,6 @@
 
 #ifndef SG_TYPES_ALREADY_DEFINED
 /*
-    various compile-time constants
-
-    FIXME: it may make sense to convert some of those into defines so
-    that the user code can override them.
-*/
-enum {
-    SG_INVALID_ID = 0,
-    SG_NUM_SHADER_STAGES = 3,
-    SG_NUM_INFLIGHT_FRAMES = 2,
-    SG_MAX_COLOR_ATTACHMENTS = 4,
-    SG_MAX_SHADERSTAGE_BUFFERS = 8,
-    SG_MAX_SHADERSTAGE_IMAGES = 12,
-    SG_MAX_SHADERSTAGE_IMAGES_CS = 8,
-    SG_MAX_SHADERSTAGE_UBS = 4,
-    SG_MAX_UB_MEMBERS = 16,
-    SG_MAX_VERTEX_ATTRIBUTES = 16,
-    SG_MAX_MIPMAPS = 16,
-    SG_MAX_TEXTUREARRAY_LAYERS = 128
-};
-
-/*
     Resource id typedefs:
 
     sg_buffer:      vertex- and index-buffers
@@ -58,6 +37,27 @@ typedef struct sg_shader   { uint32_t id; } sg_shader;
 typedef struct sg_pipeline { uint32_t id; } sg_pipeline;
 typedef struct sg_pass     { uint32_t id; } sg_pass;
 typedef struct sg_context  { uint32_t id; } sg_context;
+
+/*
+    various compile-time constants
+
+    FIXME: it may make sense to convert some of those into defines so
+    that the user code can override them.
+*/
+enum {
+    SG_INVALID_ID = 0,
+    SG_NUM_SHADER_STAGES = 2,
+    SG_NUM_INFLIGHT_FRAMES = 2,
+    SG_MAX_COLOR_ATTACHMENTS = 4,
+    SG_MAX_SHADERSTAGE_BUFFERS = 8,
+    SG_MAX_SHADERSTAGE_IMAGES = 12,
+    SG_MAX_SHADERSTAGE_IMAGES_CS = 8,
+    SG_MAX_SHADERSTAGE_UBS = 4,
+    SG_MAX_UB_MEMBERS = 16,
+    SG_MAX_VERTEX_ATTRIBUTES = 16,      /* NOTE: actual max vertex attrs can be less on GLES2, see sg_limits! */
+    SG_MAX_MIPMAPS = 16,
+    SG_MAX_TEXTUREARRAY_LAYERS = 128
+};
 
 /*
     sg_backend
@@ -208,12 +208,12 @@ typedef enum sg_pixel_format {
     by sg_query_pixelformat().
 */
 typedef struct sg_pixelformat_info {
-    bool sample:1;      /* pixel format can be sampled in shaders */
-    bool filter:1;      /* pixel format can be sampled with filtering */
-    bool render:1;      /* pixel format can be used as render target */
-    bool blend:1;       /* alpha-blending is supported */
-    bool msaa:1;        /* pixel format can be used as MSAA render target */
-    bool depth:1;       /* pixel format is a depth format */
+    bool sample;        /* pixel format can be sampled in shaders */
+    bool filter;        /* pixel format can be sampled with filtering */
+    bool render;        /* pixel format can be used as render target */
+    bool blend;         /* alpha-blending is supported */
+    bool msaa;          /* pixel format can be used as MSAA render target */
+    bool depth;         /* pixel format is a depth format */
 } sg_pixelformat_info;
 
 /*
@@ -221,23 +221,25 @@ typedef struct sg_pixelformat_info {
     returned by sg_query_features()
 */
 typedef struct sg_features {
-    bool instancing:1;
-    bool origin_top_left:1;
-    bool multiple_render_targets:1;
-    bool msaa_render_targets:1;
-    bool imagetype_3d:1;        /* creation of SG_IMAGETYPE_3D images is supported */
-    bool imagetype_array:1;     /* creation of SG_IMAGETYPE_ARRAY images is supported */
+    bool instancing;
+    bool origin_top_left;
+    bool multiple_render_targets;
+    bool msaa_render_targets;
+    bool imagetype_3d;          /* creation of SG_IMAGETYPE_3D images is supported */
+    bool imagetype_array;       /* creation of SG_IMAGETYPE_ARRAY images is supported */
+    bool image_clamp_to_border; /* border color and clamp-to-border UV-wrap mode is supported */
 } sg_features;
 
 /*
     Runtime information about resource limits, returned by sg_query_limit()
 */
 typedef struct sg_limits {
-    uint32_t max_image_size_2d;      /* max width/height of SG_IMAGETYPE_2D images */
-    uint32_t max_image_size_cube;    /* max width/height of SG_IMAGETYPE_CUBE images */
-    uint32_t max_image_size_3d;      /* max width/height/depth of SG_IMAGETYPE_3D images */
+    uint32_t max_image_size_2d;         /* max width/height of SG_IMAGETYPE_2D images */
+    uint32_t max_image_size_cube;       /* max width/height of SG_IMAGETYPE_CUBE images */
+    uint32_t max_image_size_3d;         /* max width/height/depth of SG_IMAGETYPE_3D images */
     uint32_t max_image_size_array;
     uint32_t max_image_array_layers;
+    uint32_t max_vertex_attrs;          /* <= SG_MAX_VERTEX_ATTRIBUTES (only on some GLES2 impls) */
 } sg_limits;
 
 /*
@@ -301,7 +303,6 @@ typedef enum sg_resource_state {
 */
 typedef enum sg_usage {
     _SG_USAGE_DEFAULT,      /* value 0 reserved for default-init */
-    SG_USAGE_DEFAULT, 
     SG_USAGE_IMMUTABLE,
     SG_USAGE_DYNAMIC,
     SG_USAGE_STREAM,
@@ -402,6 +403,7 @@ typedef enum sg_cube_face {
 typedef enum sg_shader_stage {
     SG_SHADERSTAGE_VS,
     SG_SHADERSTAGE_FS,
+    SG_SHADERSTAGE_CS,
     _SG_SHADERSTAGE_FORCE_U32 = 0x7FFFFFFF
 } sg_shader_stage;
 
@@ -454,15 +456,52 @@ typedef enum sg_filter {
     and .wrap_w members when creating an image.
 
     The default wrap mode is SG_WRAP_REPEAT.
+
+    NOTE: SG_WRAP_CLAMP_TO_BORDER is not supported on all backends
+    and platforms. To check for support, call sg_query_features()
+    and check the "clamp_to_border" boolean in the returned
+    sg_features struct.
+
+    Platforms which don't support SG_WRAP_CLAMP_TO_BORDER will silently fall back
+    to SG_WRAP_CLAMP_TO_EDGE without a validation error.
+
+    Platforms which support clamp-to-border are:
+
+        - all desktop GL platforms
+        - Metal on macOS
+        - D3D11
+
+    Platforms which do not support clamp-to-border:
+
+        - GLES2/3 and WebGL/WebGL2
+        - Metal on iOS
 */
 typedef enum sg_wrap {
     _SG_WRAP_DEFAULT,   /* value 0 reserved for default-init */
     SG_WRAP_REPEAT,
     SG_WRAP_CLAMP_TO_EDGE,
+    SG_WRAP_CLAMP_TO_BORDER,
     SG_WRAP_MIRRORED_REPEAT,
     _SG_WRAP_NUM,
     _SG_WRAP_FORCE_U32 = 0x7FFFFFFF
 } sg_wrap;
+
+/*
+    sg_border_color
+
+    The border color to use when sampling a texture, and the UV wrap
+    mode is SG_WRAP_CLAMP_TO_BORDER.
+
+    The default border color is SG_BORDERCOLOR_OPAQUE_BLACK
+*/
+typedef enum sg_border_color {
+    _SG_BORDERCOLOR_DEFAULT,    /* value 0 reserved for default-init */
+    SG_BORDERCOLOR_TRANSPARENT_BLACK,
+    SG_BORDERCOLOR_OPAQUE_BLACK,
+    SG_BORDERCOLOR_OPAQUE_WHITE,
+    _SG_BORDERCOLOR_NUM,
+    _SG_BORDERCOLOR_FORCE_U32 = 0x7FFFFFFF
+} sg_border_color;
 
 /*
     sg_vertex_format
@@ -482,8 +521,10 @@ typedef enum sg_vertex_format {
     SG_VERTEXFORMAT_UBYTE4N,
     SG_VERTEXFORMAT_SHORT2,
     SG_VERTEXFORMAT_SHORT2N,
+    SG_VERTEXFORMAT_USHORT2N,
     SG_VERTEXFORMAT_SHORT4,
     SG_VERTEXFORMAT_SHORT4N,
+    SG_VERTEXFORMAT_USHORT4N,
     SG_VERTEXFORMAT_UINT10_N2,
     _SG_VERTEXFORMAT_NUM,
     _SG_VERTEXFORMAT_FORCE_U32 = 0x7FFFFFFF
@@ -918,6 +959,7 @@ typedef struct sg_image_content {
     .wrap_u:            SG_WRAP_REPEAT
     .wrap_v:            SG_WRAP_REPEAT
     .wrap_w:            SG_WRAP_REPEAT (only SG_IMAGETYPE_3D)
+    .border_color       SG_BORDERCOLOR_OPAQUE_BLACK
     .max_anisotropy     1 (must be 1..16)
     .min_lod            0.0f
     .max_lod            FLT_MAX
@@ -965,6 +1007,7 @@ typedef struct sg_image_desc {
     sg_wrap wrap_u;
     sg_wrap wrap_v;
     sg_wrap wrap_w;
+    sg_border_color border_color;
     uint32_t max_anisotropy;
     float min_lod;
     float max_lod;
@@ -1044,7 +1087,7 @@ typedef struct sg_shader_desc {
     sg_shader_stage_desc vs;
     sg_shader_stage_desc fs;
     sg_shader_stage_desc cs;
-	sg_bind_flag bind_flag;
+    sg_bind_flag bind_flag;
     const char* label;
     uint32_t _end_canary;
 } sg_shader_desc;

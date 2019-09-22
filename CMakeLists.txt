@@ -216,7 +216,8 @@ if (BUILD_EXAMPLES AND NOT BUNDLE)
     endforeach()
 endif()
 
-# use -DBUNDLE_TARGET=target-name and -DBUNDLE_TARGET_NAME=name to define 
+#
+# use -DBUNDLE=1, -DBUNDLE_TARGET=target-name and -DBUNDLE_TARGET_NAME=name to define a single _bundled_ executable
 if (BUNDLE)
     if (NOT BUNDLE_TARGET)
         message(FATAL_ERROR "BUNDLE_TARGET is not set, set BUNDLE_TARGET to the target name of your executable target")

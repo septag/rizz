@@ -1611,7 +1611,7 @@ rizz_plugin_decl_main(imgui, plugin, e)
             imgui__submit_make_commands(make_cmdbuff, make_cmdbuff_sz);
         }
 
-        imgui__frame();
+        //imgui__frame();
         break;
     }
 

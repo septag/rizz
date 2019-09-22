@@ -4309,9 +4309,18 @@ static const rizz_gfx_trace_info* rizz__trace_info()
     return &g_gfx.trace.t;
 }
 
+static bool rizz__imm_begin(rizz_gfx_stage stage) 
+{
+    return true;
+}
+
+static void rizz__imm_end() {}
+
 // clang-format off
 rizz_api_gfx the__gfx = {
     .imm = { 
+             .begin                 = rizz__imm_begin,
+             .end                   = rizz__imm_end,
              .update_buffer         = sg_update_buffer,
              .update_image          = sg_update_image,
              .append_buffer         = sg_append_buffer,
@@ -4323,6 +4332,7 @@ rizz_api_gfx the__gfx = {
              .apply_bindings        = sg_apply_bindings,
              .apply_uniforms        = sg_apply_uniforms,
              .draw                  = sg_draw,
+             .dispatch              = sg_dispatch,
              .end_pass              = sg_end_pass,
              .begin_profile_sample  = rizz__begin_profile_sample,
              .end_profile_sample    = rizz__end_profile_sample },
@@ -4362,6 +4372,10 @@ rizz_api_gfx the__gfx = {
     .query_shader_state         = sg_query_shader_state,
     .query_pipeline_state       = sg_query_pipeline_state,
     .query_pass_state           = sg_query_pass_state,
+    .query_buffer_defaults      = sg_query_buffer_defaults,
+    .query_image_defaults       = sg_query_image_defaults,
+    .query_pipeline_defaults    = sg_query_pipeline_defaults,
+    .query_pass_defaults        = sg_query_pass_defaults,
     .alloc_buffer               = sg_alloc_buffer,
     .alloc_image                = sg_alloc_image,
     .alloc_shader               = sg_alloc_shader,

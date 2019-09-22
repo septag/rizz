@@ -81,7 +81,7 @@ static bool init()
     };
 
 
-    uint16_t indices[] = { 0, 2, 1, 3, 0, 2 };
+    uint16_t indices[] = { 0, 2, 1, 2, 0, 3 };
 
     // buffers
     g_quad.vbuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
@@ -107,7 +107,7 @@ static bool init()
         .layout.buffers[0].stride = 20,    // sizeof each vertex (float[3] + float[2])
         .shader = ((rizz_shader*)the_asset->obj(g_quad.shader).ptr)->shd,
         .index_type = SG_INDEXTYPE_UINT16,
-        .rasterizer = { .cull_mode = SG_CULLMODE_NONE, .sample_count = 4 }
+        .rasterizer = { .cull_mode = SG_CULLMODE_BACK, .sample_count = 4 }
     };
     g_quad.pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
         the_asset->obj(g_quad.shader).ptr, &pip_desc, &k_vertex_layout));
