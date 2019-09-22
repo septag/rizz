@@ -3221,6 +3221,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_caps_panel(sg_imgui_t* ctx) {
     the__imgui.Text("    msaa_render_targets: %s", _sg_imgui_bool_string(f.msaa_render_targets));
     the__imgui.Text("    imagetype_3d: %s", _sg_imgui_bool_string(f.imagetype_3d));
     the__imgui.Text("    imagetype_array: %s", _sg_imgui_bool_string(f.imagetype_array));
+    the__imgui.Text("    compute_shaders: %s", _sg_imgui_bool_string(f.compute_shaders));
     sg_limits l = ctx->api->query_limits();
     the__imgui.Text("\nLimits:\n");
     the__imgui.Text("    max_image_size_2d: %d", l.max_image_size_2d);

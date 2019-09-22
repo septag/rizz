@@ -228,6 +228,7 @@ typedef struct sg_features {
     bool imagetype_3d;          /* creation of SG_IMAGETYPE_3D images is supported */
     bool imagetype_array;       /* creation of SG_IMAGETYPE_ARRAY images is supported */
     bool image_clamp_to_border; /* border color and clamp-to-border UV-wrap mode is supported */
+    bool compute_shaders;
 } sg_features;
 
 /*
