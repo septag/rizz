@@ -61,7 +61,7 @@ SX_PRAGMA_DIAGNOSTIC_POP();
 // clang-format off
 #define SOKOL_MALLOC(s)     sx_malloc(g_app.alloc, s)
 #define SOKOL_FREE(p)       sx_free(g_app.alloc, p)
-#define SOKOL_CALLOC(n, s)  rizz__calloc(g_app.alloc, n, s)
+#define SOKOL_CALLOC(n, s)  rizz__calloc(g_app.alloc ? g_app.alloc : sx_alloc_malloc(), n, s)
 #define SOKOL_ASSERT(c)     sx_assert(c)
 #define SOKOL_LOG(s)        rizz_log_debug(s)
 // clang-format on
@@ -73,8 +73,8 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wlogical-not-parentheses")
 #endif
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-parameter")
 #define SOKOL_IMPL
-// #define SOKOL_API_DECL static
-// #define SOKOL_API_IMPL static
+#define SOKOL_API_DECL static
+#define SOKOL_API_IMPL static
 #include "sokol/sokol_app.h"
 SX_PRAGMA_DIAGNOSTIC_POP();
 
@@ -432,4 +432,6 @@ rizz_api_app the__app = { .width = sapp_width,
                           .key_pressed = rizz__app_key_pressed,
                           .quit = sapp_quit,
                           .request_quit = sapp_request_quit,
-                          .cancel_quit = sapp_cancel_quit };
+                          .cancel_quit = sapp_cancel_quit,
+                          .show_mouse = sapp_show_mouse,
+                          .mouse_shown = sapp_mouse_shown };

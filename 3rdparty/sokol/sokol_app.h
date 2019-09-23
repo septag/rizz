@@ -1,4 +1,4 @@
-#pragma once
+#ifndef SOKOL_APP_INCLUDED
 /*
     sokol_app.h -- cross-platform application wrapper
 
@@ -19,6 +19,8 @@
     SOKOL_NO_ENTRY      - define this if sokol_app.h shouldn't "hijack" the main() function
     SOKOL_API_DECL      - public function declaration prefix (default: extern)
     SOKOL_API_IMPL      - public function implementation prefix (default: -)
+    SOKOL_CALLOC        - your own calloc function (default: calloc(n, s))
+    SOKOL_FREE          - your own free function (default: free(p))
 
     Optionally define the following to force debug checks and validations
     even in release mode:
@@ -525,7 +527,7 @@ typedef enum sapp_event_type {
     SAPP_EVENTTYPE_UPDATE_CURSOR,
     SAPP_EVENTTYPE_QUIT_REQUESTED,
     _SAPP_EVENTTYPE_NUM,
-    _SAPP_EVENTTYPE_FORCE_U32 = 0x7FFFFFF
+    _SAPP_EVENTTYPE_FORCE_U32 = 0x7FFFFFFF
 } sapp_event_type;
 
 /* key codes are the same names and values as GLFW */
@@ -745,6 +747,10 @@ SOKOL_API_DECL float sapp_dpi_scale(void);
 SOKOL_API_DECL void sapp_show_keyboard(bool visible);
 /* return true if the mobile device onscreen keyboard is currently shown */
 SOKOL_API_DECL bool sapp_keyboard_shown(void);
+/* show or hide the mouse cursor */
+SOKOL_API_DECL void sapp_show_mouse(bool visible);
+/* show or hide the mouse cursor */
+SOKOL_API_DECL bool sapp_mouse_shown();
 /* return the userdata pointer optionally provided in sapp_desc */
 SOKOL_API_DECL void* sapp_userdata(void);
 /* return a copy of the sapp_desc structure */
@@ -795,9 +801,10 @@ SOKOL_API_DECL const void* sapp_android_get_native_activity(void);
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
+#endif // SOKOL_APP_INCLUDED
 
 /*-- IMPLEMENTATION ----------------------------------------------------------*/
-#ifdef SOKOL_IMPL
+#if defined(SOKOL_IMPL)
 #define SOKOL_APP_IMPL_INCLUDED (1)
 
 #ifdef _MSC_VER
@@ -871,7 +878,7 @@ SOKOL_API_DECL const void* sapp_android_get_native_activity(void);
     #include <assert.h>
     #define SOKOL_ASSERT(c) assert(c)
 #endif
-#if !defined(SOKOL_CALLOC) && !defined(SOKOL_FREE)
+#if !defined(SOKOL_CALLOC) || !defined(SOKOL_FREE)
     #include <stdlib.h>
 #endif
 #if !defined(SOKOL_CALLOC)
@@ -982,21 +989,25 @@ _SOKOL_PRIVATE void _sapp_call_frame(void) {
 }
 
 _SOKOL_PRIVATE void _sapp_call_cleanup(void) {
-    if (_sapp.desc.cleanup_cb) {
-        _sapp.desc.cleanup_cb();
+    if (!_sapp.cleanup_called) {
+        if (_sapp.desc.cleanup_cb) {
+            _sapp.desc.cleanup_cb();
+        }
+        else if (_sapp.desc.cleanup_userdata_cb) {
+            _sapp.desc.cleanup_userdata_cb(_sapp.desc.user_data);
+        }
+        _sapp.cleanup_called = true;
     }
-    else if (_sapp.desc.cleanup_userdata_cb) {
-        _sapp.desc.cleanup_userdata_cb(_sapp.desc.user_data);
-    }
-    _sapp.cleanup_called = true;
 }
 
 _SOKOL_PRIVATE void _sapp_call_event(const sapp_event* e) {
-    if (_sapp.desc.event_cb) {
-        _sapp.desc.event_cb(e);
-    }
-    else if (_sapp.desc.event_userdata_cb) {
-        _sapp.desc.event_userdata_cb(e, _sapp.desc.user_data);
+    if (!_sapp.cleanup_called) {
+        if (_sapp.desc.event_cb) {
+            _sapp.desc.event_cb(e);
+        }
+        else if (_sapp.desc.event_userdata_cb) {
+            _sapp.desc.event_userdata_cb(e, _sapp.desc.user_data);
+        }
     }
 }
 
@@ -1367,6 +1378,9 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
         [_sapp_view_obj updateTrackingAreas];
         if (_sapp.desc.high_dpi) {
             [_sapp_view_obj setWantsBestResolutionOpenGLSurface:YES];
+        }
+        else {
+            [_sapp_view_obj setWantsBestResolutionOpenGLSurface:NO];
         }
 
         _sapp_macos_window_obj.contentView = _sapp_view_obj;
@@ -2734,6 +2748,8 @@ _SOKOL_PRIVATE const _sapp_gl_fbconfig* _sapp_gl_choose_fbconfig(const _sapp_gl_
 #endif
 #include <windows.h>
 #include <windowsx.h>
+#include <shellapi.h>
+#pragma comment (lib, "Shell32.lib")
 
 #if defined(SOKOL_D3D11)
 #ifndef D3D11_NO_HELPERS
@@ -3110,6 +3126,9 @@ typedef int  GLint;
 #define GL_MAX_CUBE_MAP_TEXTURE_SIZE 0x851C
 #define GL_MAX_3D_TEXTURE_SIZE 0x8073
 #define GL_MAX_ARRAY_TEXTURE_LAYERS 0x88FF
+#define GL_MAX_VERTEX_ATTRIBS 0x8869
+#define GL_CLAMP_TO_BORDER 0x812D
+#define GL_TEXTURE_BORDER_COLOR 0x1004
 
 typedef void  (GL_APIENTRY *PFN_glBindVertexArray)(GLuint array);
 static PFN_glBindVertexArray _sapp_glBindVertexArray;
@@ -3271,6 +3290,8 @@ typedef void  (GL_APIENTRY *PFN_glBlendColor)(GLfloat red, GLfloat green, GLfloa
 static PFN_glBlendColor _sapp_glBlendColor;
 typedef void  (GL_APIENTRY *PFN_glTexParameterf)(GLenum target, GLenum pname, GLfloat param);
 static PFN_glTexParameterf _sapp_glTexParameterf;
+typedef void  (GL_APIENTRY *PFN_glTexParameterfv)(GLenum target, GLenum pname, GLfloat* params);
+static PFN_glTexParameterfv _sapp_glTexParameterfv;
 typedef void  (GL_APIENTRY *PFN_glGetShaderInfoLog)(GLuint shader, GLsizei bufSize, GLsizei * length, GLchar * infoLog);
 static PFN_glGetShaderInfoLog _sapp_glGetShaderInfoLog;
 typedef void  (GL_APIENTRY *PFN_glDepthFunc)(GLenum func);
@@ -3392,6 +3413,7 @@ _SOKOL_PRIVATE  void _sapp_win32_gl_loadfuncs(void) {
     _SAPP_GLPROC(glClearColor);
     _SAPP_GLPROC(glBlendColor);
     _SAPP_GLPROC(glTexParameterf);
+    _SAPP_GLPROC(glTexParameterfv);
     _SAPP_GLPROC(glGetShaderInfoLog);
     _SAPP_GLPROC(glDepthFunc);
     _SAPP_GLPROC(glStencilOp);
@@ -3486,6 +3508,7 @@ _SOKOL_PRIVATE  void _sapp_win32_gl_loadfuncs(void) {
 #define glClearColor _sapp_glClearColor
 #define glBlendColor _sapp_glBlendColor
 #define glTexParameterf _sapp_glTexParameterf
+#define glTexParameterfv _sapp_glTexParameterfv
 #define glGetShaderInfoLog _sapp_glGetShaderInfoLog
 #define glDepthFunc _sapp_glDepthFunc
 #define glStencilOp _sapp_glStencilOp
@@ -3853,6 +3876,18 @@ _SOKOL_PRIVATE bool _sapp_win32_utf8_to_wide(const char* src, wchar_t* dst, int 
         /* input string doesn't fit into destination buffer */
         return false;
     }
+}
+
+_SOKOL_PRIVATE void _sapp_win32_show_mouse(bool shown) {
+    ShowCursor((BOOL)shown);
+}
+
+_SOKOL_PRIVATE bool _sapp_win32_mouse_shown(void) {
+    CURSORINFO cursor_info;
+    memset(&cursor_info, 0, sizeof(CURSORINFO));
+    cursor_info.cbSize = sizeof(CURSORINFO);
+    GetCursorInfo(&cursor_info);
+    return (cursor_info.flags & CURSOR_SHOWING) != 0;
 }
 
 _SOKOL_PRIVATE void _sapp_win32_init_keytable(void) {
@@ -4369,22 +4404,56 @@ _SOKOL_PRIVATE void _sapp_run(const sapp_desc* desc) {
     _sapp_win32_destroy_window();
 }
 
+static char** _sapp_win32_command_line_to_utf8_argv(LPWSTR w_command_line, int* o_argc) {
+    int argc = 0;
+    char** argv;
+    char* args;
+
+    LPWSTR* w_argv = CommandLineToArgvW(w_command_line, &argc);
+    if (w_argv == NULL) {
+        _sapp_fail("Win32: failed to parse command line");
+    } else {
+        size_t size = wcslen(w_command_line) * 4;
+        argv = (char**) SOKOL_CALLOC(1, (argc + 1) * sizeof(char*) + size);
+        args = (char*)&argv[argc + 1];
+        int n;
+        for (int i = 0; i < argc; ++i) {
+            n = WideCharToMultiByte(CP_UTF8, 0, w_argv[i], -1, args, (int)size, NULL, NULL);
+            if (n == 0) {
+                _sapp_fail("Win32: failed to convert all arguments to utf8");
+                break;
+            }
+            argv[i] = args;
+            size -= n;
+            args += n;
+        }
+        LocalFree(w_argv);
+    }
+    *o_argc = argc;
+    return argv;
+}
+
 #if !defined(SOKOL_NO_ENTRY)
 #if defined(SOKOL_WIN32_FORCE_MAIN)
 int main(int argc, char* argv[]) {
+    sapp_desc desc = sokol_main(argc, argv);
+    _sapp_run(&desc);
+    return 0;
+}
 #else
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
     _SOKOL_UNUSED(hInstance);
     _SOKOL_UNUSED(hPrevInstance);
     _SOKOL_UNUSED(lpCmdLine);
     _SOKOL_UNUSED(nCmdShow);
-    int argc = __argc;
-    char** argv = __argv;
-#endif
-    sapp_desc desc = sokol_main(argc, argv);
+    int argc_utf8 = 0;
+    char** argv_utf8 = _sapp_win32_command_line_to_utf8_argv(GetCommandLineW(), &argc_utf8);
+    sapp_desc desc = sokol_main(argc_utf8, argv_utf8);
     _sapp_run(&desc);
+    SOKOL_FREE(argv_utf8);
     return 0;
 }
+#endif /* SOKOL_WIN32_FORCE_MAIN */
 #endif /* SOKOL_NO_ENTRY */
 #undef _SAPP_SAFE_RELEASE
 #endif /* WINDOWS */
@@ -7769,6 +7838,22 @@ SOKOL_API_IMPL void sapp_show_keyboard(bool shown) {
 
 SOKOL_API_IMPL bool sapp_keyboard_shown(void) {
     return _sapp.onscreen_keyboard_shown;
+}
+
+SOKOL_API_IMPL void sapp_show_mouse(bool shown) {
+    #if defined(_WIN32)
+    _sapp_win32_show_mouse(shown);
+    #else
+    _SOKOL_UNUSED(shown);
+    #endif
+}
+
+SOKOL_API_IMPL bool sapp_mouse_shown(void) {
+    #if defined(_WIN32)
+    return _sapp_win32_mouse_shown();
+    #else
+    return false;
+    #endif
 }
 
 SOKOL_API_IMPL void sapp_request_quit(void) {

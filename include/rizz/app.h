@@ -228,6 +228,8 @@ typedef struct rizz_api_app {
     void (*request_quit)();
     void (*cancel_quit)();
     const char* (*name)();
+    void (*show_mouse)(bool visible);
+    bool (*mouse_shown)();
 } rizz_api_app;
 
 #ifdef RIZZ_INTERNAL_API
