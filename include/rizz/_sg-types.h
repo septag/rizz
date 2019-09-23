@@ -46,7 +46,7 @@ typedef struct sg_context  { uint32_t id; } sg_context;
 */
 enum {
     SG_INVALID_ID = 0,
-    SG_NUM_SHADER_STAGES = 2,
+    SG_NUM_SHADER_STAGES = 3,
     SG_NUM_INFLIGHT_FRAMES = 2,
     SG_MAX_COLOR_ATTACHMENTS = 4,
     SG_MAX_SHADERSTAGE_BUFFERS = 8,
@@ -310,13 +310,6 @@ typedef enum sg_usage {
     _SG_USAGE_NUM,
     _SG_USAGE_FORCE_U32 = 0x7FFFFFFF
 } sg_usage;
-
-typedef enum sg_bind_flag {
-    _SG_BIND_FLAG_DEFAULT, /* value 0 reserved for default-init */
-    SG_BIND_FLAG_SHADER_WRITE,
-    SG_BIND_FLAG_COMPUTE_SHADER,
-    _SG_BIND_FLAG_FORCE_U32 = 0x7FFFFFFF
-} sg_bind_flag;
 
 /*
     sg_buffer_type
@@ -947,6 +940,7 @@ typedef struct sg_image_content {
 
     .type:              SG_IMAGETYPE_2D
     .render_target:     false
+    .shader_write:      false
     .width              0 (must be set to >0)
     .height             0 (must be set to >0)
     .depth/.layers:     1
@@ -992,6 +986,7 @@ typedef struct sg_image_desc {
     uint32_t _start_canary;
     sg_image_type type;
     bool render_target;
+    bool shader_write;
     int width;
     int height;
     union {
@@ -1000,7 +995,6 @@ typedef struct sg_image_desc {
     };
     int num_mipmaps;
     sg_usage usage;
-    sg_bind_flag bind_flag;
     sg_pixel_format pixel_format;
     int sample_count;
     sg_filter min_filter;
@@ -1088,7 +1082,6 @@ typedef struct sg_shader_desc {
     sg_shader_stage_desc vs;
     sg_shader_stage_desc fs;
     sg_shader_stage_desc cs;
-    sg_bind_flag bind_flag;
     const char* label;
     uint32_t _end_canary;
 } sg_shader_desc;

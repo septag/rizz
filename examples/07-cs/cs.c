@@ -129,7 +129,7 @@ static bool init()
     
     // compute-shader stuff
     sg_image_desc csout_desc = { .type = SG_IMAGETYPE_2D,
-                                 .bind_flag = SG_BIND_FLAG_SHADER_WRITE,
+                                 .shader_write = true,
                                  .pixel_format = SG_PIXELFORMAT_RGBA8,
                                  .width = 512,
                                  .height = 512 };

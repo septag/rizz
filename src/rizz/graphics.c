@@ -1594,9 +1594,9 @@ static sg_shader_desc* rizz__shader_setup_desc_cs(sg_shader_desc* desc,
         // TODO: storage buffers
     }
 
-    desc->bind_flag = SG_BIND_FLAG_COMPUTE_SHADER;
     return desc;
 }
+
 static rizz_shader rizz__shader_make_with_data(const sx_alloc* alloc, uint32_t vs_data_size,
                                                const uint32_t* vs_data, uint32_t vs_refl_size,
                                                const uint32_t* vs_refl_json, uint32_t fs_data_size,
