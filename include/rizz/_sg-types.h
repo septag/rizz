@@ -51,7 +51,7 @@ enum {
     SG_MAX_COLOR_ATTACHMENTS = 4,
     SG_MAX_SHADERSTAGE_BUFFERS = 8,
     SG_MAX_SHADERSTAGE_IMAGES = 12,
-    SG_MAX_SHADERSTAGE_IMAGES_CS = 8,
+    SG_MAX_SHADERSTAGE_UAVS = 8,
     SG_MAX_SHADERSTAGE_UBS = 4,
     SG_MAX_UB_MEMBERS = 16,
     SG_MAX_VERTEX_ATTRIBUTES = 16,      /* NOTE: actual max vertex attrs can be less on GLES2, see sg_limits! */
@@ -323,6 +323,8 @@ typedef enum sg_buffer_type {
     _SG_BUFFERTYPE_DEFAULT,         /* value 0 reserved for default-init */
     SG_BUFFERTYPE_VERTEXBUFFER,
     SG_BUFFERTYPE_INDEXBUFFER,
+    SG_BUFFERTYPE_STRUCT,
+    SG_BUFFERTYPE_RAW,
     _SG_BUFFERTYPE_NUM,
     _SG_BUFFERTYPE_FORCE_U32 = 0x7FFFFFFF
 } sg_buffer_type;
@@ -841,6 +843,7 @@ typedef struct sg_bindings {
     sg_image vs_images[SG_MAX_SHADERSTAGE_IMAGES];
     sg_image fs_images[SG_MAX_SHADERSTAGE_IMAGES];
     sg_image cs_images[SG_MAX_SHADERSTAGE_IMAGES];
+    sg_buffer cs_buffers[SG_MAX_SHADERSTAGE_BUFFERS];
     uint32_t _end_canary;
 } sg_bindings;
 
@@ -890,6 +893,8 @@ typedef struct sg_buffer_desc {
     int size;
     sg_buffer_type type;
     sg_usage usage;
+    bool shader_write;
+    int stride;
     const void* content;
     const char* label;
     /* GL specific */

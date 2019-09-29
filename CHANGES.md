@@ -24,6 +24,7 @@
 - [x] Raspberry build
 - [ ] iOS build
 - [x] EXPERIMENTAL: D3D11 compute-shader support
+- [ ] EXPERIMENTAL: sokol debugging support for compute-shader
 
 ### Changed
 - [x] BREAKING - gfx: immediate and staged APIs are now the same. creation/destroy/query functions 

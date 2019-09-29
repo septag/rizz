@@ -43,13 +43,23 @@ typedef struct {
     rizz_asset csshader_asset;
     sg_shader csshader;
 
-    sg_image csout;
+    // sg_image csout;
+    sg_buffer csin1;
+    sg_buffer csin2;
+    sg_buffer csout;
 
     sg_bindings csbindings;
     sg_pipeline cspip;
-} quad_state;
+} cs_state;
 
-RIZZ_STATE static quad_state g_quad;
+RIZZ_STATE static cs_state g_cs;
+
+#define NUM_ELEMENTS 1024
+
+typedef struct cs_type_t {
+    int i;
+    float f;
+} cs_type;
 
 static bool init()
 {
@@ -70,8 +80,8 @@ static bool init()
 
     // register main graphics stage.
     // at least one stage should be registered if you want to draw anything
-    g_quad.stage = the_gfx->stage_register("main", (rizz_gfx_stage){ .id = 0 });
-    sx_assert(g_quad.stage.id);
+    g_cs.stage = the_gfx->stage_register("main", (rizz_gfx_stage){ .id = 0 });
+    sx_assert(g_cs.stage.id);
 
     // quad vertices:
     //      pos: float[3]
@@ -92,60 +102,83 @@ static bool init()
     uint16_t indices[] = { 0, 2, 1, 2, 0, 3 };
 
     // buffers
-    g_quad.vbuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
-                                                           .type = SG_BUFFERTYPE_VERTEXBUFFER,
-                                                           .size = sizeof(vertices),
-                                                           .content = vertices });
+    g_cs.vbuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
+                                                         .type = SG_BUFFERTYPE_VERTEXBUFFER,
+                                                         .size = sizeof(vertices),
+                                                         .content = vertices });
 
-    g_quad.ibuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
-                                                           .type = SG_BUFFERTYPE_INDEXBUFFER,
-                                                           .size = sizeof(indices),
-                                                           .content = indices });
+    g_cs.ibuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
+                                                         .type = SG_BUFFERTYPE_INDEXBUFFER,
+                                                         .size = sizeof(indices),
+                                                         .content = indices });
 
     // shader
     // this shader is built with `glslcc` that reside in `/tools` directory.
     // see `glslcc --help` for details
     char shader_path[RIZZ_MAX_PATH];
-    g_quad.shader = the_asset->load(
+    g_cs.shader = the_asset->load(
         "shader", ex_shader_path(shader_path, sizeof(shader_path), "/assets/shaders", "quad.sgs"),
         NULL, 0, NULL, 0);
 
     // pipeline
     sg_pipeline_desc pip_desc = {
         .layout.buffers[0].stride = 20,    // sizeof each vertex (float[3] + float[2])
-        .shader = ((rizz_shader*)the_asset->obj(g_quad.shader).ptr)->shd,
+        .shader = ((rizz_shader*)the_asset->obj(g_cs.shader).ptr)->shd,
         .index_type = SG_INDEXTYPE_UINT16,
         .rasterizer = { .cull_mode = SG_CULLMODE_BACK, .sample_count = 4 }
     };
-    g_quad.pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
-        the_asset->obj(g_quad.shader).ptr, &pip_desc, &k_vertex_layout));
+    g_cs.pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
+        the_asset->obj(g_cs.shader).ptr, &pip_desc, &k_vertex_layout));
 
     // bindings
-    g_quad.bindings =
-        (sg_bindings){ .vertex_buffers[0] = g_quad.vbuff, .index_buffer = g_quad.ibuff };
+    g_cs.bindings = (sg_bindings){ .vertex_buffers[0] = g_cs.vbuff, .index_buffer = g_cs.ibuff };
 
-    g_quad.img = the_asset->load("texture", "/assets/textures/texfmt_rgba8.png",
-                                 &(rizz_texture_load_params){ 0 }, 0, NULL, 0);
-    
+    g_cs.img = the_asset->load("texture", "/assets/textures/texfmt_rgba8.png",
+                               &(rizz_texture_load_params){ 0 }, 0, NULL, 0);
+
     // compute-shader stuff
     sg_image_desc csout_desc = { .type = SG_IMAGETYPE_2D,
                                  .shader_write = true,
                                  .pixel_format = SG_PIXELFORMAT_RGBA8,
                                  .width = 512,
                                  .height = 512 };
-    g_quad.csout = the_gfx->make_image(&csout_desc);
+    // g_quad.csout = the_gfx->make_image(&csout_desc);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    cs_type* in1 = (cs_type*)sx_malloc(tmp_alloc, sizeof(cs_type) * NUM_ELEMENTS);
+    cs_type* in2 = (cs_type*)sx_malloc(tmp_alloc, sizeof(cs_type) * NUM_ELEMENTS);
+    for (int i = 0; i < NUM_ELEMENTS; i++) {
+        in1[i].f = (float)i;
+        in1[i].i = i;
+        in2[i].f = (float)i;
+        in2[i].i = i;
+    }
 
-    g_quad.csshader_asset = the_asset->load(
+    g_cs.csin1 = the_gfx->make_buffer(&(sg_buffer_desc){ .type = SG_BUFFERTYPE_RAW,
+                                                         .size = NUM_ELEMENTS * sizeof(cs_type),
+                                                         .stride = sizeof(cs_type),
+                                                         .content = in1 });
+    g_cs.csin2 = the_gfx->make_buffer(&(sg_buffer_desc){ .type = SG_BUFFERTYPE_RAW,
+                                                         .size = NUM_ELEMENTS * sizeof(cs_type),
+                                                         .stride = sizeof(cs_type),
+                                                         .content = in2 });
+    the_core->tmp_alloc_pop();
+
+    g_cs.csout = the_gfx->make_buffer(&(sg_buffer_desc){ .type = SG_BUFFERTYPE_RAW,
+                                                         .size = NUM_ELEMENTS * sizeof(cs_type),
+                                                         .stride = sizeof(cs_type),
+                                                         .shader_write = true });
+
+    g_cs.csshader_asset = the_asset->load(
         "shader",
         ex_shader_path(shader_path, sizeof(shader_path), "/assets/shaders", "cs.comp.sgs"), NULL, 0,
         NULL, 0);
 
     sg_pipeline_desc cspip_desc = {
-        .shader = ((rizz_shader*)the_asset->obj(g_quad.csshader_asset).ptr)->shd,
+        .shader = ((rizz_shader*)the_asset->obj(g_cs.csshader_asset).ptr)->shd,
     };
-    g_quad.cspip = the_gfx->make_pipeline(&cspip_desc);
+    g_cs.cspip = the_gfx->make_pipeline(&cspip_desc);
 
-    g_quad.csbindings = (sg_bindings){ 0 };
+    g_cs.csbindings = (sg_bindings){ 0 };
 
     //////////////////////////////////////////////////////////////////////////////////////////
     // camera
@@ -154,26 +187,26 @@ static bool init()
     sx_vec2 screen_size = the_app->sizef();
     const float view_width = 5.0f;
     const float view_height = screen_size.y * view_width / screen_size.x;
-    the_camera->fps_init(&g_quad.cam, 50.0f,
+    the_camera->fps_init(&g_cs.cam, 50.0f,
                          sx_rectwh(-view_width, -view_height, view_width, view_height), 0.1f,
                          100.0f);
-    the_camera->fps_lookat(&g_quad.cam, sx_vec3f(0, -4.0f, 0.0), SX_VEC3_ZERO, SX_VEC3_UNITZ);
+    the_camera->fps_lookat(&g_cs.cam, sx_vec3f(0, -4.0f, 0.0), SX_VEC3_ZERO, SX_VEC3_UNITZ);
 
     return true;
 }
 
 static void shutdown()
 {
-    if (g_quad.vbuff.id)
-        the_gfx->destroy_buffer(g_quad.vbuff);
-    if (g_quad.ibuff.id)
-        the_gfx->destroy_buffer(g_quad.ibuff);
-    if (g_quad.img.id)
-        the_asset->unload(g_quad.img);
-    if (g_quad.shader.id)
-        the_asset->unload(g_quad.shader);
-    if (g_quad.pip.id)
-        the_gfx->destroy_pipeline(g_quad.pip);
+    if (g_cs.vbuff.id)
+        the_gfx->destroy_buffer(g_cs.vbuff);
+    if (g_cs.ibuff.id)
+        the_gfx->destroy_buffer(g_cs.ibuff);
+    if (g_cs.img.id)
+        the_asset->unload(g_cs.img);
+    if (g_cs.shader.id)
+        the_asset->unload(g_cs.shader);
+    if (g_cs.pip.id)
+        the_gfx->destroy_pipeline(g_cs.pip);
 }
 
 static void update(float dt) {}
@@ -182,35 +215,40 @@ static void render()
 {
     sg_pass_action pass_action = { .colors[0] = { SG_ACTION_CLEAR, { 0.25f, 0.5f, 0.75f, 1.0f } },
                                    .depth = { SG_ACTION_CLEAR, 1.0f } };
-    the_gfx->staged.begin(g_quad.stage);
+    the_gfx->imm.begin(g_cs.stage);
 
     // dispatch CS to generate the texture
     {
-        g_quad.csbindings.cs_images[0] = ((rizz_texture*)the_asset->obj(g_quad.img).ptr)->img;
-        g_quad.csbindings.cs_images[1] = g_quad.csout;
-        the_gfx->staged.apply_pipeline(g_quad.cspip);
-        the_gfx->staged.apply_bindings(&g_quad.csbindings);
-        the_gfx->staged.dispatch(512 / 16, 512 / 16, 1);
+        // g_quad.csbindings.cs_images[0] = ((rizz_texture*)the_asset->obj(g_quad.img).ptr)->img;
+        // g_quad.csbindings.cs_images[1] = g_quad.csout;
+        g_cs.csbindings.cs_buffers[0] = g_cs.csin1;
+        g_cs.csbindings.cs_buffers[1] = g_cs.csin2;
+        g_cs.csbindings.cs_buffers[2] = g_cs.csout;
+
+        the_gfx->imm.apply_pipeline(g_cs.cspip);
+        the_gfx->imm.apply_bindings(&g_cs.csbindings);
+        // the_gfx->imm.dispatch(512 / 16, 512 / 16, 1);
+        the_gfx->imm.dispatch(NUM_ELEMENTS, 1, 1);
     }
 
-    the_gfx->staged.begin_default_pass(&pass_action, the_app->width(), the_app->height());
+    the_gfx->imm.begin_default_pass(&pass_action, the_app->width(), the_app->height());
 
     // draw textured quad with the CS processed texture
-    {
-        sx_mat4 proj = the_camera->ortho_mat(&g_quad.cam.cam);
-        sx_mat4 view = the_camera->view_mat(&g_quad.cam.cam);
+    if (0) {
+        sx_mat4 proj = the_camera->ortho_mat(&g_cs.cam.cam);
+        sx_mat4 view = the_camera->view_mat(&g_cs.cam.cam);
 
         quad_matrices mats = { .mvp = sx_mat4_mul(&proj, &view) };
 
-        g_quad.bindings.fs_images[0] = g_quad.csout;
-        the_gfx->staged.apply_pipeline(g_quad.pip);
-        the_gfx->staged.apply_bindings(&g_quad.bindings);
-        the_gfx->staged.apply_uniforms(SG_SHADERSTAGE_VS, 0, &mats, sizeof(mats));
-        the_gfx->staged.draw(0, 6, 1);
+        // g_quad.bindings.fs_images[0] = g_quad.csout;
+        the_gfx->imm.apply_pipeline(g_cs.pip);
+        the_gfx->imm.apply_bindings(&g_cs.bindings);
+        the_gfx->imm.apply_uniforms(SG_SHADERSTAGE_VS, 0, &mats, sizeof(mats));
+        the_gfx->imm.draw(0, 6, 1);
     }
 
-    the_gfx->staged.end_pass();
-    the_gfx->staged.end();
+    the_gfx->imm.end_pass();
+    the_gfx->imm.end();
 
     // Use imgui UI
     the_imgui->SetNextWindowContentSize(sx_vec2f(100.0f, 50.0f));

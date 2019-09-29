@@ -667,12 +667,12 @@ static bool imgui__setup()
 
     g_imgui.bind.vertex_buffers[0] =
         the_gfx->make_buffer(&(sg_buffer_desc){ .type = SG_BUFFERTYPE_VERTEXBUFFER,
-                                                    .usage = SG_USAGE_STREAM,
-                                                    .size = sizeof(ImDrawVert) * MAX_VERTS });
+                                                .usage = SG_USAGE_STREAM,
+                                                .size = sizeof(ImDrawVert) * MAX_VERTS });
     g_imgui.bind.index_buffer =
         the_gfx->make_buffer(&(sg_buffer_desc){ .type = SG_BUFFERTYPE_INDEXBUFFER,
-                                                    .usage = SG_USAGE_STREAM,
-                                                    .size = sizeof(uint16_t) * MAX_INDICES });
+                                                .usage = SG_USAGE_STREAM,
+                                                .size = sizeof(uint16_t) * MAX_INDICES });
 
     uint8_t* font_pixels;
     int font_width, font_height, bpp;
@@ -1611,7 +1611,7 @@ rizz_plugin_decl_main(imgui, plugin, e)
             imgui__submit_make_commands(make_cmdbuff, make_cmdbuff_sz);
         }
 
-        //imgui__frame();
+        // imgui__frame();
         break;
     }
 

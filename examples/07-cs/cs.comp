@@ -1,5 +1,6 @@
 #version 450
 
+#if 0
 layout (binding = 0) uniform sampler2D input_rgb;
 layout (binding = 1, rgba8) uniform image2D  output_l;
 
@@ -14,3 +15,31 @@ void main()
 
     imageStore(output_l, gid.xy, vec4(grey, grey, grey, 1.0));
 }
+#endif
+
+struct buf_type {
+    int i;
+    float f;
+};
+
+layout(std430, binding = 0) readonly buffer src_data1_block {
+    buf_type src_data1[];
+};
+
+layout(std430, binding = 1) readonly buffer src_data2_block {
+    buf_type src_data2[];
+};
+
+layout(std430, binding = 2) writeonly buffer dst_data_block {
+    buf_type dst_data[];
+};
+
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+void main() 
+{
+    ivec3 gid = ivec3(gl_GlobalInvocationID);
+    dst_data[gid.x].i = src_data1[gid.x].i + src_data2[gid.x].i;
+    dst_data[gid.x].f = src_data1[gid.x].f + src_data2[gid.x].f;
+}
+
