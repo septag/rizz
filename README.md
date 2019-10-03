@@ -34,6 +34,7 @@ see [CHANGELOG](CHANGES.md) for latest changes, new features and bug fixes.
 - *Multiple graphics API support*: Metal (iOS, MacOS). OpenGL-ES 2/3 (Android). Direct3D11 (Windows), OpenGL 3.3 (Linux)
 - *Portable shaders*: Write shaders once in GLSL, toolset will automatically translate the shader to other APIs.
 - *Multi-threaded GPU command-buffer*: Draw commands can be submitted by multiple threads with _staged_ API.
+- *Compute shader support (Experimental)*: Experimental compute-shader support, currently only under Direct3D, more backends will be added.
 
 #### Plugins
 - [imgui](src/imgui): Dear-imgui plugin with some utility API

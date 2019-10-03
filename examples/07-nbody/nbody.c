@@ -302,7 +302,7 @@ static void render()
     the_gfx->staged.end();
 
     // Use imgui UI
-    the_imgui->SetNextWindowContentSize(sx_vec2f(150.0f, 50.0f));
+    the_imgui->SetNextWindowContentSize(sx_vec2f(200.0f, 150.0f));
     if (the_imgui->Begin("nbody", NULL, 0)) {
         the_imgui->LabelText("Fps", "%.3f", the_core->fps());
         the_imgui->SliderFloat("Speed", &g_nbody.simulation_speed, 0.01f, 0.5f, "%.2f", 1.0f);
