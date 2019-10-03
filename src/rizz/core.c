@@ -923,6 +923,7 @@ bool rizz__core_init(const rizz_config* conf)
     the__vfs.mount(conf->cache_path, "/cache");
     if (!the__vfs.is_dir(conf->cache_path))
         the__vfs.mkdir(conf->cache_path);
+
     return true;
 }
 
@@ -1044,9 +1045,6 @@ void rizz__core_frame()
     // because submitting commands
     rizz__gfx_trace_reset_frame_stats();
     rizz__gfx_execute_command_buffers();
-    the_imgui = the__plugin.get_api_byname("imgui", 0);
-    if (the_imgui)
-        the_imgui->Render();
 
     // commit render (metal only)
     rizz__gfx_commit();
@@ -1065,6 +1063,11 @@ void rizz__core_frame()
 
     // update plugins and application
     rizz__plugin_update(dt);
+
+    the_imgui = the__plugin.get_api_byname("imgui", 0);
+    if (the_imgui) {
+        the_imgui->Render();
+    }
 
     ++g_core.frame_idx;
 }

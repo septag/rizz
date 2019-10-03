@@ -65,6 +65,18 @@ function(rizz__add_example proj_name)
         set(shaders examples/${proj_name}/${source_file}.vert 
                     examples/${proj_name}/${source_file}.frag)
         set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "examples/assets/shaders")
+	    if (CMAKE_BUILD_TYPE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set_source_files_properties(${shaders} PROPERTIES GLSLCC_COMPILE_FLAGS "--debug-bin")
+        endif()
+        glslcc_target_compile_shaders_sgs(${proj_name} "${shaders}")
+    endif()
+    
+    if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/${proj_name}/${source_file}.comp)
+        set(shaders examples/${proj_name}/${source_file}.comp) 
+        set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "examples/assets/shaders")
+	    if (CMAKE_BUILD_TYPE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+            set_source_files_properties(${shaders} PROPERTIES GLSLCC_COMPILE_FLAGS "--debug-bin")
+        endif()
         glslcc_target_compile_shaders_sgs(${proj_name} "${shaders}")
     endif()
 endfunction()
@@ -167,7 +179,8 @@ set(example_projects 01-hello
                      03-drawsprite 
                      04-animsprite
                      05-playsound
-					 06-sdf)
+					 06-sdf
+					 07-nbody)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
@@ -198,12 +211,18 @@ endforeach()
 
 if (BUILD_EXAMPLES AND NOT BUNDLE) 
     foreach (example_project ${example_projects})
+        # exceptions: currently compute-shaders are only supported on windows, so we ignore examples that use them
+        if (NOT WIN32 AND ${example_project} STREQUAL "07-nbody")
+            continue()
+        endif()
+
         rizz__add_example(${example_project})
         set_target_properties(${example_project} PROPERTIES FOLDER examples)
     endforeach()
 endif()
 
-# use -DBUNDLE_TARGET=target-name and -DBUNDLE_TARGET_NAME=name to define 
+#
+# use -DBUNDLE=1, -DBUNDLE_TARGET=target-name and -DBUNDLE_TARGET_NAME=name to define a single _bundled_ executable
 if (BUNDLE)
     if (NOT BUNDLE_TARGET)
         message(FATAL_ERROR "BUNDLE_TARGET is not set, set BUNDLE_TARGET to the target name of your executable target")

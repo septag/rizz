@@ -69,6 +69,13 @@ typedef struct rizz_shader_refl_uniform_buffer {
                        // FLOAT4
 } rizz_shader_refl_uniform_buffer;
 
+typedef struct rizz_shader_refl_buffer {
+    char name[32];
+    int size_bytes;
+    int binding;
+    int array_stride;
+} rizz_shader_refl_buffer;
+
 typedef struct rizz_shader_refl_texture {
     char name[32];
     int binding;
@@ -84,6 +91,10 @@ typedef struct rizz_shader_refl {
     int num_inputs;
     rizz_shader_refl_texture* textures;
     int num_textures;
+    rizz_shader_refl_texture* storage_images;
+    int num_storage_images;
+    rizz_shader_refl_buffer* storage_buffers;
+    int num_storage_buffers;
     rizz_shader_refl_uniform_buffer* uniform_buffers;
     int num_uniform_buffers;
     rizz_shader_code_type code_type;
@@ -297,6 +308,7 @@ typedef struct rizz_api_gfx_draw {
     void (*apply_bindings)(const sg_bindings* bind);
     void (*apply_uniforms)(sg_shader_stage stage, int ub_index, const void* data, int num_bytes);
     void (*draw)(int base_element, int num_elements, int num_instances);
+    void (*dispatch)(int thread_group_x, int thread_group_y, int thread_group_z);
     void (*end_pass)();
 
     void (*update_buffer)(sg_buffer buf, const void* data_ptr, int data_size);
@@ -372,6 +384,11 @@ typedef struct rizz_api_gfx {
     sg_features (*query_features)(void);
     sg_limits (*query_limits)(void);
     sg_pixelformat_info (*query_pixelformat)(sg_pixel_format fmt);
+    sg_buffer_desc (*query_buffer_defaults)(const sg_buffer_desc* desc);
+    sg_image_desc (*query_image_defaults)(const sg_image_desc* desc);
+    sg_shader_desc (*query_shader_defaults)(const sg_shader_desc* desc);
+    sg_pipeline_desc (*query_pipeline_defaults)(const sg_pipeline_desc* desc);
+    sg_pass_desc (*query_pass_defaults)(const sg_pass_desc* desc);
 
     // internal use (imgui plugin)
     void (*internal_state)(void** make_cmdbuff, int* make_cmdbuff_sz);

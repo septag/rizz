@@ -7,7 +7,7 @@ layout (location=COLOR0)    in  vec4 a_color;
 layout (location=COLOR0)    out vec4 f_color;
 layout (location=TEXCOORD0) out vec2 f_coord;
 
-layout (std140) uniform globals {
+layout (std140, binding = 0) uniform globals {
     vec4 disp_size;     // x,y = width/height of view
 };
 
