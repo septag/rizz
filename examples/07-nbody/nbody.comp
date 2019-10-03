@@ -1,0 +1,107 @@
+#version 450
+
+#define BLOCK_SIZE 128
+
+// constants
+const float SOFTENING_SQUARED = 0.0012500000*0.0012500000;
+const float FG = 6.67300e-11f * 10000.0f;
+const float PARTICLE_MASS = FG*10000.0f * 10000.0f;
+
+layout (binding = 0, std140) uniform params {
+    ivec4 _p1;
+    vec4  _p2;
+};
+
+#define param_max_particles _p1.x
+#define param_dimx _p1.y
+#define param_dt _p2.x
+#define param_damping _p2.y
+
+struct particle_t {
+    vec4 pos;
+    vec4 vel;
+};
+
+layout(std430, binding = 0) readonly buffer src_particles_b {
+    particle_t src_particles[];
+};
+
+layout(std430, binding = 0) writeonly buffer dst_particles_b {
+    particle_t dst_particles[];
+};
+
+shared vec4 shared_pos[BLOCK_SIZE];
+
+void body2body_interaction(inout vec3 ai, vec4 bj, vec4 bi, float mass, int particles)
+{
+    vec3 r = bj.xyz - bi.xyz;
+
+    float dist_sqr = dot(r, r);
+    dist_sqr += SOFTENING_SQUARED;
+
+    float inv_dist = 1.0f / sqrt(dist_sqr);
+	float inv_dist_cube =  inv_dist * inv_dist * inv_dist;
+    
+    float s = mass * inv_dist_cube * particles;
+
+    ai += r * s;
+}
+
+layout(local_size_x = BLOCK_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+void main() 
+{
+    // Each thread of the CS updates one of the particles
+    ivec3 gid = ivec3(gl_GlobalInvocationID);
+
+    vec4 pos = src_particles[gid.x].pos;
+    vec4 vel = src_particles[gid.x].vel;
+    vec3 accel = vec3(0, 0, 0);
+    float mass = PARTICLE_MASS;
+
+    // Update current particle using all other particles
+    for (int tile = 0; tile < param_dimx; tile++)
+    {
+        // Cache a tile of particles unto shared memory to increase IO efficiency
+        int index = int(gl_LocalInvocationIndex);
+        shared_pos[index] = src_particles[tile * BLOCK_SIZE + index].pos;
+       
+        barrier();        
+
+        for (uint counter = 0; counter < BLOCK_SIZE; counter+=8) 
+        {
+            body2body_interaction(accel, shared_pos[counter], pos, mass, 1);
+            body2body_interaction(accel, shared_pos[counter+1], pos, mass, 1);
+            body2body_interaction(accel, shared_pos[counter+2], pos, mass, 1);
+            body2body_interaction(accel, shared_pos[counter+3], pos, mass, 1);
+            body2body_interaction(accel, shared_pos[counter+4], pos, mass, 1);
+            body2body_interaction(accel, shared_pos[counter+5], pos, mass, 1);
+            body2body_interaction(accel, shared_pos[counter+6], pos, mass, 1);
+            body2body_interaction(accel, shared_pos[counter+7], pos, mass, 1);
+        }
+        
+        barrier();
+    }  
+
+    // g_param.x is the number of our particles, however this number might not be an exact multiple of the tile size.
+    // In such cases, out of bound reads occur in the process above, which means there will be 
+    // tooManyParticles "phantom" particles generating false gravity at position (0, 0, 0), so we have to substract them here.
+    // NOTE, out of bound reads always return 0 in CS
+    const int too_many_particles = param_dimx * BLOCK_SIZE - param_max_particles;
+    body2body_interaction(accel, vec4(0, 0, 0, 0), pos, mass, -too_many_particles);
+
+    // Update the velocity and position of current particle using the acceleration computed above
+    vel.xyz += accel.xyz * param_dt;
+    vel.xyz *= param_damping;
+    pos.xyz += vel.xyz * param_dt;
+
+    if (gid.x < param_max_particles) {
+        // copy the particle four times into destination buffer
+        // because destination buffer maps to sprite quad vertices
+        int index = gid.x;
+        vec4 vel = vec4(vel.xyz, length(accel));
+
+        dst_particles[index].pos = pos;
+        dst_particles[index].vel = vel;
+    }    
+}
