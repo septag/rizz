@@ -382,9 +382,9 @@ rizz_plugin_decl_event_handler(nbody, e)
 
 rizz_game_decl_config(conf)
 {
-    conf->app_name = "cs";
+    conf->app_name = "nbody";
     conf->app_version = 1000;
-    conf->app_title = "cs";
+    conf->app_title = "nbody";
     conf->window_width = 800;
     conf->window_height = 600;
     conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;

@@ -40,3 +40,10 @@ Demonstrates basic application setup. Just clears the view with blue color.
 - Simple parametric animations
 
 ![06-sdf](screenshots/06-sdf.png)
+
+### [NBody](07-nbody/nbody.c)
+- Basic compute shader usage
+- GPU particle rendering with instancing 
+- (Currently only build under windows/Direct3D backend)
+
+![07-nbody](screenshots/07-nbody.png)
