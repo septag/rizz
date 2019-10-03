@@ -70,7 +70,7 @@ function(rizz__add_example proj_name)
         endif()
         glslcc_target_compile_shaders_sgs(${proj_name} "${shaders}")
     endif()
-
+    
     if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/${proj_name}/${source_file}.comp)
         set(shaders examples/${proj_name}/${source_file}.comp) 
         set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "examples/assets/shaders")
@@ -180,7 +180,7 @@ set(example_projects 01-hello
                      04-animsprite
                      05-playsound
 					 06-sdf
-					 07-cs)
+					 07-nbody)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
@@ -211,6 +211,11 @@ endforeach()
 
 if (BUILD_EXAMPLES AND NOT BUNDLE) 
     foreach (example_project ${example_projects})
+        # exceptions: currently compute-shaders are only supported on windows, so we ignore examples that use them
+        if (NOT WIN32 AND ${example_project} STREQUAL "07-nbody")
+            continue()
+        endif()
+
         rizz__add_example(${example_project})
         set_target_properties(${example_project} PROPERTIES FOLDER examples)
     endforeach()

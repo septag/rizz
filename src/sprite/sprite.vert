@@ -20,7 +20,8 @@ layout (binding = 0, std140) uniform matrices {
     mat4 vp;
 };
 
-void main() {
+void main() 
+{
     mat4 model = mat4(vec4(a_transform1[0], a_transform1[1], 0, 0),
                       vec4(a_transform1[2], a_transform2[0], 0, 0),
                       vec4(0, 0, 1.0, 0),

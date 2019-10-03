@@ -518,6 +518,7 @@ static inline sg_pixel_format rizz__texture_get_texture_format(ddsktx_format fmt
 {
     // clang-format off
     switch (fmt) {
+    case DDSKTX_FORMAT_BGRA8:   return SG_PIXELFORMAT_RGBA8;    // TODO: FIXME ? 
     case DDSKTX_FORMAT_RGBA8:   return SG_PIXELFORMAT_RGBA8;
     case DDSKTX_FORMAT_RGBA16F: return SG_PIXELFORMAT_RGBA16F;
     case DDSKTX_FORMAT_R32F:    return SG_PIXELFORMAT_R32F;
@@ -3414,9 +3415,63 @@ static void rizz__cb_apply_bindings(const sg_bindings* bind)
         }
     }
 
+    for (int i = 0; i < SG_MAX_SHADERSTAGE_BUFFERS; i++) {
+        if (bind->vs_buffers[i].id) {
+            _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, bind->vs_buffers[i].id);
+            buf->used_frame = frame_idx;
+        } else {
+            break;
+        }
+    }
+
     for (int i = 0; i < SG_MAX_SHADERSTAGE_IMAGES; i++) {
         if (bind->fs_images[i].id) {
             _sg_image_t* img = _sg_lookup_image(&_sg.pools, bind->fs_images[i].id);
+            img->used_frame = frame_idx;
+        } else {
+            break;
+        }
+    }
+
+    for (int i = 0; i < SG_MAX_SHADERSTAGE_BUFFERS; i++) {
+        if (bind->fs_buffers[i].id) {
+            _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, bind->fs_buffers[i].id);
+            buf->used_frame = frame_idx;
+        } else {
+            break;
+        }
+    }
+
+    for (int i = 0; i < SG_MAX_SHADERSTAGE_IMAGES; i++) {
+        if (bind->cs_images[i].id) {
+            _sg_image_t* img = _sg_lookup_image(&_sg.pools, bind->cs_images[i].id);
+            img->used_frame = frame_idx;
+        } else {
+            break;
+        }
+    }
+
+    for (int i = 0; i < SG_MAX_SHADERSTAGE_BUFFERS; i++) {
+        if (bind->cs_buffers[i].id) {
+            _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, bind->cs_buffers[i].id);
+            buf->used_frame = frame_idx;
+        } else {
+            break;
+        }
+    }
+
+    for (int i = 0; i < SG_MAX_SHADERSTAGE_UAVS; i++) {
+        if (bind->cs_buffer_uavs[i].id) {
+            _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, bind->cs_buffer_uavs[i].id);
+            buf->used_frame = frame_idx;
+        } else {
+            break;
+        }
+    }
+
+    for (int i = 0; i < SG_MAX_SHADERSTAGE_UAVS; i++) {
+        if (bind->cs_image_uavs[i].id) {
+            _sg_image_t* img = _sg_lookup_image(&_sg.pools, bind->cs_image_uavs[i].id);
             img->used_frame = frame_idx;
         } else {
             break;

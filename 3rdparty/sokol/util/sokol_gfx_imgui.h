@@ -1,4 +1,5 @@
 #pragma once
+/* clang-format off */
 /*
     sokol_gfx_imgui.h -- debug-inspection UI for sokol_gfx.h using Dear ImGui
 
@@ -150,8 +151,8 @@
         3. This notice may not be removed or altered from any source
         distribution.
 */
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #if !defined(SOKOL_GFX_INCLUDED)
 #error "Please include sokol_gfx.h before sokol_gfx_imgui.h"
@@ -606,8 +607,8 @@ SOKOL_API_DECL void sg_imgui_draw_capabilities_window(sg_imgui_t* ctx);
 #define SOKOL_API_IMPL
 #endif
 
-#include <string.h>
 #include <stdio.h>      /* snprintf */
+#include <string.h>
 
 #define _SG_IMGUI_SLOT_MASK (0xFFFF)
 #define _SG_IMGUI_LIST_WIDTH (192)
@@ -856,6 +857,10 @@ _SOKOL_PRIVATE const char* _sg_imgui_uniformtype_string(sg_uniform_type t) {
         case SG_UNIFORMTYPE_FLOAT3: return "SG_UNIFORMTYPE_FLOAT3";
         case SG_UNIFORMTYPE_FLOAT4: return "SG_UNIFORMTYPE_FLOAT4";
         case SG_UNIFORMTYPE_MAT4:   return "SG_UNIFORMTYPE_MAT4";
+        case SG_UNIFORMTYPE_INT:    return "SG_UNIFORMTYPE_INT";
+        case SG_UNIFORMTYPE_INT2:   return "SG_UNIFORMTYPE_INT2";
+        case SG_UNIFORMTYPE_INT3:   return "SG_UNIFORMTYPE_INT3";
+        case SG_UNIFORMTYPE_INT4:   return "SG_UNIFORMTYPE_INT4";
         default:                    return "???";
     }
 }

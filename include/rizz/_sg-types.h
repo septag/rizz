@@ -323,7 +323,6 @@ typedef enum sg_buffer_type {
     _SG_BUFFERTYPE_DEFAULT,         /* value 0 reserved for default-init */
     SG_BUFFERTYPE_VERTEXBUFFER,
     SG_BUFFERTYPE_INDEXBUFFER,
-    SG_BUFFERTYPE_STRUCT,
     SG_BUFFERTYPE_RAW,
     _SG_BUFFERTYPE_NUM,
     _SG_BUFFERTYPE_FORCE_U32 = 0x7FFFFFFF
@@ -559,6 +558,10 @@ typedef enum sg_uniform_type {
     SG_UNIFORMTYPE_FLOAT3,
     SG_UNIFORMTYPE_FLOAT4,
     SG_UNIFORMTYPE_MAT4,
+    SG_UNIFORMTYPE_INT,
+    SG_UNIFORMTYPE_INT2,
+    SG_UNIFORMTYPE_INT3,
+    SG_UNIFORMTYPE_INT4,
     _SG_UNIFORMTYPE_NUM,
     _SG_UNIFORMTYPE_FORCE_U32 = 0x7FFFFFFF
 } sg_uniform_type;
@@ -841,9 +844,13 @@ typedef struct sg_bindings {
     sg_buffer index_buffer;
     int index_buffer_offset;
     sg_image vs_images[SG_MAX_SHADERSTAGE_IMAGES];
+    sg_buffer vs_buffers[SG_MAX_SHADERSTAGE_BUFFERS];
     sg_image fs_images[SG_MAX_SHADERSTAGE_IMAGES];
+    sg_buffer fs_buffers[SG_MAX_SHADERSTAGE_BUFFERS];
     sg_image cs_images[SG_MAX_SHADERSTAGE_IMAGES];
     sg_buffer cs_buffers[SG_MAX_SHADERSTAGE_BUFFERS];
+    sg_image cs_image_uavs[SG_MAX_SHADERSTAGE_UAVS];
+    sg_buffer cs_buffer_uavs[SG_MAX_SHADERSTAGE_UAVS];
     uint32_t _end_canary;
 } sg_bindings;
 
@@ -894,7 +901,6 @@ typedef struct sg_buffer_desc {
     sg_buffer_type type;
     sg_usage usage;
     bool shader_write;
-    int stride;
     const void* content;
     const char* label;
     /* GL specific */

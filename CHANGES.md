@@ -34,6 +34,7 @@
 - [x] Deferred destroys. Now objects in use will never be destroyed even if the user calls _destroy_
 - [ ] Error handling for missing shaders
 - [x] immediate mode api conflicts with imgui
+- [ ] fixed sx_matx_inv 
 
 ## [0.1]:
 ### Added

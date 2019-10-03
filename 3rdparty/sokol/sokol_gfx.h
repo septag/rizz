@@ -846,7 +846,6 @@ typedef enum sg_buffer_type {
     _SG_BUFFERTYPE_DEFAULT,         /* value 0 reserved for default-init */
     SG_BUFFERTYPE_VERTEXBUFFER,
     SG_BUFFERTYPE_INDEXBUFFER,
-    SG_BUFFERTYPE_STRUCT,
     SG_BUFFERTYPE_RAW,
     _SG_BUFFERTYPE_NUM,
     _SG_BUFFERTYPE_FORCE_U32 = 0x7FFFFFFF
@@ -1082,6 +1081,10 @@ typedef enum sg_uniform_type {
     SG_UNIFORMTYPE_FLOAT3,
     SG_UNIFORMTYPE_FLOAT4,
     SG_UNIFORMTYPE_MAT4,
+    SG_UNIFORMTYPE_INT,
+    SG_UNIFORMTYPE_INT2,
+    SG_UNIFORMTYPE_INT3,
+    SG_UNIFORMTYPE_INT4,
     _SG_UNIFORMTYPE_NUM,
     _SG_UNIFORMTYPE_FORCE_U32 = 0x7FFFFFFF
 } sg_uniform_type;
@@ -1366,9 +1369,13 @@ typedef struct sg_bindings {
     sg_buffer index_buffer;
     int index_buffer_offset;
     sg_image vs_images[SG_MAX_SHADERSTAGE_IMAGES];
+    sg_buffer vs_buffers[SG_MAX_SHADERSTAGE_BUFFERS];
     sg_image fs_images[SG_MAX_SHADERSTAGE_IMAGES];
+    sg_buffer fs_buffers[SG_MAX_SHADERSTAGE_BUFFERS];
     sg_image cs_images[SG_MAX_SHADERSTAGE_IMAGES];
     sg_buffer cs_buffers[SG_MAX_SHADERSTAGE_BUFFERS];
+    sg_image cs_image_uavs[SG_MAX_SHADERSTAGE_UAVS];
+    sg_buffer cs_buffer_uavs[SG_MAX_SHADERSTAGE_UAVS];
     uint32_t _end_canary;
 } sg_bindings;
 
@@ -1384,7 +1391,6 @@ typedef struct sg_bindings {
     .type:          SG_BUFFERTYPE_VERTEXBUFFER
     .usage:         SG_USAGE_IMMUTABLE
     .shader_write   false
-    .stride         0       (for structured buffers only)
     .content        0
     .label          0       (optional string label for trace hooks)
 
@@ -1421,7 +1427,6 @@ typedef struct sg_buffer_desc {
     sg_buffer_type type;
     sg_usage usage;
     bool shader_write;
-    int stride; 
     const void* content;
     const char* label;
     /* GL specific */
@@ -2383,6 +2388,7 @@ typedef struct {
     _sg_slot_t slot;
     int size;
     int append_pos;
+    bool shader_write;
     bool append_overflow;
     sg_buffer_type type;
     sg_usage usage;
@@ -2482,6 +2488,7 @@ typedef struct {
     _sg_slot_t slot;
     int size;
     int append_pos;
+    bool shader_write;
     bool append_overflow;
     sg_buffer_type type;
     sg_usage usage;
@@ -2668,10 +2675,10 @@ typedef struct {
     _sg_slot_t slot;
     int size;
     int append_pos;
+    bool shader_write;
     bool append_overflow;
     sg_buffer_type type;
     sg_usage usage;
-    int stride;
     uint32_t update_frame_index;
     uint32_t append_frame_index;
     uint32_t map_frame_index;
@@ -2877,6 +2884,7 @@ typedef struct {
     _sg_slot_t slot;
     int size;
     int append_pos;
+    bool shader_write;
     bool append_overflow;
     sg_buffer_type type;
     sg_usage usage;
@@ -3068,8 +3076,6 @@ typedef enum {
     _SG_VALIDATE_BUFFERDESC_CONTENT,
     _SG_VALIDATE_BUFFERDESC_NO_CONTENT,
     _SG_VALIDATE_BUFFERDESC_TYPE,
-    _SG_VALIDATE_BUFFERDESC_STRIDE,
-    _SG_VALIDATE_BUFFERDESC_STRIDE_DIVIDE,
 
     /* image creation */
     _SG_VALIDATE_IMAGEDESC_CANARY,
@@ -3281,6 +3287,10 @@ _SOKOL_PRIVATE int _sg_uniform_size(sg_uniform_type type, int count) {
         case SG_UNIFORMTYPE_FLOAT3:     return 12 * count; /* FIXME: std140??? */
         case SG_UNIFORMTYPE_FLOAT4:     return 16 * count;
         case SG_UNIFORMTYPE_MAT4:       return 64 * count;
+        case SG_UNIFORMTYPE_INT:        return 4;
+        case SG_UNIFORMTYPE_INT2:        return 8 * count;
+        case SG_UNIFORMTYPE_INT3:        return 12 * count;
+        case SG_UNIFORMTYPE_INT4:        return 16 * count;
         default:
             SOKOL_UNREACHABLE;
             return -1;
@@ -3811,9 +3821,13 @@ _SOKOL_PRIVATE void _sg_apply_bindings(
     _sg_buffer_t** vbs, const int* vb_offsets, int num_vbs,
     _sg_buffer_t* ib, int ib_offset,
     _sg_image_t** vs_imgs, int num_vs_imgs,
-    _sg_image_t** fs_imgs, int num_fs_imgs, 
+    _sg_buffer_t** vs_bufs, int num_vs_bufs,
+    _sg_image_t** fs_imgs, int num_fs_imgs,
+    _sg_buffer_t** fs_bufs, int num_fs_bufs,
     _sg_image_t** cs_imgs, int num_cs_imgs, 
-    _sg_buffer_t** cs_bufs, int num_cs_bufs)
+    _sg_buffer_t** cs_bufs, int num_cs_bufs,
+    _sg_image_t** cs_img_uavs, int num_cs_img_uavs,
+    _sg_buffer_t** cs_buf_uavs, int num_cs_buf_uavs)
 {
     SOKOL_ASSERT(pip);
     SOKOL_ASSERT(vbs && vb_offsets);
@@ -3823,9 +3837,13 @@ _SOKOL_PRIVATE void _sg_apply_bindings(
     _SOKOL_UNUSED(vbs); _SOKOL_UNUSED(vb_offsets); _SOKOL_UNUSED(num_vbs);
     _SOKOL_UNUSED(ib); _SOKOL_UNUSED(ib_offset);
     _SOKOL_UNUSED(vs_imgs); _SOKOL_UNUSED(num_vs_imgs);
+    _SOKOL_UNUSED(vs_bufs); _SOKOL_UNUSED(num_vs_bufs);
     _SOKOL_UNUSED(fs_imgs); _SOKOL_UNUSED(num_fs_imgs);
+    _SOKOL_UNUSED(fs_bufs); _SOKOL_UNUSED(num_fs_bufs);
     _SOKOL_UNUSED(cs_imgs); _SOKOL_UNUSED(num_cs_imgs);
     _SOKOL_UNUSED(cs_bufs); _SOKOL_UNUSED(num_cs_bufs);
+    _SOKOL_UNUSED(cs_img_uavs); _SOKOL_UNUSED(num_cs_img_uavs);
+    _SOKOL_UNUSED(cs_buf_uavs); _SOKOL_UNUSED(num_cs_buf_uavs);
 }
 
 _SOKOL_PRIVATE void _sg_apply_uniforms(sg_shader_stage stage_index, int ub_index, const void* data, int num_bytes) {
@@ -6152,9 +6170,13 @@ _SOKOL_PRIVATE void _sg_apply_bindings(
     _sg_buffer_t** vbs, const int* vb_offsets, int num_vbs,
     _sg_buffer_t* ib, int ib_offset,
     _sg_image_t** vs_imgs, int num_vs_imgs,
-    _sg_image_t** fs_imgs, int num_fs_imgs, 
+    _sg_buffer_t** vs_bufs, int num_vs_bufs,
+    _sg_image_t** fs_imgs, int num_fs_imgs,
+    _sg_buffer_t** fs_bufs, int num_fs_bufs,
 	_sg_image_t** cs_imgs, int num_cs_imgs,
-    _sg_buffer_t** cs_bufs, int num_cs_bufs)
+    _sg_buffer_t** cs_bufs, int num_cs_bufs,
+    _sg_image_t** cs_img_uavs, int num_cs_img_uavs,
+    _sg_buffer_t** cs_buf_uavs, int num_cs_buf_uavs)
 {
     SOKOL_ASSERT(pip);
     _SOKOL_UNUSED(num_fs_imgs);
@@ -6239,8 +6261,21 @@ _SOKOL_PRIVATE void _sg_apply_bindings(
         }
     }
     _SG_GL_CHECK_ERROR();
+
+    /* TODO: vertex/fragment shader buffers */
+    if (vs_bufs && num_vs_bufs) {
+        _SOKOL_UNUSED(vs_bufs);
+        _SOKOL_UNUSED(num_vs_bufs);
+        SOKOL_ASSERT(0);
+    }
+
+    if (fs_bufs && num_fs_bufs) {
+        _SOKOL_UNUSED(fs_bufs);
+        _SOKOL_UNUSED(num_fs_bufs);
+        SOKOL_ASSERT(0);
+    }
     
-    // TODO: compute shader images */
+    /* TODO: compute shader images */
     if (cs_imgs && num_cs_imgs) {
         _SOKOL_UNUSED(cs_imgs);
         _SOKOL_UNUSED(num_cs_imgs);
@@ -6250,6 +6285,18 @@ _SOKOL_PRIVATE void _sg_apply_bindings(
     if (cs_bufs && num_cs_bufs) {
         _SOKOL_UNUSED(cs_bufs);
         _SOKOL_UNUSED(num_cs_bufs);
+        SOKOL_ASSERT(0);
+    }
+
+    if (cs_img_uavs && num_cs_img_uavs) {
+        _SOKOL_UNUSED(cs_img_uavs);
+        _SOKOL_UNUSED(num_cs_img_uavs);
+        SOKOL_ASSERT(0);
+    }
+
+    if (cs_buf_uavs && num_cs_buf_uavs) {
+        _SOKOL_UNUSED(cs_buf_uavs);
+        _SOKOL_UNUSED(num_cs_buf_uavs);
         SOKOL_ASSERT(0);
     }
 }
@@ -6816,11 +6863,11 @@ _SOKOL_PRIVATE sg_resource_state _sg_create_buffer(_sg_buffer_t* buf, const sg_b
     SOKOL_ASSERT(buf && desc);
     SOKOL_ASSERT(!buf->d3d11_buf);
     buf->size = desc->size;
+    buf->shader_write = desc->shader_write;
     buf->append_pos = 0;
     buf->append_overflow = false;
     buf->type = desc->type;
     buf->usage = desc->usage;
-    buf->stride = desc->stride;
     buf->update_frame_index = 0;
     buf->append_frame_index = 0;
     buf->map_frame_index = 0;
@@ -6834,7 +6881,6 @@ _SOKOL_PRIVATE sg_resource_state _sg_create_buffer(_sg_buffer_t* buf, const sg_b
         switch (buf->type) {
             case SG_BUFFERTYPE_VERTEXBUFFER:    bind_flags = D3D11_BIND_VERTEX_BUFFER; break;
             case SG_BUFFERTYPE_INDEXBUFFER:     bind_flags = D3D11_BIND_INDEX_BUFFER; break;
-            case SG_BUFFERTYPE_STRUCT:          bind_flags = D3D11_BIND_SHADER_RESOURCE; break;
             case SG_BUFFERTYPE_RAW:             bind_flags = D3D11_BIND_SHADER_RESOURCE; break;
             default:
                 SOKOL_UNREACHABLE;
@@ -6859,41 +6905,35 @@ _SOKOL_PRIVATE sg_resource_state _sg_create_buffer(_sg_buffer_t* buf, const sg_b
             init_data.pSysMem = desc->content;
             init_data_ptr = &init_data;
         }
-        if (buf->type == SG_BUFFERTYPE_STRUCT || buf->type == SG_BUFFERTYPE_RAW) {
-            SOKOL_ASSERT(desc->stride > 0);
-            d3d11_desc.StructureByteStride = desc->stride;
-            d3d11_desc.MiscFlags = buf->type == SG_BUFFERTYPE_STRUCT ? D3D11_RESOURCE_MISC_BUFFER_STRUCTURED : D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+        else if (desc->content && buf->type == SG_BUFFERTYPE_RAW) {
+            init_data.pSysMem = desc->content;
+            init_data_ptr = &init_data;            
         }
+
+        if (buf->type == SG_BUFFERTYPE_RAW) {
+            d3d11_desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
+        }
+
         HRESULT hr = ID3D11Device_CreateBuffer(_sg.d3d11.dev, &d3d11_desc, init_data_ptr, &buf->d3d11_buf);
         _SOKOL_UNUSED(hr);
         SOKOL_ASSERT(SUCCEEDED(hr) && buf->d3d11_buf);
 
         /* create views SRV/UAV */
-        if (buf->type == SG_BUFFERTYPE_STRUCT || buf->type == SG_BUFFERTYPE_RAW) {
+        if (buf->type == SG_BUFFERTYPE_RAW) {
             D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = { 0 };
             srv_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
-            if (buf->type == SG_BUFFERTYPE_STRUCT) {
-                srv_desc.BufferEx.NumElements = buf->size / buf->stride;
-            }
-            else {
-                srv_desc.Format = DXGI_FORMAT_R32_TYPELESS;
-                srv_desc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
-                srv_desc.BufferEx.NumElements = buf->size / 4;
-            }
+            srv_desc.Format = DXGI_FORMAT_R32_TYPELESS;
+            srv_desc.BufferEx.Flags = D3D11_BUFFEREX_SRV_FLAG_RAW;
+            srv_desc.BufferEx.NumElements = buf->size / 4;
             hr = ID3D11Device_CreateShaderResourceView(_sg.d3d11.dev, (ID3D11Resource*)buf->d3d11_buf, &srv_desc, &buf->d3d11_srv);
             SOKOL_ASSERT(SUCCEEDED(hr) && buf->d3d11_srv);
 
             if (desc->shader_write) {
                 D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc = { 0 };
                 uav_desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
-                if (buf->type == SG_BUFFERTYPE_STRUCT) {
-                    uav_desc.Buffer.NumElements = buf->size / buf->stride;
-                }
-                else {
-                    uav_desc.Format = DXGI_FORMAT_R32_TYPELESS;
-                    uav_desc.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_RAW;
-                    uav_desc.Buffer.NumElements = buf->size / 4;
-                }
+                uav_desc.Format = DXGI_FORMAT_R32_TYPELESS;
+                uav_desc.Buffer.Flags = D3D11_BUFFER_UAV_FLAG_RAW;
+                uav_desc.Buffer.NumElements = buf->size / 4;
                 hr = ID3D11Device_CreateUnorderedAccessView(_sg.d3d11.dev, (ID3D11Resource*)buf->d3d11_buf, &uav_desc, &buf->d3d11_uav);
                 SOKOL_ASSERT(SUCCEEDED(hr) && buf->d3d11_uav);
             }
@@ -7281,11 +7321,13 @@ _SOKOL_PRIVATE sg_resource_state _sg_create_shader(_sg_shader_t* shd, const sg_s
     /* shader stage uniform blocks and image slots */
     for (int stage_index = 0; stage_index < SG_NUM_SHADER_STAGES; stage_index++) {
         const sg_shader_stage_desc* stage_desc;
-        if (stage_index == SG_SHADERSTAGE_CS) {
-            stage_desc = &desc->cs;
-        } 
-        else {
-            stage_desc = (stage_index == SG_SHADERSTAGE_VS) ? &desc->vs : &desc->fs;
+        switch (stage_index) {
+            case SG_SHADERSTAGE_VS:     stage_desc = &desc->vs; break;
+            case SG_SHADERSTAGE_FS:     stage_desc = &desc->fs; break;
+            case SG_SHADERSTAGE_CS:     stage_desc = &desc->cs; break;
+            default:                    
+                SOKOL_UNREACHABLE;
+                break;
         }
         _sg_shader_stage_t* stage = &shd->stage[stage_index];
         SOKOL_ASSERT(stage->num_uniform_blocks == 0);
@@ -7833,9 +7875,13 @@ _SOKOL_PRIVATE void _sg_apply_bindings(
     _sg_buffer_t** vbs, const int* vb_offsets, int num_vbs,
     _sg_buffer_t* ib, int ib_offset,
     _sg_image_t** vs_imgs, int num_vs_imgs,
+    _sg_buffer_t** vs_bufs, int num_vs_bufs,
     _sg_image_t** fs_imgs, int num_fs_imgs,
+    _sg_buffer_t** fs_bufs, int num_fs_bufs,
     _sg_image_t** cs_imgs, int num_cs_imgs,
-    _sg_buffer_t** cs_bufs, int num_cs_bufs)
+    _sg_buffer_t** cs_bufs, int num_cs_bufs,
+    _sg_image_t** cs_img_uavs, int num_cs_img_uavs,
+    _sg_buffer_t** cs_buf_uavs, int num_cs_buf_uavs)
 {
     SOKOL_ASSERT(pip);
     SOKOL_ASSERT(_sg.d3d11.ctx);
@@ -7854,46 +7900,63 @@ _SOKOL_PRIVATE void _sg_apply_bindings(
     ID3D11SamplerState* d3d11_cs_smps[SG_MAX_SHADERSTAGE_IMAGES] = { 0 };
 
     int i;
+    int vs_srv_index, fs_srv_index, cs_srv_index, cs_uav_index;
+
     for (i = 0; i < num_vbs; i++) {
         SOKOL_ASSERT(vbs[i]->d3d11_buf);
         d3d11_vbs[i] = vbs[i]->d3d11_buf;
         d3d11_vb_offsets[i] = vb_offsets[i];
     }
 
-    for (i = 0; i < num_vs_imgs; i++) {
+    for (i = 0, vs_srv_index = 0; i < num_vs_imgs; i++, vs_srv_index++) {
         SOKOL_ASSERT(vs_imgs[i]->d3d11_srv);
         SOKOL_ASSERT(vs_imgs[i]->d3d11_smp);
-        d3d11_vs_srvs[i] = vs_imgs[i]->d3d11_srv;
-        d3d11_vs_smps[i] = vs_imgs[i]->d3d11_smp;
+        d3d11_vs_srvs[vs_srv_index] = vs_imgs[i]->d3d11_srv;
+        d3d11_vs_smps[vs_srv_index] = vs_imgs[i]->d3d11_smp;
     }
 
-    for (i = 0; i < num_fs_imgs; i++) {
+    for (i = 0; i < num_vs_bufs; i++, vs_srv_index++) {
+        SOKOL_ASSERT(vs_bufs[i]->d3d11_srv);
+        d3d11_vs_srvs[vs_srv_index] = vs_bufs[i]->d3d11_srv;
+    }
+
+    for (i = 0, fs_srv_index = 0; i < num_fs_imgs; i++, fs_srv_index++) {
         SOKOL_ASSERT(fs_imgs[i]->d3d11_srv);
         SOKOL_ASSERT(fs_imgs[i]->d3d11_smp);
-        d3d11_fs_srvs[i] = fs_imgs[i]->d3d11_srv;
-        d3d11_fs_smps[i] = fs_imgs[i]->d3d11_smp;
+        d3d11_fs_srvs[fs_srv_index] = fs_imgs[i]->d3d11_srv;
+        d3d11_fs_smps[fs_srv_index] = fs_imgs[i]->d3d11_smp;
     }
 
-	for (i = 0; i < num_cs_imgs; i++) {
+    for (i = 0; i < num_fs_bufs; i++, fs_srv_index++) {
+        SOKOL_ASSERT(fs_bufs[i]->d3d11_srv);
+        d3d11_fs_srvs[fs_srv_index] = fs_bufs[i]->d3d11_srv;
+    }
+
+	for (i = 0, cs_srv_index = 0; i < num_cs_imgs; i++, cs_srv_index++) {
         SOKOL_ASSERT(cs_imgs[i]->d3d11_srv);
         SOKOL_ASSERT(cs_imgs[i]->d3d11_smp);
-        if (!cs_imgs[i]->d3d11_uav) {
-            d3d11_cs_srvs[i] = cs_imgs[i]->d3d11_srv;
-            d3d11_cs_smps[i] = cs_imgs[i]->d3d11_smp;
-        } 
-        else {
-            d3d11_cs_uavs[i] = cs_imgs[i]->d3d11_uav;
-        }
+        SOKOL_ASSERT(cs_srv_index < SG_MAX_SHADERSTAGE_IMAGES);
+        d3d11_cs_srvs[cs_srv_index] = cs_imgs[i]->d3d11_srv;
+        d3d11_cs_smps[cs_srv_index] = cs_imgs[i]->d3d11_smp;
     }
 
-    for (; i < num_cs_bufs; i++) {
+    for (i = 0; i < num_cs_bufs; i++, cs_srv_index++) {
         SOKOL_ASSERT(cs_bufs[i]->d3d11_srv);
-        if (!cs_bufs[i]->d3d11_uav) {
-            d3d11_cs_srvs[i] = cs_bufs[i]->d3d11_srv;
-        }
-        else {
-            d3d11_cs_uavs[i] = cs_bufs[i]->d3d11_uav;
-        }
+        SOKOL_ASSERT(cs_srv_index < SG_MAX_SHADERSTAGE_IMAGES);
+        d3d11_cs_srvs[cs_srv_index] = cs_bufs[i]->d3d11_srv;
+    }
+
+    /* uavs */
+    for (i = 0, cs_uav_index = 0; i < num_cs_img_uavs; i++, cs_uav_index++) {
+        SOKOL_ASSERT(cs_img_uavs[i]->d3d11_uav);
+        SOKOL_ASSERT(cs_uav_index < SG_MAX_SHADERSTAGE_UAVS);
+        d3d11_cs_uavs[cs_uav_index] = cs_img_uavs[i]->d3d11_uav;
+    }
+
+    for (i = 0; i < num_cs_buf_uavs; i++, cs_uav_index++) {
+        SOKOL_ASSERT(cs_buf_uavs[i]->d3d11_uav);
+        SOKOL_ASSERT(cs_uav_index < SG_MAX_SHADERSTAGE_UAVS);
+        d3d11_cs_uavs[cs_uav_index] = cs_buf_uavs[i]->d3d11_uav;
     }
 
     if (!pip->shader->compute_shader) {
@@ -7914,7 +7977,7 @@ _SOKOL_PRIVATE void _sg_apply_bindings(
 
 _SOKOL_PRIVATE void _sg_apply_uniforms(sg_shader_stage stage_index, int ub_index, const void* data, int num_bytes) {
     _SOKOL_UNUSED(num_bytes);
-    SOKOL_ASSERT(_sg.d3d11.ctx && _sg.d3d11.in_pass);
+    SOKOL_ASSERT(_sg.d3d11.ctx && (_sg.d3d11.in_pass || stage_index == SG_SHADERSTAGE_CS));
     SOKOL_ASSERT(data && (num_bytes > 0));
     SOKOL_ASSERT((stage_index >= 0) && ((int)stage_index < SG_NUM_SHADER_STAGES));
     SOKOL_ASSERT((ub_index >= 0) && (ub_index < SG_MAX_SHADERSTAGE_UBS));
@@ -9588,9 +9651,13 @@ _SOKOL_PRIVATE void _sg_apply_bindings(
     _sg_buffer_t** vbs, const int* vb_offsets, int num_vbs,
     _sg_buffer_t* ib, int ib_offset,
     _sg_image_t** vs_imgs, int num_vs_imgs,
+    _sg_buffer_t** vs_bufs, int num_vs_bufs,
     _sg_image_t** fs_imgs, int num_fs_imgs,
+    _sg_buffer_t** fs_bufs, int num_fs_bufs,
     _sg_image_t** cs_imgs, int num_cs_imgs,
-    _sg_buffer_t** cs_bufs, int num_cs_bufs)
+    _sg_buffer_t** cs_bufs, int num_cs_bufs,
+    _sg_image_t** cs_img_uavs, int num_cs_img_uavs,
+    _sg_buffer_t** cs_buf_uavs, int num_cs_buf_uavs)
 {
     SOKOL_ASSERT(_sg.mtl.in_pass);
     if (!_sg.mtl.pass_valid) {
@@ -9655,6 +9722,19 @@ _SOKOL_PRIVATE void _sg_apply_bindings(
         }
     }
 
+    /* TODO: apply vertex/fragment shader buffers */
+    if (vs_bufs && num_vs_bufs) {
+        _SOKOL_UNUSED(vs_bufs);
+        _SOKOL_UNUSED(num_vs_bufs);
+        SOKOL_ASSERT(0);
+    }
+
+    if (fs_bufs && num_fs_bufs) {
+        _SOKOL_UNUSED(fs_bufs);
+        _SOKOL_UNUSED(num_fs_bufs);
+        SOKOL_ASSERT(0);
+    }
+
     /* TODO: apply compute shader images */
     if (cs_imgs && num_cs_imgs > 0) {
         _SOKOL_UNUSED(cs_imgs);
@@ -9665,6 +9745,18 @@ _SOKOL_PRIVATE void _sg_apply_bindings(
     if (cs_bufs && num_cs_bufs > 0) {
         _SOKOL_UNUSED(cs_bufs);
         _SOKOL_UNUSED(num_cs_bufs);
+        SOKOL_ASSERT(0);
+    }
+
+    if (cs_img_uavs && num_cs_img_uavs > 0) {
+        _SOKOL_UNUSED(cs_img_uavs);
+        _SOKOL_UNUSED(num_cs_img_uavs);
+        SOKOL_ASSERT(0);
+    }
+
+    if (cs_buf_uavs && num_cs_buf_uavs > 0) {
+        _SOKOL_UNUSED(cs_buf_uavs);
+        _SOKOL_UNUSED(num_cs_buf_uavs);
         SOKOL_ASSERT(0);
     }
 }
@@ -10131,8 +10223,6 @@ _SOKOL_PRIVATE const char* _sg_validate_string(_sg_validate_error_t err) {
         case _SG_VALIDATE_BUFFERDESC_CONTENT:       return "immutable buffers must be initialized with content (sg_buffer_desc.content)";
         case _SG_VALIDATE_BUFFERDESC_NO_CONTENT:    return "dynamic/stream usage buffers cannot be initialized with content";
         case _SG_VALIDATE_BUFFERDESC_TYPE:          return "buffer storage cannot be vertex or index type";
-        case _SG_VALIDATE_BUFFERDESC_STRIDE:        return "sg_buffer_desc.stride cannot be 0 for structured buffers";
-        case _SG_VALIDATE_BUFFERDESC_STRIDE_DIVIDE: return "sg_buffer_desc.stride must be dividable by sg_buffer_desc.size";
 
         /* image creation validation errros */
         case _SG_VALIDATE_IMAGEDESC_CANARY:             return "sg_image_desc not initialized";
@@ -10293,18 +10383,16 @@ _SOKOL_PRIVATE bool _sg_validate_buffer_desc(const sg_buffer_desc* desc) {
         SOKOL_VALIDATE(desc->_end_canary == 0, _SG_VALIDATE_BUFFERDESC_CANARY);
         SOKOL_VALIDATE(desc->size > 0, _SG_VALIDATE_BUFFERDESC_SIZE);
         bool ext = (0 != desc->gl_buffers[0]) || (0 != desc->mtl_buffers[0]) || (0 != desc->d3d11_buffer);
-        if (!ext && (desc->usage == SG_USAGE_IMMUTABLE)) {
-            SOKOL_VALIDATE(0 != desc->content, _SG_VALIDATE_BUFFERDESC_CONTENT);
-        }
-        else {
-            SOKOL_VALIDATE(0 == desc->content, _SG_VALIDATE_BUFFERDESC_NO_CONTENT);
+        if (desc->usage != _SG_USAGE_DEFAULT) {
+            if (!ext && (desc->usage == SG_USAGE_IMMUTABLE)) {
+                SOKOL_VALIDATE(0 != desc->content, _SG_VALIDATE_BUFFERDESC_CONTENT);
+            }
+            else {
+                SOKOL_VALIDATE(0 == desc->content, _SG_VALIDATE_BUFFERDESC_NO_CONTENT);
+            }
         }
         if (desc->shader_write) {
             SOKOL_VALIDATE(desc->type != SG_BUFFERTYPE_VERTEXBUFFER && desc->type != SG_BUFFERTYPE_INDEXBUFFER, _SG_VALIDATE_BUFFERDESC_TYPE);
-        }
-        if (desc->type == SG_BUFFERTYPE_STRUCT) {
-            SOKOL_VALIDATE(desc->stride > 0, _SG_VALIDATE_BUFFERDESC_STRIDE);
-            SOKOL_VALIDATE(desc->size % desc->stride == 0, _SG_VALIDATE_BUFFERDESC_STRIDE_DIVIDE);
         }
 
         return SOKOL_VALIDATE_END();
@@ -10683,7 +10771,7 @@ _SOKOL_PRIVATE bool _sg_validate_apply_bindings(const sg_bindings* bindings) {
                 const _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, bindings->vertex_buffers[i].id);
                 SOKOL_VALIDATE(buf != 0, _SG_VALIDATE_ABND_VB_EXISTS);
                 if (buf && buf->slot.state == SG_RESOURCESTATE_VALID) {
-                    SOKOL_VALIDATE(SG_BUFFERTYPE_VERTEXBUFFER == buf->type, _SG_VALIDATE_ABND_VB_TYPE);
+                    SOKOL_VALIDATE(SG_BUFFERTYPE_VERTEXBUFFER == buf->type || SG_BUFFERTYPE_RAW == buf->type, _SG_VALIDATE_ABND_VB_TYPE);
                     SOKOL_VALIDATE(!buf->append_overflow, _SG_VALIDATE_ABND_VB_OVERFLOW);
                 }
             }
@@ -10771,7 +10859,7 @@ _SOKOL_PRIVATE bool _sg_validate_apply_uniforms(sg_shader_stage stage_index, int
         _SOKOL_UNUSED(num_bytes);
         return true;
     #else
-        SOKOL_ASSERT((stage_index == SG_SHADERSTAGE_VS) || (stage_index == SG_SHADERSTAGE_FS));
+        SOKOL_ASSERT((stage_index == SG_SHADERSTAGE_VS) || (stage_index == SG_SHADERSTAGE_FS) || (stage_index == SG_SHADERSTAGE_CS));
         SOKOL_ASSERT((ub_index >= 0) && (ub_index < SG_MAX_SHADERSTAGE_UBS));
         SOKOL_VALIDATE_BEGIN();
         SOKOL_VALIDATE(_sg.cur_pipeline.id != SG_INVALID_ID, _SG_VALIDATE_AUB_NO_PIPELINE);
@@ -11727,6 +11815,19 @@ SOKOL_API_IMPL void sg_apply_bindings(const sg_bindings* bindings) {
         }
     }
 
+    _sg_buffer_t* vs_bufs[SG_MAX_SHADERSTAGE_BUFFERS] = { 0 };
+    int num_vs_bufs = 0;
+    for (int i = 0; i < SG_MAX_SHADERSTAGE_BUFFERS; i++, num_vs_bufs++) {
+        if (bindings->vs_buffers[i].id) {
+            vs_bufs[i] = _sg_lookup_buffer(&_sg.pools, bindings->vs_buffers[i].id);
+            SOKOL_ASSERT(vs_bufs[i]);
+            _sg.next_draw_valid &= (SG_RESOURCESTATE_VALID == vs_bufs[i]->slot.state);
+        }
+        else {
+            break;
+        }
+    }
+
     _sg_image_t* fs_imgs[SG_MAX_SHADERSTAGE_IMAGES] = { 0 };
     int num_fs_imgs = 0;
     for (int i = 0; i < SG_MAX_SHADERSTAGE_IMAGES; i++, num_fs_imgs++) {
@@ -11735,6 +11836,19 @@ SOKOL_API_IMPL void sg_apply_bindings(const sg_bindings* bindings) {
             SOKOL_ASSERT(fs_imgs[i]);
             _sg.next_draw_valid &= (SG_RESOURCESTATE_VALID == fs_imgs[i]->slot.state);
         } 
+        else {
+            break;
+        }
+    }
+
+    _sg_buffer_t* fs_bufs[SG_MAX_SHADERSTAGE_BUFFERS] = { 0 };
+    int num_fs_bufs = 0;
+    for (int i = 0; i < SG_MAX_SHADERSTAGE_BUFFERS; i++, num_fs_bufs++) {
+        if (bindings->fs_buffers[i].id) {
+            fs_bufs[i] = _sg_lookup_buffer(&_sg.pools, bindings->fs_buffers[i].id);
+            SOKOL_ASSERT(vs_bufs[i]);
+            _sg.next_draw_valid &= (SG_RESOURCESTATE_VALID == fs_bufs[i]->slot.state);
+        }
         else {
             break;
         }
@@ -11767,11 +11881,46 @@ SOKOL_API_IMPL void sg_apply_bindings(const sg_bindings* bindings) {
         }
     }
 
+    _sg_image_t* cs_img_uavs[SG_MAX_SHADERSTAGE_UAVS] = { 0 };
+    int num_cs_img_uavs = 0;
+    for (int i = 0; i < SG_MAX_SHADERSTAGE_UAVS; i++, num_cs_img_uavs++) {
+        if (bindings->cs_image_uavs[i].id) {
+            cs_img_uavs[i] = _sg_lookup_image(&_sg.pools, bindings->cs_image_uavs[i].id);
+            SOKOL_ASSERT(cs_img_uavs[i]);
+            SOKOL_ASSERT(cs_img_uavs[i]->shader_write);
+            _sg.next_draw_valid &= (SG_RESOURCESTATE_VALID == cs_img_uavs[i]->slot.state);
+        }
+        else {
+            break;
+        }
+    }
+
+    _sg_buffer_t* cs_buf_uavs[SG_MAX_SHADERSTAGE_UAVS] = { 0 };
+    int num_cs_buf_uavs = 0;
+    for (int i = 0; i < SG_MAX_SHADERSTAGE_UAVS; i++, num_cs_buf_uavs++) {
+        if (bindings->cs_buffer_uavs[i].id) {
+            cs_buf_uavs[i] = _sg_lookup_buffer(&_sg.pools, bindings->cs_buffer_uavs[i].id);
+            SOKOL_ASSERT(cs_buf_uavs[i]);
+            SOKOL_ASSERT(cs_buf_uavs[i]->shader_write);
+            _sg.next_draw_valid &= (SG_RESOURCESTATE_VALID == cs_buf_uavs[i]->slot.state);
+        }
+        else {
+            break;
+        }
+    }
+
     if (_sg.next_draw_valid) {
         const int* vb_offsets = bindings->vertex_buffer_offsets;
         int ib_offset = bindings->index_buffer_offset;
-        _sg_apply_bindings(pip, vbs, vb_offsets, num_vbs, ib, ib_offset, vs_imgs, num_vs_imgs, fs_imgs, num_fs_imgs, 
-            cs_imgs, num_cs_imgs, cs_bufs, num_cs_bufs);
+        _sg_apply_bindings(pip, vbs, vb_offsets, num_vbs, ib, ib_offset, 
+            vs_imgs, num_vs_imgs, 
+            vs_bufs, num_vs_bufs,
+            fs_imgs, num_fs_imgs,
+            fs_bufs, num_fs_bufs,
+            cs_imgs, num_cs_imgs, 
+            cs_bufs, num_cs_bufs, 
+            cs_img_uavs, num_cs_img_uavs,
+            cs_buf_uavs, num_cs_buf_uavs);
         _SG_TRACE_ARGS(apply_bindings, bindings);
     }
     else {
@@ -11781,7 +11930,7 @@ SOKOL_API_IMPL void sg_apply_bindings(const sg_bindings* bindings) {
 
 SOKOL_API_IMPL void sg_apply_uniforms(sg_shader_stage stage, int ub_index, const void* data, int num_bytes) {
     SOKOL_ASSERT(_sg.valid);
-    SOKOL_ASSERT((stage == SG_SHADERSTAGE_VS) || (stage == SG_SHADERSTAGE_FS));
+    SOKOL_ASSERT((stage == SG_SHADERSTAGE_VS) || (stage == SG_SHADERSTAGE_FS) || (stage == SG_SHADERSTAGE_CS));
     SOKOL_ASSERT((ub_index >= 0) && (ub_index < SG_MAX_SHADERSTAGE_UBS));
     SOKOL_ASSERT(data && (num_bytes > 0));
     if (!_sg_validate_apply_uniforms(stage, ub_index, data, num_bytes)) {
@@ -11789,7 +11938,7 @@ SOKOL_API_IMPL void sg_apply_uniforms(sg_shader_stage stage, int ub_index, const
         _SG_TRACE_NOARGS(err_draw_invalid);
         return;
     }
-    if (!_sg.pass_valid) {
+    if (!_sg.pass_valid && stage != SG_SHADERSTAGE_CS) {
         _SG_TRACE_NOARGS(err_pass_invalid);
         return;
     }
