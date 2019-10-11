@@ -83,7 +83,7 @@ void main()
         barrier();
     }  
 
-    // g_param.x is the number of our particles, however this number might not be an exact multiple of the tile size.
+    // param_max_particles is the number of our particles, however this number might not be an exact multiple of the tile size.
     // In such cases, out of bound reads occur in the process above, which means there will be 
     // tooManyParticles "phantom" particles generating false gravity at position (0, 0, 0), so we have to substract them here.
     // NOTE, out of bound reads always return 0 in CS

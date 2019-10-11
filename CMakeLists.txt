@@ -20,6 +20,11 @@ else ()
     option(ENABLE_PROFILER "Enable profiler" ON)
 endif()
 
+# set MACOSX_BUNDLE_ROOT_DIR to define the path that cmake can find resource/plist files
+if (NOT MACOSX_BUNDLE_ROOT_DIR)
+    set (MACOSX_BUNDLE_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
+
 # output directories for binary files
 if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
@@ -79,6 +84,32 @@ function(rizz__add_example proj_name)
         endif()
         glslcc_target_compile_shaders_sgs(${proj_name} "${shaders}")
     endif()
+
+    if (BUNDLE)
+        # set bundle properties
+        if (NOT BUNDLE_TARGET_NAME)
+            message(STATUS "BUNDLE_TARGET_NAME is not set. defaults to '${proj_name}'")
+            set(BUNDLE_TARGET_NAME ${proj_name})
+        endif()
+
+        if (BUNDLE_PLUGINS)
+            rizz_set_executable(${proj_name} PLUGINS ${BUNDLE_PLUGINS} NAME ${BUNDLE_TARGET_NAME})
+        else()
+            rizz_set_executable(${proj_name} NAME ${BUNDLE_TARGET_NAME})
+        endif()    
+
+        # set macosx/ios properties
+        if (APPLE) 
+            set_target_properties(${proj_name} PROPERTIES 
+                MACOSX_BUNDLE TRUE 
+                RESOURCE ${MACOSX_BUNDLE_ROOT_DIR}/assets ${MACOSX_BUNDLE_ROOT_DIR}/images.xcassets
+                MACOSX_BUNDLE_INFO_PLIST ${MACOSX_BUNDLE_ROOT_DIR}/Info.plist)
+        endif()
+    endif()
+
+    if (WIN32)
+        set_target_properties(${proj_name} PROPERTIES WIN32_EXECUTABLE TRUE)
+    endif()    
 endfunction()
 
 function(rizz_add_executable proj_name source_files)
@@ -89,6 +120,45 @@ function(rizz_add_executable proj_name source_files)
     endif()
     target_link_libraries(${proj_name} PRIVATE sx)
     add_dependencies(${proj_name} rizz)
+
+    # set bundle properties
+    if (BUNDLE)
+        if (NOT BUNDLE_TARGET_NAME)
+            message(STATUS "BUNDLE_TARGET_NAME is not set. defaults to '${proj_name}'")
+            set(BUNDLE_TARGET_NAME ${proj_name})
+        endif()
+
+        if (BUNDLE_PLUGINS)
+            rizz_set_executable(${proj_name} PLUGINS ${BUNDLE_PLUGINS} NAME ${BUNDLE_TARGET_NAME})
+        else()
+            rizz_set_executable(${proj_name} NAME ${BUNDLE_TARGET_NAME})
+        endif()    
+
+        # set macosx/ios properties
+        if (APPLE) 
+            set_target_properties(${proj_name} PROPERTIES 
+                MACOSX_BUNDLE TRUE 
+                RESOURCE ${MACOSX_BUNDLE_ROOT_DIR}/assets ${MACOSX_BUNDLE_ROOT_DIR}/images.xcassets
+                MACOSX_BUNDLE_INFO_PLIST ${MACOSX_BUNDLE_ROOT_DIR}/Info.plist)
+        endif()
+    endif()
+
+    if (WIN32)
+        set_target_properties(${proj_name} PROPERTIES WIN32_EXECUTABLE TRUE)
+    endif()
+endfunction()
+
+function(rizz_add_plugin proj_name source_files)
+    if (BUNDLE)
+        add_library(${proj_name} STATIC ${source_files})
+    else()
+        add_library(${proj_name} SHARED ${source_files})
+    endif()
+
+    target_link_libraries(${proj_name} PRIVATE sx)
+    target_include_directories(${proj_name} PRIVATE ../../3rdparty)
+    add_dependencies(${proj_name} rizz)
+    set_target_properties(${proj_name} PROPERTIES FOLDER plugins)
 endfunction()
 
 add_definitions(-D__STDC_LIMIT_MACROS)
@@ -125,19 +195,6 @@ else()
 endif()
 
 get_directory_property(has_parent PARENT_DIRECTORY)
-
-# PLUGIN_TYPE, EXEC_TYPE definitions
-# PLUGIN_TYPE: cmake plugin builds should include PLUGIN_TYPE: add_library(plugin ${PLUGIN_TYPE} ...)
-# EXEC_TYPE: cmake executable builds should include EXEC_TYPE: add_executable(binary ${EXEC_TYPE} ...)
-if (BUNDLE)
-	set(PLUGIN_TYPE STATIC)
-else()
-	set(PLUGIN_TYPE SHARED)
-endif()
-
-if (WIN32)
-	set(EXEC_TYPE WIN32)
-endif()
 
 # include directory is for all projects
 include_directories(include)
@@ -180,7 +237,13 @@ set(example_projects 01-hello
                      04-animsprite
                      05-playsound
 					 06-sdf
-					 07-nbody)
+                     07-nbody)
+                     
+# exceptions
+# currently compute-shaders are only supported on windows, so we ignore examples that use them
+if (NOT WIN32) 
+    list(REMOVE_ITEM example_projects 07-nbody)
+endif()
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
@@ -211,23 +274,15 @@ endforeach()
 
 if (BUILD_EXAMPLES AND NOT BUNDLE) 
     foreach (example_project ${example_projects})
-        # exceptions: currently compute-shaders are only supported on windows, so we ignore examples that use them
-        if (NOT WIN32 AND ${example_project} STREQUAL "07-nbody")
-            continue()
-        endif()
-
         rizz__add_example(${example_project})
         set_target_properties(${example_project} PROPERTIES FOLDER examples)
     endforeach()
 endif()
 
-#
-# use -DBUNDLE=1, -DBUNDLE_TARGET=target-name and -DBUNDLE_TARGET_NAME=name to define a single _bundled_ executable
-if (BUNDLE)
-    if (NOT BUNDLE_TARGET)
-        message(FATAL_ERROR "BUNDLE_TARGET is not set, set BUNDLE_TARGET to the target name of your executable target")
-    endif()
-
+# search in examples for BUNDLE_TARGET, if matched, build it as a bundle
+# use -DBUNDLE=1, -DBUNDLE_TARGET=example-project and -DBUNDLE_TARGET_NAME=example-name
+# example: cmake -DBUNDLE=1 -DBUNDLE_TARGET=01-hello -DBUNDLE_TARGET_NAME=hello
+if (BUNDLE AND BUNDLE_TARGET)
     if (NOT BUNDLE_TARGET_NAME)
         message(STATUS "BUNDLE_TARGET_NAME is not set. defaults to '${BUNDLE_TARGET}'")
         set(BUNDLE_TARGET_NAME ${BUNDLE_TARGET})
@@ -239,10 +294,4 @@ if (BUNDLE)
             break()
         endif()
     endforeach()
-
-    if (BUNDLE_PLUGINS)
-        rizz_set_executable(${BUNDLE_TARGET} PLUGINS ${BUNDLE_PLUGINS} NAME ${BUNDLE_TARGET_NAME})
-    else()
-        rizz_set_executable(${BUNDLE_TARGET} NAME ${BUNDLE_TARGET_NAME})
-    endif()
 endif()

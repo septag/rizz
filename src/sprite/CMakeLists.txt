@@ -1,11 +1,10 @@
 cmake_minimum_required(VERSION 3.1)
 project(sprite)
 
-add_library(sprite ${PLUGIN_TYPE} sprite.c 
-                                  ../../include/rizz/sprite.h
-                                  README.md)
-target_link_libraries(sprite PRIVATE sx)
-target_include_directories(sprite PRIVATE ../../3rdparty)
+set(sprite_sources sprite.c 
+                   ../../include/rizz/sprite.h
+                   README.md)
+rizz_add_plugin(sprite "${sprite_sources}")
 
 set(shaders sprite.vert sprite.frag)
 set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "shaders_h")

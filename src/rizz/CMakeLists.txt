@@ -1,37 +1,37 @@
 cmake_minimum_required(VERSION 3.1)
 project(rizz)
 
-set(SOURCE_FILES "config.h"
-                 "app.c"
-                 "core.c" 
-                 "plugin.cpp"
-                 "graphics.c"
-                 "reflect.c"
-                 "asset.c" 
-                 "camera.c" 
-                 "http.c" 
-                 "vfs.c" 
-                 "android.c")
+set(SOURCE_FILES config.h
+                 app.c
+                 core.c 
+                 plugin.cpp
+                 graphics.c
+                 reflect.c
+                 asset.c 
+                 camera.c 
+                 http.c 
+                 vfs.c 
+                 android.c)
 
-set(INCLUDE_FILES "../../include/rizz/types.h"
-                  "../../include/rizz/app.h" 
-                  "../../include/rizz/entry.h" 
-                  "../../include/rizz/core.h" 
-                  "../../include/rizz/plugin.h" 
-                  "../../include/rizz/graphics.h"
-                  "../../include/rizz/_sg-types.h"
-                  "../../include/rizz/asset.h"
-                  "../../include/rizz/reflect.h"
-                  "../../include/rizz/camera.h"
-                  "../../include/rizz/http.h"
-                  "../../include/rizz/util.h"
-                  "../../include/rizz/vfs.h"
-                  "../../include/rizz/json.h" 
-                  "../../include/rizz/android.h")
+set(INCLUDE_FILES ../../include/rizz/types.h
+                  ../../include/rizz/app.h 
+                  ../../include/rizz/entry.h 
+                  ../../include/rizz/core.h 
+                  ../../include/rizz/plugin.h 
+                  ../../include/rizz/graphics.h
+                  ../../include/rizz/_sg-types.h
+                  ../../include/rizz/asset.h
+                  ../../include/rizz/reflect.h
+                  ../../include/rizz/camera.h
+                  ../../include/rizz/http.h
+                  ../../include/rizz/util.h
+                  ../../include/rizz/vfs.h
+                  ../../include/rizz/json.h 
+                  ../../include/rizz/android.h)
 
-set(TEXT_FILES     "../../README.md"
-                   "../../TODO.md"
-                   "../../CHANGES.md")
+set(TEXT_FILES  ../../README.md
+                ../../TODO.md
+                ../../CHANGES.md)
 
 set(EXTERNAL_INCLUDES ../../3rdparty/sokol/sokol_app.h 
                       ../../3rdparty/sokol/sokol_gfx.h
@@ -55,7 +55,11 @@ if (BUNDLE)
         target_link_libraries(rizz PUBLIC ${BUNDLE_PLUGINS})
     endif()    
 else()
-    add_executable(rizz ${EXEC_TYPE} ${SOURCE_FILES} ${EXTERNAL_INCLUDES} ${INCLUDE_FILES} ${TEXT_FILES})
+    add_executable(rizz ${SOURCE_FILES} ${EXTERNAL_INCLUDES} ${INCLUDE_FILES} ${TEXT_FILES})
+    
+    if (WIN32)
+        set_target_properties(rizz PROPERTIES WIN32_EXECUTABLE TRUE)
+    endif()
 endif()
 
 # includes and extra compile flags
@@ -76,7 +80,6 @@ endif()
 # Link system libs
 if (ANDROID)
     target_link_libraries(rizz PRIVATE EGL android GLESv3)
-    # set_property(TARGET rizz APPEND_STRING PROPERTY LINK_FLAGS " -rdynamic")
 elseif (RPI)
     target_link_directories(rizz PUBLIC ${CMAKE_SYSROOT}/opt/vc/lib)
     target_link_libraries(rizz PRIVATE GLESv2 EGL bcm_host)
@@ -85,8 +88,6 @@ elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 elseif (WIN32)
     target_link_libraries(rizz PRIVATE dxgi d3d11)
 endif()
-
-# bundle_plugins_internal(rizz imgui)
 
 # shaders
 set(shaders shaders/debug.vert 

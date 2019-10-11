@@ -29,6 +29,9 @@
 #    Makes the final APK file, signs it (with debug key) and copy it to another location
 #    if you provide `--keystore`, `--key-alias`, `--keystore-password`, `--key-password` then it will signed by your custom key
 #
+# VERSION HISTORY:
+#       1.0.0       
+#
 import sys
 import os
 import argparse
@@ -43,8 +46,6 @@ import zipfile
 import xml.etree.ElementTree as xmltree
 import hashlib
 import threading
-import queue
-import time
 
 if (platform.system() == 'Windows'):
     EXE = '.exe'
@@ -829,8 +830,7 @@ def build_android(args):
 
 
 if __name__ == "__main__":
-    # ENV vars
-    arg_parser = argparse.ArgumentParser(description='rizz android build tool v1.0')
+    arg_parser = argparse.ArgumentParser(description='rizz android build tool v1.0.0')
     arg_parser.add_argument('command', help='build command', choices=['configure', 'build', 'package', 'debug', 'deploy'])
     arg_parser.add_argument('--name', help='app/cmake target name', required=True)
     arg_parser.add_argument('--cmake-source', help='cmake (native) source directory')
@@ -851,7 +851,7 @@ if __name__ == "__main__":
     arg_parser.add_argument('--sdk-min-platform-version', help='Minimum Android platform version', type=int, default=23)
     arg_parser.add_argument('--sdk-platform-version', help='Android platform version', type=int, default=23)
     arg_parser.add_argument('--sdk-buildtools-version', help='build tools version', default='27.0.3')
-    arg_parser.add_argument('--version', action='version', version='%(prog)s 1.0')
+    arg_parser.add_argument('--version', action='version', version='1.0.0')
     arg_parser.add_argument('--keystore', help='key store file path', default='')
     arg_parser.add_argument('--key-alias', help='key alias in the key store file', default='')
     arg_parser.add_argument('--keystore-password', help='password for keystore file', default='')
