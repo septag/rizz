@@ -74,8 +74,6 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wlogical-not-parentheses")
 #endif
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-parameter")
 #define SOKOL_IMPL
-#define SOKOL_API_DECL static
-#define SOKOL_API_IMPL static
 #include "sokol/sokol_app.h"
 SX_PRAGMA_DIAGNOSTIC_POP();
 
