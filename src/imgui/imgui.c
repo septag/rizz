@@ -691,6 +691,7 @@ static bool imgui__setup()
     conf->Fonts->TexID = (ImTextureID)(uintptr_t)g_imgui.font_tex.id;
 
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+
     rizz_shader shader = the_gfx->shader_make_with_data(
         tmp_alloc, k_imgui_vs_size, k_imgui_vs_data, k_imgui_vs_refl_size, k_imgui_vs_refl_data,
         k_imgui_fs_size, k_imgui_fs_data, k_imgui_fs_refl_size, k_imgui_fs_refl_data);

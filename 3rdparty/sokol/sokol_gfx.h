@@ -5495,7 +5495,15 @@ _SOKOL_PRIVATE sg_resource_state _sg_create_shader(_sg_shader_t* shd, const sg_s
     /* resolve uniforms */
     _SG_GL_CHECK_ERROR();
     for (int stage_index = 0; stage_index < SG_NUM_SHADER_STAGES; stage_index++) {
-        const sg_shader_stage_desc* stage_desc = (stage_index == SG_SHADERSTAGE_VS)? &desc->vs : &desc->fs;
+        const sg_shader_stage_desc* stage_desc;
+        switch (stage_index) {
+            case SG_SHADERSTAGE_VS:     stage_desc = &desc->vs; break;
+            case SG_SHADERSTAGE_FS:     stage_desc = &desc->fs; break;
+            case SG_SHADERSTAGE_CS:     stage_desc = &desc->cs; break;
+            default:
+                SOKOL_UNREACHABLE;
+                break;
+        }        
         _sg_shader_stage_t* stage = &shd->stage[stage_index];
         SOKOL_ASSERT(stage->num_uniform_blocks == 0);
         for (int ub_index = 0; ub_index < SG_MAX_SHADERSTAGE_UBS; ub_index++) {
@@ -5534,7 +5542,15 @@ _SOKOL_PRIVATE sg_resource_state _sg_create_shader(_sg_shader_t* shd, const sg_s
     _SG_GL_CHECK_ERROR();
     int gl_tex_slot = 0;
     for (int stage_index = 0; stage_index < SG_NUM_SHADER_STAGES; stage_index++) {
-        const sg_shader_stage_desc* stage_desc = (stage_index == SG_SHADERSTAGE_VS)? &desc->vs : &desc->fs;
+        const sg_shader_stage_desc* stage_desc;
+        switch (stage_index) {
+            case SG_SHADERSTAGE_VS:     stage_desc = &desc->vs; break;
+            case SG_SHADERSTAGE_FS:     stage_desc = &desc->fs; break;
+            case SG_SHADERSTAGE_CS:     stage_desc = &desc->cs; break;
+            default:
+                SOKOL_UNREACHABLE;
+                break;
+        }        
         _sg_shader_stage_t* stage = &shd->stage[stage_index];
         SOKOL_ASSERT(stage->num_images == 0);
         for (int img_index = 0; img_index < SG_MAX_SHADERSTAGE_IMAGES; img_index++) {
@@ -6188,8 +6204,17 @@ _SOKOL_PRIVATE void _sg_apply_bindings(
     _SG_GL_CHECK_ERROR();
     for (int stage_index = 0; stage_index < SG_NUM_SHADER_STAGES; stage_index++) {
         const _sg_shader_stage_t* stage = &pip->shader->stage[stage_index];
-        _sg_image_t** imgs = (stage_index == SG_SHADERSTAGE_VS)? vs_imgs : fs_imgs;
-        SOKOL_ASSERT(((stage_index == SG_SHADERSTAGE_VS)? num_vs_imgs : num_fs_imgs) == stage->num_images);
+        _sg_image_t** imgs;
+        int num_imgs;
+        switch (stage_index) {
+            case SG_SHADERSTAGE_VS:     imgs = vs_imgs; num_imgs = num_vs_imgs; break;
+            case SG_SHADERSTAGE_FS:     imgs = fs_imgs; num_imgs = num_fs_imgs; break;
+            case SG_SHADERSTAGE_CS:     imgs = cs_imgs; num_imgs = num_cs_imgs; break;
+            default:                    
+                SOKOL_UNREACHABLE;
+                break;
+        }
+        SOKOL_ASSERT(num_imgs == stage->num_images);
         for (int img_index = 0; img_index < stage->num_images; img_index++) {
             const _sg_shader_image_t* shd_img = &stage->images[img_index];
             if (shd_img->gl_loc != -1) {
