@@ -28,7 +28,7 @@ typedef struct rizz_vfs_async_callbacks {
 typedef struct rizz_api_vfs {
     rizz_vfs_async_callbacks (*set_async_callbacks)(const rizz_vfs_async_callbacks* cbs);
     bool (*mount)(const char* path, const char* alias);
-    void (*mount_android_assets)(const char* alias);
+    void (*mount_mobile_assets)(const char* alias);
     void (*watch_mounts)();
     void (*read_async)(const char* path, rizz_vfs_flags flags, const sx_alloc* alloc);
     void (*write_async)(const char* path, sx_mem_block* mem, rizz_vfs_flags flags);

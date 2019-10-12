@@ -568,7 +568,6 @@ typedef struct imgui__context {
     sg_shader shader;
     sg_pipeline pip;
     sg_bindings bind;
-    sg_pass_action pass_action;
     sg_image font_tex;
     bool mouse_btn_down[RIZZ_APP_MAX_MOUSEBUTTONS];
     bool mouse_btn_up[RIZZ_APP_MAX_MOUSEBUTTONS];
@@ -700,17 +699,14 @@ static bool imgui__setup()
     sg_pipeline_desc pip_desc = { .layout.buffers[0].stride = sizeof(ImDrawVert),
                                   .shader = g_imgui.shader,
                                   .index_type = SG_INDEXTYPE_UINT16,
-                                  .rasterizer = { .sample_count = 4 },
+                                  .rasterizer = { .sample_count = 1,
+                                                  .cull_mode = SG_CULLMODE_BACK },
                                   .blend = { .enabled = true,
                                              .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
                                              .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
                                              .color_write_mask = SG_COLORMASK_RGB } };
     g_imgui.pip = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader, &pip_desc, &k__imgui_vertex));
-
-    g_imgui.pass_action = (sg_pass_action){ .colors[0] = { .action = SG_ACTION_DONTCARE },
-                                            .depth = { .action = SG_ACTION_DONTCARE },
-                                            .stencil = { .action = SG_ACTION_DONTCARE } };
 
     the_core->tmp_alloc_pop();
 
@@ -919,7 +915,11 @@ static void imgui__render(void)
     igRender();
 
     // Draw imgui primitives
-    the_gfx->imm.begin_default_pass(&g_imgui.pass_action, the_app->width(), the_app->height());
+    the_gfx->imm.begin_default_pass(
+        &(sg_pass_action){ .colors[0] = { .action = SG_ACTION_LOAD },
+                           .depth = { .action = SG_ACTION_DONTCARE },
+                           .stencil = { .action = SG_ACTION_DONTCARE } },
+        the_app->width(), the_app->height());
     imgui__draw(the__imgui.GetDrawData());
     the_gfx->imm.end_pass();
 }

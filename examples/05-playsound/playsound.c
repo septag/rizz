@@ -31,8 +31,8 @@ RIZZ_STATE rizz_asset g_snd[8];
 
 static bool init()
 {
-#if SX_PLATFORM_ANDROID
-    the_vfs->mount_android_assets("/assets");
+#if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
+    the_vfs->mount_mobile_assets("/assets");
 #else
     // mount `/asset` directory
     char asset_dir[RIZZ_MAX_PATH];
@@ -174,7 +174,6 @@ rizz_game_decl_config(conf)
     conf->window_width = 800;
     conf->window_height = 600;
     conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;
-    conf->multisample_count = 4;
     conf->swap_interval = 2;
     conf->plugins[0] = "imgui";
     conf->plugins[1] = "sound";

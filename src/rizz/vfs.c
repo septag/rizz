@@ -7,11 +7,16 @@
 #include "rizz/core.h"
 #include "rizz/vfs.h"
 #include "rizz/android.h"
+#include "rizz/ios.h"
 
 #if RIZZ_CONFIG_HOT_LOADING
 #    include "efsw/efsw.h"
 typedef enum efsw_action efsw_action;
 typedef enum efsw_error efsw_error;
+
+#   if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
+#       error "RIZZ_CONFIG_HOT_LOADING will not work under iOS/Android"
+#   endif
 #endif
 
 #include "sx/allocator.h"
@@ -91,14 +96,17 @@ typedef struct {
     sx_queue_spsc* efsw_queue;    // producer: efsw_cb, consumer: main, data: efsw__result
 #endif
 
+#if SX_PLATFORM_IOS || SX_PLATFORM_ANDROID
+    char assets_alias[RIZZ_MAX_PATH];
+    int assets_alias_len;
+#endif
+
 #if SX_PLATFORM_IOS
-    int assets_bundle_id;
+    void* assets_bundle;
 #endif
 
 #if SX_PLATFORM_ANDROID
     AAssetManager* asset_mgr;
-    char assets_alias[RIZZ_MAX_PATH];
-    int assets_alias_len;
 #endif
 } rizz__vfs;
 
@@ -195,13 +203,22 @@ static sx_mem_block* rizz__vfs_read(const char* path, rizz_vfs_flags flags, cons
     if (!alloc)
         alloc = g_vfs.alloc;
 
+    char resolved_path[RIZZ_MAX_PATH];
 #if SX_PLATFORM_ANDROID
-    if (sx_strnequal(path, g_vfs.assets_alias, g_vfs.assets_alias_len))
+    if (sx_strnequal(path, g_vfs.assets_alias, g_vfs.assets_alias_len)) {
         return rizz__vfs_read_asset_android(path + g_vfs.assets_alias_len, alloc);
+    }
+#elif SX_PLATFORM_IOS
+    if (sx_strnequal(path, g_vfs.assets_alias, g_vfs.assets_alias_len)) {
+        rizz_ios_resolve_path(g_vfs.assets_bundle, path + g_vfs.assets_alias_len, resolved_path,
+                              sizeof(resolved_path));
+    } else {
+        rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, flags);    
+    }
+#else
+    rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, flags);
 #endif
 
-    char resolved_path[RIZZ_MAX_PATH];
-    rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, flags);
     return !(flags & RIZZ_VFS_FLAG_TEXT_FILE) ? sx_file_load_bin(alloc, resolved_path)
                                               : sx_file_load_text(alloc, resolved_path);
 }
@@ -315,13 +332,13 @@ bool rizz__vfs_mount(const char* path, const char* alias)
     }
 }
 
-void rizz__vfs_mount_android_assets(const char* alias)
+void rizz__vfs_mount_mobile_assets(const char* alias)
 {
     sx_unused(alias);
-#if SX_PLATFORM_ANDROID
+#if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
     sx_os_path_unixpath(g_vfs.assets_alias, sizeof(g_vfs.assets_alias), alias);
     g_vfs.assets_alias_len = sx_strlen(g_vfs.assets_alias);
-    rizz_log_info("vfs: mounted '%s' on android assets", g_vfs.assets_alias);
+    rizz_log_info("vfs: mounted '%s' on app assets", g_vfs.assets_alias);
 #endif
 }
 
@@ -354,6 +371,10 @@ bool rizz__vfs_init(const sx_alloc* alloc)
 
 #if SX_PLATFORM_ANDROID
     g_vfs.asset_mgr = rizz_android_asset_mgr();
+#endif
+
+#if SX_PLATFORM_IOS
+    g_vfs.assets_bundle = rizz_ios_open_bundle("assets");
 #endif
 
     return true;
@@ -551,7 +572,7 @@ static void efsw__fileaction_cb(efsw_watcher watcher, efsw_watchid watchid, cons
 
 rizz_api_vfs the__vfs = { .set_async_callbacks = rizz__vfs_set_async_callbacks,
                           .mount = rizz__vfs_mount,
-                          .mount_android_assets = rizz__vfs_mount_android_assets,
+                          .mount_mobile_assets = rizz__vfs_mount_mobile_assets,
                           .watch_mounts = rizz__vfs_watch_mounts,
                           .read_async = rizz__vfs_read_async,
                           .write_async = rizz__vfs_write_async,

@@ -8,6 +8,7 @@
 #include "rizz/core.h"
 #include "rizz/entry.h"
 #include "rizz/graphics.h"
+#include "rizz/ios.h"
 
 #include "sx/allocator.h"
 #include "sx/cmdline.h"
@@ -98,6 +99,14 @@ static void rizz__app_init(void)
     g_app.conf.cache_path = default_cache_path;
 
     rizz_android_window_size(&g_app.conf.window_width, &g_app.conf.window_height);
+    g_app.window_size = sx_vec2f(g_app.conf.window_width, g_app.conf.window_height);
+#elif SX_PLATFORM_IOS
+    static char default_cache_path[512];
+    sx_strcpy(default_cache_path, sizeof(default_cache_path), rizz_ios_cache_dir());
+    g_app.conf.cache_path = default_cache_path;
+
+    g_app.conf.window_width = the__app.width();
+    g_app.conf.window_height = the__app.height();
     g_app.window_size = sx_vec2f(g_app.conf.window_width, g_app.conf.window_height);
 #elif SX_PLATFORM_RPI
     g_app.conf.window_width = the__app.width();
@@ -309,7 +318,7 @@ sapp_desc sokol_main(int argc, char* argv[])
                          .core_flags = RIZZ_CORE_FLAG_LOG_TO_FILE | RIZZ_CORE_FLAG_LOG_TO_PROFILER,
                          .window_width = 640,
                          .window_height = 480,
-                         .multisample_count = 4,
+                         .multisample_count = 1,
                          .swap_interval = 1,
                          .job_num_threads = -1,    // defaults to num_cores-1
                          .job_max_fibers = 64,

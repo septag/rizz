@@ -53,7 +53,7 @@ see [CHANGELOG](CHANGES.md) for latest changes, new features and bug fixes.
 - *MacOS*
 - *Android*
 - *RaspberryPI*
-- *iOS*: WIP
+- *iOS*
 
 ## Build
 _rizz_ is designed to run on all major mobile (iOS, android), PC (Windows, Linux, MacOS) and web (WebASM) platforms. 
@@ -66,11 +66,11 @@ But as the engine is in it's early age, the current platforms are built and test
   - libxi-dev
   - libasound2-dev (if you are planning to build `sound` plugin)
 - __MacOS__: Tested on MacOS High Sierra - AppleClang 9.1.0
-- __Android__: For android, there is a python script [android.py](scripts/build-tools/android.py) 
-               which takes care of preparing android project structure, building the code and 
-               packaging the final APK. please read the begining of ```android.py```.
+- __Android__: For android, there is a python script [android.py](scripts/build-tools/android.py) which takes care of preparing android project structure, building the code and packaging the final APK. please read the begining of ```android.py```.
 - __RaspberryPI__: Tested on RPi1 ModelB Ubuntu-jessie (gcc Raspbian 4.9.2). Package requirements:
   - libasound2-dev (if you are planning to build `sound` plugin)
+- __iOS__: For iOS, there is a python script [ios.py](scripts/build-tools/ios.py) which takes care of initializing iOS project 
+
 
 #### CMake options
 - **BUNDLE** (default=0, android/ios=1):  

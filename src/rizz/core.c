@@ -1044,10 +1044,6 @@ void rizz__core_frame()
     // currently, we are submitting the calls from the previous frame
     // because submitting commands
     rizz__gfx_trace_reset_frame_stats();
-    rizz__gfx_execute_command_buffers();
-
-    // commit render (metal only)
-    rizz__gfx_commit();
 
     // reset temp allocators
     for (int i = 0, c = g_core.num_workers; i < c; i++) {
@@ -1064,10 +1060,13 @@ void rizz__core_frame()
     // update plugins and application
     rizz__plugin_update(dt);
 
+    rizz__gfx_execute_command_buffers();    // TEMP
     the_imgui = the__plugin.get_api_byname("imgui", 0);
     if (the_imgui) {
         the_imgui->Render();
     }
+
+    rizz__gfx_commit();
 
     ++g_core.frame_idx;
 }

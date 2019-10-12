@@ -865,7 +865,7 @@ if __name__ == "__main__":
     if ((not args.cmake_source or not os.path.isdir(args.cmake_source)) and args.command == 'configure'):
         logging.error('--cmake-source directory is invalid: %s' % (args.cmake_source if args.cmake_source else ''))
         exit(-1)
-    args.cmake_source = os.path.normpath(args.cmake_source)
+    args.cmake_source = os.path.abspath(args.cmake_source)
 
     if (not args.package and not args.manifest and (args.command == 'configure' or args.command == 'debug' or args.command == 'deploy')):
         logging.error('--package argument is not provided')

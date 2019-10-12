@@ -84,8 +84,8 @@ RIZZ_STATE static drawsprite_state g_ds;
 
 static bool init()
 {
-#if SX_PLATFORM_ANDROID
-    the_vfs->mount_android_assets("/assets");
+#if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
+    the_vfs->mount_mobile_assets("/assets");
 #else
     // mount `/asset` directory
     char asset_dir[RIZZ_MAX_PATH];
@@ -126,7 +126,7 @@ static bool init()
     sg_pipeline_desc pip_desc = {
         .layout.buffers[0].stride = sizeof(drawsprite_vertex),
         .index_type = SG_INDEXTYPE_UINT16,
-        .rasterizer = { .cull_mode = SG_CULLMODE_BACK, .sample_count = 4 },
+        .rasterizer = { .cull_mode = SG_CULLMODE_BACK },
         .blend = { .enabled = true,
                    .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
                    .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA }
@@ -137,7 +137,7 @@ static bool init()
     // pipeline
     sg_pipeline_desc pip_desc_wire = {
         .layout.buffers[0].stride = sizeof(drawsprite_vertex),
-        .rasterizer = { .cull_mode = SG_CULLMODE_BACK, .sample_count = 4 },
+        .rasterizer = { .cull_mode = SG_CULLMODE_BACK },
         .blend = { .enabled = true,
                    .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
                    .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA },
@@ -406,7 +406,6 @@ rizz_game_decl_config(conf)
     conf->window_width = 800;
     conf->window_height = 600;
     conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;
-    conf->multisample_count = 4;
     conf->swap_interval = 2;
     conf->plugins[0] = "imgui";
     conf->plugins[1] = "sprite";

@@ -44,8 +44,8 @@ RIZZ_STATE static quad_state g_quad;
 
 static bool init()
 {
-#if SX_PLATFORM_ANDROID
-    the_vfs->mount_android_assets("/assets");
+#if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
+    the_vfs->mount_mobile_assets("/assets");
 #else
     // mount `/asset` directory
     char asset_dir[RIZZ_MAX_PATH];
@@ -107,7 +107,7 @@ static bool init()
         .layout.buffers[0].stride = 20,    // sizeof each vertex (float[3] + float[2])
         .shader = ((rizz_shader*)the_asset->obj(g_quad.shader).ptr)->shd,
         .index_type = SG_INDEXTYPE_UINT16,
-        .rasterizer = { .cull_mode = SG_CULLMODE_BACK, .sample_count = 4 }
+        .rasterizer = { .cull_mode = SG_CULLMODE_BACK }
     };
     g_quad.pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
         the_asset->obj(g_quad.shader).ptr, &pip_desc, &k_vertex_layout));
@@ -243,7 +243,6 @@ rizz_game_decl_config(conf)
     conf->window_width = 800;
     conf->window_height = 600;
     conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;
-    conf->multisample_count = 4;
     conf->swap_interval = 2;
     conf->plugins[0] = "imgui";
 }

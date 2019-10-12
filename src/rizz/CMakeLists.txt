@@ -27,7 +27,8 @@ set(INCLUDE_FILES ../../include/rizz/types.h
                   ../../include/rizz/util.h
                   ../../include/rizz/vfs.h
                   ../../include/rizz/json.h 
-                  ../../include/rizz/android.h)
+                  ../../include/rizz/android.h
+                  ../../include/rizz/ios.h)
 
 set(TEXT_FILES  ../../README.md
                 ../../TODO.md
@@ -45,6 +46,10 @@ set(EXTERNAL_INCLUDES ../../3rdparty/sokol/sokol_app.h
 
 if (APPLE)
     set_source_files_properties(app.c graphics.c PROPERTIES COMPILE_FLAGS "-fobjc-arc -fmodules -x objective-c") 
+endif()
+
+if (IOS)
+    list(APPEND SOURCE_FILES ios.m)
 endif()
 
 # bundle: make static lib to link it to the game.exe later

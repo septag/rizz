@@ -328,6 +328,8 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
 
     pip->shader = shd;
     pip->shader_id = shader_id;
+    sg_pipeline_desc desc_def = _sg_pipeline_desc_defaults(desc);
+    desc = &desc_def;
 
     // TODO: recreate pipeline descriptor
     SOKOL_ASSERT(pip);
@@ -335,42 +337,25 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
 
     /* create vertex-descriptor */
     MTLVertexDescriptor* vtx_desc = [MTLVertexDescriptor vertexDescriptor];
-    int auto_offset[SG_MAX_SHADERSTAGE_BUFFERS];
-    for (int layout_index = 0; layout_index < SG_MAX_SHADERSTAGE_BUFFERS; layout_index++) {
-        auto_offset[layout_index] = 0;
-    }
-    /* to use computed offsets, *all* attr offsets must be 0 */
-    bool use_auto_offset = true;
-    for (int attr_index = 0; attr_index < SG_MAX_VERTEX_ATTRIBUTES; attr_index++) {
-        if (desc->layout.attrs[attr_index].offset != 0) {
-            use_auto_offset = false;
-            break;
-        }
-    }
     for (int attr_index = 0; attr_index < SG_MAX_VERTEX_ATTRIBUTES; attr_index++) {
         const sg_vertex_attr_desc* a_desc = &desc->layout.attrs[attr_index];
         if (a_desc->format == SG_VERTEXFORMAT_INVALID) {
             break;
         }
-        SOKOL_ASSERT((a_desc->buffer_index >= 0) &&
-                     (a_desc->buffer_index < SG_MAX_SHADERSTAGE_BUFFERS));
+        SOKOL_ASSERT((a_desc->buffer_index >= 0) && (a_desc->buffer_index < SG_MAX_SHADERSTAGE_BUFFERS));
         vtx_desc.attributes[attr_index].format = _sg_mtl_vertex_format(a_desc->format);
-        vtx_desc.attributes[attr_index].offset =
-            use_auto_offset ? auto_offset[a_desc->buffer_index] : a_desc->offset;
+        vtx_desc.attributes[attr_index].offset = a_desc->offset;
         vtx_desc.attributes[attr_index].bufferIndex = a_desc->buffer_index + SG_MAX_SHADERSTAGE_UBS;
-        auto_offset[a_desc->buffer_index] += _sg_vertexformat_bytesize(a_desc->format);
         pip->vertex_layout_valid[a_desc->buffer_index] = true;
     }
     for (int layout_index = 0; layout_index < SG_MAX_SHADERSTAGE_BUFFERS; layout_index++) {
         if (pip->vertex_layout_valid[layout_index]) {
             const sg_buffer_layout_desc* l_desc = &desc->layout.buffers[layout_index];
             const int mtl_vb_slot = layout_index + SG_MAX_SHADERSTAGE_UBS;
-            const int stride = l_desc->stride ? l_desc->stride : auto_offset[layout_index];
-            SOKOL_ASSERT(stride > 0);
-            vtx_desc.layouts[mtl_vb_slot].stride = stride;
-            vtx_desc.layouts[mtl_vb_slot].stepFunction =
-                _sg_mtl_step_function(_sg_def(l_desc->step_func, SG_VERTEXSTEP_PER_VERTEX));
-            vtx_desc.layouts[mtl_vb_slot].stepRate = _sg_def(l_desc->step_rate, 1);
+            SOKOL_ASSERT(l_desc->stride > 0);
+            vtx_desc.layouts[mtl_vb_slot].stride = l_desc->stride;
+            vtx_desc.layouts[mtl_vb_slot].stepFunction = _sg_mtl_step_function(l_desc->step_func);
+            vtx_desc.layouts[mtl_vb_slot].stepRate = l_desc->step_rate;
         }
     }
 
@@ -381,7 +366,7 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
     rp_desc.vertexFunction = _sg_mtl_idpool[shd->stage[SG_SHADERSTAGE_VS].mtl_func];
     SOKOL_ASSERT(shd->stage[SG_SHADERSTAGE_FS].mtl_func != _SG_MTL_INVALID_SLOT_INDEX);
     rp_desc.fragmentFunction = _sg_mtl_idpool[shd->stage[SG_SHADERSTAGE_FS].mtl_func];
-    rp_desc.sampleCount = _sg_def(desc->rasterizer.sample_count, 1);
+    rp_desc.sampleCount = desc->rasterizer.sample_count;
     rp_desc.alphaToCoverageEnabled = desc->rasterizer.alpha_to_coverage_enabled;
     rp_desc.alphaToOneEnabled = NO;
     rp_desc.rasterizationEnabled = YES;
@@ -390,31 +375,24 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
         rp_desc.stencilAttachmentPixelFormat = _sg_mtl_pixel_format(desc->blend.depth_format);
     }
 
-    const int att_count = _sg_def(desc->blend.color_attachment_count, 1);
+    const int att_count = desc->blend.color_attachment_count;
     for (int i = 0; i < att_count; i++) {
         rp_desc.colorAttachments[i].pixelFormat = _sg_mtl_pixel_format(desc->blend.color_format);
-        rp_desc.colorAttachments[i].writeMask = _sg_mtl_color_write_mask(
-            (sg_color_mask)_sg_def(desc->blend.color_write_mask, SG_COLORMASK_RGBA));
+        rp_desc.colorAttachments[i].writeMask = _sg_mtl_color_write_mask((sg_color_mask)desc->blend.color_write_mask);
         rp_desc.colorAttachments[i].blendingEnabled = desc->blend.enabled;
-        rp_desc.colorAttachments[i].alphaBlendOperation =
-            _sg_mtl_blend_op(_sg_def(desc->blend.op_alpha, SG_BLENDOP_ADD));
-        rp_desc.colorAttachments[i].rgbBlendOperation =
-            _sg_mtl_blend_op(_sg_def(desc->blend.op_rgb, SG_BLENDOP_ADD));
-        rp_desc.colorAttachments[i].destinationAlphaBlendFactor =
-            _sg_mtl_blend_factor(_sg_def(desc->blend.dst_factor_alpha, SG_BLENDFACTOR_ZERO));
-        rp_desc.colorAttachments[i].destinationRGBBlendFactor =
-            _sg_mtl_blend_factor(_sg_def(desc->blend.dst_factor_rgb, SG_BLENDFACTOR_ZERO));
-        rp_desc.colorAttachments[i].sourceAlphaBlendFactor =
-            _sg_mtl_blend_factor(_sg_def(desc->blend.src_factor_alpha, SG_BLENDFACTOR_ONE));
-        rp_desc.colorAttachments[i].sourceRGBBlendFactor =
-            _sg_mtl_blend_factor(_sg_def(desc->blend.src_factor_rgb, SG_BLENDFACTOR_ONE));
+        rp_desc.colorAttachments[i].alphaBlendOperation = _sg_mtl_blend_op(desc->blend.op_alpha);
+        rp_desc.colorAttachments[i].rgbBlendOperation = _sg_mtl_blend_op(desc->blend.op_rgb);
+        rp_desc.colorAttachments[i].destinationAlphaBlendFactor = _sg_mtl_blend_factor(desc->blend.dst_factor_alpha);
+        rp_desc.colorAttachments[i].destinationRGBBlendFactor = _sg_mtl_blend_factor(desc->blend.dst_factor_rgb);
+        rp_desc.colorAttachments[i].sourceAlphaBlendFactor = _sg_mtl_blend_factor(desc->blend.src_factor_alpha);
+        rp_desc.colorAttachments[i].sourceRGBBlendFactor = _sg_mtl_blend_factor(desc->blend.src_factor_rgb);
     }
     NSError* err = NULL;
-    id<MTLRenderPipelineState> mtl_rps =
-        [_sg_mtl_device newRenderPipelineStateWithDescriptor:rp_desc error:&err];
+    id<MTLRenderPipelineState> mtl_rps = [_sg_mtl_device newRenderPipelineStateWithDescriptor:rp_desc error:&err];
     if (nil == mtl_rps) {
         SOKOL_ASSERT(err);
         SOKOL_LOG([err.localizedDescription UTF8String]);
+        return;
     }
 
     pip->mtl_rps = _sg_mtl_add_resource(mtl_rps);
@@ -2830,17 +2808,6 @@ static void rizz__gfx_collect_garbage(int64_t frame)
         }
     }
 
-    // shaders
-    for (int i = 0, c = sx_array_count(g_gfx.destroy_shaders); i < c; i++) {
-        _sg_pipeline_t* shd = _sg_lookup_pipeline(&_sg.pools, g_gfx.destroy_shaders[i].id);
-        if (frame > shd->used_frame + 1) {
-            sg_destroy_shader(g_gfx.destroy_shaders[i]);
-            sx_array_pop(g_gfx.destroy_shaders, i);
-            i--;
-            c--;
-        }
-    }
-
     // pipelines
     for (int i = 0, c = sx_array_count(g_gfx.destroy_pips); i < c; i++) {
         sg_pipeline pip_id = g_gfx.destroy_pips[i];
@@ -2865,6 +2832,22 @@ static void rizz__gfx_collect_garbage(int64_t frame)
             c--;
         }
     }
+
+    // shaders
+    for (int i = 0, c = sx_array_count(g_gfx.destroy_shaders); i < c; i++) {
+        _sg_pipeline_t* shd = _sg_lookup_pipeline(&_sg.pools, g_gfx.destroy_shaders[i].id);
+        if (shd && frame > shd->used_frame + 1) {
+            sg_destroy_shader(g_gfx.destroy_shaders[i]);
+            sx_array_pop(g_gfx.destroy_shaders, i);
+            i--;
+            c--;
+        } else {
+            // TODO (FIXME): crash happened where shd became NULL when we reloaded the shaders
+            sx_array_pop(g_gfx.destroy_shaders, i);
+            i--;
+            c--;
+        }
+    }    
 
     // passes
     for (int i = 0, c = sx_array_count(g_gfx.destroy_passes); i < c; i++) {
@@ -2959,7 +2942,6 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
         sg_pipeline_desc pip_desc_wire = { .layout.buffers[0].stride = sizeof(rizz__debug_vertex),
                                            .shader = g_gfx.dbg.shader,
                                            .index_type = SG_INDEXTYPE_NONE,
-                                           .rasterizer = { .sample_count = 4 },
                                            .primitive_type = SG_PRIMITIVETYPE_LINES,
                                            .depth_stencil = { .depth_compare_func =
                                                                   SG_COMPAREFUNC_LESS_EQUAL } };
@@ -3933,7 +3915,7 @@ static const rizz__run_command_cb k_run_cbs[_GFX_COMMAND_COUNT] = {
 };
 
 // note: must run in main thread
-void rizz__gfx_execute_command_buffers()
+int rizz__gfx_execute_command_buffers()
 {
     static_assert((sizeof(k_run_cbs) / sizeof(rizz__run_command_cb)) == _GFX_COMMAND_COUNT,
                   "k_run_cbs must match rizz__gfx_command");
@@ -3995,6 +3977,7 @@ void rizz__gfx_execute_command_buffers()
     }
 
     the__core.tmp_alloc_pop();
+    return cmd_count;
 }
 
 static rizz_gfx_stage rizz__stage_register(const char* name, rizz_gfx_stage parent_stage)

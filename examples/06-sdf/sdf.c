@@ -98,8 +98,8 @@ static void orbit_lights()
 
 static bool init()
 {
-#if SX_PLATFORM_ANDROID
-    the_vfs->mount_android_assets("/assets");
+#if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
+    the_vfs->mount_mobile_assets("/assets");
 #else
     // mount `/asset` directory
     char asset_dir[RIZZ_MAX_PATH];
@@ -142,8 +142,7 @@ static bool init()
     sg_pipeline_desc pip_desc = { .layout.buffers[0].stride = sizeof(sdf_vertex),
                                   .shader = ((rizz_shader*)the_asset->obj(g_sdf.shader).ptr)->shd,
                                   .index_type = SG_INDEXTYPE_UINT16,
-                                  .rasterizer = { .cull_mode = SG_CULLMODE_BACK,
-                                                  .sample_count = 1 } };
+                                  .rasterizer = { .cull_mode = SG_CULLMODE_BACK } };
     g_sdf.pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
         the_asset->obj(g_sdf.shader).ptr, &pip_desc, &k_sdf_vertex_layout));
 
@@ -366,7 +365,6 @@ rizz_game_decl_config(conf)
     conf->window_width = 800;
     conf->window_height = 600;
     conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;
-    conf->multisample_count = 1;
     conf->swap_interval = 2;
     conf->plugins[0] = "imgui";
 }

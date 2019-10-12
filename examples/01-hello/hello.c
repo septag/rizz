@@ -18,10 +18,6 @@ RIZZ_STATE static rizz_api_core* the_core;
 RIZZ_STATE static rizz_api_gfx* the_gfx;
 RIZZ_STATE static rizz_api_app* the_app;
 RIZZ_STATE static rizz_api_imgui* the_imgui;
-RIZZ_STATE static rizz_api_asset* the_asset;
-RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
-RIZZ_STATE static rizz_api_camera* the_camera;
-RIZZ_STATE static rizz_api_vfs* the_vfs;
 
 RIZZ_STATE rizz_gfx_stage g_stage;
 
@@ -42,8 +38,8 @@ static void update(float dt) {}
 static void render()
 {
     sg_pass_action pass_action = { .colors[0] = { SG_ACTION_CLEAR, { 0.25f, 0.5f, 0.75f, 1.0f } },
-                                   .depth = { SG_ACTION_CLEAR, 1.0f } };
-
+                                   .depth = { SG_ACTION_DONTCARE, 1.0f } };
+    
     the_gfx->staged.begin(g_stage);
     the_gfx->staged.begin_default_pass(&pass_action, the_app->width(), the_app->height());
     the_gfx->staged.end_pass();
@@ -117,7 +113,6 @@ rizz_game_decl_config(conf)
     conf->window_width = 800;
     conf->window_height = 600;
     conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;
-    conf->multisample_count = 4;
     conf->swap_interval = 2;
     conf->plugins[0] = "imgui";
 }

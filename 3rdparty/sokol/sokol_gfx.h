@@ -9149,7 +9149,15 @@ _SOKOL_PRIVATE sg_resource_state _sg_create_shader(_sg_shader_t* shd, const sg_s
 
     /* uniform block sizes and image types */
     for (int stage_index = 0; stage_index < SG_NUM_SHADER_STAGES; stage_index++) {
-        const sg_shader_stage_desc* stage_desc = (stage_index == SG_SHADERSTAGE_VS) ? &desc->vs : &desc->fs;
+        const sg_shader_stage_desc* stage_desc;
+        switch (stage_index) {
+            case SG_SHADERSTAGE_VS:     stage_desc = &desc->vs; break;
+            case SG_SHADERSTAGE_FS:     stage_desc = &desc->fs; break;
+            case SG_SHADERSTAGE_CS:     stage_desc = &desc->cs; break;
+            default:
+                SOKOL_UNREACHABLE;
+                break;
+        }
         _sg_shader_stage_t* stage = &shd->stage[stage_index];
         SOKOL_ASSERT(stage->num_uniform_blocks == 0);
         for (int ub_index = 0; ub_index < SG_MAX_SHADERSTAGE_UBS; ub_index++) {
@@ -10844,7 +10852,7 @@ _SOKOL_PRIVATE bool _sg_validate_apply_bindings(const sg_bindings* bindings) {
                 }
             }
             else {
-                SOKOL_VALIDATE(i >= stage->num_images, _SG_VALIDATE_ABND_FS_IMGS);
+                SOKOL_VALIDATE(i >= stage->num_images, _SG_VALIDATE_ABND_CS_IMGS);
             }
         }
         return SOKOL_VALIDATE_END();

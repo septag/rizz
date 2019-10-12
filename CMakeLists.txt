@@ -49,7 +49,7 @@ function(rizz__add_example proj_name)
     string(SUBSTRING ${proj_name} 3 -1 source_file)
 
     if (BUNDLE AND NOT ANDROID) 
-        add_executable(${proj_name} ${EXEC_TYPE} examples/${proj_name}/${source_file}.c)
+        add_executable(${proj_name} examples/${proj_name}/${source_file}.c)
     else()
         add_library(${proj_name} SHARED examples/${proj_name}/${source_file}.c)
     endif()
@@ -106,10 +106,15 @@ function(rizz__add_example proj_name)
 
         # set macosx/ios properties
         if (APPLE) 
+            set(resource_files ${MACOSX_BUNDLE_ROOT_DIR}/assets 
+                               ${MACOSX_BUNDLE_ROOT_DIR}/images.xcassets)
+            target_sources(${proj_name} PRIVATE "${resource_files}")
             set_target_properties(${proj_name} PROPERTIES 
                 MACOSX_BUNDLE TRUE 
-                RESOURCE ${MACOSX_BUNDLE_ROOT_DIR}/assets ${MACOSX_BUNDLE_ROOT_DIR}/images.xcassets
-                MACOSX_BUNDLE_INFO_PLIST ${MACOSX_BUNDLE_ROOT_DIR}/Info.plist)
+                MACOSX_BUNDLE_INFO_PLIST ${MACOSX_BUNDLE_ROOT_DIR}/Info.plist 
+                XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon" 
+                XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME "LaunchImage" 
+                RESOURCE "${resource_files}")
         endif()
     endif()
 
@@ -120,7 +125,7 @@ endfunction()
 
 function(rizz_add_executable proj_name source_files)
     if (BUNDLE AND NOT ANDROID) 
-        add_executable(${proj_name} ${EXEC_TYPE} ${source_files})
+        add_executable(${proj_name} ${source_files})
     else()
         add_library(${proj_name} SHARED ${source_files})
     endif()
@@ -142,10 +147,15 @@ function(rizz_add_executable proj_name source_files)
 
         # set macosx/ios properties
         if (APPLE) 
+            set(resource_files ${MACOSX_BUNDLE_ROOT_DIR}/assets 
+                               ${MACOSX_BUNDLE_ROOT_DIR}/images.xcassets)
+            target_sources(${proj_name} PRIVATE "${resource_files}")
             set_target_properties(${proj_name} PROPERTIES 
                 MACOSX_BUNDLE TRUE 
-                RESOURCE ${MACOSX_BUNDLE_ROOT_DIR}/assets ${MACOSX_BUNDLE_ROOT_DIR}/images.xcassets
-                MACOSX_BUNDLE_INFO_PLIST ${MACOSX_BUNDLE_ROOT_DIR}/Info.plist)
+                MACOSX_BUNDLE_INFO_PLIST ${MACOSX_BUNDLE_ROOT_DIR}/Info.plist 
+                XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon" 
+                XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME "LaunchImage" 
+                RESOURCE "${resource_files}")
         endif()
     endif()
 

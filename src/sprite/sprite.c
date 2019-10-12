@@ -1305,7 +1305,7 @@ static bool sprite__init()
         (sg_pipeline_desc){ .layout.buffers[0].stride = sizeof(rizz_sprite_vertex),
                             .layout.buffers[1].stride = sizeof(sprite__vertex_transform),
                             .index_type = SG_INDEXTYPE_UINT16,
-                            .rasterizer = { .cull_mode = SG_CULLMODE_BACK, .sample_count = 4 },
+                            .rasterizer = { .cull_mode = SG_CULLMODE_BACK },
                             .blend = { .enabled = true,
                                        .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
                                        .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA } };

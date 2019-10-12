@@ -447,7 +447,7 @@ void rizz__gfx_release();
 void rizz__gfx_trace_reset_frame_stats();
 rizz__gfx_cmdbuffer* rizz__gfx_create_command_buffer(const sx_alloc* alloc);
 void rizz__gfx_destroy_command_buffer(rizz__gfx_cmdbuffer* cb);
-void rizz__gfx_execute_command_buffers();
+int rizz__gfx_execute_command_buffers();
 void rizz__gfx_update();
 void rizz__gfx_commit();
 
