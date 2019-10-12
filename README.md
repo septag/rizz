@@ -15,7 +15,7 @@ I will try to stick to these as much as possible, and I recommend every programm
 #### Note
 This is not a game engine, it's a relatively low-level framework for programmers to build their own engine/renderer/physics on top of it. The core of _rizz_ does not and will not implement any rendering techniques/physics or impose any specific entity system to the user. It just provides the basic building blocks for game developers. Other features will be implemented as plugins.
   
-## Features
+## Features and Changes
 see [CHANGELOG](CHANGES.md) for latest changes, new features and bug fixes.
 
 #### Core
@@ -133,9 +133,6 @@ how to get started.
 - [sort](https://github.com/swenson/sort): Sorting routine implementations in "template" C
 - [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo): 3D gizmo for imgui
 - [gainput](https://github.com/jkuhlmann/gainput): Input library for games
-
-[TODO](TODO.md)
-----
 
 [License (BSD 2-clause)](https://github.com/septag/rizz/blob/master/LICENSE)
 --------------------------------------------------------------------------

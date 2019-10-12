@@ -31,7 +31,6 @@ set(INCLUDE_FILES ../../include/rizz/types.h
                   ../../include/rizz/ios.h)
 
 set(TEXT_FILES  ../../README.md
-                ../../TODO.md
                 ../../CHANGES.md)
 
 set(EXTERNAL_INCLUDES ../../3rdparty/sokol/sokol_app.h 

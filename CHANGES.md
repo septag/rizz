@@ -1,17 +1,18 @@
 # Changelog
 
-## [unreleased]:
+## [0.2]:
 ### Added
 - [x] Sprites
-- [x] DrawSprite example
+- [x] _drawsprite_ example
 - [x] Sprite animation/controller
-- [x] AnimSprite example
+- [x] _animsprite_ example
 - [x] Sprite debugger
 - [x] Verbose logging
 - [x] Input system 
 - [x] CR update
 - [x] sokol update
 - [x] Initiate sound plugin
+- [x] _playsound_ example
 - [x] Gamepad support
 - [x] Gamepad demo
 - [x] Plugin dependencies
@@ -22,9 +23,9 @@
 - [x] Audio backend for sokol_audio
 - [x] Android build
 - [x] Raspberry build
-- [ ] iOS build
+- [x] iOS build
 - [x] EXPERIMENTAL: D3D11 compute-shader support
-- [ ] EXPERIMENTAL: sokol debugging support for compute-shader
+- [x] Nbody physics example (D3d11 only)
 
 ### Changed
 - [x] BREAKING - gfx: immediate and staged APIs are now the same. creation/destroy/query functions 
@@ -32,9 +33,8 @@
 
 ### Fixed
 - [x] Deferred destroys. Now objects in use will never be destroyed even if the user calls _destroy_
-- [ ] Error handling for missing shaders
 - [x] immediate mode api conflicts with imgui
-- [ ] fixed sx_matx_inv 
+- [x] Fixed metal backend shader reload
 
 ## [0.1]:
 ### Added
@@ -58,4 +58,14 @@
 - Graphics debugger (sokol)
 - Demo project
 
+## [WIP]
+### Added
+- [ ] EXPERIMENTAL: sokol debugging support for compute-shader
+- [ ] EXPERIMENTAL: OpenGL compute-shader support
 
+### Changed
+- [ ] try to use <sys/sem.h> instead of posix semaphores
+
+### Fixed
+- [ ] fix sx_matx_inv 
+- [ ] Error handling for missing shaders so they won't crash
