@@ -88,8 +88,7 @@ static void update(float dt)
 
             if (the_imgui->ColorButton(btn_id, color, ImGuiColorEditFlags_NoTooltip,
                                        sx_vec2f(30.0f, 30.0f))) {
-                rizz_snd_source s = (rizz_snd_source){ (uint32_t)the_asset->obj(g_snd[i]).id };
-                the_sound->play(s, 0, 1.0f, 0, false);
+                the_sound->play(the_sound->source_get(g_snd[i]), 0, 1.0f, 0, false);
             }
             if ((i + 1) % 4 != 0) {
                 the_imgui->SameLine(0, -1.0f);

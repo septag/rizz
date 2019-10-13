@@ -62,10 +62,12 @@
 ### Added
 - [ ] EXPERIMENTAL: sokol debugging support for compute-shader
 - [ ] EXPERIMENTAL: OpenGL compute-shader support
+- [x] Added `shader_get`/`texture_get` and other asset getters to all asset types
 
 ### Changed
 - [ ] try to use <sys/sem.h> instead of posix semaphores
+- [x] BREAKING: external macro APIS (rizz_log_xxxx) are now same as internal ones (api variable is defined in header)
 
 ### Fixed
-- [ ] fix sx_matx_inv 
-- [ ] Error handling for missing shaders so they won't crash
+- [x] fix sx_matx_inv 
+- [x] Error handling for missing shaders so they won't crash

@@ -25,6 +25,11 @@
 
 #include "types.h"
 
+// default name for API var, if you have a different name, set this macro before including this file
+#ifndef RIZZ_REFLECT_API_VARNAME
+#    define RIZZ_REFLECT_API_VARNAME the_refl
+#endif
+
 typedef struct sx_alloc sx_alloc;
 
 typedef enum rizz_refl_type { RIZZ_REFL_ENUM, RIZZ_REFL_FUNC, RIZZ_REFL_FIELD } rizz_refl_type;
@@ -73,6 +78,7 @@ typedef struct rizz_api_refl {
 } rizz_api_refl;
 
 
+// clang-format off
 #ifdef RIZZ_INTERNAL_API
 bool rizz__refl_init(const sx_alloc* alloc, int max_regs sx_default(0));
 void rizz__refl_release();
@@ -80,20 +86,17 @@ void rizz__refl_release();
 RIZZ_API rizz_api_refl the__refl;
 
 #    define rizz_refl_enum(_type, _name)                                                 \
-        the__refl._reg(RIZZ_REFL_ENUM, (void*)(intptr_t)_name, #_type, #_name, NULL, "", \
-                       sizeof(_type), 0)
+        the__refl._reg(RIZZ_REFL_ENUM, (void*)(intptr_t)_name, #_type, #_name, NULL, "", sizeof(_type), 0)
 #    define rizz_refl_func(_type, _name, _desc) \
         the__refl._reg(RIZZ_REFL_FUNC, &_name, #_type, #_name, NULL, _desc, sizeof(void*), 0)
 #    define rizz_refl_field(_struct, _type, _name, _desc)                                         \
-        the__refl._reg(RIZZ_REFL_FIELD, &(((_struct*)0)->_name), #_type, #_name, #_struct, _desc, \
-                       sizeof(_type), sizeof(_struct))
+        the__refl._reg(RIZZ_REFL_FIELD, &(((_struct*)0)->_name), #_type, #_name, #_struct, _desc, sizeof(_type), sizeof(_struct))
 #else
-#    define rizz_refl_enum(_api, _type, _name)                                       \
-        _api->_reg(RIZZ_REFL_ENUM, (void*)(intptr_t)_name, #_type, #_name, NULL, "", \
-                   sizeof(_type), 0)
-#    define rizz_refl_func(_api, _type, _name, _desc) \
-        _api->_reg(RIZZ_REFL_FUNC, &_name, #_type, #_name, NULL, _desc, sizeof(void*), 0)
-#    define rizz_refl_field(_api, _struct, _type, _name, _desc)                               \
-        _api->_reg(RIZZ_REFL_FIELD, &(((_struct*)0)->_name), #_type, #_name, #_struct, _desc, \
-                   sizeof(_type), sizeof(_struct))
+#    define rizz_refl_enum(_type, _name)                                       \
+        (RIZZ_REFLECT_API_VARNAME)->_reg(RIZZ_REFL_ENUM, (void*)(intptr_t)_name, #_type, #_name, NULL, "", sizeof(_type), 0)
+#    define rizz_refl_func(_type, _name, _desc) \
+        (RIZZ_REFLECT_API_VARNAME)->_reg(RIZZ_REFL_FUNC, &_name, #_type, #_name, NULL, _desc, sizeof(void*), 0)
+#    define rizz_refl_field(_struct, _type, _name, _desc)                               \
+        (RIZZ_REFLECT_API_VARNAME)->_reg(RIZZ_REFL_FIELD, &(((_struct*)0)->_name), #_type, #_name, #_struct, _desc, sizeof(_type), sizeof(_struct))
 #endif
+// clang-format on

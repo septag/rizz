@@ -8,6 +8,11 @@
 
 #include "types.h"
 
+// default name for API var, if you have a different name, set this macro before including this file
+#ifndef RIZZ_APP_API_VARNAME
+#    define RIZZ_APP_API_VARNAME the_app
+#endif
+
 enum {
     RIZZ_APP_MAX_TOUCHPOINTS = 8,
     RIZZ_APP_MAX_MOUSEBUTTONS = 3,

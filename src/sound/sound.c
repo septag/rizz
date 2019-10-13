@@ -46,7 +46,7 @@ RIZZ_STATE static const sx_alloc* g_snd_alloc;
 #include "dr_libs/dr_wav.h"
 
 #define SOKOL_ASSERT(c) sx_assert(c)
-#define SOKOL_LOG(msg) rizz_log_error(the_core, msg);
+#define SOKOL_LOG(msg) rizz_log_error(msg);
 #define SOKOL_MALLOC(s) sx_malloc(g_snd_alloc, s)
 #define SOKOL_FREE(p) sx_free(g_snd_alloc, p)
 #define SOKOL_API_DECL static
@@ -329,7 +329,7 @@ static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params
     sx_handle_t handle = sx_handle_new_and_grow(g_snd.source_handles, g_snd_alloc);
     if (!handle) {
         sx_out_of_memory();
-        return (rizz_asset_load_data){{ 0 }};
+        return (rizz_asset_load_data){ { 0 } };
     }
 
     snd__source_flags flags = (sparams->looping ? SND_SOURCEFLAG_LOOPING : 0) |
@@ -350,7 +350,7 @@ static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params
     void* data = sx_malloc(alloc, total_sz);
     if (!data) {
         sx_out_of_memory();
-        return (rizz_asset_load_data){{ 0 }};
+        return (rizz_asset_load_data){ { 0 } };
     }
     src.data = data;
     uint8_t* buff = (uint8_t*)data;
@@ -381,7 +381,7 @@ static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_param
     if (src->fmt == SND_SOURCEFORMAT_WAV) {
         drwav wav;
         if (!drwav_init_memory(&wav, mem->data, mem->size)) {
-            rizz_log_warn(the_core, "loading sound '%s' failed: invalid WAV format", params->path);
+            rizz_log_warn("loading sound '%s' failed: invalid WAV format", params->path);
             snd__destroy_source(srchandle, alloc);
             return false;
         }
@@ -402,7 +402,7 @@ static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_param
 
         uint64_t num_frames = drwav_read_pcm_frames_f32(&wav, wav.totalPCMFrameCount, samples);
         if (num_frames != wav.totalPCMFrameCount) {
-            rizz_log_warn(the_core, "loading sound '%s' failed: reached EOF", params->path);
+            rizz_log_warn("loading sound '%s' failed: reached EOF", params->path);
             snd__destroy_source(srchandle, alloc);
             return false;
         }
@@ -445,7 +445,7 @@ static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_param
                                        .alloc_buffer_length_in_bytes = vorbis_buffer_size,
                                    });
         if (!vorbis) {
-            rizz_log_warn(the_core, "loading sound '%s' failed: %s", params->path,
+            rizz_log_warn("loading sound '%s' failed: %s", params->path,
                           snd__vorbis_get_error(vorbis_err));
             snd__destroy_source(srchandle, alloc);
             return false;
@@ -508,7 +508,7 @@ static void snd__on_read_metadata(void* metadata, const rizz_asset_load_params* 
     sx_os_path_ext(ext, sizeof(ext), params->path);
     if (sx_strequalnocase(ext, ".wav")) {
         if (!drwav_init_memory(&wav, mem->data, mem->size)) {
-            rizz_log_warn(the_core, "loading sound '%s' failed", params->path);
+            rizz_log_warn("loading sound '%s' failed", params->path);
             return;
         }
 
@@ -523,7 +523,7 @@ static void snd__on_read_metadata(void* metadata, const rizz_asset_load_params* 
         int error;
         stb_vorbis* vorbis = stb_vorbis_open_memory(mem->data, mem->size, &error, NULL);
         if (!vorbis) {
-            rizz_log_warn(the_core, "loading sound '%s' failed: %s", snd__vorbis_get_error(error));
+            rizz_log_warn("loading sound '%s' failed: %s", snd__vorbis_get_error(error));
             return;
         }
         stb_vorbis_info info = stb_vorbis_get_info(vorbis);
@@ -661,12 +661,12 @@ static bool snd__init()
     g_snd.silence_src = snd__create_dummy_source(k__snd_silent, sizeof(k__snd_silent), "silence");
 
     // register sound resources for asset loader
-    rizz_refl_enum(the_refl, snd__source_format, SND_SOURCEFORMAT_WAV);
-    rizz_refl_enum(the_refl, snd__source_format, SND_SOURCEFORMAT_OGG);
-    rizz_refl_field(the_refl, snd__metadata, snd__source_format, fmt, "file format");
-    rizz_refl_field(the_refl, snd__metadata, int, num_frames, "num_frames");
-    rizz_refl_field(the_refl, snd__metadata, int, num_channels, "num_channels");
-    rizz_refl_field(the_refl, snd__metadata, int, vorbis_buffer_size, "vorbis specific buff-size");
+    rizz_refl_enum(snd__source_format, SND_SOURCEFORMAT_WAV);
+    rizz_refl_enum(snd__source_format, SND_SOURCEFORMAT_OGG);
+    rizz_refl_field(snd__metadata, snd__source_format, fmt, "file format");
+    rizz_refl_field(snd__metadata, int, num_frames, "num_frames");
+    rizz_refl_field(snd__metadata, int, num_channels, "num_channels");
+    rizz_refl_field(snd__metadata, int, vorbis_buffer_size, "vorbis specific buff-size");
 
     the_asset->register_asset_type(
         "sound",
@@ -726,7 +726,7 @@ static void snd__release()
     if (g_snd.source_handles) {
         // two of them are reserved for dummies
         if (g_snd.source_handles->count > 2) {
-            rizz_log_warn(the_core, "sound: total %d sound_sources are not released",
+            rizz_log_warn("sound: total %d sound_sources are not released",
                           g_snd.source_handles->count - 2);
         }
         sx_handle_destroy_pool(g_snd.source_handles, g_snd_alloc);
@@ -734,7 +734,7 @@ static void snd__release()
 
     if (g_snd.instance_handles) {
         if (g_snd.instance_handles->count > 0) {
-            rizz_log_warn(the_core, "sound: total %d sound_instances are not released",
+            rizz_log_warn("sound: total %d sound_instances are not released",
                           g_snd.instance_handles->count);
         }
         sx_handle_destroy_pool(g_snd.instance_handles, g_snd_alloc);
@@ -1457,7 +1457,6 @@ static void snd__bus_set_max_lanes(int bus, int max_lanes)
     int remain = RIZZ_SND_DEVICE_MAX_LANES - count;
     if (max_lanes > remain) {
         rizz_log_warn(
-            the_core,
             "sound: maximum lanes for bus '%d' (%d truncated to %d) exceeds total maximum of %d",
             bus, max_lanes, remain, RIZZ_SND_DEVICE_MAX_LANES);
         sx_assert(0 && "wether increase RIZZ_SND_DEVICE_MAX_LANES or fix `max_lanes` parameter");
@@ -1774,6 +1773,11 @@ static void snd__execute_command_buffers()
     }
 }
 
+static rizz_snd_source snd__source_get(rizz_asset snd_asset) 
+{
+    return (rizz_snd_source){ (uint32_t)the_asset->obj(snd_asset).id };
+}
+
 static rizz_api_snd the__snd = { .queued = { .play = snd__cb_play,
                                              .play_clocked = snd__cb_play_clocked,
                                              .bus_stop = snd__cb_bus_stop,
@@ -1783,7 +1787,6 @@ static rizz_api_snd the__snd = { .queued = { .play = snd__cb_play,
                                              .source_set_volume = snd__cb_source_set_volume },
                                  .play = snd__play,
                                  .play_clocked = snd__play_clocked,
-                                 .show_debugger = snd__show_debugger,
                                  .bus_set_max_lanes = snd__bus_set_max_lanes,
                                  .master_volume = snd__master_volume,
                                  .set_master_volume = snd__set_master_volume,
@@ -1795,7 +1798,9 @@ static rizz_api_snd the__snd = { .queued = { .play = snd__cb_play,
                                  .source_looping = snd__source_looping,
                                  .source_set_looping = snd__source_set_looping,
                                  .source_set_singleton = snd__source_set_singleton,
-                                 .source_set_volume = snd__source_set_volume };
+                                 .source_set_volume = snd__source_set_volume,
+                                 .source_get = snd__source_get, 
+                                 .show_debugger = snd__show_debugger };
 
 rizz_plugin_decl_main(sound, plugin, e)
 {

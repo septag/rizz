@@ -13,7 +13,7 @@
 //
 #pragma once
 
-#include "sx/sx.h"
+#include "rizz/types.h"
 
 #define RIZZ_SND_DEVICE_SAMPLE_RATE (44100)
 #define RIZZ_SND_DEVICE_NUM_CHANNELS 2
@@ -71,6 +71,7 @@ typedef struct rizz_api_snd {
     void (*source_set_looping)(rizz_snd_source src, bool loop);
     void (*source_set_singleton)(rizz_snd_source src, bool singleton);
     void (*source_set_volume)(rizz_snd_source src, float vol);
+    rizz_snd_source (*source_get)(rizz_asset snd_asset);
 
     void (*show_debugger)(bool* p_open);
 } rizz_api_snd;

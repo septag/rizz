@@ -105,12 +105,12 @@ static bool init()
     // pipeline
     sg_pipeline_desc pip_desc = {
         .layout.buffers[0].stride = 20,    // sizeof each vertex (float[3] + float[2])
-        .shader = ((rizz_shader*)the_asset->obj(g_quad.shader).ptr)->shd,
+        .shader = the_gfx->shader_get(g_quad.shader)->shd,
         .index_type = SG_INDEXTYPE_UINT16,
         .rasterizer = { .cull_mode = SG_CULLMODE_BACK }
     };
     g_quad.pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
-        the_asset->obj(g_quad.shader).ptr, &pip_desc, &k_vertex_layout));
+        the_gfx->shader_get(g_quad.shader), &pip_desc, &k_vertex_layout));
 
     // bindings
     g_quad.bindings =
@@ -164,7 +164,7 @@ static void render()
 
         quad_matrices mats = { .mvp = sx_mat4_mul(&proj, &view) };
 
-        g_quad.bindings.fs_images[0] = ((rizz_texture*)the_asset->obj(g_quad.img).ptr)->img;
+        g_quad.bindings.fs_images[0] = the_gfx->texture_get(g_quad.img)->img;
         the_gfx->staged.apply_pipeline(g_quad.pip);
         the_gfx->staged.apply_bindings(&g_quad.bindings);
         the_gfx->staged.apply_uniforms(SG_SHADERSTAGE_VS, 0, &mats, sizeof(mats));

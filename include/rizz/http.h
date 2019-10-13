@@ -7,6 +7,11 @@
 
 #include "types.h"
 
+// default name for API var, if you have a different name, set this macro before including this file
+#ifndef RIZZ_HTTP_API_VARNAME
+#    define RIZZ_HTTP_API_VARNAME the_http
+#endif
+
 typedef enum rizz_http_status {
     RIZZ_HTTP_PENDING = 0,
     RIZZ_HTTP_COMPLETED,

@@ -6,6 +6,11 @@
 
 #include "sx/sx.h"
 
+// default name for API var, if you have a different name, set this macro before including this file
+#ifndef RIZZ_VFS_API_VARNAME
+#    define RIZZ_VFS_API_VARNAME the_vfs
+#endif
+
 typedef struct sx_mem_block sx_mem_block;
 typedef struct sx_alloc sx_alloc;
 

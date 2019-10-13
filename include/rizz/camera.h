@@ -5,8 +5,12 @@
 #pragma once
 
 #include "sx/math.h"
-
 #include "types.h"
+
+// default name for API var, if you have a different name, set this macro before including this file
+#ifndef RIZZ_CAMERA_API_VARNAME
+#    define RIZZ_CAMERA_API_VARNAME the_camera
+#endif
 
 typedef struct rizz_camera {
     sx_vec3 forward;

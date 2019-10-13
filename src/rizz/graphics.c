@@ -342,7 +342,8 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
         if (a_desc->format == SG_VERTEXFORMAT_INVALID) {
             break;
         }
-        SOKOL_ASSERT((a_desc->buffer_index >= 0) && (a_desc->buffer_index < SG_MAX_SHADERSTAGE_BUFFERS));
+        SOKOL_ASSERT((a_desc->buffer_index >= 0) &&
+                     (a_desc->buffer_index < SG_MAX_SHADERSTAGE_BUFFERS));
         vtx_desc.attributes[attr_index].format = _sg_mtl_vertex_format(a_desc->format);
         vtx_desc.attributes[attr_index].offset = a_desc->offset;
         vtx_desc.attributes[attr_index].bufferIndex = a_desc->buffer_index + SG_MAX_SHADERSTAGE_UBS;
@@ -378,17 +379,23 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
     const int att_count = desc->blend.color_attachment_count;
     for (int i = 0; i < att_count; i++) {
         rp_desc.colorAttachments[i].pixelFormat = _sg_mtl_pixel_format(desc->blend.color_format);
-        rp_desc.colorAttachments[i].writeMask = _sg_mtl_color_write_mask((sg_color_mask)desc->blend.color_write_mask);
+        rp_desc.colorAttachments[i].writeMask =
+            _sg_mtl_color_write_mask((sg_color_mask)desc->blend.color_write_mask);
         rp_desc.colorAttachments[i].blendingEnabled = desc->blend.enabled;
         rp_desc.colorAttachments[i].alphaBlendOperation = _sg_mtl_blend_op(desc->blend.op_alpha);
         rp_desc.colorAttachments[i].rgbBlendOperation = _sg_mtl_blend_op(desc->blend.op_rgb);
-        rp_desc.colorAttachments[i].destinationAlphaBlendFactor = _sg_mtl_blend_factor(desc->blend.dst_factor_alpha);
-        rp_desc.colorAttachments[i].destinationRGBBlendFactor = _sg_mtl_blend_factor(desc->blend.dst_factor_rgb);
-        rp_desc.colorAttachments[i].sourceAlphaBlendFactor = _sg_mtl_blend_factor(desc->blend.src_factor_alpha);
-        rp_desc.colorAttachments[i].sourceRGBBlendFactor = _sg_mtl_blend_factor(desc->blend.src_factor_rgb);
+        rp_desc.colorAttachments[i].destinationAlphaBlendFactor =
+            _sg_mtl_blend_factor(desc->blend.dst_factor_alpha);
+        rp_desc.colorAttachments[i].destinationRGBBlendFactor =
+            _sg_mtl_blend_factor(desc->blend.dst_factor_rgb);
+        rp_desc.colorAttachments[i].sourceAlphaBlendFactor =
+            _sg_mtl_blend_factor(desc->blend.src_factor_alpha);
+        rp_desc.colorAttachments[i].sourceRGBBlendFactor =
+            _sg_mtl_blend_factor(desc->blend.src_factor_rgb);
     }
     NSError* err = NULL;
-    id<MTLRenderPipelineState> mtl_rps = [_sg_mtl_device newRenderPipelineStateWithDescriptor:rp_desc error:&err];
+    id<MTLRenderPipelineState> mtl_rps =
+        [_sg_mtl_device newRenderPipelineStateWithDescriptor:rp_desc error:&err];
     if (nil == mtl_rps) {
         SOKOL_ASSERT(err);
         SOKOL_LOG([err.localizedDescription UTF8String]);
@@ -938,6 +945,11 @@ static sg_image rizz__texture_black()
 static sg_image rizz__texture_checker()
 {
     return g_gfx.tex_mgr.checker_tex.img;
+}
+
+static const rizz_texture* rizz__texture_get(rizz_asset texture_asset)
+{
+    return (const rizz_texture*)the__asset.obj(texture_asset).ptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1652,8 +1664,15 @@ static sg_pipeline_desc* rizz__shader_bindto_pipeline_sg(sg_shader shd,
     return desc;
 }
 
+static const rizz_shader* rizz__shader_get(rizz_asset shader_asset)
+{
+    const rizz_shader* shd = (const rizz_shader*)the__asset.obj(shader_asset).ptr;
+    sx_assert(shd && "shader is not loaded or missing");
+    return shd;
+}
 
-static sg_pipeline_desc* rizz__shader_bindto_pipeline(rizz_shader* shd, sg_pipeline_desc* desc,
+static sg_pipeline_desc* rizz__shader_bindto_pipeline(const rizz_shader* shd,
+                                                      sg_pipeline_desc* desc,
                                                       const rizz_vertex_layout* vl)
 {
     return rizz__shader_bindto_pipeline_sg(shd->shd, shd->info.inputs, shd->info.num_inputs, desc,
@@ -2578,6 +2597,11 @@ static void rizz__font_init()
         (rizz_asset_obj){ .ptr = NULL }, (rizz_asset_obj){ .ptr = NULL }, 0);
 }
 
+static const rizz_font* rizz__font_get(rizz_asset font_asset)
+{
+    return (const rizz_font*)the__asset.obj(font_asset).ptr;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @common
 static inline void rizz__stage_add_child(rizz_gfx_stage parent, rizz_gfx_stage child)
@@ -2847,7 +2871,7 @@ static void rizz__gfx_collect_garbage(int64_t frame)
             i--;
             c--;
         }
-    }    
+    }
 
     // passes
     for (int i = 0, c = sx_array_count(g_gfx.destroy_passes); i < c; i++) {
@@ -4347,7 +4371,7 @@ static const rizz_gfx_trace_info* rizz__trace_info()
     return &g_gfx.trace.t;
 }
 
-static bool rizz__imm_begin(rizz_gfx_stage stage) 
+static bool rizz__imm_begin(rizz_gfx_stage stage)
 {
     sx_unused(stage);
     return true;
@@ -4456,10 +4480,12 @@ rizz_api_gfx the__gfx = {
     .shader_make_with_data      = rizz__shader_make_with_data,
     .shader_bindto_pipeline     = rizz__shader_bindto_pipeline,
     .shader_bindto_pipeline_sg  = rizz__shader_bindto_pipeline_sg,
+    .shader_get                 = rizz__shader_get,
     .texture_white              = rizz__texture_white,
     .texture_black              = rizz__texture_black,
     .texture_checker            = rizz__texture_checker,
     .texture_create_checker     = rizz__texture_create_checker,
+    .texture_get                = rizz__texture_get,
     .debug_grid_xzplane         = rizz__debug_grid_xzplane,
     .debug_grid_xyplane         = rizz__debug_grid_xyplane,
     .trace_info                 = rizz__trace_info

@@ -260,7 +260,7 @@ static rizz_sprite_animclip sprite__animclip_create(const rizz_sprite_animclip_d
                               .trigger_end_event = desc->trigger_end_event,
                               .alloc = alloc };
     if (clip.num_frames < desc->num_frames) {
-        rizz_log_warn(the_core, "num_frames exceeded maximum amount (%d) for sprite-animclip: 0x%x",
+        rizz_log_warn("num_frames exceeded maximum amount (%d) for sprite-animclip: 0x%x",
                       RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES, handle);
     }
 
@@ -296,7 +296,7 @@ static rizz_sprite_animclip sprite__animclip_create(const rizz_sprite_animclip_d
         if (sidx != -1) {
             frame->atlas_id = sx_hashtbl_get(&atlas->sprite_tbl, sidx);
         } else {
-            rizz_log_warn(the_core, "sprite not found: '%s' in '%s'", frame_desc->name,
+            rizz_log_warn("sprite not found: '%s' in '%s'", frame_desc->name,
                           the_asset->path(desc->atlas));
         }
     }
@@ -460,7 +460,7 @@ static int sprite__animctrl_find_param_indesc(const char* name,
             return index;
         }
     }
-    rizz_log_warn(the_core, "sprite animctrl param '%s' not found", name);
+    rizz_log_warn("sprite animctrl param '%s' not found", name);
     sx_assert(0);
     return -1;
 }
@@ -473,7 +473,7 @@ static sprite__animctrl_param* sprite__animctrl_find_param(const char* name, spr
             return p;
         }
     }
-    rizz_log_warn(the_core, "sprite animctrl param '%s' not found", name);
+    rizz_log_warn("sprite animctrl param '%s' not found", name);
     sx_assert(0);
     return NULL;
 }
@@ -547,7 +547,7 @@ static int sprite__animctrl_find_state(const char* name, const uint32_t* hashes,
         if (hash == hashes[i])
             return i;
     }
-    rizz_log_warn(the_core, "sprite animctrl state '%s' not found", name);
+    rizz_log_warn("sprite animctrl state '%s' not found", name);
     sx_assert(0);
     return 0;
 }
@@ -881,9 +881,9 @@ static void sprite__sync_with_animclip(sprite__data* spr)
         spr->atlas_sprite_id = (int)clip->frames[clip->frame_id].atlas_id;
         spr->flip = clip->flip;
     } else {
-        rizz_log_warn(
-            the_core, "sprite_animclip 'handle: 0x%x' binded to sprite '%s' has become invalid",
-            clip_handle.id, spr->name ? sx_strpool_cstr(g_spr.name_pool, spr->name) : "[noname]");
+        rizz_log_warn("sprite_animclip 'handle: 0x%x' binded to sprite '%s' has become invalid",
+                      clip_handle.id,
+                      spr->name ? sx_strpool_cstr(g_spr.name_pool, spr->name) : "[noname]");
         spr->clip = (rizz_sprite_animclip){ 0 };
     }
 }
@@ -1026,7 +1026,7 @@ static bool atlas__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
 
     sjson_node* jroot = sjson_decode(jctx, buff);
     if (!jroot) {
-        rizz_log_warn(the_core, "loading atlas '%s' failed: not a valid json file", params->path);
+        rizz_log_warn("loading atlas '%s' failed: not a valid json file", params->path);
         return false;
     }
 
@@ -1181,7 +1181,7 @@ static void atlas__on_read_metadata(void* metadata, const rizz_asset_load_params
 
     sjson_node* jroot = sjson_decode(jctx, buff);
     if (!jroot) {
-        rizz_log_warn(the_core, "loading atlas '%s' failed: not a valid json file", params->path);
+        rizz_log_warn("loading atlas '%s' failed: not a valid json file", params->path);
         return;
     }
 
@@ -1272,10 +1272,10 @@ static bool sprite__init()
     sx_assert(g_spr.animctrl_handles);
 
     // register "atlas" asset type and metadata
-    rizz_refl_field(the_refl, atlas__metadata, char[RIZZ_MAX_PATH], img_filepath, "img_filepath");
-    rizz_refl_field(the_refl, atlas__metadata, int, num_sprites, "num_sprites");
-    rizz_refl_field(the_refl, atlas__metadata, int, num_vertices, "num_vertices");
-    rizz_refl_field(the_refl, atlas__metadata, int, num_indices, "num_indices");
+    rizz_refl_field(atlas__metadata, char[RIZZ_MAX_PATH], img_filepath, "img_filepath");
+    rizz_refl_field(atlas__metadata, int, num_sprites, "num_sprites");
+    rizz_refl_field(atlas__metadata, int, num_vertices, "num_vertices");
+    rizz_refl_field(atlas__metadata, int, num_indices, "num_indices");
 
     the_asset->register_asset_type(
         "atlas",
@@ -1353,15 +1353,14 @@ static void sprite__release()
 
     if (g_spr.sprite_handles) {
         if (g_spr.sprite_handles->count > 0) {
-            rizz_log_warn(the_core, "total %d sprites are not released",
-                          g_spr.sprite_handles->count);
+            rizz_log_warn("total %d sprites are not released", g_spr.sprite_handles->count);
         }
         sx_handle_destroy_pool(g_spr.sprite_handles, g_spr.alloc);
     }
 
     if (g_spr.animclip_handles) {
         if (g_spr.animclip_handles->count > 0) {
-            rizz_log_warn(the_core, "total %d sprite_animclips are not released",
+            rizz_log_warn("total %d sprite_animclips are not released",
                           g_spr.animclip_handles->count);
         }
         sx_handle_destroy_pool(g_spr.animclip_handles, g_spr.alloc);
@@ -1369,7 +1368,7 @@ static void sprite__release()
 
     if (g_spr.animctrl_handles) {
         if (g_spr.animctrl_handles->count > 0) {
-            rizz_log_warn(the_core, "total %d sprite_animctrls are not released",
+            rizz_log_warn("total %d sprite_animctrls are not released",
                           g_spr.animctrl_handles->count);
         }
 
@@ -1434,7 +1433,7 @@ static rizz_sprite sprite__create(const rizz_sprite_desc* desc)
             if (sidx != -1) {
                 spr.atlas_sprite_id = sx_hashtbl_get(&atlas->sprite_tbl, sidx);
             } else {
-                rizz_log_warn(the_core, "sprite not found: '%s' in '%s'", desc->name,
+                rizz_log_warn("sprite not found: '%s' in '%s'", desc->name,
                               the_asset->path(desc->atlas));
             }
         } else {
@@ -1976,7 +1975,7 @@ static void sprite__show_sprite_preview(sprite__data* spr) {
         } else {
             uv1 = sx_vec2f(0.0f, 0.0f);
             uv2 = sx_vec2f(1.0f, 1.0f);
-            rizz_texture* tex = (rizz_texture*)the_asset->obj(spr->texture).ptr;
+            const rizz_texture* tex = the_gfx->texture_get(spr->texture);
             sx_vec2 base_size = sx_vec2f((float)tex->info.width, (float)tex->info.height);
             sprite_rect = sx_rectf(0, 0, base_size.x, base_size.y);
 
@@ -1995,7 +1994,7 @@ static void sprite__show_sprite_preview(sprite__data* spr) {
         sx_vec2     vmin = sx_vec2_add(wpos, sx_vec2_mul(sprite_rect.vmin, wsize));
         sx_vec2     vmax = sx_vec2_add(wpos, sx_vec2_mul(sprite_rect.vmax, wsize));
         ImTextureID tex_id =
-            (ImTextureID)(uintptr_t)((rizz_texture*)the_asset->obj(spr->texture).ptr)->img.id;
+            (ImTextureID)(uintptr_t)the_gfx->texture_get(spr->texture)->img.id;
         the_imgui->ImDrawList_AddImage(draw_list, tex_id, vmin, vmax, uv1, uv2, 0xffffffff);
 
         // base frame
@@ -2025,7 +2024,7 @@ static void sprite__show_sprite_tab_contents(sprite__data* spr) {
         const atlas__sprite* aspr = &atlas->sprites[spr->atlas_sprite_id];
         base_size = aspr->base_size;
     } else {
-        rizz_texture* tex = (rizz_texture*)the_asset->obj(spr->texture).ptr;
+        const rizz_texture* tex = the_gfx->texture_get(spr->texture);
         base_size = sx_vec2f((float)tex->info.width, (float)tex->info.height);
     }
 
@@ -2259,9 +2258,15 @@ static void sprite__show_debugger(bool* p_open)
     the_imgui->End();
 }
 
+static const rizz_atlas* sprite__atlas_get(rizz_asset atlas_asset)
+{
+    return (const rizz_atlas*)the_asset->obj(atlas_asset).ptr;
+}
+
 static rizz_api_sprite the__sprite = { .create = sprite__create,
                                        .destroy = sprite__destroy,
                                        .clone = sprite__clone,
+                                       .atlas_get = sprite__atlas_get,
                                        .size = sprite__size,
                                        .origin = sprite__origin,
                                        .bounds = sprite__bounds,

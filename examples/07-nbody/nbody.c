@@ -162,9 +162,9 @@ static bool init()
 
     // pipelines
     g_nbody.draw_pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
-        the_asset->obj(g_nbody.draw_shader).ptr,
+        the_gfx->shader_get(g_nbody.draw_shader),
         &(sg_pipeline_desc){ .layout.buffers[0].stride = sizeof(nbody_draw_vertex),
-                             .shader = ((rizz_shader*)the_asset->obj(g_nbody.draw_shader).ptr)->shd,
+                             .shader = the_gfx->shader_get(g_nbody.draw_shader)->shd,
                              .index_type = SG_INDEXTYPE_UINT16,
                              .rasterizer = { .cull_mode = SG_CULLMODE_BACK, .sample_count = 1 },
                              .blend = { .enabled = true,
@@ -183,7 +183,7 @@ static bool init()
                    sx_vec4f(0, 0, 20.0f, 1.0f / 10000.0f / 10000.0f), SPREAD, MAX_PARTICLES / 2);
 
     g_nbody.particle_pip = the_gfx->make_pipeline(&(sg_pipeline_desc){
-        .shader = ((rizz_shader*)the_asset->obj(g_nbody.particle_shader).ptr)->shd });
+        .shader = the_gfx->shader_get(g_nbody.particle_shader)->shd });
 
     // particle buffers
     g_nbody.particle_buff1 =
@@ -283,7 +283,7 @@ static void render()
         the_gfx->staged.apply_bindings(
             &(sg_bindings){ .vertex_buffers[0] = g_nbody.vbuff,
                             .index_buffer = g_nbody.ibuff,
-                            .fs_images[0] = ((rizz_texture*)the_asset->obj(g_nbody.img).ptr)->img,
+                            .fs_images[0] = the_gfx->texture_get(g_nbody.img)->img,
                             .vs_buffers[0] = g_nbody.particle_buff1 });
 
         rizz_camera* cam = &g_nbody.cam.cam;

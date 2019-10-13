@@ -140,7 +140,7 @@ static bool init()
         NULL, 0, NULL, 0);
 
     sg_pipeline_desc pip_desc = { .layout.buffers[0].stride = sizeof(sdf_vertex),
-                                  .shader = ((rizz_shader*)the_asset->obj(g_sdf.shader).ptr)->shd,
+                                  .shader = the_gfx->shader_get(g_sdf.shader)->shd,
                                   .index_type = SG_INDEXTYPE_UINT16,
                                   .rasterizer = { .cull_mode = SG_CULLMODE_BACK } };
     g_sdf.pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(

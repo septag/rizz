@@ -29,6 +29,11 @@
 #include "sx/io.h"
 #include "types.h"
 
+// default name for API var, if you have a different name, set this macro before including this file
+#ifndef RIZZ_ASSET_API_VARNAME
+#    define RIZZ_ASSET_API_VARNAME the_asset
+#endif
+
 enum rizz_asset_load_flags_ {
     RIZZ_ASSET_LOAD_FLAG_NONE = 0x0,
     RIZZ_ASSET_LOAD_FLAG_ABSOLUTE_PATH = 0x1,

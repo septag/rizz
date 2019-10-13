@@ -35,12 +35,8 @@ void main()
     int particle_id = gl_InstanceIndex;
     vec3 pos = a_pos * PARTICLE_RADIUS;
     pos = mat3(inv_view) * pos;
-    // vec4 pos_billboard = /*inv_view * */vec4(pos, 1.0);
-    // pos_billboard.xyz += particles[particle_id].pos.xyz;
     pos += particles[particle_id].pos.xyz;
-    // vec4 pos_billboard = vec4(pos, 1.0);
     gl_Position = vp * vec4(pos, 1.0);
-    // gl_Position = pos_billboard;
     f_uv = a_uv;
 
     float mag = particles[particle_id].vel.w / 9.0;

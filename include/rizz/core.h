@@ -11,6 +11,11 @@
 
 #define RIZZ_MAX_TEMP_ALLOCS 32
 
+// default name for API var, if you have a different name, set this macro before including this file
+#ifndef RIZZ_CORE_API_VARNAME 
+#   define RIZZ_CORE_API_VARNAME the_core
+#endif
+
 typedef struct rizz_config rizz_config;    // #include "rizz/game.h"
 
 // custom console commands that can be registered (sent via profiler)
@@ -161,11 +166,11 @@ RIZZ_API rizz_api_core the__core;
 #   define rizz_coro_invoke(_name, _user)    the__core.coro_invoke(coro__##_name, (_user))
 #else
 // logging
-#   define rizz_log_info(_core, _text, ...)     _core->print_info(_text, ##__VA_ARGS__)
-#   define rizz_log_debug(_core, _text, ...)    _core->print_debug(_text, ##__VA_ARGS__)
-#   define rizz_log_verbose(_core, _text, ...)  _core->print_verbose(_text, ##__VA_ARGS__)
-#   define rizz_log_error(_core, _text, ...)    _core->print_error_trace(__FILE__, __LINE__, _text, ##__VA_ARGS__)
-#   define rizz_log_warn(_core, _text, ...)     _core->print_warning(_text, ##__VA_ARGS__)
+#   define rizz_log_info(_text, ...)     (RIZZ_CORE_API_VARNAME)->print_info(_text, ##__VA_ARGS__)
+#   define rizz_log_debug(_text, ...)    (RIZZ_CORE_API_VARNAME)->print_debug(_text, ##__VA_ARGS__)
+#   define rizz_log_verbose(_text, ...)  (RIZZ_CORE_API_VARNAME)->print_verbose(_text, ##__VA_ARGS__)
+#   define rizz_log_error(_text, ...)    (RIZZ_CORE_API_VARNAME)->print_error_trace(__FILE__, __LINE__, _text, ##__VA_ARGS__)
+#   define rizz_log_warn(_text, ...)     (RIZZ_CORE_API_VARNAME)->print_warning(_text, ##__VA_ARGS__)
 
 // coroutines
 #   ifdef __cplusplus
@@ -178,20 +183,20 @@ RIZZ_API rizz_api_core the__core;
             static void coro__##_name_(sx_fiber_transfer __transfer)
 #   endif
 
-#   define rizz_coro_userdata()                  __transfer.user
-#   define rizz_coro_end(_core)                  _core->coro_end(&__transfer.from)
-#   define rizz_coro_wait(_core, _msecs)         _core->coro_wait(&__transfer.from, (_msecs))
-#   define rizz_coro_yield(_core)                _core->coro_yield(&__transfer.from, 1)
-#   define rizz_coro_yieldn(_core, _n)           _core->coro_yield(&__transfer.from, (_n))
-#   define rizz_coro_end(_core)                  _core->coro_end(&__transfer.from)
-#   define rizz_coro_invoke(_core, _name, _user) _core->coro_invoke(coro__##_name, (_user))
+#   define rizz_coro_userdata()             __transfer.user
+#   define rizz_coro_end()                  (RIZZ_CORE_API_VARNAME)->coro_end(&__transfer.from)
+#   define rizz_coro_wait(_msecs)           (RIZZ_CORE_API_VARNAME)->coro_wait(&__transfer.from, (_msecs))
+#   define rizz_coro_yield()                (RIZZ_CORE_API_VARNAME)->coro_yield(&__transfer.from, 1)
+#   define rizz_coro_yieldn(_n)             (RIZZ_CORE_API_VARNAME)->coro_yield(&__transfer.from, (_n))
+#   define rizz_coro_end()                  (RIZZ_CORE_API_VARNAME)->coro_end(&__transfer.from)
+#   define rizz_coro_invoke(_name, _user)   (RIZZ_CORE_API_VARNAME)->coro_invoke(coro__##_name, (_user))
 
 // clang-format on
 
-#    define rizz_profile_begin(_core, _name, _flags) \
+#    define rizz_profile_begin(_name, _flags) \
         static uint32_t rmt_sample_hash_##_name = 0; \
-        _core->begin_profile_sample(#_name, _flags, &rmt_sample_hash_##_name)
-#    define rizz_profile_end(_core) _core->end_profile_sample()
+        (RIZZ_CORE_API_VARNAME)->begin_profile_sample(#_name, _flags, &rmt_sample_hash_##_name)
+#    define rizz_profile_end() (RIZZ_CORE_API_VARNAME)->end_profile_sample()
 
 #    ifdef __cplusplus
 struct rizz_profile_scoped {

@@ -545,7 +545,7 @@ RIZZ_STATE const sx_alloc* g_sg_imgui_alloc;
 #define SOKOL_MALLOC(s) sx_malloc(g_sg_imgui_alloc, s)
 #define SOKOL_FREE(p) sx_free(g_sg_imgui_alloc, p)
 #define SOKOL_ASSERT(c) sx_assert(c)
-#define SOKOL_LOG(s) rizz_log_error(the_core, s)
+#define SOKOL_LOG(s) rizz_log_error(s)
 
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
@@ -614,7 +614,7 @@ static bool imgui__setup()
     g_imgui.last_cursor = ImGuiMouseCursor_COUNT;
     g_imgui.ctx = the__imgui.CreateContext(NULL);
     if (!g_imgui.ctx) {
-        rizz_log_error(the_core, "imgui: init failed");
+        rizz_log_error("imgui: init failed");
         return false;
     }
 

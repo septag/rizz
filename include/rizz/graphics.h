@@ -21,6 +21,11 @@
     _rizz_shader_path_lang(_basepath, RIZZ_GRAPHICS_SHADER_LANG, _filename)
 // clang-format on
 
+// default name for API var, if you have a different name, set this macro before including this file
+#ifndef RIZZ_GRAPHICS_API_VARNAME
+#    define RIZZ_GRAPHICS_API_VARNAME the_gfx
+#endif
+
 typedef struct sx_alloc sx_alloc;
 
 typedef enum rizz_gfx_backend {
@@ -418,17 +423,20 @@ typedef struct rizz_api_gfx {
                                          const uint32_t* vs_refl_json, uint32_t fs_data_size,
                                          const uint32_t* fs_data, uint32_t fs_refl_size,
                                          const uint32_t* fs_refl_json);
-    sg_pipeline_desc* (*shader_bindto_pipeline)(rizz_shader* shd, sg_pipeline_desc* pip_desc,
+    sg_pipeline_desc* (*shader_bindto_pipeline)(const rizz_shader* shd, sg_pipeline_desc* pip_desc,
                                                 const rizz_vertex_layout* vl);
     sg_pipeline_desc* (*shader_bindto_pipeline_sg)(sg_shader shd,
                                                    const rizz_shader_refl_input* inputs,
                                                    int num_inputs, sg_pipeline_desc* pip_desc,
                                                    const rizz_vertex_layout* vl);
+    const rizz_shader* (*shader_get)(rizz_asset shader_asset);
+
     // texture
     sg_image (*texture_white)();
     sg_image (*texture_black)();
     sg_image (*texture_checker)();
     rizz_texture (*texture_create_checker)(int checker_size, int size, const sx_color colors[2]);
+    const rizz_texture* (*texture_get)(rizz_asset texture_asset);
 
     // debug
     void (*debug_grid_xzplane)(float spacing, float spacing_bold, const sx_mat4* vp,

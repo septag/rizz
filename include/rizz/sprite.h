@@ -179,6 +179,9 @@ typedef struct rizz_api_sprite {
     // if clip = {0}, it uses the source sprite clip handle
     rizz_sprite (*clone)(rizz_sprite spr, rizz_sprite_animclip clip);
 
+    // atlas
+    const rizz_atlas* (*atlas_get)(rizz_asset atlas_asset);
+
     // property accessors
     sx_vec2 (*size)(rizz_sprite spr);
     sx_vec2 (*origin)(rizz_sprite spr);

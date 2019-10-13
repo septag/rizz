@@ -8,6 +8,11 @@
 
 typedef struct sx_alloc sx_alloc;
 
+// default name for API var, if you have a different name, set this macro before including this file
+#ifndef RIZZ_PLUGIN_API_VARNAME
+#    define RIZZ_PLUGIN_API_VARNAME the_plugin
+#endif
+
 #ifndef RIZZ_BUNDLE
 // RIZZ_STATE: must put before any static variable that needs to be persistant in plugin reloads
 // RIZZ_POINTER: must put before any function pointer that is passed to the engine like coroutines

@@ -132,7 +132,7 @@ static bool init()
                    .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA }
     };
     g_ds.pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
-        the_asset->obj(g_ds.shader).ptr, &pip_desc, &k_vertex_layout));
+        the_gfx->shader_get(g_ds.shader), &pip_desc, &k_vertex_layout));
 
     // pipeline
     sg_pipeline_desc pip_desc_wire = {
@@ -143,7 +143,7 @@ static bool init()
                    .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA },
     };
     g_ds.pip_wire = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
-        the_asset->obj(g_ds.shader_wire).ptr, &pip_desc_wire, &k_vertex_layout_wire));
+        the_gfx->shader_get(g_ds.shader_wire), &pip_desc_wire, &k_vertex_layout_wire));
 
     // camera
     // projection: setup for ortho, total-width = 10 units
@@ -273,7 +273,7 @@ static void draw_custom(const drawsprite_params* params)
         the_gfx->staged.apply_pipeline(g_ds.pip_wire);
     }
 
-    bindings.fs_images[0] = ((rizz_texture*)the_asset->obj(dd->batches[0].texture).ptr)->img;
+    bindings.fs_images[0] = the_gfx->texture_get(dd->batches[0].texture)->img;
     the_gfx->staged.apply_bindings(&bindings);
 
     the_gfx->staged.apply_uniforms(SG_SHADERSTAGE_VS, 0, params, sizeof(*params));
