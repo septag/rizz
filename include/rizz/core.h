@@ -116,7 +116,8 @@ typedef struct rizz_api_core {
                              void* user, sx_job_priority priority, uint32_t tags);
     void (*job_wait_and_del)(sx_job_t job);
     bool (*job_test_and_del)(sx_job_t job);
-    int (*job_num_workers)();
+    int (*job_num_threads)();
+    int (*job_thread_index)();
 
     void (*coro_invoke)(void (*coro_cb)(sx_fiber_transfer), void* user);
     void (*coro_end)(void* pfrom);
@@ -137,12 +138,9 @@ typedef struct rizz_api_core {
 } rizz_api_core;
 
 #ifdef RIZZ_INTERNAL_API
-typedef struct rizz_gfx_cmdbuffer rizz_gfx_cmdbuffer;    // #include "rizz/graphics.h"
-
 bool rizz__core_init(const rizz_config* conf);
 void rizz__core_release();
 void rizz__core_frame();
-rizz_gfx_cmdbuffer* rizz__core_gfx_cmdbuffer();
 RIZZ_API void rizz__core_fix_callback_ptrs(const void** ptrs, const void** new_ptrs, int num_ptrs);
 
 RIZZ_API rizz_api_core the__core;

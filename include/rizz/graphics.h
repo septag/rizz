@@ -222,25 +222,23 @@ typedef struct sjson_context sjson_context;    // shader_parse_reflection
 // Immediate API: access directly to GPU graphics API. this is actually a thin wrapper over backend
 //                Calls are executed immediately and sequentially, unlike _staged_ API (see below)
 // Note: this API is NOT multi-threaded
-//       Immediate mode is more of a lower-level graphics API
+//       Immediate mode is more of a direct and immediate graphics API
 //       It is recommended to use staged API mentioned below,
-//       because most of graphics primitives like sprites and text uses retained-mode API for it's
-//       muti-threading capabilities
 //
-// Staged API:   staged (defrred calls), multi-threaded API.
-//               Contains only a selection of async drawing functions
+// Staged API:   staged (deferred calls), multi-threaded API.
+//               Contains only a selection of drawing functions
 //               Can be called within worker threads spawned by `job_dispatch`, but with some rules
 //               and restrictions
 //
 // Usage: always call begin_stage first, execute commands, then call end_stage
 //        At the end of the frame step, all commands buffers will be merged and executed by the
-//        rendering stages graph Stages must be registered and setup before using deferred
+//        rendering stages. Also, stages must be registered and setup before using staged
 //        functions. (see below)
 //
 // Rule #1: in a worker threads, always end_stage before spawning and waiting for
 //          another job because the command-buffer may change on thread-switch and drawing will be
 //          messed up
-//          Example:
+//          Example of misuse:
 //              { // dispatched job (worker-thread)
 //                  job_dispatch(..);
 //                  begin_stage(..)
@@ -251,55 +249,25 @@ typedef struct sjson_context sjson_context;    // shader_parse_reflection
 //                  draw(..)
 //                  end_stage(..)
 //              }
-// Rule #2: if you are submitting commands in other worker threads (sx_job_t dispatch jobs),
-//          make sure you wait for them to complete before frame ends.
-//          because there is no synchronization between main-thread command merge and worker threads
-//          So the rule is for rendering jobs, you must dispatch and wait within a single frame
-//          Example:
-//              {   // dispatched job (worker-thread)
-//                  begin_stage(..)
-//                  begin_pass(..);
-//                  draw(..)
-//                  end_stage(..)
-//              }
 //
-//              {   // main thread (game update)
-//                  update();
-//                  render();   // dispatches rendering jobs
-//                  job_wait_and_del(rendering_jobs);
-//              }
-//
-// Rule #3: Do not destroy graphics objects (buffers/shaders/textures) during rendering work
+// Rule #2: Do not destroy graphics objects (buffers/shaders/textures) during rendering work
 //          This is actually like the multi-threaded asset usage pattern (see asset.h)
 //          You should only destroy graphics objects when they are not being rendered or used
 //
-// Here's multi-threaded command-queue work flow for clarification:
-//      engine:frame {
-//          execute_command_buffers();  // render data from previous frame
-//          update_input();
-//          update_plugins();
-//          update_game() {
-//              update_my_stuff();
-//              spawn_some_render_jobs();
-//              do_whatever();
-//          }
-//      }
-//
-// As you can see in the pseudo-code above, execute_command_buffers() happens at the start of the
-// frame with the render-data submitted from the previous frame.
-// So it's your responsibility to not destroy graphics resources where they are used in the
-// current frame
+// Rule #3: The commands will be submitted to GPU at the end of the frame update automatically
+//          But, you can use `presend_commands` and `commit_commands` to submit commands early
+//          and prevent the GPU driver from doing too much work at the end. see below:
 // 
-// Note: Difference between immediate and staged API is that staged API queues the draw commands
-//       and submits them to the GPU at the begining of the _next_ frame. So the rendering will have
-//       one frame latency, but the work load will be more balanced between CPU and GPU.
-//       But immediate mode API sends commands directly to the GPU to and will be synced at the 
-//       end of the current frame. So latency is lower, but it does not have multi-threading
-//       capabilities.
-//       The trade-off is that in theory, staged API will perform better in high detail scenes where 
-//       there is lots of draws, especially if you use multi-threaded rendering. But in immediate 
-//       API, the rendering latency is lower but would waste cycles waiting for GPU thus perform 
-//       worse in high complexity scenes.
+// Common multi-threaded usage pattern is like as follows:
+//  
+// [thread #1]   ->             |---draw---|                       |---draw---|
+// [thread #2]   ->             |---draw---|                       |---draw---|
+// [thread #3]   ->             |---draw---|                       |---draw---|
+// [game update] -> ----dispatch+---draw---|wait+present---dispatch+commit----|wait---draw--- <- end
+//                                                  |                    |                         |
+//  present called when no drawing is being done <-/                     |                         |
+//       commit called during drawing (main thread) but after present <-/                          |
+//    when frame is done, the framework will automatically execute and flush remaining commands <-/
 //
 typedef struct rizz_api_gfx_draw {
     bool (*begin)(rizz_gfx_stage stage);
@@ -332,6 +300,17 @@ typedef struct rizz_api_gfx {
     rizz_gfx_backend (*backend)(void);
     bool (*GL_family)();
     void (*reset_state_cache)(void);
+
+    // multi-threading
+    // swaps the command buffers, makes previously submitted commands visible to `commit_commands`
+    // NOTE: care must be taken when calling this function, first of all, it should be called on 
+    //       the main thread. And should never be called when rendering jobs are running or 
+    //       undefined behviour will occur. see documentation for more info.
+    void (*present_commands)();
+    // call this function to submit queued commands to the gpu. it will be also called automatically 
+    // at the end of the frame. User must call `present_commands` before making this call
+    // NOTE: should call this function only on the main thread. see documentation for more info.
+    void (*commit_commands)();
 
     // resource creation, destruction and updating
     sg_buffer (*make_buffer)(const sg_buffer_desc* desc);
@@ -449,15 +428,11 @@ typedef struct rizz_api_gfx {
 } rizz_api_gfx;
 
 #ifdef RIZZ_INTERNAL_API
-typedef struct rizz__gfx_cmdbuffer rizz__gfx_cmdbuffer;
 bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_profile);
 void rizz__gfx_release();
 void rizz__gfx_trace_reset_frame_stats();
-rizz__gfx_cmdbuffer* rizz__gfx_create_command_buffer(const sx_alloc* alloc);
-void rizz__gfx_destroy_command_buffer(rizz__gfx_cmdbuffer* cb);
-int rizz__gfx_execute_command_buffers();
+void rizz__gfx_execute_command_buffers_final();
 void rizz__gfx_update();
-void rizz__gfx_commit();
-
+void rizz__gfx_commit_gpu();
 RIZZ_API rizz_api_gfx the__gfx;
 #endif

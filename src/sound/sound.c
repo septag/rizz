@@ -687,13 +687,13 @@ static bool snd__init()
 
     // we have a command buffer for each worker thread
     g_snd.cmd_buffers =
-        sx_malloc(g_snd_alloc, sizeof(snd__cmdbuffer*) * the_core->job_num_workers());
+        sx_malloc(g_snd_alloc, sizeof(snd__cmdbuffer*) * the_core->job_num_threads());
     if (!g_snd.cmd_buffers) {
         sx_out_of_memory();
         return false;
     }
-    g_snd.num_cmdbuffers = the_core->job_num_workers();
-    sx_memset(g_snd.cmd_buffers, 0x0, sizeof(snd__cmdbuffer*) * the_core->job_num_workers());
+    g_snd.num_cmdbuffers = the_core->job_num_threads();
+    sx_memset(g_snd.cmd_buffers, 0x0, sizeof(snd__cmdbuffer*) * the_core->job_num_threads());
     the_core->tls_register("snd_cmdbuffer", NULL, snd__cmdbuffer_init);
 
     return true;

@@ -139,11 +139,8 @@ typedef struct rizz__core {
     char logfile[32];
     uint32_t app_ver;
 
-    rizz__core_tmpalloc* tmp_allocs;         // count: num_workers
-    rizz__gfx_cmdbuffer** gfx_cmdbuffers;    // count: num_workers
-    sx_tls tmp_allocs_tls;
-    sx_tls cmdbuffer_tls;
-    int num_workers;
+    rizz__core_tmpalloc* tmp_allocs;         // count: num_threads
+    int num_threads;
 
     Remotery* rmt;
     rizz__core_cmd* console_cmds;    // sx_array
@@ -454,12 +451,8 @@ static void rizz__job_thread_init_cb(sx_job_context* ctx, int thread_index, uint
     sx_unused(user);
     sx_unused(ctx);
 
-    int worker_index = thread_index + 1;    // 0 is rreserved for main-thread
-    sx_tls_set(g_core.tmp_allocs_tls, &g_core.tmp_allocs[worker_index]);
-    sx_tls_set(g_core.cmdbuffer_tls, g_core.gfx_cmdbuffers[worker_index]);
-
     char name[32];
-    sx_snprintf(name, sizeof(name), "Thread #%d", worker_index);
+    sx_snprintf(name, sizeof(name), "Thread #%d", thread_index + 1 /* 0 is for main-thread */);
     rmt_SetCurrentThreadName(name);
 }
 
@@ -777,8 +770,8 @@ bool rizz__core_init(const rizz_config* conf)
         sx_max(1, num_worker_threads);    // we should have at least one worker thread
 
     // Temp allocators
-    g_core.num_workers = num_worker_threads + 1;    // include the main-thread
-    g_core.tmp_allocs = sx_malloc(alloc, sizeof(rizz__core_tmpalloc) * g_core.num_workers);
+    g_core.num_threads = num_worker_threads + 1;    // include the main-thread
+    g_core.tmp_allocs = sx_malloc(alloc, sizeof(rizz__core_tmpalloc) * g_core.num_threads);
     if (!g_core.tmp_allocs) {
         sx_out_of_memory();
         return false;
@@ -786,10 +779,7 @@ bool rizz__core_init(const rizz_config* conf)
     int tmp_size = (int)sx_align_mask(
         conf->tmp_mem_max > 0 ? conf->tmp_mem_max * 1024 : DEFAULT_TMP_SIZE, sx_os_pagesz() - 1);
 
-    g_core.tmp_allocs_tls = sx_tls_create();
-    sx_assert(g_core.tmp_allocs_tls);
-
-    for (int i = 0; i < g_core.num_workers; i++) {
+    for (int i = 0; i < g_core.num_threads; i++) {
         rizz__core_tmpalloc* t = &g_core.tmp_allocs[i];
         void* mem = sx_virtual_commit(sx_virtual_reserve(tmp_size), tmp_size);
         if (!mem) {
@@ -799,8 +789,22 @@ bool rizz__core_init(const rizz_config* conf)
         sx_stackalloc_init(&t->stack_alloc, mem, tmp_size);
         t->offset_stack = NULL;
     }
-    sx_tls_set(g_core.tmp_allocs_tls, &g_core.tmp_allocs[0]);
-    rizz_log_info("(init) temp memory: %dx%d kb", g_core.num_workers, tmp_size / 1024);
+    rizz_log_info("(init) temp memory: %dx%d kb", g_core.num_threads, tmp_size / 1024);
+
+    // job dispatcher
+    g_core.jobs = sx_job_create_context(
+        alloc, &(sx_job_context_desc){ .num_threads = num_worker_threads,
+                                       .max_fibers = conf->job_max_fibers,
+                                       .fiber_stack_sz = conf->job_stack_size * 1024,
+                                       .thread_init_cb = rizz__job_thread_init_cb,
+                                       .thread_shutdown_cb = rizz__job_thread_shutdown_cb });
+    if (!g_core.jobs) {
+        rizz_log_error("initializing job dispatcher failed");
+        return false;
+    }
+    rizz_log_info("(init) jobs: threads=%d, max_fibers=%d, stack_size=%dkb",
+                  sx_job_num_worker_threads(g_core.jobs), conf->job_max_fibers,
+                  conf->job_stack_size);
 
     // reflection
     if (!rizz__refl_init(rizz__alloc(RIZZ_MEMID_REFLECT), 0)) {
@@ -865,36 +869,7 @@ bool rizz__core_init(const rizz_config* conf)
         return false;
     }
 
-    // create command buffers for each thread and their tls variable
-    g_core.cmdbuffer_tls = sx_tls_create();
-    sx_assert(g_core.cmdbuffer_tls);
-    g_core.gfx_cmdbuffers = sx_malloc(alloc, sizeof(rizz_gfx_cmdbuffer*) * g_core.num_workers);
-    if (!g_core.gfx_cmdbuffers) {
-        sx_out_of_memory();
-        return false;
-    }
-    for (int i = 0; i < g_core.num_workers; i++) {
-        g_core.gfx_cmdbuffers[i] =
-            rizz__gfx_create_command_buffer(rizz__alloc(RIZZ_MEMID_GRAPHICS));
-        sx_assert(g_core.gfx_cmdbuffers[i]);
-    }
-    sx_tls_set(g_core.cmdbuffer_tls, g_core.gfx_cmdbuffers[0]);
     rizz_log_info("(init) graphics: %s", k__gfx_driver_names[the__gfx.backend()]);
-
-    // job dispatcher
-    g_core.jobs = sx_job_create_context(
-        alloc, &(sx_job_context_desc){ .num_threads = num_worker_threads,
-                                       .max_fibers = conf->job_max_fibers,
-                                       .fiber_stack_sz = conf->job_stack_size * 1024,
-                                       .thread_init_cb = rizz__job_thread_init_cb,
-                                       .thread_shutdown_cb = rizz__job_thread_shutdown_cb });
-    if (!g_core.jobs) {
-        rizz_log_error("initializing job dispatcher failed");
-        return false;
-    }
-    rizz_log_info("(init) jobs: threads=%d, max_fibers=%d, stack_size=%dkb",
-                  sx_job_num_worker_threads(g_core.jobs), conf->job_max_fibers,
-                  conf->job_stack_size);
 
     // coroutines
     g_core.coro =
@@ -961,12 +936,6 @@ void rizz__core_release()
     if (g_core.coro)
         sx_coro_destroy_context(g_core.coro, alloc);
 
-    // destroy gfx command-buffers (per-thread)
-    for (int i = 0; i < g_core.num_workers; i++) {
-        rizz__gfx_destroy_command_buffer(g_core.gfx_cmdbuffers[i]);
-    }
-    sx_free(alloc, g_core.gfx_cmdbuffers);
-
 #if !SX_PLATFORM_ANDROID && !SX_PLATFORM_IOS
     rizz__asset_save_meta_cache();
 #endif
@@ -987,7 +956,7 @@ void rizz__core_release()
     sx_array_free(alloc, g_core.console_cmds);
 
     if (g_core.tmp_allocs) {
-        for (int i = 0; i < g_core.num_workers; i++) {
+        for (int i = 0; i < g_core.num_threads; i++) {
             void* mem = g_core.tmp_allocs[i].stack_alloc.ptr;
             if (mem)
                 sx_virtual_release(mem, g_core.tmp_allocs[i].stack_alloc.size);
@@ -995,11 +964,6 @@ void rizz__core_release()
         }
         sx_free(alloc, g_core.tmp_allocs);
     }
-
-    if (g_core.tmp_allocs_tls)
-        sx_tls_destroy(g_core.tmp_allocs_tls);
-    if (g_core.cmdbuffer_tls)
-        sx_tls_destroy(g_core.cmdbuffer_tls);
 
     if (RIZZ_CONFIG_DEBUG_MEMORY) {
         for (int i = 0; i < _RIZZ_MEMID_COUNT; i++) {
@@ -1046,7 +1010,7 @@ void rizz__core_frame()
     rizz__gfx_trace_reset_frame_stats();
 
     // reset temp allocators
-    for (int i = 0, c = g_core.num_workers; i < c; i++) {
+    for (int i = 0, c = g_core.num_threads; i < c; i++) {
         sx_stackalloc_reset(&g_core.tmp_allocs[i].stack_alloc);
     }
 
@@ -1060,38 +1024,36 @@ void rizz__core_frame()
     // update plugins and application
     rizz__plugin_update(dt);
 
-    rizz__gfx_execute_command_buffers();    // TEMP
+    // execute remaining commands from the 'staged' API
+    rizz__gfx_execute_command_buffers_final();
+
+    // draw imgui stuff
     the_imgui = the__plugin.get_api_byname("imgui", 0);
     if (the_imgui) {
         the_imgui->Render();
     }
 
-    rizz__gfx_commit();
+    rizz__gfx_commit_gpu();
 
     ++g_core.frame_idx;
 }
 
 static const sx_alloc* rizz__core_tmp_alloc_push()
 {
-    rizz__core_tmpalloc* talloc = sx_tls_get(g_core.tmp_allocs_tls);
+    rizz__core_tmpalloc* talloc = &g_core.tmp_allocs[sx_job_thread_index(g_core.jobs)];
     sx_array_push(rizz__alloc(RIZZ_MEMID_CORE), talloc->offset_stack, talloc->stack_alloc.offset);
     return &talloc->stack_alloc.alloc;
 }
 
 static void rizz__core_tmp_alloc_pop()
 {
-    rizz__core_tmpalloc* talloc = sx_tls_get(g_core.tmp_allocs_tls);
+    rizz__core_tmpalloc* talloc = &g_core.tmp_allocs[sx_job_thread_index(g_core.jobs)];
     if (sx_array_count(talloc->offset_stack)) {
         int last_offset = sx_array_last(talloc->offset_stack);
         sx_array_pop_last(talloc->offset_stack);
         talloc->stack_alloc.offset = last_offset;
         talloc->stack_alloc.last_ptr_offset = 0;
     }
-}
-
-rizz_gfx_cmdbuffer* rizz__core_gfx_cmdbuffer()
-{
-    return (rizz_gfx_cmdbuffer*)sx_tls_get(g_core.cmdbuffer_tls);
 }
 
 static uint32_t rizz__rand()
@@ -1129,9 +1091,15 @@ static bool rizz__job_test_and_del(sx_job_t job)
     return sx_job_test_and_del(g_core.jobs, job);
 }
 
-static int rizz__job_num_workers()
+static int rizz__job_num_threads()
 {
-    return g_core.num_workers;
+    return g_core.num_threads;
+}
+
+static int rizz__job_thread_index() 
+{
+    sx_assert(g_core.jobs);
+    return sx_job_thread_index(g_core.jobs);
 }
 
 static void rizz__begin_profile_sample(const char* name, uint32_t flags, uint32_t* hash_cache)
@@ -1159,15 +1127,15 @@ static void rizz__get_mem_info(rizz_mem_info* info)
                                                     .peak = t->peak };
     }
 
-    int num_temp_allocs = sx_min(g_core.num_workers, RIZZ_MAX_TEMP_ALLOCS);
-    for (int i = 0; i < g_core.num_workers && i < num_temp_allocs; i++) {
+    int num_temp_allocs = sx_min(g_core.num_threads, RIZZ_MAX_TEMP_ALLOCS);
+    for (int i = 0; i < g_core.num_threads && i < num_temp_allocs; i++) {
         info->temp_allocs[i] =
             (rizz_linalloc_info){ .offset = g_core.tmp_allocs[i].stack_alloc.offset,
                                   .size = g_core.tmp_allocs[i].stack_alloc.size,
                                   .peak = g_core.tmp_allocs[i].stack_alloc.peak };
     }
 
-    info->num_temp_allocs = g_core.num_workers;
+    info->num_temp_allocs = g_core.num_threads;
     info->heap = g_core.heap_size;
     info->heap_max = g_core.heap_max;
     info->heap_count = g_core.heap_count;
@@ -1265,7 +1233,8 @@ rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .job_dispatch = rizz__job_dispatch,
                             .job_wait_and_del = rizz__job_wait_and_del,
                             .job_test_and_del = rizz__job_test_and_del,
-                            .job_num_workers = rizz__job_num_workers,
+                            .job_num_threads = rizz__job_num_threads,
+                            .job_thread_index = rizz__job_thread_index,
                             .coro_invoke = rizz__coro_invoke,
                             .coro_end = rizz__coro_end,
                             .coro_wait = rizz__coro_wait,

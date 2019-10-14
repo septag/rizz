@@ -67,6 +67,9 @@
 ### Changed
 - [ ] try to use <sys/sem.h> instead of posix semaphores
 - [x] BREAKING: external macro APIS (rizz_log_xxxx) are now same as internal ones (api variable is defined in header)
+- [x] Improved GPU command buffers multi-threaded submission
+- [ ] Investigate and check if stage lock (`stage_lk`) is actually required
+- [ ] BREAKING: graphic helper functions/renderers should take any API
 
 ### Fixed
 - [x] fix sx_matx_inv 
