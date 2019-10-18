@@ -312,7 +312,9 @@ function(glslcc__target_compile_shaders target_name file_type source_files)
         
         set(args ${args} --silent)
         set(args ${args} --lang=${shader_lang})
-        set(args ${args} --profile=${shader_ver})
+        if (shader_ver)
+            set(args ${args} --profile=${shader_ver})
+        endif()
         set(args ${args} --reflect)
 
         if (${file_type} STREQUAL "h")
@@ -341,6 +343,7 @@ function(glslcc__target_compile_shaders target_name file_type source_files)
         string(TOUPPER ${shader_lang} shader_lang_upper)
 
         file(RELATIVE_PATH output_relpath ${CMAKE_CURRENT_SOURCE_DIR} ${output_filepath})
+
         add_custom_command(
             OUTPUT ${output_filepath}
             COMMAND ${glslcc_path}
