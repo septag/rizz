@@ -11,6 +11,7 @@
 //
 #include "config.h"
 
+#include "basisut.h"
 #include "rizz/app.h"
 #include "rizz/asset.h"
 #include "rizz/core.h"
@@ -527,13 +528,17 @@ static inline sg_pixel_format rizz__texture_get_texture_format(ddsktx_format fmt
     // clang-format on
 }
 
+typedef struct basisut_transcode_data {
+    basisut_transcoder_texture_format fmt;
+    int mip_size[SG_MAX_MIPMAPS];
+} basisut_transcode_data;
+
 static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_params* params,
                                                      const void* metadata)
 {
     const sx_alloc* alloc = params->alloc ? params->alloc : g_gfx_alloc;
     const rizz_texture_info* info = metadata;
 
-    // TODO: allocate and cache texture data for later restoring (android+ES2)
     rizz_texture* tex = sx_malloc(alloc, sizeof(rizz_texture));
     if (!tex || info->mem_size_bytes == 0) {
         sx_out_of_memory();
@@ -542,8 +547,79 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
     tex->img = the__gfx.alloc_image();
     sx_memcpy(&tex->info, info, sizeof(*info));
 
-    return (rizz_asset_load_data){ .obj = { .ptr = tex },
-                                   .user = sx_malloc(g_gfx_alloc, sizeof(sg_image_desc)) };
+    void* user_data;
+
+    // create extra buffer for basis transcoding
+    char ext[32];
+    sx_os_path_ext(ext, sizeof(ext), params->path);
+    if (sx_strequalnocase(ext, ".basis")) {
+        const rizz_texture_load_params* tparams = params->params;
+        sx_assert(tparams->fmt != _SG_PIXELFORMAT_DEFAULT && "fmt must be defined for basis files");
+
+        basisut_transcoder_texture_format basis_fmt;
+        // clang-format off
+        switch (tparams->fmt) {
+        case SG_PIXELFORMAT_ETC2_RGB8:          basis_fmt = cTFETC1;            break;
+        case SG_PIXELFORMAT_ETC2_RGB8A1:        basis_fmt = cTFETC2;            break;
+        case SG_PIXELFORMAT_BC1_RGBA:           basis_fmt = cTFBC1;             break;
+        case SG_PIXELFORMAT_BC3_RGBA:           basis_fmt = cTFBC3;             break;
+        case SG_PIXELFORMAT_BC4_R:              basis_fmt = cTFBC4;             break;
+        case SG_PIXELFORMAT_BC5_RG:             basis_fmt = cTFBC5;             break;
+        case SG_PIXELFORMAT_BC7_RGBA:           basis_fmt = cTFBC7_M5;          break;
+        case SG_PIXELFORMAT_PVRTC_RGBA_4BPP:    basis_fmt = cTFPVRTC1_4_RGBA;   break;
+        case SG_PIXELFORMAT_PVRTC_RGB_4BPP:     basis_fmt = cTFPVRTC1_4_RGB;    break;
+        case SG_PIXELFORMAT_RGBA8:              basis_fmt = cTFRGBA32;          break;
+        default:
+            rizz_log_warn(
+                "parsing texture '%s' failed. transcoding of specified format is not supported");
+            sx_assert(0);
+            return (rizz_asset_load_data){ .obj = { 0 } };
+        }
+        // clang-format on
+
+        tex->info.format = tparams->fmt;
+        int w = tex->info.width;
+        int h = tex->info.height;
+        int num_mips = tex->info.mips;
+        int num_images = tex->info.layers;
+
+        int total_sz = sizeof(sg_image_desc) + sizeof(basisut_transcode_data);
+        int mip_size[SG_MAX_MIPMAPS];
+
+        // calculate the buffer sizes needed for holding all the output pixels
+        sx_assert(num_mips < SG_MAX_MIPMAPS);
+
+        for (int i = 0; i < num_images; i++) {
+            for (int mip = 0; mip < num_mips; mip++) {
+                if (mip >= tparams->first_mip) {
+                    int image_sz = _sg_surface_pitch(tparams->fmt, w, h);
+                    mip_size[mip - tparams->first_mip] = image_sz;
+                    total_sz += image_sz;
+                }
+
+                w >>= 1;
+                h >>= 1;
+                if (w == 0 || h == 0) {
+                    break;
+                }
+            }
+        }
+
+        uint8_t* buff = (uint8_t*)sx_malloc(g_gfx_alloc, total_sz);
+        if (!buff) {
+            sx_out_of_memory();
+            return (rizz_asset_load_data){ .obj = { 0 } };
+        }
+        user_data = buff;
+        buff += sizeof(sg_image_desc);
+        basisut_transcode_data* transcode_data = (basisut_transcode_data*)buff;
+        transcode_data->fmt = basis_fmt;
+        sx_memcpy(transcode_data->mip_size, mip_size, sizeof(mip_size));
+    } else {
+        user_data = sx_malloc(g_gfx_alloc, sizeof(sg_image_desc));
+    }
+
+    return (rizz_asset_load_data){ .obj = { .ptr = tex }, .user = user_data };
 }
 
 static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params,
@@ -559,7 +635,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
         .width = tex->info.width,
         .height = tex->info.height,
         .layers = tex->info.layers,
-        .num_mipmaps = tex->info.mips,
+        .num_mipmaps = sx_max(1, tex->info.mips - tparams->first_mip),
         .pixel_format = tex->info.format,
         .min_filter = tparams->min_filter,
         .mag_filter = tparams->mag_filter,
@@ -570,46 +646,85 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
 
     char ext[32];
     sx_os_path_ext(ext, sizeof(ext), params->path);
-    if (sx_strequalnocase(ext, ".dds") || sx_strequalnocase(ext, ".ktx")) {
+
+    if (sx_strequalnocase(ext, ".basis")) {
+        sx_assert(tparams->fmt != _SG_PIXELFORMAT_DEFAULT);
+        if (tparams->fmt != _SG_PIXELFORMAT_DEFAULT &&
+            basisut_start_transcoding(mem->data, mem->size)) {
+
+            // we have extra buffers for this particular type of file
+            basisut_transcode_data* transcode_data = (basisut_transcode_data*)(desc + 1);
+            uint8_t* transcode_buff = (uint8_t*)(transcode_data + 1);
+
+            int num_mips = tex->info.mips;
+            int num_images = tex->info.type == SG_IMAGETYPE_2D ? 1 : tex->info.layers;
+            int bytes_per_block =
+                basisut_format_is_uncompressed(transcode_data->fmt)
+                    ? basisut_get_uncompressed_bytes_per_pixel(transcode_data->fmt)
+                    : (int)basisut_get_bytes_per_block(transcode_data->fmt);
+
+            for (int i = 0; i < num_images; i++) {
+                for (int mip = tparams->first_mip; mip < num_mips; mip++) {
+                    int dst_mip = mip - tparams->first_mip;
+                    int mip_size = transcode_data->mip_size[dst_mip];
+                    basisut_transcode_image_level(mem->data, mem->size, 0, mip, transcode_buff,
+                                                  mip_size / bytes_per_block, transcode_data->fmt,
+                                                  0);
+                    desc->content.subimage[i][dst_mip].ptr = transcode_buff;
+                    desc->content.subimage[i][dst_mip].size = mip_size;
+                    transcode_buff += mip_size;
+                }
+            }
+        } else {
+            rizz_log_warn("parsing texture '%s' failed", params->path);
+            return false;
+        }
+    } else if (sx_strequalnocase(ext, ".dds") || sx_strequalnocase(ext, ".ktx")) {
         ddsktx_texture_info tc = { 0 };
         ddsktx_error err;
         if (ddsktx_parse(&tc, mem->data, mem->size, &err)) {
+            sx_assert(tc.num_mips <= SG_MAX_MIPMAPS);
+
             switch (tex->info.type) {
             case SG_IMAGETYPE_2D: {
-                for (int mip = 0; mip < tc.num_mips; mip++) {
+                for (int mip = tparams->first_mip; mip < tc.num_mips; mip++) {
+                    int dst_mip = mip - tparams->first_mip;
                     ddsktx_sub_data sub_data;
                     ddsktx_get_sub(&tc, &sub_data, mem->data, mem->size, 0, 0, mip);
-                    desc->content.subimage[0][mip].ptr = sub_data.buff;
-                    desc->content.subimage[0][mip].size = sub_data.size_bytes;
+                    desc->content.subimage[0][dst_mip].ptr = sub_data.buff;
+                    desc->content.subimage[0][dst_mip].size = sub_data.size_bytes;
                 }
             } break;
             case SG_IMAGETYPE_CUBE: {
                 for (int face = 0; face < DDSKTX_CUBE_FACE_COUNT; face++) {
-                    for (int mip = 0; mip < tc.num_mips; mip++) {
+                    for (int mip = tparams->first_mip; mip < tc.num_mips; mip++) {
+                        int dst_mip = mip - tparams->first_mip;
                         ddsktx_sub_data sub_data;
                         ddsktx_get_sub(&tc, &sub_data, mem->data, mem->size, 0, face, mip);
-                        desc->content.subimage[face][mip].ptr = sub_data.buff;
-                        desc->content.subimage[face][mip].size = sub_data.size_bytes;
+                        desc->content.subimage[face][dst_mip].ptr = sub_data.buff;
+                        desc->content.subimage[face][dst_mip].size = sub_data.size_bytes;
                     }
                 }
             } break;
             case SG_IMAGETYPE_3D: {
                 for (int depth = 0; depth < tc.depth; depth++) {
-                    for (int mip = 0; mip < tc.num_mips; mip++) {
+                    for (int mip = tparams->first_mip; mip < tc.num_mips; mip++) {
+                        int dst_mip = mip - tparams->first_mip;
                         ddsktx_sub_data sub_data;
                         ddsktx_get_sub(&tc, &sub_data, mem->data, mem->size, 0, depth, mip);
-                        desc->content.subimage[depth][mip].ptr = sub_data.buff;
-                        desc->content.subimage[depth][mip].size = sub_data.size_bytes;
+                        desc->content.subimage[depth][dst_mip].ptr = sub_data.buff;
+                        desc->content.subimage[depth][dst_mip].size = sub_data.size_bytes;
                     }
                 }
             } break;
             case SG_IMAGETYPE_ARRAY: {
                 for (int array = 0; array < tc.num_layers; array++) {
-                    for (int mip = 0; mip < tc.num_mips; mip++) {
+                    for (int mip = tparams->first_mip; mip < tc.num_mips; mip++) {
+                        int dst_mip = mip - tparams->first_mip;
                         ddsktx_sub_data sub_data;
                         ddsktx_get_sub(&tc, &sub_data, mem->data, mem->size, array, 0, mip);
-                        desc->content.subimage[array][mip].ptr = sub_data.buff;
-                        desc->content.subimage[array][mip].size = sub_data.size_bytes;
+                        desc->content.subimage[array][dst_mip].ptr = sub_data.buff;
+                        desc->content.subimage[array][dst_mip].size = sub_data.size_bytes;
                     }
                 }
             } break;
@@ -648,7 +763,10 @@ static void rizz__texture_on_finalize(rizz_asset_load_data* data,
     char ext[32];
     sx_os_path_ext(ext, sizeof(ext), params->path);
     the__gfx.init_image(tex->img, desc);
-    if (!sx_strequalnocase(ext, ".dds") && !sx_strequalnocase(ext, ".ktx")) {
+
+    // TODO: do something better in case of stbi
+    if (!sx_strequalnocase(ext, ".dds") && !sx_strequalnocase(ext, ".ktx") &&
+        !sx_strequalnocase(ext, ".basis")) {
         sx_assert(desc->content.subimage[0][0].ptr);
         stbi_image_free((void*)desc->content.subimage[0][0].ptr);
     }
@@ -686,18 +804,29 @@ static void rizz__texture_on_read_metadata(void* metadata, const rizz_asset_load
     rizz_texture_info* info = metadata;
     char ext[32];
     sx_os_path_ext(ext, sizeof(ext), params->path);
-    if (sx_strequalnocase(ext, ".dds") || sx_strequalnocase(ext, ".ktx")) {
+    if (sx_strequalnocase(ext, ".basis")) {
+        if (basisut_validate_header(mem->data, mem->size)) {
+            bool r = basisut_image_info(mem->data, mem->size, info);
+            sx_unused(r);
+            sx_assert(r);
+        } else {
+            rizz_log_warn("reading texture '%s' metadata failed", params->path);
+            sx_memset(info, 0x0, sizeof(rizz_texture_info));
+        }
+    } else if (sx_strequalnocase(ext, ".dds") || sx_strequalnocase(ext, ".ktx")) {
         ddsktx_texture_info tc = { 0 };
         ddsktx_error err;
+        const rizz_texture_load_params* tparams = params->params;
         if (ddsktx_parse(&tc, mem->data, mem->size, &err)) {
             info->type = rizz__texture_get_type(&tc);
             info->format = rizz__texture_get_texture_format(tc.format);
-            if (info->type == SG_IMAGETYPE_ARRAY)
+            if (info->type == SG_IMAGETYPE_ARRAY) {
                 info->layers = tc.num_layers;
-            else if (info->type == SG_IMAGETYPE_3D)
+            } else if (info->type == SG_IMAGETYPE_3D) {
                 info->depth = tc.depth;
-            else
+            } else {
                 info->layers = 1;
+            }
             info->mem_size_bytes = tc.size_bytes;
             info->width = tc.width;
             info->height = tc.height;
@@ -921,6 +1050,9 @@ static void rizz__texture_init()
         "rizz_texture_load_params", sizeof(rizz_texture_load_params), "rizz_texture_info",
         sizeof(rizz_texture_info), (rizz_asset_obj){ .ptr = &g_gfx.tex_mgr.white_tex },
         (rizz_asset_obj){ .ptr = &g_gfx.tex_mgr.white_tex }, 0);
+
+    // init basis
+    basisut_init();
 }
 
 static void rizz__texture_release()
@@ -931,6 +1063,7 @@ static void rizz__texture_release()
         the__gfx.destroy_image(g_gfx.tex_mgr.black_tex.img);
     if (g_gfx.tex_mgr.checker_tex.img.id)
         the__gfx.destroy_image(g_gfx.tex_mgr.checker_tex.img);
+    basisut_release();
 }
 
 static sg_image rizz__texture_white()
@@ -3075,6 +3208,12 @@ static bool rizz__gfx_GL_family()
            backend == SG_BACKEND_GLES3;
 }
 
+static bool rizz__gfx_GLES_family()
+{
+    sg_backend backend = sg_query_backend();
+    return backend == SG_BACKEND_GLES2 || backend == SG_BACKEND_GLES3;
+}
+
 static inline uint8_t* rizz__cb_alloc_params_buff(rizz__gfx_cmdbuffer* cb, int size, int* offset)
 {
     uint8_t* ptr = sx_array_add(cb->alloc, cb->params_buff,
@@ -4034,7 +4173,7 @@ void rizz__gfx_execute_command_buffers_final()
 }
 
 // Note: presents the `feed` buffer for rendering. must run on main thread
-//       we couldn't automate this. because there could be multiple jobs doing rendering and the 
+//       we couldn't automate this. because there could be multiple jobs doing rendering and the
 //       user should be aware to call this when no other threaded rendering is being done
 static void rizz__gfx_swap_command_buffers()
 {
@@ -4051,7 +4190,7 @@ static void rizz__gfx_commit()
 
     // render commands should be ready for submition
     if (rizz__gfx_execute_command_buffer(g_gfx.cmd_buffers_render) > 0) {
-        rizz__gfx_commit_gpu();     // TODO: test this on iOS/MacOS
+        rizz__gfx_commit_gpu();    // TODO: test this on iOS/MacOS
     }
 }
 
@@ -4469,6 +4608,7 @@ rizz_api_gfx the__gfx = {
                 .end_profile_sample   = rizz__cb_end_profile_sample },
     .backend                    = rizz__gfx_backend,
     .GL_family                  = rizz__gfx_GL_family,
+    .GLES_family                = rizz__gfx_GLES_family,
     .reset_state_cache          = sg_reset_state_cache,
     .make_buffer                = rizz__make_buffer,
     .make_image                 = sg_make_image,

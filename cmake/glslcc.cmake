@@ -1,3 +1,40 @@
+# glslcc.cmake: helper for integrating glslcc compilation into cmake projects
+# Copyright 2019 Sepehr Taghdisian. All rights reserved. 
+# https://github.com/septag/glslcc
+#
+# Functions:
+#   glslcc_target_compile_shaders(target source_files):
+#       compile shaders and add them to the target. it will generate normal shaders (glsl/hlsl/msl files + reflection.json)
+#   glslcc_target_compile_shaders_h(target source_files):
+#       compile shaders as C header and add them to the target
+#   glslcc_target_compile_shaders_sgs(target source_files):
+#       compile shaders as SGS file. SGS files are binary files that integrate multiple shaders with their reflection info    
+#       This function packs multiple input files into single SGS file
+#       for example: glslcc_target_compile_shaders_sgs(target myshader.vert myshader.frag) will build a single myshader.sgs file
+#
+# Variables:
+#   GLSLCC_BIN: Path to glslcc compiler on the system. If not provided, the module tries to find it in 
+#               the system path automatically
+# The following variables can also be set as source file properties using `set_source_files_properties` function
+#   GLSLCC_OUTPUT_DIRECTORY: output directory for files. 
+#   GLSLCC_COMPILE_DEFINITIONS: set global compile definitions. seperated with semicolon. 
+#   GLSLCC_INCLUDE_DIRS: include directories. seperated with semicolon.
+#   GLSLCC_COMPILE_FLAGS: Extra compilation flags
+#   GLSLCC_OUTPUT_FILENAME: output filename (default is source_file.shader_lang.h). can only be used as source file property
+#   GLSLCC_SOURCE_GROUP: source group used in visual-studio and xcode IDEs
+#   GLSLCC_SHADER_LANG: shader language. if not provided, the value wil be selected automatically:
+#                       windows: hlsl
+#                       android/rpi: gles
+#                       iOS/MacOS: msl (metal)
+#                       linux: glsl
+#   GLSLCC_SHADER_VERSION: shader version. if not provided, the value will be selected automatically: 
+#                       windows: 50 (HLSL 5.0)
+#                       android: 300 (OpenGL-ES 3.0)
+#                       rpi: 200 (OpenGL-ES 2.0)
+#                       linux: 330 (OpenGL 3.3)
+#
+
+# determine compilation platform
 string(TOLOWER ${CMAKE_SYSTEM_NAME} glslcc_platform_name)
 if (IOS)
     set(glslcc_platform_name "ios")
@@ -50,6 +87,15 @@ endif()
 define_property(SOURCE PROPERTY GLSLCC_OUTPUT_DIRECTORY 
                 BRIEF_DOCS "Compiled shader output directory"
                 FULL_DOCS "Compiled shader output directory")
+# PROPERTY: include direcotries
+define_property(SOURCE PROPERTY GLSLCC_INCLUDE_DIRS 
+                BRIEF_DOCS "Compiled shader include directories"
+                FULL_DOCS "Compiled shader include directories, seperated with comma")   
+# PROPERTY: compile definitions
+define_property(SOURCE PROPERTY GLSLCC_COMPILE_DEFINITIONS 
+                BRIEF_DOCS "Compiled shader compile definitions"
+                FULL_DOCS "Compiled shader output directory, seperated with comma")                   
+
 # PROPERTY:  shader language (optional)
 define_property(SOURCE PROPERTY GLSLCC_SHADER_LANG 
                 BRIEF_DOCS "Target language"
@@ -61,11 +107,15 @@ define_property(SOURCE PROPERTY GLSLCC_SHADER_VERSION
 # PROPERTY: shader_output_file (optional)
 define_property(SOURCE PROPERTY GLSLCC_OUTPUT_FILENAME
                 BRIEF_DOCS "Compiled shader output filename"
-                FULL_DOCS "Compiled shader output filename. Default is SOURCE_FILE.EXT.h")
+                FULL_DOCS "Compiled shader output filename. Default is SOURCE_FILE.EXT")
 # PROPERTY: extra flags (optional)
 define_property(SOURCE PROPERTY GLSLCC_COMPILE_FLAGS 
                 BRIEF_DOCS "Extra compile flags"
                 FULL_DOCS "Extra compile flags")
+# PROPERTY: 
+define_property(SOURCE PROPERTY GLSLCC_SOURCE_GROUP 
+                BRIEF_DOCS "Shader Source group"
+                FULL_DOCS "Shader Source group, child subdirectories will be created for each output type")
 
 function(join_array output glue values)
     string (REGEX REPLACE "([^\\]|^);" "\\1${glue}" tmp_str "${values}")
@@ -85,14 +135,36 @@ function(glslcc__target_compile_shaders target_name file_type source_files)
             message(FATAL_ERROR "only 'sgs' shader types support multiple shader stages")
         endif()
 
-
-        get_source_file_property(defs ${first_file} COMPILE_DEFINITIONS) 
-        get_source_file_property(include_dirs ${first_file} INCLUDE_DIRECTORIES) 
+        get_source_file_property(defs ${first_file} GLSLCC_COMPILE_DEFINITIONS) 
+        get_source_file_property(include_dirs ${first_file} GLSLCC_INCLUDE_DIRS) 
         get_source_file_property(output_dir ${first_file} GLSLCC_OUTPUT_DIRECTORY)
         get_source_file_property(shader_lang ${first_file} GLSLCC_SHADER_LANG)
         get_source_file_property(shader_ver ${first_file} GLSLCC_SHADER_VERSION)
         get_source_file_property(output_filename ${first_file} GLSLCC_OUTPUT_FILENAME)
         get_source_file_property(compile_flags ${first_file} GLSLCC_COMPILE_FLAGS)
+        get_source_file_property(source_group_name ${first_file} GLSLCC_SOURCE_GROUP)
+        
+        if (GLSLCC_COMPILE_DEFINITIONS)
+            set(defs ${defs} ${GLSLCC_COMPILE_DEFINITIONS})
+        endif()
+        if (GLSLCC_INCLUDE_DIRS)
+            set(include_dirs ${include_dirs} ${GLSLCC_INCLUDE_DIRS})
+        endif()
+        if (NOT output_dir)
+            set(output_dir ${GLSLCC_OUTPUT_DIRECTORY})
+        endif()
+        if (NOT shader_lang)
+            set(shader_lang ${GLSLCC_SHADER_LANG})
+        endif()
+        if (NOT shader_ver)
+            set(shader_ver ${GLSLSCC_SHADER_VERSION})
+        endif()
+        if (GLSLCC_COMPILE_FLAGS)
+            set(compile_flags ${compile_flags} ${GLSLCC_COMPILE_FLAGS})
+        endif()
+        if (NOT source_group_name)
+            set(source_group_name ${GLSLCC_SOURCE_GROUP})
+        endif()
 
         if (include_dirs)
             set(include_dirs_abs)
@@ -100,13 +172,15 @@ function(glslcc__target_compile_shaders target_name file_type source_files)
                 if (IS_DIRECTORY ${include_dir})
                     get_filename_component(include_dir ${include_dir} ABSOLUTE)
                     list(APPEND include_dirs_abs ${include_dir})
+                else()
+                    message(WARNING "invalid directory: ${include_dir}")
                 endif()
             endforeach()
             join_array(include_dirs_abs $<SEMICOLON> "${include_dirs_abs}")
         endif()
 
         if (defs)
-            join_array(defs ";" "${defs}")
+            join_array(defs $<SEMICOLON> "${defs}")
         endif()
 
         # default shader languages
@@ -144,6 +218,14 @@ function(glslcc__target_compile_shaders target_name file_type source_files)
             endif()
         endif()
 
+        if (NOT output_dir)
+            get_filename_component(output_dir ${first_file} DIRECTORY)
+            if (NOT output_dir)
+                set(output_dir ".")
+            endif()            
+            get_filename_component(output_dir ${output_dir} ABSOLUTE)
+        endif()
+
         if (output_dir)
             # append system_name to output_path
             set(output_dir ${output_dir}/${shader_lang})
@@ -170,7 +252,7 @@ function(glslcc__target_compile_shaders target_name file_type source_files)
         endif()
 
         if (${glslcc_platform_name} STREQUAL "windows")
-            set(arg_bin "--bin")
+            set(arg_bin --bin $<IF:$<CONFIG:DEBUG>,--debug,--optimize>)
         endif()
 
         # determine the file from the extension
@@ -270,6 +352,11 @@ function(glslcc__target_compile_shaders target_name file_type source_files)
 
         # add to source files
         target_sources(${target_name} PRIVATE "${source_files_sub}" ${output_relpath})
+
+        if (source_group_name)
+            source_group(${source_group_name} FILES ${source_files_sub})
+            source_group(${source_group_name}\\${file_type} FILES ${output_relpath})
+        endif()
     endforeach()    
 endfunction()
 

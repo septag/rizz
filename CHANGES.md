@@ -63,6 +63,7 @@
 - [ ] EXPERIMENTAL: sokol debugging support for compute-shader
 - [ ] EXPERIMENTAL: OpenGL compute-shader support
 - [x] Added `shader_get`/`texture_get` and other asset getters to all asset types
+- [x] Added basis texture support
 
 ### Changed
 - [ ] try to use <sys/sem.h> instead of posix semaphores

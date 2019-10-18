@@ -9,6 +9,7 @@ Demonstrates basic application setup. Just clears the view with blue color.
 - Loading shaders (shaders built with `glslcc` under `/tools` directory)
 - Setting up buffers and pipelines
 - Basic ortho camera setup
+- Loading .basis textures
   
 ![02-quad](screenshots/02-quad.png)
 

@@ -136,6 +136,7 @@ typedef struct rizz_texture_load_params {
     sg_wrap wrap_u;
     sg_wrap wrap_v;
     sg_wrap wrap_w;
+    sg_pixel_format fmt;    // request image format. only valid for basis files
 } rizz_texture_load_params;
 
 // texture metadata
@@ -299,6 +300,7 @@ typedef struct rizz_api_gfx {
 
     rizz_gfx_backend (*backend)(void);
     bool (*GL_family)();
+    bool (*GLES_family)();
     void (*reset_state_cache)(void);
 
     // multi-threading

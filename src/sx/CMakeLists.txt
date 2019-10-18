@@ -84,7 +84,8 @@ set(INCLUDE_FILES ../../include/sx/allocator.h
                   ../../include/sx/bheap.h
                   ../../include/sx/tlsf-alloc.h
                   ../../include/sx/simd.h
-                  ../../include/sx/ringbuffer.h)
+                  ../../include/sx/ringbuffer.h
+                  ../../include/sx/lockless.h)
 
 # Remove fiber functions for now on emscripten
 if (EMSCRIPTEN)

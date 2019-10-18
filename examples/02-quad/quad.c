@@ -103,12 +103,11 @@ static bool init()
         NULL, 0, NULL, 0);
 
     // pipeline
-    sg_pipeline_desc pip_desc = {
-        .layout.buffers[0].stride = 20,    // sizeof each vertex (float[3] + float[2])
-        .shader = the_gfx->shader_get(g_quad.shader)->shd,
-        .index_type = SG_INDEXTYPE_UINT16,
-        .rasterizer = { .cull_mode = SG_CULLMODE_BACK }
-    };
+    sg_pipeline_desc pip_desc = { .layout.buffers[0].stride =
+                                      20,    // sizeof each vertex (float[3] + float[2])
+                                  .shader = the_gfx->shader_get(g_quad.shader)->shd,
+                                  .index_type = SG_INDEXTYPE_UINT16,
+                                  .rasterizer = { .cull_mode = SG_CULLMODE_BACK } };
     g_quad.pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
         the_gfx->shader_get(g_quad.shader), &pip_desc, &k_vertex_layout));
 
@@ -116,9 +115,14 @@ static bool init()
     g_quad.bindings =
         (sg_bindings){ .vertex_buffers[0] = g_quad.vbuff, .index_buffer = g_quad.ibuff };
 
-    g_quad.img = the_asset->load("texture", "/assets/textures/logo.png",
-                                 &(rizz_texture_load_params){ 0 }, 0, NULL, 0);
-
+    // note: we should define .fmt property when loading .basis textures
+    bool etc_fmt = the_gfx->GLES_family() || the_gfx->backend() == RIZZ_GFX_BACKEND_METAL_IOS;
+    g_quad.img =
+        the_asset->load("texture", "/assets/textures/logo.basis",
+                        &(rizz_texture_load_params){ .fmt = etc_fmt ? SG_PIXELFORMAT_ETC2_RGB8
+                                                                    : SG_PIXELFORMAT_BC1_RGBA },
+                        0, NULL, 0);
+    
     // camera
     // projection: setup for ortho, total-width = 10 units
     // view: Z-UP Y-Forward (like blender)

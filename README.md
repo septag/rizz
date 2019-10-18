@@ -35,6 +35,7 @@ see [CHANGELOG](CHANGES.md) for latest changes, new features and bug fixes.
 - *Portable shaders*: Write shaders once in GLSL, toolset will automatically translate the shader to other APIs.
 - *Multi-threaded GPU command-buffer*: Draw commands can be submitted by multiple threads with _staged_ API.
 - *Compute shader support (Experimental)*: Experimental compute-shader support, currently only under Direct3D, more backends will be added.
+- [basis_universal](https://github.com/BinomialLLC/basis_universal) texture format support
 
 #### Plugins
 - [imgui](src/imgui): Dear-imgui plugin with some utility API
@@ -71,7 +72,6 @@ But as the engine is in it's early age, the current platforms are built and test
   - libasound2-dev (if you are planning to build `sound` plugin)
 - __iOS__: For iOS, there is a python script [ios.py](scripts/build-tools/ios.py) which takes care of initializing iOS project 
 
-
 #### CMake options
 - **BUNDLE** (default=0, android/ios=1):  
     - `BUNDLE=0` indicates that _rizz_ is built as an executable host which runs the game 
@@ -95,6 +95,13 @@ But as the engine is in it's early age, the current platforms are built and test
   On msvc compiler, enables `/d2cgsummary` flag for detailed compile stats. Read more about this 
   [here](https://aras-p.info/blog/2017/10/23/Best-unknown-MSVC-flag-d2cgsummary/)
 
+#### shaders
+shader builds can be integrated into cmake builds with ```glslcc_target_compile_shaders_xxx``` family of cmake functions. see [cmake/glslcc.cmake](cmake/glslcc.cmake) file for more information.
+
+#### ispc 
+ISPC files can be integrated into cmake builds with ```ispc_target_add_files``` cmake function.
+see [cmake/ispc.cmake](cmake/ispc.cmake) file for more information.
+
 ## Usage
 To build a compatible game/app module for _rizz_ you should do the following steps:
 - Add `rizz_plugin_decl_main(proj_name, plugin, event) {}` to your source. This is actually the main 
@@ -110,8 +117,16 @@ To build a compatible game/app module for _rizz_ you should do the following ste
   So all documentation and examples of *sokol_gfx* also applies here, except the little concept called _stages_ that is 
   explained in [graphics.h](https://github.com/septag/rizz/blob/master/include/rizz/graphics.h) in more detail.
 
-Currently, the documentation is lacking. But you can check out the `/examples` directory and figure out 
-how to get started.
+Currently, the documentation is lacking. But you can check out the `/examples` directory and figure out how to get started.
+
+#### basisu
+_rizz_ comes with basis texture support. It is recommended that you use basis textures especially for 
+multiplatform projects. But you should provide `.fmt` flag in `rizz_texture_load_params` struct when 
+loading these files, because this format should be transcoded to any platform specific formats on load.  
+To make .basis files, `basisu` binary is provided in `tools` directory. You can also provide your own 
+binary by fetching the source from it's [repo](https://github.com/BinomialLLC/basis_universal) and build it.
+
+I will also develop additional python tools to recusively encode directories of images into basis files.
 
 ## Open-Source libraries used
 #### Primarily developed for rizz
@@ -133,6 +148,7 @@ how to get started.
 - [sort](https://github.com/swenson/sort): Sorting routine implementations in "template" C
 - [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo): 3D gizmo for imgui
 - [gainput](https://github.com/jkuhlmann/gainput): Input library for games
+- [basis_universal](https://github.com/BinomialLLC/basis_universal): Basis Universal GPU Texture Codec
 
 [License (BSD 2-clause)](https://github.com/septag/rizz/blob/master/LICENSE)
 --------------------------------------------------------------------------

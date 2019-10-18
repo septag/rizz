@@ -36,6 +36,7 @@ endif()
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(glslcc)
 include(bundle)
+include(ispc)
 
 function(rizz__remove_compile_options dst_var compile_flags flags)
     separate_arguments(flags)
@@ -71,23 +72,18 @@ function(rizz__add_example proj_name)
 	ENDIF()
 
     # compile default shaders
+    set(GLSLCC_SOURCE_GROUP "shaders")
     if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/${proj_name}/${source_file}.vert AND 
         EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/${proj_name}/${source_file}.frag)
         set(shaders examples/${proj_name}/${source_file}.vert 
                     examples/${proj_name}/${source_file}.frag)
         set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "examples/assets/shaders")
-	    if (CMAKE_BUILD_TYPE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-            set_source_files_properties(${shaders} PROPERTIES GLSLCC_COMPILE_FLAGS "--debug-bin")
-        endif()
         glslcc_target_compile_shaders_sgs(${proj_name} "${shaders}")
     endif()
     
     if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/examples/${proj_name}/${source_file}.comp)
         set(shaders examples/${proj_name}/${source_file}.comp) 
         set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "examples/assets/shaders")
-	    if (CMAKE_BUILD_TYPE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-            set_source_files_properties(${shaders} PROPERTIES GLSLCC_COMPILE_FLAGS "--debug-bin")
-        endif()
         glslcc_target_compile_shaders_sgs(${proj_name} "${shaders}")
     endif()
 
@@ -182,6 +178,7 @@ add_definitions(-D__STDC_FORMAT_MACROS)
 add_definitions(-D__STDC_CONSTANT_MACROS)
 if(MSVC)
     add_definitions(-D_ITERATOR_DEBUG_LEVEL=0)
+    add_definitions(-D_SECURE_SCL=0)
     add_definitions(-D_HAS_EXCEPTIONS=0)
     add_definitions(-D_CRT_SECURE_NO_WARNINGS=0)
 endif()
@@ -230,7 +227,8 @@ set(3rdparty_projects utf
                       imguizmo
                       remotery
                       efsw
-                      gainput)
+                      gainput
+                      basisu)
 
 if (NOT ENABLE_HOT_LOADING)
     list(REMOVE_ITEM 3rdparty_projects efsw)

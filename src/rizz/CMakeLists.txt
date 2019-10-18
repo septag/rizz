@@ -11,7 +11,9 @@ set(SOURCE_FILES config.h
                  camera.c 
                  http.c 
                  vfs.c 
-                 android.c)
+                 android.c
+                 basisut.cpp 
+                 basisut.h)
 
 set(INCLUDE_FILES ../../include/rizz/types.h
                   ../../include/rizz/app.h 
@@ -68,7 +70,7 @@ endif()
 
 # includes and extra compile flags
 target_include_directories(rizz PRIVATE ../../3rdparty)
-target_link_libraries(rizz PUBLIC sx PRIVATE remotery utf)
+target_link_libraries(rizz PUBLIC sx PRIVATE remotery utf basisu)
 target_compile_definitions(rizz PRIVATE -DRIZZ_INTERNAL_API) # Expose internal API structs when build the library
 if (ENABLE_HOT_LOADING)
     target_compile_definitions(rizz PRIVATE -DRIZZ_CONFIG_HOT_LOADING=1)
@@ -98,4 +100,3 @@ set(shaders shaders/debug.vert
             shaders/debug.frag)
 set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "shaders_h")
 glslcc_target_compile_shaders_h(rizz "${shaders}")
-

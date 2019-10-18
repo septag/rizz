@@ -11,6 +11,6 @@ set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "shade
 glslcc_target_compile_shaders_h(sprite "${shaders}")
 
 # recompile sprite shaders with WIREFRAME flag
-set_source_files_properties(${shaders} PROPERTIES COMPILE_DEFINITIONS "WIREFRAME" 
+set_source_files_properties(${shaders} PROPERTIES GLSLCC_COMPILE_DEFINITIONS "WIREFRAME" 
                                                   GLSLCC_OUTPUT_FILENAME "sprite_wire")
 glslcc_target_compile_shaders_h(sprite "${shaders}")
