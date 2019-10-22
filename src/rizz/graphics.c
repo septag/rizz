@@ -560,7 +560,8 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
         // clang-format off
         switch (tparams->fmt) {
         case SG_PIXELFORMAT_ETC2_RGB8:          basis_fmt = cTFETC1;            break;
-        case SG_PIXELFORMAT_ETC2_RGB8A1:        basis_fmt = cTFETC2;            break;
+        case SG_PIXELFORMAT_ETC2_RGBA8:         basis_fmt = cTFETC2;            break;
+        case SG_PIXELFORMAT_ETC2_RG11:          basis_fmt = cTFETC2_EAC_RG11;   break;
         case SG_PIXELFORMAT_BC1_RGBA:           basis_fmt = cTFBC1;             break;
         case SG_PIXELFORMAT_BC3_RGBA:           basis_fmt = cTFBC3;             break;
         case SG_PIXELFORMAT_BC4_R:              basis_fmt = cTFBC4;             break;
