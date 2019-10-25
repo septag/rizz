@@ -47,9 +47,9 @@ static const sx_alloc*      g_gfx_alloc = NULL;
 #if RIZZ_GRAPHICS_API_D3D==11
 #   define SOKOL_D3D11
 #   define rmt__begin_gpu_sample(_name, _hash)  \
-    (g_gfx.enable_profile ? RMT_OPTIONAL(RMT_USE_D3D11, _rmt_BeginD3D11Sample(_name, _hash)) : 0)
+    RMT_OPTIONAL(RMT_USE_D3D11, (g_gfx.enable_profile ? _rmt_BeginD3D11Sample(_name, _hash) : 0))
 #   define rmt__end_gpu_sample()                \
-    (g_gfx.enable_profile ? RMT_OPTIONAL(RMT_USE_D3D11, _rmt_EndD3D11Sample()) : 0)
+    RMT_OPTIONAL(RMT_USE_D3D11, (g_gfx.enable_profile ? _rmt_EndD3D11Sample() : 0))
 #elif RIZZ_GRAPHICS_API_METAL==1
 #   define SOKOL_METAL
 // disable profiling on metal, because it has some limitations. For example we can't micro-profile commands
@@ -73,9 +73,9 @@ static const sx_alloc*      g_gfx_alloc = NULL;
 #   include "flextGL/flextGL.h"
 #   define SOKOL_GLCORE33
 #   define rmt__begin_gpu_sample(_name, _hash)  \
-    (g_gfx.enable_profile ? RMT_OPTIONAL(RMT_USE_OPENGL, _rmt_BeginOpenGLSample(_name, _hash)) : 0)
+    RMT_OPTIONAL(RMT_USE_OPENGL, (g_gfx.enable_profile ? _rmt_BeginOpenGLSample(_name, _hash) : 0))
 #   define rmt__end_gpu_sample()                \
-    (g_gfx.enable_profile ? RMT_OPTIONAL(RMT_USE_OPENGL, _rmt_EndOpenGLSample()) : 0)
+    RMT_OPTIONAL(RMT_USE_OPENGL, (g_gfx.enable_profile ? _rmt_EndOpenGLSample() : 0))
 #else
 #   error "Platform graphics is not supported"
 #endif

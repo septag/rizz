@@ -66,6 +66,7 @@
 // History:
 //      1.0.0       First version. working Win32/Linux backends
 //      1.1.0       MacOS backend
+//      1.1.1       Minor fixes, eliminate gcc/clang warnings with -Wall
 //
 #ifndef __DMON_H__
 #define __DMON_H__
@@ -1314,11 +1315,13 @@ DMON_API_IMPL void dmon_deinit(void)
     _dmon_init = false;
 }
 
-_DMON_PRIVATE void dmon__fsevent_callback(ConstFSEventStreamRef streamRef, void* user_data,
+_DMON_PRIVATE void dmon__fsevent_callback(ConstFSEventStreamRef stream_ref, void* user_data,
                                           size_t num_events, void* event_paths,
                                           const FSEventStreamEventFlags event_flags[],
                                           const FSEventStreamEventId event_ids[])
 {
+    _DMON_UNUSED(stream_ref);
+
     union dmon__cast_userdata _userdata;
     _userdata.ptr = user_data;
     dmon_watch_id watch_id = dmon__make_id(_userdata.id);
