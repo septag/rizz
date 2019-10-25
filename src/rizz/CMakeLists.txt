@@ -76,7 +76,7 @@ target_compile_definitions(rizz PRIVATE -DRIZZ_INTERNAL_API) # Expose internal A
 if (ENABLE_HOT_LOADING)
     target_compile_definitions(rizz PRIVATE -DRIZZ_CONFIG_HOT_LOADING=1)
     if (APPLE)
-        target_link_libraries(sound PRIVATE "-framework CoreServices -framework CoreFoundation")
+        target_link_libraries(rizz PRIVATE "-framework CoreServices -framework CoreFoundation")
     endif()
 else()
     target_compile_definitions(rizz PRIVATE -DRIZZ_CONFIG_HOT_LOADING=0)
