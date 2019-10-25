@@ -4,45 +4,24 @@
 //
 #include "config.h"
 
-#include "rizz/core.h"
-#include "rizz/vfs.h"
 #include "rizz/android.h"
+#include "rizz/core.h"
 #include "rizz/ios.h"
-
-#if RIZZ_CONFIG_HOT_LOADING
-#    include "efsw/efsw.h"
-typedef enum efsw_action efsw_action;
-typedef enum efsw_error efsw_error;
-
-#   if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
-#       error "RIZZ_CONFIG_HOT_LOADING will not work under iOS/Android"
-#   endif
-#endif
+#include "rizz/vfs.h"
 
 #include "sx/allocator.h"
 #include "sx/array.h"
 #include "sx/io.h"
+#include "sx/lockless.h"
 #include "sx/os.h"
 #include "sx/string.h"
 #include "sx/threads.h"
-#include "sx/lockless.h"
 
 #if SX_PLATFORM_ANDROID
 #    include <android/asset_manager.h>
 #    include <android/asset_manager_jni.h>
 #    include <jni.h>
 #endif
-
-#if RIZZ_CONFIG_HOT_LOADING
-static void efsw__fileaction_cb(efsw_watcher watcher, efsw_watchid watchid, const char* dir,
-                                const char* filename, efsw_action action, const char* old_filename,
-                                void* param);
-
-typedef struct efsw__result {
-    efsw_action action;
-    char path[RIZZ_MAX_PATH];
-} efsw__result;
-#endif    // RIZZ_CONFIG_HOT_LOADING
 
 typedef enum { VFS_COMMAND_READ, VFS_COMMAND_WRITE } rizz__vfs_async_command;
 
@@ -76,8 +55,7 @@ typedef struct {
     char alias[RIZZ_MAX_PATH];
     int alias_len;
 #if RIZZ_CONFIG_HOT_LOADING
-    char efsw_root_dir[RIZZ_MAX_PATH];
-    efsw_watchid watch_id;
+    uint32_t watch_id;
 #endif
 } rizz__vfs_mount_point;
 
@@ -92,8 +70,7 @@ typedef struct {
     int quit;
 
 #if RIZZ_CONFIG_HOT_LOADING
-    efsw_watcher watcher;
-    sx_queue_spsc* efsw_queue;    // producer: efsw_cb, consumer: main, data: efsw__result
+    sx_queue_spsc* dmon_queue;    // producer: efsw_cb, consumer: main, data: efsw__result
 #endif
 
 #if SX_PLATFORM_IOS || SX_PLATFORM_ANDROID
@@ -111,6 +88,33 @@ typedef struct {
 } rizz__vfs;
 
 static rizz__vfs g_vfs;
+
+#if RIZZ_CONFIG_HOT_LOADING
+#    define DMON_IMPL
+#    define DMON_MALLOC(size) sx_malloc(g_vfs.alloc, size)
+#    define DMON_FREE(ptr) sx_free(g_vfs.alloc, ptr)
+#    define DMON_REALLOC(ptr, size) sx_realloc(g_vfs.alloc, ptr, size)
+#    include <stdio.h>
+#    define DMON_LOG_ERROR(s) rizz_log_error(s)
+#    ifndef NDEBUG
+#        define DMON_LOG_DEBUG(s) rizz_log_debug(s)
+#    else
+#        define DMON_LOG_DEBUG(s)
+#    endif
+#    define DMON_MAX_PATH RIZZ_MAX_PATH
+#    include "dmon/dmon.h"
+#    if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
+#        error "RIZZ_CONFIG_HOT_LOADING will not work under iOS/Android"
+#    endif
+
+static void dmon__event_cb(dmon_watch_id watch_id, dmon_action action, const char* rootdir,
+                           const char* filepath, const char* oldfilepath, void* user);
+
+typedef struct dmon__result {
+    dmon_action action;
+    char path[RIZZ_MAX_PATH];
+} dmon__result;
+#endif    // RIZZ_CONFIG_HOT_LOADING
 
 // Dummy callbacks
 void rizz__dummy_on_read_error(const char* uri)
@@ -213,7 +217,7 @@ static sx_mem_block* rizz__vfs_read(const char* path, rizz_vfs_flags flags, cons
         rizz_ios_resolve_path(g_vfs.assets_bundle, path + g_vfs.assets_alias_len, resolved_path,
                               sizeof(resolved_path));
     } else {
-        rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, flags);    
+        rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, flags);
     }
 #else
     rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, flags);
@@ -305,13 +309,7 @@ bool rizz__vfs_mount(const char* path, const char* alias)
         mp.alias_len = sx_strlen(mp.alias);
 
 #if RIZZ_CONFIG_HOT_LOADING
-        if (SX_PLATFORM_OSX) {
-            sx_os_path_abspath(mp.efsw_root_dir, sizeof(mp.efsw_root_dir), mp.path);
-        } else {
-            sx_strcpy(mp.efsw_root_dir, sizeof(mp.efsw_root_dir), mp.path);
-        }
-
-        mp.watch_id = efsw_addwatch(g_vfs.watcher, mp.path, efsw__fileaction_cb, 1, NULL);
+        mp.watch_id = dmon_watch(mp.path, dmon__event_cb, DMON_WATCHFLAGS_RECURSIVE, NULL).id;
 #endif
 
         // check that the mount path is not already registered
@@ -358,14 +356,10 @@ bool rizz__vfs_init(const sx_alloc* alloc)
         sx_thread_create(alloc, rizz__vfs_worker, NULL, 1024 * 1024, "rizz_vfs", NULL);
 
 #if RIZZ_CONFIG_HOT_LOADING
-    g_vfs.watcher = efsw_create(0);
-    if (!g_vfs.watcher) {
-        rizz_log_error("efsw: could not create context");
-        return false;
-    }
+    dmon_init();
 
-    g_vfs.efsw_queue = sx_queue_spsc_create(alloc, sizeof(efsw__result), 128);
-    if (!g_vfs.efsw_queue)
+    g_vfs.dmon_queue = sx_queue_spsc_create(alloc, sizeof(dmon__result), 128);
+    if (!g_vfs.dmon_queue)
         return false;
 #endif    // RIZZ_CONFIG_HOT_LOADING
 
@@ -398,31 +392,18 @@ void rizz__vfs_release()
         sx_queue_spsc_destroy(g_vfs.res_queue, g_vfs.alloc);
 
 #if RIZZ_CONFIG_HOT_LOADING
-    if (g_vfs.watcher) {
-        for (int i = 0, c = sx_array_count(g_vfs.mounts); i < c; i++) {
-            rizz__vfs_mount_point* mp = &g_vfs.mounts[i];
-            if (mp->watch_id)
-                efsw_removewatch_byid(g_vfs.watcher, mp->watch_id);
-        }
-        efsw_release(g_vfs.watcher);
-    }
+    dmon_deinit();
 
-    if (g_vfs.efsw_queue)
-        sx_queue_spsc_destroy(g_vfs.efsw_queue, g_vfs.alloc);
+    if (g_vfs.dmon_queue) {
+        sx_queue_spsc_destroy(g_vfs.dmon_queue, g_vfs.alloc);
+    }
 #endif
 
     sx_array_free(g_vfs.alloc, g_vfs.mounts);
     g_vfs.alloc = NULL;
 }
 
-void rizz__vfs_watch_mounts()
-{
-#if RIZZ_CONFIG_HOT_LOADING
-    if (sx_array_count(g_vfs.mounts)) {
-        efsw_watch(g_vfs.watcher);
-    }
-#endif
-}
+void rizz__vfs_watch_mounts() {}
 
 void rizz__vfs_async_update()
 {
@@ -449,18 +430,11 @@ void rizz__vfs_async_update()
     }
 
 #if RIZZ_CONFIG_HOT_LOADING
-    if (g_vfs.watcher) {
-        // process efsw callbacks
-        efsw__result efsw_res;
-        while (sx_queue_spsc_consume(g_vfs.efsw_queue, &efsw_res)) {
-            switch (efsw_res.action) {
-            case EFSW_MODIFIED:
-                g_vfs.callbacks.on_modified(efsw_res.path);
-                break;
-            default:
-                sx_assert(0 && "not implemented");
-                break;
-            }
+    // process efsw callbacks
+    dmon__result dmon_res;
+    while (sx_queue_spsc_consume(g_vfs.dmon_queue, &dmon_res)) {
+        if (dmon_res.action == DMON_ACTION_MODIFY) {
+            g_vfs.callbacks.on_modified(dmon_res.path);
         }
     }
 #endif
@@ -530,41 +504,44 @@ static uint64_t rizz__vfs_last_modified(const char* path)
 }
 
 #if RIZZ_CONFIG_HOT_LOADING
-static void efsw__fileaction_cb(efsw_watcher watcher, efsw_watchid watchid, const char* dir,
-                                const char* filename, efsw_action action, const char* old_filename,
-                                void* param)
+static void dmon__event_cb(dmon_watch_id watch_id, dmon_action action, const char* rootdir,
+                           const char* filepath, const char* oldfilepath, void* user)
 {
-    sx_unused(param);
-    sx_unused(old_filename);
-    sx_unused(watchid);
-    sx_unused(watcher);
+    sx_unused(oldfilepath);
+    sx_unused(watch_id);
+    sx_unused(user);
 
     switch (action) {
-    case EFSW_MODIFIED: {
-        efsw__result r = { .action = action };
-        sx_os_path_join(r.path, sizeof(r.path), dir, filename);
-        sx_file_info info = sx_os_stat(r.path);
+    case DMON_ACTION_MODIFY: {
+        dmon__result r = (dmon__result){ r.action = action };
+        char abs_filepath[RIZZ_MAX_PATH];
+        sx_strcpy(abs_filepath, sizeof(abs_filepath), rootdir);
+        sx_strcat(abs_filepath, sizeof(abs_filepath), filepath);
+        sx_file_info info = sx_os_stat(abs_filepath);
+        // TODO: when directory ignore added to dmon, remove this check
         if (info.type == SX_FILE_TYPE_REGULAR && info.size > 0) {
             for (int i = 0, c = sx_array_count(g_vfs.mounts); i < c; i++) {
                 const rizz__vfs_mount_point* mp = &g_vfs.mounts[i];
-                if (sx_strstr(r.path, mp->efsw_root_dir) == r.path) {
-                    char relpath[RIZZ_MAX_PATH];
-                    sx_os_path_relpath(relpath, sizeof(relpath), r.path, mp->efsw_root_dir);
-                    sx_os_path_join(r.path, sizeof(r.path), mp->alias, relpath);
-                    if (SX_PLATFORM_WINDOWS)
-                        sx_os_path_unixpath(r.path, sizeof(r.path), r.path);
+                if (mp->watch_id == watch_id.id) {
+                    sx_strcpy(r.path, sizeof(r.path), mp->alias);
+                    int alias_len = sx_strlen(r.path);
+                    if (alias_len > 0 && r.path[alias_len - 1] != '/') {
+                        sx_assert((alias_len + 1) < sizeof(r.path));
+                        r.path[alias_len] = '/';
+                        r.path[alias_len + 1] = '\0';
+                    }
+
+                    sx_strcat(r.path, sizeof(r.path), filepath);
                     break;
                 }
             }
 
-            if (r.path[0])
-                sx_queue_spsc_produce_and_grow(g_vfs.efsw_queue, &r, g_vfs.alloc);
+            if (r.path[0]) {
+                sx_queue_spsc_produce_and_grow(g_vfs.dmon_queue, &r, g_vfs.alloc);
+            }
         }
-        break;
-    }
-    case EFSW_DELETE:
-    case EFSW_ADD:
-    case EFSW_MOVED:
+    } break;
+    default:
         break;
     }
 }

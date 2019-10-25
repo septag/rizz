@@ -584,7 +584,8 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
         int num_mips = tex->info.mips;
         int num_images = tex->info.layers;
 
-        int total_sz = sizeof(sg_image_desc) + sizeof(basisut_transcode_data);
+        size_t total_sz =
+            sizeof(sg_image_desc) + basisut_transcoder_bytesize() + sizeof(basisut_transcode_data);
         int mip_size[SG_MAX_MIPMAPS];
 
         // calculate the buffer sizes needed for holding all the output pixels
@@ -612,7 +613,7 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
             return (rizz_asset_load_data){ .obj = { 0 } };
         }
         user_data = buff;
-        buff += sizeof(sg_image_desc);
+        buff += sizeof(sg_image_desc) + basisut_transcoder_bytesize();
         basisut_transcode_data* transcode_data = (basisut_transcode_data*)buff;
         transcode_data->fmt = basis_fmt;
         sx_memcpy(transcode_data->mip_size, mip_size, sizeof(mip_size));
@@ -650,11 +651,14 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
 
     if (sx_strequalnocase(ext, ".basis")) {
         sx_assert(tparams->fmt != _SG_PIXELFORMAT_DEFAULT);
-        if (tparams->fmt != _SG_PIXELFORMAT_DEFAULT &&
-            basisut_start_transcoding(mem->data, mem->size)) {
+        if (tparams->fmt != _SG_PIXELFORMAT_DEFAULT) {
+            uint8_t* transcoder_obj_buffer = (uint8_t*)(desc + 1);
+            void* trans = basisut_start_transcoding(transcoder_obj_buffer, mem->data, mem->size);
+            sx_assert(trans);
 
             // we have extra buffers for this particular type of file
-            basisut_transcode_data* transcode_data = (basisut_transcode_data*)(desc + 1);
+            basisut_transcode_data* transcode_data =
+                (basisut_transcode_data*)(transcoder_obj_buffer + basisut_transcoder_bytesize());
             uint8_t* transcode_buff = (uint8_t*)(transcode_data + 1);
 
             int num_mips = tex->info.mips;
@@ -668,9 +672,11 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
                 for (int mip = tparams->first_mip; mip < num_mips; mip++) {
                     int dst_mip = mip - tparams->first_mip;
                     int mip_size = transcode_data->mip_size[dst_mip];
-                    basisut_transcode_image_level(mem->data, mem->size, 0, mip, transcode_buff,
-                                                  mip_size / bytes_per_block, transcode_data->fmt,
-                                                  0);
+                    bool r = basisut_transcode_image_level(
+                        trans, mem->data, mem->size, 0, mip, transcode_buff,
+                        mip_size / bytes_per_block, transcode_data->fmt, 0);
+                    sx_unused(r);
+                    sx_assert(r && "basis transcode failed");
                     desc->content.subimage[i][dst_mip].ptr = transcode_buff;
                     desc->content.subimage[i][dst_mip].size = mip_size;
                     transcode_buff += mip_size;
@@ -987,6 +993,9 @@ static void rizz__texture_init()
     rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGBA_4BPP);
     rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RGB8);
     rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RGB8A1);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RGBA8);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RG11);
+    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RG11SN);
 
     rizz_refl_field(rizz_texture_info, sg_image_type, type, "texture type");
     rizz_refl_field(rizz_texture_info, sg_pixel_format, format, "texture pixel format");
@@ -1053,7 +1062,7 @@ static void rizz__texture_init()
         (rizz_asset_obj){ .ptr = &g_gfx.tex_mgr.white_tex }, 0);
 
     // init basis
-    basisut_init();
+    basisut_init(g_gfx_alloc);
 }
 
 static void rizz__texture_release()

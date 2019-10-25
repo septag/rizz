@@ -88,16 +88,18 @@ typedef enum basisut_transcoder_texture_format {
 extern "C" {
 #endif
 
-void basisut_init(); 
+typedef struct sx_alloc sx_alloc;
+void basisut_init(const sx_alloc* alloc);
 void basisut_release();
 
+size_t basisut_transcoder_bytesize();
+void* basisut_start_transcoding(void* memptr, const void* data, uint32_t data_size);
 bool basisut_validate_header(const void* data, uint32_t data_size);
 bool basisut_image_info(const void* data, uint32_t data_size, rizz_texture_info* info);
-bool basisut_start_transcoding(const void* data, uint32_t data_size);
-bool basisut_transcode_image_level(const void* data, uint32_t data_size, uint32_t image_index,
-                           uint32_t level_index, void* pOutput_blocks,
-                           uint32_t output_blocks_buf_size_in_blocks_or_pixels,
-                           basisut_transcoder_texture_format fmt, uint32_t decode_flags);
+bool basisut_transcode_image_level(void* transcoder, const void* data, uint32_t data_size,
+                                   uint32_t image_index, uint32_t level_index, void* pOutput_blocks,
+                                   uint32_t output_blocks_buf_size_in_blocks_or_pixels,
+                                   basisut_transcoder_texture_format fmt, uint32_t decode_flags);
 uint32_t basisut_get_bytes_per_block(basisut_transcoder_texture_format fmt);
 bool basisut_format_is_uncompressed(basisut_transcoder_texture_format fmt);
 int basisut_get_uncompressed_bytes_per_pixel(basisut_transcoder_texture_format fmt);

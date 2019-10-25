@@ -43,7 +43,8 @@ set(EXTERNAL_INCLUDES ../../3rdparty/sokol/sokol_app.h
                       ../../3rdparty/stb/stb_image.h
                       ../../3rdparty/stb/stb_image_resize.h
                       ../../3rdparty/sort/sort.h
-                      ../../3rdparty/mattias/http.h)
+                      ../../3rdparty/mattias/http.h 
+                      ../../include/dmon/dmon.h)
 
 if (APPLE)
     set_source_files_properties(app.c graphics.c PROPERTIES COMPILE_FLAGS "-fobjc-arc -fmodules -x objective-c") 
@@ -74,7 +75,6 @@ target_link_libraries(rizz PUBLIC sx PRIVATE remotery utf basisu)
 target_compile_definitions(rizz PRIVATE -DRIZZ_INTERNAL_API) # Expose internal API structs when build the library
 if (ENABLE_HOT_LOADING)
     target_compile_definitions(rizz PRIVATE -DRIZZ_CONFIG_HOT_LOADING=1)
-    target_link_libraries(rizz PRIVATE efsw)
 else()
     target_compile_definitions(rizz PRIVATE -DRIZZ_CONFIG_HOT_LOADING=0)
 endif()

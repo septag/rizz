@@ -135,6 +135,7 @@ I will also develop additional python tools to recusively encode directories of 
 - [dds-ktx](https://github.com/septag/dds-ktx): Single header KTX/DDS reader
 - [sjson](https://github.com/septag/sjson): Fast and portable single-header C file Json encoder/decoder
 - [atlasc](https://github.com/septag/atlasc): Command-line tool that builds atlas texture from a bunch of input images.
+- [dmon](https://github.com/septag/dmon): Single header C99 portable library for monitoring directory changes.
 
 #### 3rdparties
 - [sokol](https://github.com/floooh/sokol): minimal cross-platform standalone C headers

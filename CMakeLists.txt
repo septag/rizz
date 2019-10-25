@@ -226,13 +226,8 @@ set(3rdparty_projects utf
                       cimgui
                       imguizmo
                       remotery
-                      efsw
                       gainput
                       basisu)
-
-if (NOT ENABLE_HOT_LOADING)
-    list(REMOVE_ITEM 3rdparty_projects efsw)
-endif()
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux" AND NOT RPI)
     list(APPEND 3rdparty_projects flextGL)
