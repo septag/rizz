@@ -526,7 +526,7 @@ static void dmon__event_cb(dmon_watch_id watch_id, dmon_action action, const cha
                     sx_strcpy(r.path, sizeof(r.path), mp->alias);
                     int alias_len = sx_strlen(r.path);
                     if (alias_len > 0 && r.path[alias_len - 1] != '/') {
-                        sx_assert((alias_len + 1) < sizeof(r.path));
+                        sx_assert((alias_len + 1) < (int)sizeof(r.path));
                         r.path[alias_len] = '/';
                         r.path[alias_len + 1] = '\0';
                     }
