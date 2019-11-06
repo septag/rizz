@@ -3,11 +3,8 @@
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
 
-#include "rizz/http.h"
-#include "config.h"
-#include "rizz/core.h"
+#include "internal.h"
 
-#include "sx/allocator.h"
 #include "sx/array.h"
 #include "sx/handle.h"
 #include "sx/string.h"
@@ -69,10 +66,10 @@ void rizz__http_release()
                 sx_handle_t handle = sx_handle_at(g_http.http_handles, i);
                 rizz__http* http = &g_http.https[sx_handle_index(handle)];
                 if (http->h) {
-                    rizz_log_warn("un-freed active http request: 0x%p", http->h);
+                    rizz__log_warn("un-freed active http request: 0x%p", http->h);
                     http_release(http->h);
                 } else if (http->params) {
-                    rizz_log_warn("un-freed http request: %s", http->params->url);
+                    rizz__log_warn("un-freed http request: %s", http->params->url);
                     sx_free(g_http.alloc, http->params);
                 }
             }

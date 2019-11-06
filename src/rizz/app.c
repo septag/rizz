@@ -3,14 +3,10 @@
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
 
-#include "rizz/app.h"
-#include "rizz/android.h"
-#include "rizz/core.h"
-#include "rizz/entry.h"
-#include "rizz/graphics.h"
+#include "internal.h"
+
 #include "rizz/ios.h"
 
-#include "sx/allocator.h"
 #include "sx/cmdline.h"
 #include "sx/os.h"
 #include "sx/string.h"
@@ -20,18 +16,18 @@
 #include "Remotery.h"
 
 // Choose api based on the platform
-#if SX_PLATFORM_WINDOWS
+#if RIZZ_GRAPHICS_API_D3D==11
 #    define SOKOL_D3D11
-#elif SX_PLATFORM_APPLE
+#elif RIZZ_GRAPHICS_API_METAL==1
 #    define SOKOL_METAL
-#elif SX_PLATFORM_RPI || SX_PLATFORM_EMSCRIPTEN
+#elif RIZZ_GRAPHICS_API_GLES==21
 #    define SOKOL_GLES2
-#elif SX_PLATFORM_ANDROID
+#elif RIZZ_GRAPHICS_API_GLES==30
 #    define SOKOL_GLES3
-#elif SX_PLATFORM_LINUX
+#elif RIZZ_GRAPHICS_API_GL==33
 #    define SOKOL_GLCORE33
 #else
-#    define SOKOL_GLCORE33
+#    error "Platform graphics is not supported"
 #endif
 
 #ifdef RIZZ_BUNDLE
@@ -64,7 +60,7 @@ SX_PRAGMA_DIAGNOSTIC_POP();
 #define SOKOL_FREE(p)       sx_free(g_app.alloc, p)
 #define SOKOL_CALLOC(n, s)  rizz__calloc(g_app.alloc ? g_app.alloc : sx_alloc_malloc(), n, s)
 #define SOKOL_ASSERT(c)     sx_assert(c)
-#define SOKOL_LOG(s)        rizz_log_debug(s)
+#define SOKOL_LOG(s)        rizz__log_debug(s)
 // clang-format on
 
 SX_PRAGMA_DIAGNOSTIC_PUSH();
@@ -114,7 +110,7 @@ static void rizz__app_init(void)
 
     // Initialize engine components
     if (!rizz__core_init(&g_app.conf)) {
-        rizz_log_error("core init failed");
+        rizz__log_error("core init failed");
         exit(-1);
     }
 
@@ -133,19 +129,19 @@ static void rizz__app_init(void)
     // add game
 #ifndef RIZZ_BUNDLE
     if (!rizz__plugin_load_abs(g_app.game_filepath, true, g_app.conf.plugins, num_plugins)) {
-        rizz_log_error("loading game plugin failed: %s", g_app.game_filepath);
+        rizz__log_error("loading game plugin failed: %s", g_app.game_filepath);
         exit(-1);
     }
 #else
     if (!rizz__plugin_load_abs(ENTRY_NAME, true, g_app.conf.plugins, num_plugins)) {
-        rizz_log_error("loading game plugin failed: %s", g_app.game_filepath);
+        rizz__log_error("loading game plugin failed: %s", g_app.game_filepath);
         exit(-1);
     }
 #endif
 
     // initialize all plugins
     if (!rizz__plugin_init_plugins()) {
-        rizz_log_error("initializing plugins failed");
+        rizz__log_error("initializing plugins failed");
         exit(-1);
     }
 }
@@ -198,7 +194,7 @@ static void rizz__app_event(const sapp_event* e)
 
 static void rizz__app_fail(const char* msg)
 {
-    rizz_log_error(msg);
+    rizz__log_error(msg);
 }
 
 static void rizz__app_show_help(sx_cmdline_context* cmdline)

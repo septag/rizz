@@ -1,13 +1,8 @@
+#include "rizz/imgui.h"
+#include "rizz/rizz.h"
+
 #include "rizz/sound.h"
 
-#include "rizz/app.h"
-#include "rizz/asset.h"
-#include "rizz/core.h"
-#include "rizz/imgui.h"
-#include "rizz/plugin.h"
-#include "rizz/reflect.h"
-
-#include "sx/allocator.h"
 #include "sx/array.h"
 #include "sx/atomic.h"
 #include "sx/handle.h"
@@ -1773,7 +1768,7 @@ static void snd__execute_command_buffers()
     }
 }
 
-static rizz_snd_source snd__source_get(rizz_asset snd_asset) 
+static rizz_snd_source snd__source_get(rizz_asset snd_asset)
 {
     return (rizz_snd_source){ (uint32_t)the_asset->obj(snd_asset).id };
 }
@@ -1799,7 +1794,7 @@ static rizz_api_snd the__snd = { .queued = { .play = snd__cb_play,
                                  .source_set_looping = snd__source_set_looping,
                                  .source_set_singleton = snd__source_set_singleton,
                                  .source_set_volume = snd__source_set_volume,
-                                 .source_get = snd__source_get, 
+                                 .source_get = snd__source_get,
                                  .show_debugger = snd__show_debugger };
 
 rizz_plugin_decl_main(sound, plugin, e)

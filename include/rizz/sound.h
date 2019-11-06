@@ -13,8 +13,6 @@
 //
 #pragma once
 
-#include "rizz/types.h"
-
 #define RIZZ_SND_DEVICE_SAMPLE_RATE (44100)
 #define RIZZ_SND_DEVICE_NUM_CHANNELS 2
 #define RIZZ_SND_DEVICE_BUFFER_FRAMES 2048

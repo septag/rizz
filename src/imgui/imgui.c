@@ -5,13 +5,10 @@
 
 #include "rizz/imgui.h"
 #include "rizz/imgui-extra.h"
+#include "rizz/rizz.h"
 
 #include "imguizmo/ImGuizmo.h"
 
-#include "rizz/app.h"
-#include "rizz/core.h"
-#include "rizz/graphics.h"
-#include "rizz/plugin.h"
 
 #include "sx/allocator.h"
 #include "sx/array.h"

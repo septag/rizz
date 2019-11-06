@@ -3,12 +3,8 @@
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
 
-#include "config.h"
+#include "internal.h"
 
-#include "rizz/core.h"
-#include "rizz/plugin.h"
-
-#include "sx/allocator.h"
 #include "sx/array.h"
 #include "sx/os.h"
 #include "sx/string.h"
@@ -37,14 +33,6 @@ typedef rizz_plugin cr_plugin;
 #    define CR_OTHER RIZZ_PLUGIN_CRASH_OTHER
 #endif
 
-// Keep the list of all APIs (and their headers! ouch)
-#include "rizz/app.h"
-#include "rizz/asset.h"
-#include "rizz/camera.h"
-#include "rizz/graphics.h"
-#include "rizz/http.h"
-#include "rizz/reflect.h"
-#include "rizz/vfs.h"
 static void* g_native_apis[_RIZZ_API_COUNT] = { &the__core,  &the__plugin, &the__app,
                                                 &the__gfx,   &the__refl,   &the__vfs,
                                                 &the__asset, &the__camera, &the__http };
@@ -101,7 +89,7 @@ bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path)
         sx_strcpy(g_plugin.plugin_path, sizeof(g_plugin.plugin_path), plugin_path);
         sx_os_path_normpath(g_plugin.plugin_path, sizeof(g_plugin.plugin_path), plugin_path);
         if (!sx_os_path_isdir(g_plugin.plugin_path)) {
-            rizz_log_error("Plugin path '%s' is incorrect", g_plugin.plugin_path);
+            rizz__log_error("Plugin path '%s' is incorrect", g_plugin.plugin_path);
             return false;
         }
     } else {
@@ -135,7 +123,7 @@ void* rizz__plugin_get_api_byname(const char* name, uint32_t version)
         }
     }
 
-    rizz_log_warn("API '%s' version '%d' not found", name, version);
+    rizz__log_warn("API '%s' version '%d' not found", name, version);
     return NULL;
 }
 
@@ -219,7 +207,7 @@ static bool rizz__plugin_order_dependencies()
 
     // check for errors
     if (count != num_plugins) {
-        rizz_log_error("the following plugins' dependencies didn't met:");
+        rizz__log_error("the following plugins' dependencies didn't met:");
         for (int i = 0; i < num_plugins; i++) {
             rizz__plugin_item* item = &g_plugin.plugins[i];
             if (item->order == -1) {
@@ -231,8 +219,8 @@ static bool rizz__plugin_order_dependencies()
                     else
                         sx_strcat(dep_str, sizeof(dep_str), "]");
                 }
-                rizz_log_error("\t%s -(depends)-> %s",
-                               item->info.name[0] ? item->info.name : "[entry]", dep_str);
+                rizz__log_error("\t%s -(depends)-> %s",
+                                item->info.name[0] ? item->info.name : "[entry]", dep_str);
             }
         }
 
@@ -300,7 +288,7 @@ bool rizz__plugin_load_abs(const char* name, bool entry, const char** edeps, int
 
         return true;
     } else {
-        rizz_log_error("plugin load failed: %s", name);
+        rizz__log_error("plugin load failed: %s", name);
         return false;
     }
 }
@@ -318,7 +306,7 @@ bool rizz__plugin_init_plugins()
         // load the plugin
         int r;
         if ((r = item->info.main_cb((rizz_plugin*)&item->p, RIZZ_PLUGIN_EVENT_INIT)) != 0) {
-            rizz_log_error("plugin load failed: %s, returned: %d", item->info.name, r);
+            rizz__log_error("plugin load failed: %s, returned: %d", item->info.name, r);
             return false;
         }
 
@@ -328,9 +316,9 @@ bool rizz__plugin_init_plugins()
             int version = item->info.version;
             char filename[32];
             sx_os_path_basename(filename, sizeof(filename), item->filepath);
-            rizz_log_info("(init) plugin: %s (%s) - %s - v%d.%d.%d", item->info.name, filename,
-                          item->info.desc, rizz_version_major(version), rizz_version_minor(version),
-                          rizz_version_bugfix(version));
+            rizz__log_info("(init) plugin: %s (%s) - %s - v%d.%d.%d", item->info.name, filename,
+                           item->info.desc, rizz_version_major(version),
+                           rizz_version_minor(version), rizz_version_bugfix(version));
         }
     }
 
@@ -384,12 +372,12 @@ static bool rizz__plugin_load(const char* name)
 
     // construct full filepath, by joining to root plugin path and adding extension
     char filepath[256];
-#if SX_PLATFORM_LINUX || SX_PLATFORM_OSX || SX_PLATFORM_RPI
+#    if SX_PLATFORM_LINUX || SX_PLATFORM_OSX || SX_PLATFORM_RPI
     sx_os_path_join(filepath, sizeof(filepath), g_plugin.plugin_path, "lib");
     sx_strcat(filepath, sizeof(filepath), name);
-#else
+#    else
     sx_os_path_join(filepath, sizeof(filepath), g_plugin.plugin_path, name);
-#endif
+#    endif
     sx_strcat(filepath, sizeof(filepath), SX_DLL_EXT);
     return rizz__plugin_load_abs(filepath, false, NULL, 0);
 }
@@ -405,14 +393,14 @@ bool rizz__plugin_load_abs(const char* filepath, bool entry, const char** edeps,
     if (!entry) {
         dll = sx_os_dlopen(filepath);
         if (!dll) {
-            rizz_log_error("plugin load failed: %s: %s", filepath, sx_os_dlerr());
+            rizz__log_error("plugin load failed: %s: %s", filepath, sx_os_dlerr());
             return false;
         }
 
         rizz_plugin_get_info_cb* get_info =
             (rizz_plugin_get_info_cb*)sx_os_dlsym(dll, "rizz_plugin_get_info");
         if (!get_info) {
-            rizz_log_error("plugin missing rizz_plugin_get_info symbol: %s", filepath);
+            rizz__log_error("plugin missing rizz_plugin_get_info symbol: %s", filepath);
             return false;
         }
 
@@ -458,7 +446,7 @@ bool rizz__plugin_init_plugins()
         rizz__plugin_item* item = &g_plugin.plugins[index];
 
         if (!cr_plugin_load(item->p, item->filepath, rizz__plugin_reload_handler)) {
-            rizz_log_error("plugin init failed: %s", item->filepath);
+            rizz__log_error("plugin init failed: %s", item->filepath);
             return false;
         }
 
@@ -466,9 +454,9 @@ bool rizz__plugin_init_plugins()
             int version = item->info.version;
             char filename[32];
             sx_os_path_basename(filename, sizeof(filename), item->filepath);
-            rizz_log_info("(init) plugin: %s (%s) - %s - v%d.%d.%d", item->info.name, filename,
-                          item->info.desc, rizz_version_major(version), rizz_version_minor(version),
-                          rizz_version_bugfix(version));
+            rizz__log_info("(init) plugin: %s (%s) - %s - v%d.%d.%d", item->info.name, filename,
+                           item->info.desc, rizz_version_major(version),
+                           rizz_version_minor(version), rizz_version_bugfix(version));
         }
     }
 
@@ -490,12 +478,13 @@ void rizz__plugin_update(float dt)
 
         int r = cr_plugin_update(plugin->p, check_reload);
         if (r == -2) {
-            rizz_log_error("plugin '%s' failed to reload", g_plugin.plugins[i].info.name);
+            rizz__log_error("plugin '%s' failed to reload", g_plugin.plugins[i].info.name);
         } else if (r < -1) {
             if (plugin->p.failure == CR_USER) {
-                rizz_log_error("plugin '%s' failed (main ret = -1)", g_plugin.plugins[i].info.name);
+                rizz__log_error("plugin '%s' failed (main ret = -1)",
+                                g_plugin.plugins[i].info.name);
             } else {
-                rizz_log_error("plugin '%s' crashed", g_plugin.plugins[i].info.name);
+                rizz__log_error("plugin '%s' crashed", g_plugin.plugins[i].info.name);
             }
         }
     }
@@ -542,7 +531,7 @@ void rizz__plugin_remove_api(const char* name, uint32_t version)
             return;
         }
     }
-    rizz_log_warn("API (name='%s', version=%d) not found", name, version);
+    rizz__log_warn("API (name='%s', version=%d) not found", name, version);
 }
 
 const char* rizz__plugin_crash_reason(rizz_plugin_crash crash)

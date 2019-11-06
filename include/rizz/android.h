@@ -1,7 +1,6 @@
 #pragma once
 
 #include "sx/platform.h"
-#include "types.h"
 
 #if SX_PLATFORM_ANDROID
 

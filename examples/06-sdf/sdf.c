@@ -1,19 +1,10 @@
-#include "sx/allocator.h"
-#include "sx/math.h"
 #include "sx/string.h"
 #include "sx/timer.h"
 
-#include "rizz/app.h"
-#include "rizz/asset.h"
-#include "rizz/camera.h"
-#include "rizz/core.h"
-#include "rizz/entry.h"
-#include "rizz/graphics.h"
 #include "rizz/imgui-extra.h"
 #include "rizz/imgui.h"
-#include "rizz/plugin.h"
+#include "rizz/rizz.h"
 #include "rizz/util.h"
-#include "rizz/vfs.h"
 
 #include "../common.h"
 
@@ -105,7 +96,6 @@ static bool init()
     char asset_dir[RIZZ_MAX_PATH];
     sx_os_path_join(asset_dir, sizeof(asset_dir), EXAMPLES_ROOT, "assets");    // "/examples/assets"
     the_vfs->mount(asset_dir, "/assets");
-    the_vfs->watch_mounts();
 #endif
 
     // load assets metadata cache to speedup asset loading

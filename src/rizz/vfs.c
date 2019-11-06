@@ -2,14 +2,8 @@
 // Copyright 2019 Sepehr Taghdisian (septag@github). All rights reserved.
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
-#include "config.h"
+#include "internal.h"
 
-#include "rizz/android.h"
-#include "rizz/core.h"
-#include "rizz/ios.h"
-#include "rizz/vfs.h"
-
-#include "sx/allocator.h"
 #include "sx/array.h"
 #include "sx/io.h"
 #include "sx/lockless.h"
@@ -23,7 +17,10 @@
 #    include <jni.h>
 #endif
 
-typedef enum { VFS_COMMAND_READ, VFS_COMMAND_WRITE } rizz__vfs_async_command;
+typedef enum {
+    VFS_COMMAND_READ,    //
+    VFS_COMMAND_WRITE    //
+} rizz__vfs_async_command;
 
 typedef enum {
     VFS_RESPONSE_READ_FAILED,
@@ -95,9 +92,9 @@ static rizz__vfs g_vfs;
 #    define DMON_FREE(ptr) sx_free(g_vfs.alloc, ptr)
 #    define DMON_REALLOC(ptr, size) sx_realloc(g_vfs.alloc, ptr, size)
 #    include <stdio.h>
-#    define DMON_LOG_ERROR(s) rizz_log_error(s)
+#    define DMON_LOG_ERROR(s) rizz__log_error(s)
 #    ifndef NDEBUG
-#        define DMON_LOG_DEBUG(s) rizz_log_debug(s)
+#        define DMON_LOG_DEBUG(s) rizz__log_debug(s)
 #    else
 #        define DMON_LOG_DEBUG(s)
 #    endif
@@ -119,25 +116,25 @@ typedef struct dmon__result {
 // Dummy callbacks
 void rizz__dummy_on_read_error(const char* uri)
 {
-    rizz_log_debug("disk: read_error: %s", uri);
+    rizz__log_debug("disk: read_error: %s", uri);
 }
 void rizz__dummy_on_write_error(const char* uri)
 {
-    rizz_log_debug("disk: write_error: %s", uri);
+    rizz__log_debug("disk: write_error: %s", uri);
 }
 void rizz__dummy_on_read_complete(const char* uri, sx_mem_block* mem)
 {
-    rizz_log_debug("disk: read_complete: %s (size: %d kb)", uri, mem->size / 1024);
+    rizz__log_debug("disk: read_complete: %s (size: %d kb)", uri, mem->size / 1024);
     sx_mem_destroy_block(mem);
 }
 void rizz__dummy_on_write_complete(const char* uri, int bytes_written, sx_mem_block* mem)
 {
-    rizz_log_debug("disk: write_complete: %s (size: %d kb)", uri, bytes_written / 1024);
+    rizz__log_debug("disk: write_complete: %s (size: %d kb)", uri, bytes_written / 1024);
     sx_mem_destroy_block(mem);
 }
 void rizz__dummy_on_modified(const char* uri)
 {
-    rizz_log_debug("disk: modified: %s", uri);
+    rizz__log_debug("disk: modified: %s", uri);
 }
 
 static rizz_vfs_async_callbacks g_vfs_dummy_callbacks = {
@@ -315,17 +312,17 @@ bool rizz__vfs_mount(const char* path, const char* alias)
         // check that the mount path is not already registered
         for (int i = 0, c = sx_array_count(g_vfs.mounts); i < c; i++) {
             if (sx_strequal(g_vfs.mounts[i].path, mp.path)) {
-                rizz_log_error("vfs: path '%s' is already mounted on '%s'", mp.path, mp.alias);
+                rizz__log_error("vfs: path '%s' is already mounted on '%s'", mp.path, mp.alias);
                 return false;
             }
         }
 
 
         sx_array_push(g_vfs.alloc, g_vfs.mounts, mp);
-        rizz_log_info("vfs: mounted '%s' on '%s'", mp.alias, mp.path);
+        rizz__log_info("vfs: mounted '%s' on '%s'", mp.alias, mp.path);
         return true;
     } else {
-        rizz_log_error("mount path is not valid: %s", path);
+        rizz__log_error("mount path is not valid: %s", path);
         return false;
     }
 }
@@ -336,7 +333,7 @@ void rizz__vfs_mount_mobile_assets(const char* alias)
 #if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
     sx_os_path_unixpath(g_vfs.assets_alias, sizeof(g_vfs.assets_alias), alias);
     g_vfs.assets_alias_len = sx_strlen(g_vfs.assets_alias);
-    rizz_log_info("vfs: mounted '%s' on app assets", g_vfs.assets_alias);
+    rizz__log_info("vfs: mounted '%s' on app assets", g_vfs.assets_alias);
 #endif
 }
 
@@ -402,8 +399,6 @@ void rizz__vfs_release()
     sx_array_free(g_vfs.alloc, g_vfs.mounts);
     g_vfs.alloc = NULL;
 }
-
-void rizz__vfs_watch_mounts() {}
 
 void rizz__vfs_async_update()
 {
@@ -550,7 +545,6 @@ static void dmon__event_cb(dmon_watch_id watch_id, dmon_action action, const cha
 rizz_api_vfs the__vfs = { .set_async_callbacks = rizz__vfs_set_async_callbacks,
                           .mount = rizz__vfs_mount,
                           .mount_mobile_assets = rizz__vfs_mount_mobile_assets,
-                          .watch_mounts = rizz__vfs_watch_mounts,
                           .read_async = rizz__vfs_read_async,
                           .write_async = rizz__vfs_write_async,
                           .read = rizz__vfs_read,

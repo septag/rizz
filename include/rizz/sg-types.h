@@ -1,12 +1,13 @@
 //
 // Copyright 2019 Sepehr Taghdisian (septag@github). All rights reserved.
 // License: https://github.com/septag/rizz#license-bsd-2-clause
-//
+// clang-format off
 
 #pragma once
 
-#include "types.h"
-#include <stdint.h>
+#ifndef RIZZ_INCLUDE_SG_TYPES
+#   error "this file can not be included indepdendently"
+#endif
 
 #ifndef SG_TYPES_ALREADY_DEFINED
 /*

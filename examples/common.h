@@ -1,6 +1,5 @@
 #pragma once
 
-#include "rizz/types.h"
 #include "sx/os.h"
 
 static inline char* ex_shader_path(char* path, int path_sz, const char* prefix_path, const char* filename) {

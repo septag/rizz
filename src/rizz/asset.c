@@ -2,15 +2,8 @@
 // Copyright 2019 Sepehr Taghdisian (septag@github). All rights reserved.
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
-#include "config.h"
+#include "internal.h"
 
-#include "rizz/asset.h"
-#include "rizz/core.h"
-#include "rizz/reflect.h"
-#include "rizz/types.h"
-#include "rizz/vfs.h"
-
-#include "sx/allocator.h"
 #include "sx/array.h"
 #include "sx/atomic.h"
 #include "sx/handle.h"
@@ -133,9 +126,9 @@ static rizz__asset_lib g_asset;
 
 #define rizz__asset_errmsg(_path, _realpath, _msgpref)                           \
     if (!sx_strequal(_path, _realpath))                                          \
-        rizz_log_warn("%s asset '%s -> %s' failed", _msgpref, _path, _realpath); \
+        rizz__log_warn("%s asset '%s -> %s' failed", _msgpref, _path, _realpath); \
     else                                                                         \
-        rizz_log_warn("%s asset '%s' failed", _msgpref, _path);
+        rizz__log_warn("%s asset '%s' failed", _msgpref, _path);
 
 static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, const void* params,
                                           rizz_asset_load_flags flags, const sx_alloc* obj_alloc,
@@ -351,11 +344,11 @@ static inline int rizz__asset_find_asset_mgr(uint32_t name_hash)
 }
 
 // asset database
-static void rizz__asset_meta_read_item(const rizz_refl_field* f, sjson_node* jmeta)
+static void rizz__asset_meta_read_item(const rizz__refl_field* f, sjson_node* jmeta)
 {
     const rizz_refl_info* r = &f->info;
     void* value = f->value;
-    rizz_refl_field fields[32];
+    rizz__refl_field fields[32];
 
     sjson_node* jfield = sjson_find_member(jmeta, r->name);
     if (jfield) {
@@ -369,14 +362,14 @@ static void rizz__asset_meta_read_item(const rizz_refl_field* f, sjson_node* jme
                 for (int i = 0; i < r->array_size; i++) {
                     int num_fields = the__refl.get_fields(
                         r->type, (uint8_t*)value + (size_t)i * (size_t)r->stride, fields,
-                        sizeof(fields) / sizeof(rizz_refl_field));
+                        sizeof(fields) / sizeof(rizz__refl_field));
                     for (int fi = 0; fi < num_fields; fi++) {
                         rizz__asset_meta_read_item(&fields[fi], sjson_find_element(jfield, i));
                     }
                 }
             } else {
                 int num_fields = the__refl.get_fields(r->type, value, fields,
-                                                      sizeof(fields) / sizeof(rizz_refl_field));
+                                                      sizeof(fields) / sizeof(rizz__refl_field));
                 for (int fi = 0; fi < num_fields; fi++) {
                     rizz__asset_meta_read_item(&fields[fi], jfield);
                 }
@@ -397,12 +390,12 @@ static void rizz__asset_meta_read_item(const rizz_refl_field* f, sjson_node* jme
     }
 }
 
-static void rizz__asset_meta_write_item(const rizz_refl_field* field, sjson_context* jctx,
+static void rizz__asset_meta_write_item(const rizz__refl_field* field, sjson_context* jctx,
                                         sjson_node* jmeta)
 {
     const rizz_refl_info* r = &field->info;
     void* value = field->value;
-    rizz_refl_field fields[32];
+    rizz__refl_field fields[32];
 
     if (r->flags & RIZZ_REFL_FLAG_IS_ENUM) {
         int _e = *(int*)value;
@@ -414,7 +407,7 @@ static void rizz__asset_meta_write_item(const rizz_refl_field* field, sjson_cont
                 sjson_node* jitem = sjson_mkobject(jctx);
                 int num_fields =
                     the__refl.get_fields(r->type, (uint8_t*)value + (size_t)i * (size_t)r->stride,
-                                         fields, sizeof(fields) / sizeof(rizz_refl_field));
+                                         fields, sizeof(fields) / sizeof(rizz__refl_field));
                 for (int fi = 0; fi < num_fields; fi++) {
                     rizz__asset_meta_write_item(&fields[fi], jctx, jitem);
                 }
@@ -423,7 +416,7 @@ static void rizz__asset_meta_write_item(const rizz_refl_field* field, sjson_cont
         } else {
             sjson_node* js = sjson_put_obj(jctx, jmeta, r->name);
             int num_fields = the__refl.get_fields(r->type, value, fields,
-                                                  sizeof(fields) / sizeof(rizz_refl_field));
+                                                  sizeof(fields) / sizeof(rizz__refl_field));
             for (int fi = 0; fi < num_fields; fi++) {
                 rizz__asset_meta_write_item(&fields[fi], jctx, js);
             }
@@ -453,12 +446,12 @@ static bool rizz__asset_load_meta_cache()
         return false;
     sjson_node* jroot = sjson_decode(jctx, (const char*)db->data);
     if (!jroot) {
-        rizz_log_warn("loading asset database failed: %s", g_asset.asset_db_file);
+        rizz__log_warn("loading asset database failed: %s", g_asset.asset_db_file);
         return false;
     }
 
     sjson_node* jitem;
-    rizz_refl_field meta_fields[32];
+    rizz__refl_field meta_fields[32];
     sjson_foreach(jitem, jroot)
     {
         const char* name = sjson_get_string(jitem, "name", "");
@@ -499,7 +492,7 @@ static bool rizz__asset_load_meta_cache()
 
                 int num_fields =
                     the__refl.get_fields(amgr->metadata_type_name, meta_buff, meta_fields,
-                                         sizeof(meta_fields) / sizeof(rizz_refl_field));
+                                         sizeof(meta_fields) / sizeof(rizz__refl_field));
                 for (int fi = 0; fi < num_fields; fi++) {
                     rizz__asset_meta_read_item(&meta_fields[fi], jmeta);
                 }
@@ -522,7 +515,7 @@ bool rizz__asset_save_meta_cache()
     if (!jctx)
         return false;
 
-    rizz_refl_field meta_fields[32];
+    rizz__refl_field meta_fields[32];
     sjson_node* jroot = sjson_mkarray(jctx);
 
     for (int i = 0, c = sx_array_count(g_asset.resources); i < c; i++) {
@@ -543,7 +536,7 @@ bool rizz__asset_save_meta_cache()
             uint8_t* meta_buff = &amgr->metadata_buff[rizz_to_index(rs->metadata_id)];
 
             int num_fields = the__refl.get_fields(amgr->metadata_type_name, meta_buff, meta_fields,
-                                                  sizeof(meta_fields) / sizeof(rizz_refl_field));
+                                                  sizeof(meta_fields) / sizeof(rizz__refl_field));
             for (int fi = 0; fi < num_fields; fi++) {
                 rizz__asset_meta_write_item(&meta_fields[fi], jctx, jmeta);
             }
@@ -734,7 +727,7 @@ static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, 
                                           uint32_t tags)
 {
     if (!path[0]) {
-        rizz_log_warn("empty path for asset");
+        rizz__log_warn("empty path for asset");
         return (rizz_asset){ 0 };
     }
 
@@ -904,7 +897,7 @@ void rizz__asset_release()
             rizz__asset* a = &g_asset.assets[sx_handle_index(handle)];
             if (a->state == RIZZ_ASSET_STATE_OK) {
                 sx_assert(a->resource_id);
-                rizz_log_warn("un-released asset: %s",
+                rizz__log_warn("un-released asset: %s",
                               g_asset.resources[rizz_to_index(a->resource_id)].path);
                 if (a->obj.id) {
                     rizz__asset_mgr* amgr = &g_asset.asset_mgrs[a->asset_mgr_id];

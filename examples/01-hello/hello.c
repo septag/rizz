@@ -1,18 +1,9 @@
-#include "sx/allocator.h"
-#include "sx/math.h"
 #include "sx/string.h"
 #include "sx/timer.h"
 
-#include "rizz/app.h"
-#include "rizz/asset.h"
-#include "rizz/camera.h"
-#include "rizz/core.h"
-#include "rizz/entry.h"
-#include "rizz/graphics.h"
+#include "rizz/rizz.h"
 #include "rizz/imgui-extra.h"
 #include "rizz/imgui.h"
-#include "rizz/plugin.h"
-#include "rizz/vfs.h"
 
 RIZZ_STATE static rizz_api_core* the_core;
 RIZZ_STATE static rizz_api_gfx* the_gfx;

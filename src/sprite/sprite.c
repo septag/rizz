@@ -1,6 +1,5 @@
 #include "rizz/sprite.h"
 
-#include "sx/allocator.h"
 #include "sx/array.h"
 #include "sx/handle.h"
 #include "sx/hash.h"
@@ -8,19 +7,12 @@
 #include "sx/pool.h"
 #include "sx/string.h"
 
-#include "rizz/app.h"
-#include "rizz/asset.h"
-#include "rizz/core.h"
-#include "rizz/graphics.h"
 #include "rizz/imgui-extra.h"
 #include "rizz/imgui.h"
 #include "rizz/json.h"
-#include "rizz/plugin.h"
-#include "rizz/reflect.h"
 
 #include <float.h>
 #include <limits.h>
-
 #include <alloca.h>
 
 #include rizz_shader_path(shaders_h, sprite.frag.h)

@@ -556,8 +556,6 @@ typedef struct sg_pipeline { uint32_t id; } sg_pipeline;
 typedef struct sg_pass     { uint32_t id; } sg_pass;
 typedef struct sg_context  { uint32_t id; } sg_context;
 
-#ifndef SOKOL_CONFIG
-
 /*
     various compile-time constants
 
@@ -578,8 +576,6 @@ enum {
     SG_MAX_MIPMAPS = 16,
     SG_MAX_TEXTUREARRAY_LAYERS = 128
 };
-
-#endif	// SOKOL_CONFIG
 
 /*
     sg_backend

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
 project(rizz)
 
-set(SOURCE_FILES config.h
+set(SOURCE_FILES internal.h
                  app.c
                  core.c 
                  plugin.cpp
@@ -15,22 +15,13 @@ set(SOURCE_FILES config.h
                  basisut.cpp 
                  basisut.h)
 
-set(INCLUDE_FILES ../../include/rizz/types.h
-                  ../../include/rizz/app.h 
-                  ../../include/rizz/entry.h 
-                  ../../include/rizz/core.h 
-                  ../../include/rizz/plugin.h 
-                  ../../include/rizz/graphics.h
-                  ../../include/rizz/_sg-types.h
-                  ../../include/rizz/asset.h
-                  ../../include/rizz/reflect.h
-                  ../../include/rizz/camera.h
-                  ../../include/rizz/http.h
+set(INCLUDE_FILES ../../include/rizz/config.h
+                  ../../include/rizz/sg-types.h
                   ../../include/rizz/util.h
-                  ../../include/rizz/vfs.h
                   ../../include/rizz/json.h 
                   ../../include/rizz/android.h
-                  ../../include/rizz/ios.h)
+                  ../../include/rizz/ios.h 
+                  ../../include/rizz/rizz.h)
 
 set(TEXT_FILES  ../../README.md
                 ../../CHANGES.md)

@@ -115,7 +115,7 @@ To build a compatible game/app module for _rizz_ you should do the following ste
   _rizz_ will fill `rizz_app_event` struct and pass window messages to your application.
 - The low-level graphics api is almost as same as [sokol_gfx](https://github.com/floooh/sokol/blob/master/sokol_gfx.h).
   So all documentation and examples of *sokol_gfx* also applies here, except the little concept called _stages_ that is 
-  explained in [graphics.h](https://github.com/septag/rizz/blob/master/include/rizz/graphics.h) in more detail.
+  explained in [rizz.h](https://github.com/septag/rizz/blob/master/include/rizz/rizz.h) in more detail.
 
 Currently, the documentation is lacking. But you can check out the `/examples` directory and figure out how to get started.
 

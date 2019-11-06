@@ -5,9 +5,7 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-parameter")
 #include "basisu/basisu_transcoder.h"
 SX_PRAGMA_DIAGNOSTIC_POP();
 
-#include "rizz/core.h"
-#include "rizz/graphics.h"
-
+#include "internal.h"
 #include "basisut.h"
 
 static const sx_alloc* g_basisut_alloc;
@@ -72,7 +70,7 @@ bool basisut_image_info(const void* data, uint32_t data_size, rizz_texture_info*
 
     if (file_info.m_tex_type == basist::cBASISTexTypeCubemapArray &&
         (file_info.m_total_images % 6) != 1) {
-        rizz_log_warn("cube arrays are not supported");
+        rizz__log_warn("cube arrays are not supported");
         sx_assert(0);
         file_info.m_total_images = 6;
     }

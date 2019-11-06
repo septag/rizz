@@ -1,10 +1,7 @@
 #include "rizz/input.h"
-
-#include "rizz/app.h"
-#include "rizz/core.h"
 #include "rizz/imgui-extra.h"
 #include "rizz/imgui.h"
-#include "rizz/plugin.h"
+#include "rizz/rizz.h"
 
 #include "sx/allocator.h"
 #include "sx/array.h"
@@ -21,9 +18,10 @@
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4267)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG("-Wshorten-64-to-32")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_GCC("-Wimplicit-fallthrough")
 #include "gainput/gainput.h"
-SX_PRAGMA_DIAGNOSTIC_POP()
 #include "gainput/GainputDebugRenderer.h"
+SX_PRAGMA_DIAGNOSTIC_POP()
 
 using namespace gainput;
 
@@ -55,7 +53,7 @@ class ga_allocator : public Allocator
 {
     void* Allocate(size_t size, size_t align) override
     {
-        sx_unused(align);        
+        sx_unused(align);
         sx_assert(g_input_alloc);
         if (!size) {
             return nullptr;
@@ -485,7 +483,8 @@ static void input__show_debugger(bool* p_open)
             sx_assert(g_input.devices);
             rizz_input_device_type type = g_input.devices[selected_input].type;
             float w = the_imgui->GetContentRegionAvailWidth();
-            the_imgui->BeginChild("input_debugger_view", sx_vec2f(w, w), true, ImGuiWindowFlags_NoScrollbar);
+            the_imgui->BeginChild("input_debugger_view", sx_vec2f(w, w), true,
+                                  ImGuiWindowFlags_NoScrollbar);
             sx_vec2 view_size;
             sx_vec2 view_pos;
             the_imgui->GetWindowSize_nonUDT(&view_size);
@@ -568,7 +567,7 @@ rizz_plugin_decl_event_handler(input, e)
 
     case RIZZ_APP_EVENTTYPE_UPDATE_APIS:
         the_imgui = (rizz_api_imgui*)the_plugin->get_api_byname("imgui", 0);
-        the_imguix = (rizz_api_imgui_extra*)the_plugin->get_api_byname("imgui_extra", 0);    
+        the_imguix = (rizz_api_imgui_extra*)the_plugin->get_api_byname("imgui_extra", 0);
         break;
 
     case RIZZ_APP_EVENTTYPE_MOUSE_DOWN:

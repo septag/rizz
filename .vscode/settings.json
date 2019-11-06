@@ -58,7 +58,8 @@
         "xlocale": "c",
         "xiosbase": "cpp",
         "limits.h": "c",
-        "xutility": "c"
+        "xutility": "c",
+        "internal.h": "c"
     },
     "files.exclude": {
         "**/.git": true,

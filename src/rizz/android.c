@@ -16,7 +16,7 @@ void* sapp_android_get_native_window();
 
 static void android__detach_cb(void* p)
 {
-    rizz_log_debug("Detached current thread");
+    rizz__log_debug("Detached current thread");
     const ANativeActivity* activity = p;
     (*activity->vm)->DetachCurrentThread(activity->vm);
 }
@@ -45,14 +45,14 @@ bool rizz_android_get_method(rizz_android_method* method, const char* method_nam
     JNIEnv* env = android__attach_current_thread();
     jclass clazz = (*env)->FindClass(env, class_path);
     if (!clazz) {
-        rizz_log_error("JNI class not found: %s", class_path);
+        rizz__log_error("JNI class not found: %s", class_path);
         return false;
     }
 
     jmethodID mid = (*env)->GetMethodID(env, clazz, method_name, method_sig);
     if (!mid) {
         char _class_path[512];
-        rizz_log_error("JNI method not found: %s.%s (%s)",
+        rizz__log_error("JNI method not found: %s.%s (%s)",
                        sx_replacechar(_class_path, sizeof(_class_path), class_path, '/', '.'),
                        method_name, method_sig);
         return false;
@@ -74,14 +74,14 @@ bool rizz_android_get_static_method(rizz_android_method* method, const char* met
     JNIEnv* env = android__attach_current_thread();
     jclass clazz = (*env)->FindClass(env, class_path);
     if (!clazz) {
-        rizz_log_error("JNI class not found: %s", class_path);
+        rizz__log_error("JNI class not found: %s", class_path);
         return false;
     }
 
     jmethodID mid = (*env)->GetStaticMethodID(env, clazz, method_name, method_sig);
     if (!mid) {
         char _class_path[512];
-        rizz_log_error("JNI static method not found: %s.%s (%s)",
+        rizz__log_error("JNI static method not found: %s.%s (%s)",
                        sx_replacechar(_class_path, sizeof(_class_path), class_path, '/', '.'),
                        method_name, method_sig);
         return false;

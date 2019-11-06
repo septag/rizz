@@ -2,17 +2,9 @@
 // Copyright 2019 Sepehr Taghdisian (septag@github). All rights reserved.
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
-#include "config.h"
+#include "internal.h"
 
-#include "rizz/asset.h"
-#include "rizz/core.h"
-#include "rizz/entry.h"
-#include "rizz/graphics.h"
-#include "rizz/http.h"
 #include "rizz/imgui.h"
-#include "rizz/plugin.h"
-#include "rizz/reflect.h"
-#include "rizz/vfs.h"
 
 #include "sx/allocator.h"
 #include "sx/array.h"
@@ -759,10 +751,10 @@ bool rizz__core_init(const rizz_config* conf)
 
     // disk-io (virtual file system)
     if (!rizz__vfs_init(rizz__alloc(RIZZ_MEMID_VFS))) {
-        rizz_log_error("initializing disk-io failed");
+        rizz__log_error("initializing disk-io failed");
         return false;
     }
-    rizz_log_info("(init) vfs");
+    rizz__log_info("(init) vfs");
 
     int num_worker_threads =
         conf->job_num_threads >= 0 ? conf->job_num_threads : (sx_os_numcores() - 1);
@@ -789,7 +781,7 @@ bool rizz__core_init(const rizz_config* conf)
         sx_stackalloc_init(&t->stack_alloc, mem, tmp_size);
         t->offset_stack = NULL;
     }
-    rizz_log_info("(init) temp memory: %dx%d kb", g_core.num_threads, tmp_size / 1024);
+    rizz__log_info("(init) temp memory: %dx%d kb", g_core.num_threads, tmp_size / 1024);
 
     // job dispatcher
     g_core.jobs = sx_job_create_context(
@@ -799,16 +791,16 @@ bool rizz__core_init(const rizz_config* conf)
                                        .thread_init_cb = rizz__job_thread_init_cb,
                                        .thread_shutdown_cb = rizz__job_thread_shutdown_cb });
     if (!g_core.jobs) {
-        rizz_log_error("initializing job dispatcher failed");
+        rizz__log_error("initializing job dispatcher failed");
         return false;
     }
-    rizz_log_info("(init) jobs: threads=%d, max_fibers=%d, stack_size=%dkb",
+    rizz__log_info("(init) jobs: threads=%d, max_fibers=%d, stack_size=%dkb",
                   sx_job_num_worker_threads(g_core.jobs), conf->job_max_fibers,
                   conf->job_stack_size);
 
     // reflection
     if (!rizz__refl_init(rizz__alloc(RIZZ_MEMID_REFLECT), 0)) {
-        rizz_log_error("initializing reflection failed");
+        rizz__log_error("initializing reflection failed");
         return false;
     }
 
@@ -819,10 +811,10 @@ bool rizz__core_init(const rizz_config* conf)
     const char* asset_dbpath = "/cache/asset-db.json";
 #endif
     if (!rizz__asset_init(rizz__alloc(RIZZ_MEMID_CORE), asset_dbpath, "")) {
-        rizz_log_error("initializing asset system failed");
+        rizz__log_error("initializing asset system failed");
         return false;
     }
-    rizz_log_info("(init) asset system: hot-loading=%d", RIZZ_CONFIG_HOT_LOADING);
+    rizz__log_info("(init) asset system: hot-loading=%d", RIZZ_CONFIG_HOT_LOADING);
 
     // profiler
     rmtSettings* rmt_config = rmt_Settings();
@@ -838,7 +830,7 @@ bool rizz__core_init(const rizz_config* conf)
     }
     rmtError rmt_err;
     if ((rmt_err = rmt_CreateGlobalInstance(&g_core.rmt)) != RMT_ERROR_NONE) {
-        rizz_log_warn("initializing profiler failed: %d", rmt_err);
+        rizz__log_warn("initializing profiler failed: %d", rmt_err);
     }
 
     rmt_SetCurrentThreadName("Main");
@@ -848,7 +840,7 @@ bool rizz__core_init(const rizz_config* conf)
             profile_subsets = "cpu/gpu";
         else
             profile_subsets = "cpu";
-        rizz_log_info("(init) profiler (%s): port=%d", profile_subsets, conf->profiler_listen_port);
+        rizz__log_info("(init) profiler (%s): port=%d", profile_subsets, conf->profiler_listen_port);
     }
 
     // graphics
@@ -865,32 +857,32 @@ bool rizz__core_init(const rizz_config* conf)
     // .context_pool_size:     16
     if (!rizz__gfx_init(rizz__alloc(RIZZ_MEMID_GRAPHICS), &gfx_desc,
                         (conf->core_flags & RIZZ_CORE_FLAG_PROFILE_GPU) ? true : false)) {
-        rizz_log_error("initializing graphics failed");
+        rizz__log_error("initializing graphics failed");
         return false;
     }
 
-    rizz_log_info("(init) graphics: %s", k__gfx_driver_names[the__gfx.backend()]);
+    rizz__log_info("(init) graphics: %s", k__gfx_driver_names[the__gfx.backend()]);
 
     // coroutines
     g_core.coro =
         sx_coro_create_context(alloc, conf->coro_max_fibers, conf->coro_stack_size * 1024);
     if (!g_core.coro) {
-        rizz_log_error("initializing coroutines failed");
+        rizz__log_error("initializing coroutines failed");
         return false;
     }
-    rizz_log_info("(init) coroutines: max_fibers=%d, stack_size=%dkb", conf->coro_max_fibers,
+    rizz__log_info("(init) coroutines: max_fibers=%d, stack_size=%dkb", conf->coro_max_fibers,
                   conf->coro_stack_size);
 
     // http client
     if (!rizz__http_init(alloc)) {
-        rizz_log_error("initializing http failed");
+        rizz__log_error("initializing http failed");
         return false;
     }
-    rizz_log_info("(init) http client");
+    rizz__log_info("(init) http client");
 
     // Plugins
     if (!rizz__plugin_init(rizz__alloc(RIZZ_MEMID_CORE), conf->plugin_path)) {
-        rizz_log_error("initializing plugins failed");
+        rizz__log_error("initializing plugins failed");
         return false;
     }
 
@@ -912,7 +904,7 @@ static void rizz__core_dump_leak(const char* formatted_msg, const char* file, co
     sx_unused(line);
     sx_unused(func);
 
-    rizz_log_debug(formatted_msg);
+    rizz__log_debug(formatted_msg);
 }
 #endif
 
@@ -978,7 +970,7 @@ void rizz__core_release()
     }
     sx_array_free(&g_core.heap_proxy_alloc, g_core.tls_vars);
 
-    rizz_log_info("shutdown");
+    rizz__log_info("shutdown");
 
 #ifdef _DEBUG
     sx_dump_leaks(rizz__core_dump_leak);
@@ -1141,22 +1133,22 @@ static void rizz__get_mem_info(rizz_mem_info* info)
     info->heap_count = g_core.heap_count;
 }
 
-static void rizz__coro_invoke(void (*coro_cb)(sx_fiber_transfer), void* user)
+static void rizz__core_coro_invoke(void (*coro_cb)(sx_fiber_transfer), void* user)
 {
     sx__coro_invoke(g_core.coro, coro_cb, user);
 }
 
-static void rizz__coro_end(void* pfrom)
+static void rizz__core_coro_end(void* pfrom)
 {
     sx__coro_end(g_core.coro, pfrom);
 }
 
-static void rizz__coro_wait(void* pfrom, int msecs)
+static void rizz__core_coro_wait(void* pfrom, int msecs)
 {
     sx__coro_wait(g_core.coro, pfrom, msecs);
 }
 
-static void rizz__coro_yield(void* pfrom, int nframes)
+static void rizz__core_coro_yield(void* pfrom, int nframes)
 {
     sx__coro_yield(g_core.coro, pfrom, nframes);
 }
@@ -1167,7 +1159,7 @@ void rizz__core_fix_callback_ptrs(const void** ptrs, const void** new_ptrs, int 
         if (ptrs[i] && ptrs[i] != new_ptrs[i] &&
             sx_coro_replace_callback(g_core.coro, (sx_fiber_cb*)ptrs[i],
                                      (sx_fiber_cb*)new_ptrs[i])) {
-            rizz_log_warn("coroutine 0x%p replaced with 0x%p and restarted!", ptrs[i], new_ptrs[i]);
+            rizz__log_warn("coroutine 0x%p replaced with 0x%p and restarted!", ptrs[i], new_ptrs[i]);
         }
     }
 }
@@ -1235,10 +1227,10 @@ rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .job_test_and_del = rizz__job_test_and_del,
                             .job_num_threads = rizz__job_num_threads,
                             .job_thread_index = rizz__job_thread_index,
-                            .coro_invoke = rizz__coro_invoke,
-                            .coro_end = rizz__coro_end,
-                            .coro_wait = rizz__coro_wait,
-                            .coro_yield = rizz__coro_yield,
+                            .coro_invoke = rizz__core_coro_invoke,
+                            .coro_end = rizz__core_coro_end,
+                            .coro_wait = rizz__core_coro_wait,
+                            .coro_yield = rizz__core_coro_yield,
                             .print_info = rizz__print_info,
                             .print_debug = rizz__print_debug,
                             .print_verbose = rizz__print_verbose,

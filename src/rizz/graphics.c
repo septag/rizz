@@ -9,13 +9,10 @@
 // rizz__cb_run_gpu_command: command-buffer deferred commands (this is actually where the command is
 // executed) rizz__gpu_command: overrides for immediate mode commands _sg_xxxx: sokol overrides
 //
-#include "config.h"
 
 #include "basisut.h"
-#include "rizz/app.h"
-#include "rizz/asset.h"
-#include "rizz/core.h"
-#include "rizz/reflect.h"
+
+#include "rizz/config.h"
 
 #include "sx/allocator.h"
 #include "sx/array.h"
@@ -80,10 +77,13 @@ static const sx_alloc*      g_gfx_alloc = NULL;
 #   error "Platform graphics is not supported"
 #endif
 
+// this is just a redirection in order to skip including "rizz.h"
+static void rizz__gfx_log_error(const char* source_file, int line, const char* str);
+
 #define SOKOL_MALLOC(s)             sx_malloc(g_gfx_alloc, s)
 #define SOKOL_FREE(p)               sx_free(g_gfx_alloc, p)
 #define SOKOL_ASSERT(c)             sx_assert(c)
-#define SOKOL_LOG(s)                rizz_log_error(s)
+#define SOKOL_LOG(s)                rizz__gfx_log_error(__FILE__, __LINE__, s)
 
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
@@ -98,7 +98,8 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-parameter")
 SX_PRAGMA_DIAGNOSTIC_POP();
 
 #define SG_TYPES_ALREADY_DEFINED
-#include "rizz/graphics.h"
+#include "internal.h"
+#undef SG_TYPES_ALREADY_DEFINED
 
 // dds-ktx
 #define DDSKTX_IMPLEMENT
@@ -571,7 +572,7 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
         case SG_PIXELFORMAT_PVRTC_RGB_4BPP:     basis_fmt = cTFPVRTC1_4_RGB;    break;
         case SG_PIXELFORMAT_RGBA8:              basis_fmt = cTFRGBA32;          break;
         default:
-            rizz_log_warn(
+            rizz__log_warn(
                 "parsing texture '%s' failed. transcoding of specified format is not supported");
             sx_assert(0);
             return (rizz_asset_load_data){ .obj = { 0 } };
@@ -683,7 +684,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
                 }
             }
         } else {
-            rizz_log_warn("parsing texture '%s' failed", params->path);
+            rizz__log_warn("parsing texture '%s' failed", params->path);
             return false;
         }
     } else if (sx_strequalnocase(ext, ".dds") || sx_strequalnocase(ext, ".ktx")) {
@@ -739,7 +740,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
                 break;
             }
         } else {
-            rizz_log_warn("parsing texture '%s' failed: %s", params->path, err.msg);
+            rizz__log_warn("parsing texture '%s' failed: %s", params->path, err.msg);
             return false;
         }
     } else {
@@ -750,7 +751,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
             desc->content.subimage[0][0].ptr = pixels;
             desc->content.subimage[0][0].size = w * h * 4;
         } else {
-            rizz_log_warn("parsing image '%s' failed: %s", params->path, stbi_failure_reason());
+            rizz__log_warn("parsing image '%s' failed: %s", params->path, stbi_failure_reason());
             return false;
         }
     }
@@ -817,7 +818,7 @@ static void rizz__texture_on_read_metadata(void* metadata, const rizz_asset_load
             sx_unused(r);
             sx_assert(r);
         } else {
-            rizz_log_warn("reading texture '%s' metadata failed", params->path);
+            rizz__log_warn("reading texture '%s' metadata failed", params->path);
             sx_memset(info, 0x0, sizeof(rizz_texture_info));
         }
     } else if (sx_strequalnocase(ext, ".dds") || sx_strequalnocase(ext, ".ktx")) {
@@ -840,7 +841,7 @@ static void rizz__texture_on_read_metadata(void* metadata, const rizz_asset_load
             info->mips = tc.num_mips;
             info->bpp = tc.bpp;
         } else {
-            rizz_log_warn("reading texture '%s' metadata failed: %s", params->path, err.msg);
+            rizz__log_warn("reading texture '%s' metadata failed: %s", params->path, err.msg);
             sx_memset(info, 0x0, sizeof(rizz_texture_info));
         }
     } else {
@@ -856,7 +857,7 @@ static void rizz__texture_on_read_metadata(void* metadata, const rizz_asset_load
             info->mips = 1;
             info->bpp = 32;
         } else {
-            rizz_log_warn("reading image '%s' metadata failed: %s", params->path,
+            rizz__log_warn("reading image '%s' metadata failed: %s", params->path,
                           stbi_failure_reason());
             sx_memset(info, 0x0, sizeof(rizz_texture_info));
         }
@@ -931,80 +932,80 @@ static rizz_texture rizz__texture_create_checker(int checker_size, int size,
 static void rizz__texture_init()
 {
     // register metadata struct reflection
-    rizz_refl_enum(sg_image_type, SG_IMAGETYPE_2D);
-    rizz_refl_enum(sg_image_type, SG_IMAGETYPE_CUBE);
-    rizz_refl_enum(sg_image_type, SG_IMAGETYPE_3D);
-    rizz_refl_enum(sg_image_type, SG_IMAGETYPE_ARRAY);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_NONE);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R8);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R8SN);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R8UI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R8SI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16SN);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16UI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16SI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16F);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG8);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG8SN);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG8UI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG8SI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R32UI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R32SI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_R32F);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16SN);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16UI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16SI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16F);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8SN);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8UI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8SI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BGRA8);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGB10A2);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG11B10F);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG32UI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG32SI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG32F);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16SN);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16UI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16SI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16F);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA32UI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA32SI);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA32F);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_DEPTH);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_DEPTH_STENCIL);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC1_RGBA);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC2_RGBA);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC3_RGBA);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC4_R);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC4_RSN);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC5_RG);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC5_RGSN);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC6H_RGBF);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC6H_RGBUF);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC7_RGBA);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGB_2BPP);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGB_4BPP);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGBA_2BPP);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGBA_4BPP);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RGB8);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RGB8A1);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RGBA8);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RG11);
-    rizz_refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RG11SN);
+    rizz__refl_enum(sg_image_type, SG_IMAGETYPE_2D);
+    rizz__refl_enum(sg_image_type, SG_IMAGETYPE_CUBE);
+    rizz__refl_enum(sg_image_type, SG_IMAGETYPE_3D);
+    rizz__refl_enum(sg_image_type, SG_IMAGETYPE_ARRAY);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_NONE);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R8);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R8SN);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R8UI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R8SI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16SN);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16UI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16SI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16F);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG8);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG8SN);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG8UI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG8SI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R32UI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R32SI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R32F);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16SN);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16UI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16SI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16F);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8SN);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8UI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8SI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BGRA8);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGB10A2);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG11B10F);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG32UI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG32SI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG32F);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16SN);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16UI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16SI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16F);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA32UI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA32SI);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA32F);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_DEPTH);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_DEPTH_STENCIL);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC1_RGBA);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC2_RGBA);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC3_RGBA);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC4_R);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC4_RSN);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC5_RG);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC5_RGSN);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC6H_RGBF);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC6H_RGBUF);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC7_RGBA);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGB_2BPP);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGB_4BPP);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGBA_2BPP);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGBA_4BPP);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RGB8);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RGB8A1);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RGBA8);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RG11);
+    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RG11SN);
 
-    rizz_refl_field(rizz_texture_info, sg_image_type, type, "texture type");
-    rizz_refl_field(rizz_texture_info, sg_pixel_format, format, "texture pixel format");
-    rizz_refl_field(rizz_texture_info, int, mem_size_bytes, "allocated texture size in bytes");
-    rizz_refl_field(rizz_texture_info, int, width, "texture width in pixels");
-    rizz_refl_field(rizz_texture_info, int, height, "texture height in pixels");
-    rizz_refl_field(rizz_texture_info, int, layers, "texture layers/depth");
-    rizz_refl_field(rizz_texture_info, int, mips, "number of texture mips");
-    rizz_refl_field(rizz_texture_info, int, bpp, "number of bits-per-pixel");
+    rizz__refl_field(rizz_texture_info, sg_image_type, type, "texture type");
+    rizz__refl_field(rizz_texture_info, sg_pixel_format, format, "texture pixel format");
+    rizz__refl_field(rizz_texture_info, int, mem_size_bytes, "allocated texture size in bytes");
+    rizz__refl_field(rizz_texture_info, int, width, "texture width in pixels");
+    rizz__refl_field(rizz_texture_info, int, height, "texture height in pixels");
+    rizz__refl_field(rizz_texture_info, int, layers, "texture layers/depth");
+    rizz__refl_field(rizz_texture_info, int, mips, "number of texture mips");
+    rizz__refl_field(rizz_texture_info, int, bpp, "number of bits-per-pixel");
 
     static uint32_t k_white_pixel = 0xffffffff;
     static uint32_t k_black_pixel = 0xff000000;
@@ -1424,7 +1425,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
     }
     sjson_node* jroot = sjson_decode(jctx, stage_refl_json);
     if (!jroot) {
-        rizz_log_error("loading shader reflection failed: invalid json");
+        rizz__log_error("loading shader reflection failed: invalid json");
         return NULL;
     }
 
@@ -1439,7 +1440,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
         stage = RIZZ_SHADER_STAGE_CS;
 
     if (stage == _RIZZ_SHADER_STAGE_COUNT || stage == RIZZ_SHADER_STAGE_CS) {
-        rizz_log_error("loading shader reflection failed: there are no valid stages");
+        rizz__log_error("loading shader reflection failed: there are no valid stages");
         return NULL;
     }
 
@@ -1796,7 +1797,7 @@ static sg_pipeline_desc* rizz__shader_bindto_pipeline_sg(sg_shader shd,
         }
 
         if (!found) {
-            rizz_log_error("vertex attribute '%s%d' does not exist in actual shader inputs",
+            rizz__log_error("vertex attribute '%s%d' does not exist in actual shader inputs",
                            attr->semantic, attr->semantic_idx);
             sx_assert(0);
         }
@@ -2042,28 +2043,28 @@ static void rizz__shader_init()
                                 .on_read_metadata = rizz__shader_on_read_metadata },
         NULL, 0, "rizz_shader_info", sizeof(rizz_shader_info), (rizz_asset_obj){ .ptr = NULL },
         (rizz_asset_obj){ .ptr = NULL }, RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD);
-    rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT);
-    rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT2);
-    rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT3);
-    rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT4);
-    rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_BYTE4);
-    rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_BYTE4N);
-    rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_UBYTE4);
-    rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_UBYTE4N);
-    rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_SHORT2);
-    rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_SHORT2N);
-    rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_SHORT4);
-    rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_SHORT4N);
-    rizz_refl_enum(sg_vertex_format, SG_VERTEXFORMAT_UINT10_N2);
+    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT);
+    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT2);
+    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT3);
+    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT4);
+    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_BYTE4);
+    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_BYTE4N);
+    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_UBYTE4);
+    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_UBYTE4N);
+    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_SHORT2);
+    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_SHORT2N);
+    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_SHORT4);
+    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_SHORT4N);
+    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_UINT10_N2);
 
-    rizz_refl_field(rizz_shader_refl_input, char[32], name, "shader input name");
-    rizz_refl_field(rizz_shader_refl_input, char[32], semantic, "shader semantic name");
-    rizz_refl_field(rizz_shader_refl_input, int, semantic_index, "shader semantic index");
-    rizz_refl_field(rizz_shader_refl_input, sg_vertex_format, type, "shader input type");
+    rizz__refl_field(rizz_shader_refl_input, char[32], name, "shader input name");
+    rizz__refl_field(rizz_shader_refl_input, char[32], semantic, "shader semantic name");
+    rizz__refl_field(rizz_shader_refl_input, int, semantic_index, "shader semantic index");
+    rizz__refl_field(rizz_shader_refl_input, sg_vertex_format, type, "shader input type");
 
-    rizz_refl_field(rizz_shader_info, rizz_shader_refl_input[SG_MAX_VERTEX_ATTRIBUTES], inputs,
+    rizz__refl_field(rizz_shader_info, rizz_shader_refl_input[SG_MAX_VERTEX_ATTRIBUTES], inputs,
                     "shader inputs");
-    rizz_refl_field(rizz_shader_info, int, num_inputs, "shader input count");
+    rizz__refl_field(rizz_shader_info, int, num_inputs, "shader input count");
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2413,7 +2414,7 @@ static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load
         uint8_t file_ver;
         sx_mem_read(&rd, &file_ver, sizeof(file_ver));
         if (file_ver != 3) {
-            rizz_log_warn("loading font '%s' failed: invalid file version", params->path);
+            rizz__log_warn("loading font '%s' failed: invalid file version", params->path);
             return false;
         }
 
@@ -2433,7 +2434,7 @@ static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load
         sx_mem_read(&rd, &common, sizeof(common));
 
         if (common.pages > 1) {
-            rizz_log_warn("loading font '%s' failed: should contain only 1 page", params->path);
+            rizz__log_warn("loading font '%s' failed: should contain only 1 page", params->path);
             return false;
         }
 
@@ -2528,7 +2529,7 @@ static bool rizz__font_on_load(rizz_asset_load_data* data, const rizz_asset_load
         buff[mem->size] = '\0';
 
         if (!rizz__fnt_text_check(buff, mem->size)) {
-            rizz_log_warn("loading font '%s' failed: not a valid fnt text file", params->path);
+            rizz__log_warn("loading font '%s' failed: not a valid fnt text file", params->path);
             the__core.tmp_alloc_pop();
             return false;
         }
@@ -2622,7 +2623,7 @@ static void rizz__font_on_read_metadata(void* metadata, const rizz_asset_load_pa
         uint8_t file_ver;
         sx_mem_read(&rd, &file_ver, sizeof(file_ver));
         if (file_ver != 3) {
-            rizz_log_warn("loading font '%s' failed: invalid file version", params->path);
+            rizz__log_warn("loading font '%s' failed: invalid file version", params->path);
             return;
         }
 
@@ -2640,7 +2641,7 @@ static void rizz__font_on_read_metadata(void* metadata, const rizz_asset_load_pa
         sx_assert(block.id == 2);
         sx_mem_read(&rd, &common, sizeof(common));
         if (common.pages > 1) {
-            rizz_log_warn("loading font '%s' failed: should contain only 1 page", params->path);
+            rizz__log_warn("loading font '%s' failed: should contain only 1 page", params->path);
             return;
         }
 
@@ -2679,7 +2680,7 @@ static void rizz__font_on_read_metadata(void* metadata, const rizz_asset_load_pa
         buff[mem->size] = '\0';
 
         if (!rizz__fnt_text_check(buff, mem->size)) {
-            rizz_log_warn("loading font '%s' failed: not a valid fnt text file", params->path);
+            rizz__log_warn("loading font '%s' failed: not a valid fnt text file", params->path);
             return;
         }
 
@@ -2721,11 +2722,11 @@ static void rizz__font_on_read_metadata(void* metadata, const rizz_asset_load_pa
 
 static void rizz__font_init()
 {
-    rizz_refl_field(rizz__font_metadata, char[RIZZ_MAX_PATH], img_filepath, "img_filepath");
-    rizz_refl_field(rizz__font_metadata, int, img_width, "img_width");
-    rizz_refl_field(rizz__font_metadata, int, img_height, "img_height");
-    rizz_refl_field(rizz__font_metadata, int, num_glyphs, "num_glyphs");
-    rizz_refl_field(rizz__font_metadata, int, num_kerns, "num_kerns");
+    rizz__refl_field(rizz__font_metadata, char[RIZZ_MAX_PATH], img_filepath, "img_filepath");
+    rizz__refl_field(rizz__font_metadata, int, img_width, "img_width");
+    rizz__refl_field(rizz__font_metadata, int, img_height, "img_height");
+    rizz__refl_field(rizz__font_metadata, int, num_glyphs, "num_glyphs");
+    rizz__refl_field(rizz__font_metadata, int, num_kerns, "num_kerns");
 
     // TODO: create default async/fail objects
 
@@ -3061,7 +3062,7 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
 {
 #if SX_PLATFORM_LINUX
     if (flextInit() != GL_TRUE) {
-        rizz_log_error("gfx: could not initialize OpenGL");
+        rizz__log_error("gfx: could not initialize OpenGL");
         return false;
     }
 #endif
@@ -4094,7 +4095,7 @@ static void rizz__gfx_validate_stage_deps()
         if (_stage->state == STAGE_STATE_DONE && _stage->parent.id) {
             rizz__gfx_stage* _parent = &g_gfx.stages[rizz_to_index(_stage->parent.id)];
             if (_parent->state != STAGE_STATE_DONE) {
-                rizz_log_error(
+                rizz__log_error(
                     "trying to execute stage '%s' that depends on '%s', but '%s' is not rendered",
                     _stage->name, _parent->name, _parent->name);
                 sx_assert(0);
@@ -4578,6 +4579,11 @@ static bool rizz__imm_begin(rizz_gfx_stage stage)
 }
 
 static void rizz__imm_end() {}
+
+void rizz__gfx_log_error(const char* source_file, int line, const char* str) 
+{ 
+    the__core.print_error_trace(source_file, line, str);
+}
 
 // clang-format off
 rizz_api_gfx the__gfx = {

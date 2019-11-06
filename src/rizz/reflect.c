@@ -3,10 +3,8 @@
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
 
-#include "rizz/reflect.h"
-#include "rizz/core.h"
+#include "internal.h"
 
-#include "sx/allocator.h"
 #include "sx/array.h"
 #include "sx/hash.h"
 #include "sx/string.h"
@@ -145,7 +143,7 @@ static void rizz__refl_reg(rizz_refl_type internal_type, void* any, const char* 
         int count = sx_array_count(g_reflect.regs);
         sx_assert(g_reflect.max_regs > count);
         if (g_reflect.max_regs > count) {
-            rizz_log_warn("maximum amount of reflection regs exceeded");
+            rizz__log_warn("maximum amount of reflection regs exceeded");
             return;
         }
     }
@@ -188,7 +186,7 @@ static void rizz__refl_reg(rizz_refl_type internal_type, void* any, const char* 
 
     // registery must not exist
     if (sx_hashtbl_find(g_reflect.reg_tbl, sx_hash_fnv32_str(key)) >= 0) {
-        rizz_log_warn("'%s' is already registered for reflection", key);
+        rizz__log_warn("'%s' is already registered for reflection", key);
         return;
     }
 
@@ -292,7 +290,7 @@ static void rizz__refl_reg(rizz_refl_type internal_type, void* any, const char* 
     if (g_reflect.max_regs <= 0 &&
         g_reflect.reg_tbl->count > (g_reflect.reg_tbl->capacity * 2 / 3)) {
         if (!sx_hashtbl_grow(&g_reflect.reg_tbl, g_reflect.alloc)) {
-            rizz_log_warn("refl: could not grow the hash-table");
+            rizz__log_warn("refl: could not grow the hash-table");
             return;
         }
     }
@@ -310,7 +308,7 @@ static int rizz__refl_size_of(const char* base_type)
     return 0;
 }
 
-static int rizz__refl_get_fields(const char* base_type, void* obj, rizz_refl_field* fields,
+static int rizz__refl_get_fields(const char* base_type, void* obj, rizz__refl_field* fields,
                                  int max_fields)
 {
     int num_fields = 0;
@@ -336,12 +334,12 @@ static int rizz__refl_get_fields(const char* base_type, void* obj, rizz_refl_fie
                                          .internal_type = r->r.internal_type };
 
                 if (!(r->r.flags & (RIZZ_REFL_FLAG_IS_PTR | RIZZ_REFL_FLAG_IS_ARRAY))) {
-                    fields[num_fields] = (rizz_refl_field){ .info = rinfo, .value = value };
+                    fields[num_fields] = (rizz__refl_field){ .info = rinfo, .value = value };
                 } else {
                     // type names for pointers must only include the _type_ part without '*' or '[]'
                     if (value && !value_nil && (r->r.flags & RIZZ_REFL_FLAG_IS_PTR))
                         value = (void*)*((uintptr_t*)value);
-                    fields[num_fields] = (rizz_refl_field){ .info = rinfo, .value = value };
+                    fields[num_fields] = (rizz__refl_field){ .info = rinfo, .value = value };
                 }
             }    // if (fields)
 

@@ -1,20 +1,11 @@
-#include "sx/allocator.h"
-#include "sx/math.h"
 #include "sx/os.h"
 #include "sx/string.h"
 #include "sx/timer.h"
 
-#include "rizz/app.h"
-#include "rizz/asset.h"
-#include "rizz/camera.h"
-#include "rizz/core.h"
-#include "rizz/entry.h"
-#include "rizz/graphics.h"
 #include "rizz/imgui-extra.h"
 #include "rizz/imgui.h"
-#include "rizz/plugin.h"
+#include "rizz/rizz.h"
 #include "rizz/sound.h"
-#include "rizz/vfs.h"
 
 RIZZ_STATE static rizz_api_core* the_core;
 RIZZ_STATE static rizz_api_gfx* the_gfx;
@@ -39,8 +30,6 @@ static bool init()
     sx_os_path_join(asset_dir, sizeof(asset_dir), EXAMPLES_ROOT, "assets");    // "/examples/assets"
     the_vfs->mount(asset_dir, "/assets");
 #endif
-
-    the_vfs->watch_mounts();
 
     // load assets metadata cache to speedup asset loading
     // always do this after you have mounted all virtual directories

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rizz/_sg-types.h"
+#include "rizz/rizz.h"
 #include "rizz/util.h"
 
 #include "sx/math.h"
