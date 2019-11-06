@@ -18,7 +18,10 @@
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4267)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG("-Wshorten-64-to-32")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_GCC("-Wunused-parameter")
+#if SX_COMPILER_GCC >= 70000
 SX_PRAGMA_DIAGNOSTIC_IGNORED_GCC("-Wimplicit-fallthrough")
+#endif
 #include "gainput/gainput.h"
 #include "gainput/GainputDebugRenderer.h"
 SX_PRAGMA_DIAGNOSTIC_POP()
