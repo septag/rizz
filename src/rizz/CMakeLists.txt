@@ -62,7 +62,7 @@ endif()
 
 # includes and extra compile flags
 target_include_directories(rizz PRIVATE ../../3rdparty)
-target_link_libraries(rizz PUBLIC sx PRIVATE remotery utf basisu)
+target_link_libraries(rizz PUBLIC sx PRIVATE remotery basisu)
 target_compile_definitions(rizz PRIVATE -DRIZZ_INTERNAL_API) # Expose internal API structs when build the library
 if (ENABLE_HOT_LOADING)
     target_compile_definitions(rizz PRIVATE -DRIZZ_CONFIG_HOT_LOADING=1)

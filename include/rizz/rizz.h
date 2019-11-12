@@ -10,64 +10,8 @@
 #include "sx/fiber.h"
 #include "sx/io.h"
 #include "sx/jobs.h"
-#include "sx/platform.h"
 #include "sx/math.h"
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// config: you can modify these preprocessors to customize some implmenetation limits
-
-// version
-#define RIZZ_VERSION 200
-
-// enables hot-loading for assets, plugins (+game) and shaders
-#ifndef RIZZ_CONFIG_HOT_LOADING
-#    if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
-#        define RIZZ_CONFIG_HOT_LOADING 0
-#    else
-#        define RIZZ_CONFIG_HOT_LOADING 1
-#    endif
-#endif    // RIZZ_CONFIG_HOT_LOADING
-
-// Time to query file changes of each plugin
-#ifndef RIZZ_CONFIG_PLUGIN_UPDATE_INTERVAL
-#    define RIZZ_CONFIG_PLUGIN_UPDATE_INTERVAL 1.0f
-#endif
-
-#ifndef RIZZ_CONFIG_ASSET_POOL_SIZE
-#    define RIZZ_CONFIG_ASSET_POOL_SIZE 256
-#endif
-
-#ifndef RIZZ_CONFIG_MAX_HTTP_REQUESTS
-#    define RIZZ_CONFIG_MAX_HTTP_REQUESTS 32
-#endif
-
-#ifndef RIZZ_CONFIG_MAX_DEBUG_VERTICES
-#    define RIZZ_CONFIG_MAX_DEBUG_VERTICES 10000
-#endif
-
-#ifndef RIZZ_CONFIG_MAX_DEBUG_INDICES
-#    define RIZZ_CONFIG_MAX_DEBUG_INDICES 10000
-#endif
-
-#ifndef RIZZ_CONFIG_DEBUG_MEMORY
-#    ifdef _DEBUG
-#        define RIZZ_CONFIG_DEBUG_MEMORY 1
-#    else
-#        define RIZZ_CONFIG_DEBUG_MEMORY 0
-#    endif
-#endif
-
-#ifndef RIZZ_CONFIG_MAX_PLUGINS
-#    define RIZZ_CONFIG_MAX_PLUGINS 64
-#endif
-
-#ifndef RIZZ_CONFIG_EVENTQUEUE_MAX_EVENTS
-#    define RIZZ_CONFIG_EVENTQUEUE_MAX_EVENTS 4
-#endif
-
-#ifndef RIZZ_MAX_PATH
-#    define RIZZ_MAX_PATH 256
-#endif    // RIZZ_MAX_PATH
+#include "sx/platform.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @types
@@ -748,23 +692,37 @@ typedef struct rizz_api_core {
 #endif
 
 #define rizz_coro_userdata()             __transfer.user
-#define rizz_coro_end()                  (RIZZ_CORE_API_VARNAME)->coro_end(&__transfer.from)
 #define rizz_coro_wait(_msecs)           (RIZZ_CORE_API_VARNAME)->coro_wait(&__transfer.from, (_msecs))
 #define rizz_coro_yield()                (RIZZ_CORE_API_VARNAME)->coro_yield(&__transfer.from, 1)
 #define rizz_coro_yieldn(_n)             (RIZZ_CORE_API_VARNAME)->coro_yield(&__transfer.from, (_n))
 #define rizz_coro_end()                  (RIZZ_CORE_API_VARNAME)->coro_end(&__transfer.from)
 #define rizz_coro_invoke(_name, _user)   (RIZZ_CORE_API_VARNAME)->coro_invoke(coro__##_name, (_user))
 
+// using these macros are preferred to begin_profile_sample() and end_profile_sample()
+// because They provide cache variables for name hashing and also somewhat emulates C++ RAII
 #define rizz_profile_begin(_name, _flags) \
         static uint32_t rmt_sample_hash_##_name = 0; \
+        uint32_t rmt_sample_raii_##_name; \
         (RIZZ_CORE_API_VARNAME)->begin_profile_sample(#_name, _flags, &rmt_sample_hash_##_name)
-#define rizz_profile_end()               (RIZZ_CORE_API_VARNAME)->end_profile_sample()
+#define rizz_profile_end(_name)               \
+        (void)rmt_sample_raii_##_name;   \
+        (RIZZ_CORE_API_VARNAME)->end_profile_sample();
+
+// using these macros are preferred to the_core->tmp_alloc_push() and the_core->tmp_alloc_pop()
+// They somewhat emulates C++ RAII and throws 'unused variable' warning when _end is not called
+#define rizz_temp_alloc_begin(_name) \
+        uint32_t _temp_alloc_raii_##_name; \
+        const sx_alloc* _name = (RIZZ_CORE_API_VARNAME)->tmp_alloc_push()
+#define rizz_temp_alloc_end(_name) \
+        (void)_temp_alloc_raii_##_name; \
+        (RIZZ_CORE_API_VARNAME)->tmp_alloc_pop()
+        
 // clang-format on
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @graphics
 // _sg-types.h is copy/pasted from sokol_gfx.h, all the types are equal between these two files
-#define RIZZ_INCLUDE_SG_TYPES 
+#define RIZZ_INCLUDE_SG_TYPES
 #include "sg-types.h"
 #undef RIZZ_INCLUDE_SG_TYPES
 
@@ -779,18 +737,18 @@ typedef struct rizz_api_core {
 //       #include rizz_shader_path(shaders/include, myshader.h)
 #define rizz_shader_path(_basepath, _filename) \
     _rizz_shader_path_lang(_basepath, RIZZ_GRAPHICS_SHADER_LANG, _filename)
-// clang-format on
+    // clang-format on
 
-typedef enum rizz_gfx_backend {
-    RIZZ_GFX_BACKEND_GLCORE33,
-    RIZZ_GFX_BACKEND_GLES2,
-    RIZZ_GFX_BACKEND_GLES3,
-    RIZZ_GFX_BACKEND_D3D11,
-    RIZZ_GFX_BACKEND_METAL_IOS,
-    RIZZ_GFX_BACKEND_METAL_MACOS,
-    RIZZ_GFX_BACKEND_METAL_SIMULATOR,
-    RIZZ_GFX_BACKEND_DUMMY,
-} rizz_gfx_backend;
+    typedef enum rizz_gfx_backend {
+        RIZZ_GFX_BACKEND_GLCORE33,
+        RIZZ_GFX_BACKEND_GLES2,
+        RIZZ_GFX_BACKEND_GLES3,
+        RIZZ_GFX_BACKEND_D3D11,
+        RIZZ_GFX_BACKEND_METAL_IOS,
+        RIZZ_GFX_BACKEND_METAL_MACOS,
+        RIZZ_GFX_BACKEND_METAL_SIMULATOR,
+        RIZZ_GFX_BACKEND_DUMMY,
+    } rizz_gfx_backend;
 
 typedef enum rizz_shader_lang {
     RIZZ_SHADER_LANG_GLES,
@@ -1437,9 +1395,11 @@ typedef struct rizz_api_refl {
     bool (*is_cstring)(const rizz_refl_info* r);
 } rizz_api_refl;
 
-#define rizz_refl_enum(_type, _name)                                       \
-        (RIZZ_REFLECT_API_VARNAME)->_reg(RIZZ_REFL_ENUM, (void*)(intptr_t)_name, #_type, #_name, NULL, "", sizeof(_type), 0)
+// clang-format off
+#define rizz_refl_enum(_type, _name) \
+    (RIZZ_REFLECT_API_VARNAME)->_reg(RIZZ_REFL_ENUM, (void*)(intptr_t)_name, #_type, #_name, NULL, "", sizeof(_type), 0)
 #define rizz_refl_func(_type, _name, _desc) \
-        (RIZZ_REFLECT_API_VARNAME)->_reg(RIZZ_REFL_FUNC, &_name, #_type, #_name, NULL, _desc, sizeof(void*), 0)
-#define rizz_refl_field(_struct, _type, _name, _desc)                               \
-        (RIZZ_REFLECT_API_VARNAME)->_reg(RIZZ_REFL_FIELD, &(((_struct*)0)->_name), #_type, #_name, #_struct, _desc, sizeof(_type), sizeof(_struct))
+    (RIZZ_REFLECT_API_VARNAME)->_reg(RIZZ_REFL_FUNC, &_name, #_type, #_name, NULL, _desc, sizeof(void*), 0)
+#define rizz_refl_field(_struct, _type, _name, _desc)   \
+    (RIZZ_REFLECT_API_VARNAME)->_reg(RIZZ_REFL_FIELD, &(((_struct*)0)->_name), #_type, #_name, #_struct, _desc, sizeof(_type), sizeof(_struct))
+// clang-format on

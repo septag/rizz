@@ -221,9 +221,7 @@ set(native_projects sx
                     input)
 
 # 3rdparty projects
-set(3rdparty_projects utf 
-                      lz4
-                      cimgui
+set(3rdparty_projects cimgui
                       imguizmo
                       remotery
                       gainput
