@@ -59,7 +59,8 @@
         "xiosbase": "cpp",
         "limits.h": "c",
         "xutility": "c",
-        "internal.h": "c"
+        "internal.h": "c",
+        "2dtools.h": "c"
     },
     "files.exclude": {
         "**/.git": true,

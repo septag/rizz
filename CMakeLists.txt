@@ -216,7 +216,7 @@ include_directories(include)
 set(native_projects sx 
                     rizz
                     imgui
-                    sprite
+                    2dtools
                     sound
                     input)
 

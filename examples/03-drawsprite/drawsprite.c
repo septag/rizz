@@ -4,7 +4,7 @@
 
 #include "rizz/imgui-extra.h"
 #include "rizz/imgui.h"
-#include "rizz/sprite.h"
+#include "rizz/2dtools.h"
 #include "rizz/rizz.h"
 
 #include "../common.h"
@@ -398,5 +398,5 @@ rizz_game_decl_config(conf)
     conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;
     conf->swap_interval = 2;
     conf->plugins[0] = "imgui";
-    conf->plugins[1] = "sprite";
+    conf->plugins[1] = "2dtools";
 }

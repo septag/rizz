@@ -24,8 +24,11 @@ typedef struct sx_alloc sx_alloc;
 typedef struct { uint32_t id; } rizz_sprite;
 typedef struct { uint32_t id; } rizz_sprite_animclip;
 typedef struct { uint32_t id; } rizz_sprite_animctrl;
+typedef struct { uint32_t id; } rizz_font;
 //clang-format on
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// @sprite
 typedef enum {
     RIZZ_SPRITE_FLIP_NONE = 0,
     RIZZ_SPRITE_FLIP_X = 0x1,
@@ -247,3 +250,90 @@ typedef struct rizz_api_sprite {
     // debugging
     void (*show_debugger)(bool* p_open);
 } rizz_api_sprite;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// @font
+typedef struct rizz_font_load_params {
+    int width;
+    int height;
+} rizz_font_load_params;
+
+typedef enum {
+	// Horizontal align
+	RIZZ_FONT_ALIGN_LEFT 	= 1<<0,	// Default
+	RIZZ_FONT_ALIGN_CENTER 	= 1<<1,
+	RIZZ_FONT_ALIGN_RIGHT 	= 1<<2,
+	// Vertical align
+	RIZZ_FONT_ALIGN_TOP     = 1<<3,
+	RIZZ_FONT_ALIGN_MIDDLE	= 1<<4,
+	RIZZ_FONT_ALIGN_BOTTOM	= 1<<5,
+	RIZZ_FONT_ALIGN_BASELINE	= 1<<6, // Default    
+} rizz_font_align_;
+typedef uint32_t rizz_font_align;
+
+typedef struct rizz_font_state {
+    float size;
+    sx_color color;
+    float spacing;
+    float blur;
+    rizz_font_align align;
+} rizz_font_state;
+
+typedef struct rizz_font_bounds {
+    sx_rect rect;
+    float advance;
+} rizz_font_bounds;
+
+typedef struct rizz_font_line_bounds {
+    float miny;
+    float maxy;
+} rizz_font_line_bounds;
+
+typedef struct rizz_font_vert_metrics {
+    float ascender;
+    float descender;
+    float lineh;
+} rizz_font_vert_metrics;
+
+typedef struct rizz_font_iter {
+    float x;
+    float y;
+    float nextx;
+    float nexty;
+    float scale;
+    float spacing;
+    uint32_t codepoint;
+    int16_t isize;
+    int16_t iblur;
+    uint32_t utf8state;
+    const char* str;
+    const char* next;
+    const char* end;
+} rizz_font_iter;
+
+typedef struct rizz_font_vertex {
+    sx_vec2 pos;
+    sx_vec2 uv;
+} rizz_font_vertex;
+
+typedef struct rizz_font_quad {
+    rizz_font_vertex v0;
+    rizz_font_vertex v1;
+} rizz_font_quad;
+
+typedef struct rizz_api_font {
+    void (*draw)(rizz_font fnt, sx_vec2 pos, const char* text);
+    void (*drawf)(rizz_font fnt, sx_vec2 pos, const char* fmt, ...);
+    void (*draw_debug)(rizz_font fnt, sx_vec2 pos);
+
+    void (*push_state)(rizz_font fnt, const rizz_font_state* state);
+    void (*pop_state)(rizz_font fnt);
+    void (*clear_state)(rizz_font fnt);
+    
+    rizz_font_bounds (*bounds)(sx_vec2 pos, const char* text); 
+    rizz_font_line_bounds (*line_bounds)(float y);
+    rizz_font_vert_metrics (*vert_metrics)(void);
+
+    rizz_font_iter (*iter_init)(rizz_font fnt, sx_vec2 pos, const char* text);
+    void (*iter_next)(rizz_font fnt, rizz_font_iter* iter, rizz_font_quad* quad);
+} rizz_api_font;

@@ -870,40 +870,6 @@ typedef struct rizz_texture {
     rizz_texture_info info;
 } rizz_texture;
 
-// text/font
-enum rizz_text_flags_ {
-    RIZZ_TEXT_ALIGN_CENTER = 0x01,
-    RIZZ_TEXT_ALIGN_RIGHT = 0x02,
-    RIZZ_TEXT_ALIGN_LEFT = 0x04,
-    RIZZ_TEXT_RTL = 0x08,
-    RIZZ_TEXT_MULTILINE = 0x10
-};
-typedef uint32_t rizz_text_flags;
-
-enum rizz_font_flags_ {
-    RIZZ_FONT_UNICODE = 0x1,
-    RIZZ_FONT_ITALIC = 0x2,
-    RIZZ_FONT_BOLD = 0x4,
-    RIZZ_FONT_FIXED_HEIGHT = 0x8
-};
-typedef uint32_t rizz_font_flags;
-
-typedef struct rizz_font {
-    char name[32];
-    int size;
-    int line_height;
-    int base;
-    int img_width;
-    int img_height;
-    int char_width;
-    rizz_font_flags flags;
-    int16_t padding[4];
-    int16_t spacing[2];
-    rizz_asset img;
-    int num_glyphs;
-    int num_kerns;
-} rizz_font;
-
 typedef struct rizz_gfx_trace_info {
     int num_draws;
     int num_instances;
