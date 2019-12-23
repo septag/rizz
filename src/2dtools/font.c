@@ -1,8 +1,22 @@
 #include "rizz/2dtools.h"
 
+#include "sx/array.h"
 #include "sx/os.h"
 
 #include "rizz/imgui.h"
+
+#define FONS_STATIC
+#define FONS_MALLOC(alloc, sz) sx_malloc((const sx_alloc*)alloc, sz)
+#define FONS_REALLOC(alloc, ptr, sz) sx_realloc((const sx_alloc*)alloc, ptr, sz)
+#define FONS_FREE(alloc, ptr) sx_free((const sx_alloc*)alloc, ptr)
+#define FONTSTASH_IMPLEMENTATION
+#include "fontstash/fontstash.h"
+
+#include rizz_shader_path(shaders_h, font.vert.h)
+#include rizz_shader_path(shaders_h, font.frag.h)
+
+#define MAX_VERTICES 4000
+#define MAX_INDICES 12000
 
 RIZZ_STATE static rizz_api_core* the_core;
 RIZZ_STATE static rizz_api_asset* the_asset;
@@ -11,28 +25,37 @@ RIZZ_STATE static rizz_api_gfx* the_gfx;
 RIZZ_STATE static rizz_api_imgui* the_imgui;
 
 typedef struct font__fons {
-    int width;
-    int height;
+    rizz_font f;
     FONScontext* ctx;
-    sg_image img;
     bool img_dirty;
 } font__fons;
 
 typedef struct font__context {
     const sx_alloc* alloc;
-
+    font__fons** fonts;    // sx_array
+    sg_pipeline pip;
+    sg_buffer vbuff;
+    sg_buffer ibuff;
+    sg_shader shader;
 } font__context;
+
+static rizz_vertex_layout k_font_vertex_layout = {
+    .attrs[0] = { .semantic = "POSITION", .offset = offsetof(rizz_font_vertex, pos) },
+    .attrs[1] = { .semantic = "TEXCOORD", .offset = offsetof(rizz_font_vertex, uv) },
+    .attrs[2] = { .semantic = "COLOR",
+                  .offset = offsetof(rizz_sprite_vertex, color),
+                  .format = SG_VERTEXFORMAT_UBYTE4N }
+};
 
 RIZZ_STATE static font__context g_font;
 
-#define FONS_STATIC
-#define FONS_MALLOC(sz) sx_malloc(g_font.alloc, sz)
-#define FONS_REALLOC(ptr, sz) sx_realloc(g_font.alloc, ptr, sz)
-#define FONS_FREE(ptr) sx_free(g_font.alloc, ptr)
-#define FONTSTASH_IMPLEMENTATION
-#include "fontstash/fontstash.h"
-
-static int fons__render_create(void* user_ptr, int width, int height) {}
+static int fons__render_create(void* user_ptr, int width, int height)
+{
+    sx_unused(user_ptr);
+    sx_unused(width);
+    sx_unused(height);
+    return 1;
+}
 
 static int fons__render_resize(void* user_ptr, int width, int height)
 {
@@ -41,7 +64,10 @@ static int fons__render_resize(void* user_ptr, int width, int height)
 
 static void fons__render_update(void* user_ptr, int* rect, const unsigned char* data)
 {
-    SOKOL_ASSERT(user_ptr && rect && data);
+    sx_assert(user_ptr && rect && data);
+    sx_unused(rect);
+    sx_unused(data);
+
     font__fons* fons = user_ptr;
     fons->img_dirty = true;
 }
@@ -49,29 +75,38 @@ static void fons__render_update(void* user_ptr, int* rect, const unsigned char* 
 static void fons__render_draw(void* user_ptr, const float* verts, const float* tcoords,
                               const unsigned int* colors, int nverts)
 {
+    sx_unused(user_ptr);
+    sx_unused(verts);
+    sx_unused(tcoords);
+    sx_unused(colors);
+    sx_unused(nverts);
 }
 
-static void fons__render_delete(void* user_ptr) {}
+static void fons__render_delete(void* user_ptr)
+{
+    sx_unused(user_ptr);
+}
 
 static rizz_asset_load_data font__fons_on_prepare(const rizz_asset_load_params* params,
                                                   const void* metadata)
 {
     const sx_alloc* alloc = params->alloc ? params->alloc : g_font.alloc;
-    rizz_font_load_params* fparams = params->params;
+    const rizz_font_load_params* fparams = params->params;
 
     font__fons* fons = sx_malloc(alloc, sizeof(font__fons));
     if (!fons) {
         sx_out_of_memory();
         return (rizz_asset_load_data){ .obj = { 0 } };
     }
-    fons->width = fparams->width;
-    fons->height = fparams->height;
+    fons->f.img_width = fparams->atlas_width;
+    fons->f.img_height = fparams->atlas_height;
 
     FONSparams fons_params;
-    fons_params.width = fparams->width;
-    fons_params.height = fparams->height;
+    fons_params.width = fparams->atlas_width;
+    fons_params.height = fparams->atlas_height;
     fons_params.flags = the_gfx->GL_family() ? FONS_ZERO_BOTTOMLEFT : FONS_ZERO_TOPLEFT;
     fons_params.userPtr = fons;
+    fons_params.allocPtr = (void*)alloc;
     fons_params.renderCreate = fons__render_create;
     fons_params.renderDelete = fons__render_delete;
     fons_params.renderDraw = fons__render_draw;
@@ -81,14 +116,14 @@ static rizz_asset_load_data font__fons_on_prepare(const rizz_asset_load_params* 
     sx_assert(fons->ctx);
 
     // create font texture
-    fons->img = the_gfx->make_image(&(sg_image_desc){ .width = fparams->width,
-                                                      .height = fparams->height,
-                                                      .min_filter = SG_FILTER_LINEAR,
-                                                      .mag_filter = SG_FILTER_LINEAR,
-                                                      .usage = SG_USAGE_DYNAMIC,
-                                                      .pixel_format = SG_PIXELFORMAT_R8 });
+    fons->f.img = the_gfx->make_image(&(sg_image_desc){ .width = fparams->atlas_width,
+                                                        .height = fparams->atlas_height,
+                                                        .min_filter = SG_FILTER_LINEAR,
+                                                        .mag_filter = SG_FILTER_LINEAR,
+                                                        .usage = SG_USAGE_DYNAMIC,
+                                                        .pixel_format = SG_PIXELFORMAT_R8 });
 
-    if (!fons->img.id) {
+    if (!fons->f.img.id) {
         return (rizz_asset_load_data){ .obj = { 0 } };
     }
 
@@ -103,6 +138,7 @@ static bool font__fons_on_load(rizz_asset_load_data* data, const rizz_asset_load
     char name[64];
     sx_os_path_basename(name, sizeof(name), params->path);
     if (fonsAddFontMem(fons->ctx, name, mem->data, mem->size, 0) == FONS_INVALID) {
+        rizz_log_warn("loading font '%s' failed: invalid TTF file", params->path);
         return false;
     }
 
@@ -112,13 +148,23 @@ static bool font__fons_on_load(rizz_asset_load_data* data, const rizz_asset_load
 static void font__fons_on_finalize(rizz_asset_load_data* data, const rizz_asset_load_params* params,
                                    const sx_mem_block* mem)
 {
+    sx_unused(params);
+    sx_unused(mem);
+
+    // add font to database to texture updates
+    font__fons* font = data->obj.ptr;
+    sx_assert(font);
+    sx_array_push(g_font.alloc, g_font.fonts, font);
 }
 
 static void font__fons_on_reload(rizz_asset handle, rizz_asset_obj prev_obj, const sx_alloc* alloc)
 {
+    sx_unused(handle);
+    sx_unused(prev_obj);
+    sx_unused(alloc);
 }
 
-static void font__fons_on_release(rizz_asset_obj obj, const sx_alloc* alloc) 
+static void font__fons_on_release(rizz_asset_obj obj, const sx_alloc* alloc)
 {
     font__fons* fons = obj.ptr;
     sx_assert(fons);
@@ -127,18 +173,68 @@ static void font__fons_on_release(rizz_asset_obj obj, const sx_alloc* alloc)
         alloc = g_font.alloc;
     }
 
-    if (fons->img.id) {
-        the_gfx->destroy_image(fons->img);
+    if (fons->f.img.id) {
+        the_gfx->destroy_image(fons->f.img);
     }
 
     fonsDeleteInternal(fons->ctx);
+
+    // remove from font database, so we don't have to update it anymore
+    for (int i = 0, c = sx_array_count(g_font.fonts); i < c; i++) {
+        if (g_font.fonts[i] == fons) {
+            sx_array_pop(g_font.fonts, i);
+            break;
+        }
+    }
 }
 
 static void font__fons_on_read_metadata(void* metadata, const rizz_asset_load_params* params,
                                         const sx_mem_block* mem)
 {
+    sx_unused(metadata);
+    sx_unused(params);
+    sx_unused(mem);
 }
 
+bool font__resize_draw_limits(int max_verts, int max_indices)
+{
+    sx_assert(max_verts < UINT16_MAX);
+
+    // recreate vertex/index buffers
+    if (g_font.vbuff.id)
+        the_gfx->destroy_buffer(g_font.vbuff);
+    if (g_font.ibuff.id)
+        the_gfx->destroy_buffer(g_font.ibuff);
+
+    if (max_verts == 0 || max_indices == 0) {
+        g_font.vbuff = g_font.ibuff = (sg_buffer){ 0 };
+        return true;
+    }
+
+    g_font.vbuff =
+        the_gfx->make_buffer(&(sg_buffer_desc){ .size = sizeof(rizz_sprite_vertex) * max_verts,
+                                                .usage = SG_USAGE_STREAM,
+                                                .type = SG_BUFFERTYPE_VERTEXBUFFER });
+    g_font.ibuff = the_gfx->make_buffer(&(sg_buffer_desc){ .size = sizeof(uint16_t) * max_indices,
+                                                        .usage = SG_USAGE_STREAM,
+                                                        .type = SG_BUFFERTYPE_INDEXBUFFER });
+
+    return g_font.vbuff.id && g_font.ibuff.id;
+}
+
+void font__update(void)
+{
+    for (int i = 0, c = sx_array_count(g_font.fonts); i < c; i++) {
+        font__fons* font = g_font.fonts[i];
+        if (font->img_dirty) {
+            font->img_dirty = false;
+            the_gfx->imm.update_image(
+                font->f.img, &(sg_image_content){ .subimage[0][0].ptr = font->ctx->texData,
+                                                  .subimage[0][0].size =
+                                                      font->f.img_width * font->f.img_height });
+        }
+    }
+}
 
 bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* refl, rizz_api_gfx* gfx)
 {
@@ -149,6 +245,43 @@ bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* refl,
 
     g_font.alloc = the_core->alloc(RIZZ_MEMID_GRAPHICS);
 
+    // gfx objects
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_shader shader = the_gfx->shader_make_with_data(
+        tmp_alloc, k_font_vs_size, k_font_vs_data, k_font_vs_refl_size, k_font_vs_refl_data,
+        k_font_fs_size, k_font_fs_data, k_font_fs_refl_size, k_font_fs_refl_data);
+    g_font.shader = shader.shd;
+
+    sg_pipeline_desc pip_desc =
+        (sg_pipeline_desc){ .layout.buffers[0].stride = sizeof(rizz_font_vertex),
+                            .index_type = SG_INDEXTYPE_UINT16,
+                            .rasterizer = { .cull_mode = SG_CULLMODE_BACK },
+                            .blend = { .enabled = true,
+                                       .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
+                                       .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA } };
+
+    g_font.pip = the_gfx->make_pipeline(
+        the_gfx->shader_bindto_pipeline(&shader, &pip_desc, &k_font_vertex_layout));
+
+    the_core->tmp_alloc_pop();
+
+    if (!font__resize_draw_limits(MAX_VERTICES, MAX_INDICES)) {
+        return false;
+    }
+
+    // TODO: set async dummy objects
+
+    the_asset->register_asset_type(
+        "font",
+        (rizz_asset_callbacks){ .on_prepare = font__fons_on_prepare,
+                                .on_load = font__fons_on_load,
+                                .on_finalize = font__fons_on_finalize,
+                                .on_reload = font__fons_on_reload,
+                                .on_release = font__fons_on_release,
+                                .on_read_metadata = font__fons_on_read_metadata },
+        "rizz_font_load_params", sizeof(rizz_font_load_params), NULL, 0,
+        (rizz_asset_obj){ .ptr = NULL }, (rizz_asset_obj){ .ptr = NULL }, 0);
+
     return true;
 }
 
@@ -157,7 +290,25 @@ void font__set_imgui(rizz_api_imgui* imgui)
     the_imgui = imgui;
 }
 
-void font__release(void) {}
+void font__release(void)
+{
+    the_asset->unregister_asset_type("font");
+
+    // destroy gfx objects
+    if (g_font.vbuff.id)
+        the_gfx->destroy_buffer(g_font.vbuff);
+    if (g_font.ibuff.id) 
+        the_gfx->destroy_buffer(g_font.ibuff);
+    if (g_font.shader.id)
+        the_gfx->destroy_shader(g_font.shader);
+    if (g_font.pip.id)
+        the_gfx->destroy_pipeline(g_font.pip);
+}
+
+const rizz_font* font__get(rizz_asset font_asset)
+{
+    return (const rizz_font*)the_asset->obj(font_asset).ptr;
+}
 
 #if 0    // bmfont loading
 // text/font

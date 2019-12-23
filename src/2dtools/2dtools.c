@@ -53,10 +53,15 @@ static rizz_api_sprite the__sprite = { .create = sprite__create,
                                        .animctrl_restart = sprite__animctrl_restart,
                                        .show_debugger = sprite__show_debugger };
 
+static rizz_api_font the__font = {
+    .font_get = font__get   // 
+};
+
 rizz_plugin_decl_main(2dtools, plugin, e)
 {
     switch (e) {
     case RIZZ_PLUGIN_EVENT_STEP:
+        font__update();
         break;
 
     case RIZZ_PLUGIN_EVENT_INIT: {
@@ -66,15 +71,17 @@ rizz_plugin_decl_main(2dtools, plugin, e)
         rizz_api_refl* refl = the_plugin->get_api(RIZZ_API_REFLECT, 0);
         rizz_api_gfx* gfx = the_plugin->get_api(RIZZ_API_GFX, 0);
         rizz_api_imgui* imgui = the_plugin->get_api_byname("imgui", 0);
-        if (!sprite__init(core, asset, refl, gfx)) {
+        if (!sprite__init(core, asset, refl, gfx) || !font__init(core, asset, refl, gfx)) {
             return -1;
         }
         sprite__set_imgui(imgui);
         the_plugin->inject_api("sprite", 0, &the__sprite);
+        the_plugin->inject_api("font", 0, &the__font);
     } break;
 
     case RIZZ_PLUGIN_EVENT_LOAD:
         the_plugin->inject_api("sprite", 0, &the__sprite);
+        the_plugin->inject_api("font", 0, &the__font);
         break;
 
     case RIZZ_PLUGIN_EVENT_UNLOAD:
@@ -82,7 +89,9 @@ rizz_plugin_decl_main(2dtools, plugin, e)
 
     case RIZZ_PLUGIN_EVENT_SHUTDOWN:
         the_plugin->remove_api("sprite", 0);
+        the_plugin->remove_api("font", 0);
         sprite__release();
+        font__release();
         break;
     }
 
@@ -94,6 +103,7 @@ rizz_plugin_decl_event_handler(2dtools, e)
     if (e->type == RIZZ_APP_EVENTTYPE_UPDATE_APIS) {
         rizz_api_imgui* imgui = the_plugin->get_api_byname("imgui", 0);
         sprite__set_imgui(imgui);
+        font__set_imgui(imgui);
     }
 }
 

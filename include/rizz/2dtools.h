@@ -24,7 +24,6 @@ typedef struct sx_alloc sx_alloc;
 typedef struct { uint32_t id; } rizz_sprite;
 typedef struct { uint32_t id; } rizz_sprite_animclip;
 typedef struct { uint32_t id; } rizz_sprite_animctrl;
-typedef struct { uint32_t id; } rizz_font;
 //clang-format on
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -254,8 +253,8 @@ typedef struct rizz_api_sprite {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @font
 typedef struct rizz_font_load_params {
-    int width;
-    int height;
+    int atlas_width;
+    int atlas_height;
 } rizz_font_load_params;
 
 typedef enum {
@@ -314,6 +313,7 @@ typedef struct rizz_font_iter {
 typedef struct rizz_font_vertex {
     sx_vec2 pos;
     sx_vec2 uv;
+    sx_color color;
 } rizz_font_vertex;
 
 typedef struct rizz_font_quad {
@@ -321,19 +321,28 @@ typedef struct rizz_font_quad {
     rizz_font_vertex v1;
 } rizz_font_quad;
 
-typedef struct rizz_api_font {
-    void (*draw)(rizz_font fnt, sx_vec2 pos, const char* text);
-    void (*drawf)(rizz_font fnt, sx_vec2 pos, const char* fmt, ...);
-    void (*draw_debug)(rizz_font fnt, sx_vec2 pos);
+typedef struct rizz_font {
+    int img_width;
+    int img_height;
+    sg_image img;
+} rizz_font;
 
-    void (*push_state)(rizz_font fnt, const rizz_font_state* state);
-    void (*pop_state)(rizz_font fnt);
-    void (*clear_state)(rizz_font fnt);
+typedef struct rizz_api_font {
+    const rizz_font* (*font_get)(rizz_asset font_asset);
+
+    void (*draw)(const rizz_font* fnt, sx_vec2 pos, const char* text);
+    void (*drawf)(const rizz_font* fnt, sx_vec2 pos, const char* fmt, ...);
+    void (*draw_debug)(const rizz_font* fnt, sx_vec2 pos);
+
+    void (*push_state)(const rizz_font* fnt, const rizz_font_state* state);
+    void (*pop_state)(const rizz_font* fnt);
+    void (*clear_state)(const rizz_font* fnt);
     
     rizz_font_bounds (*bounds)(sx_vec2 pos, const char* text); 
     rizz_font_line_bounds (*line_bounds)(float y);
     rizz_font_vert_metrics (*vert_metrics)(void);
+    bool (*resize_draw_limits)(int max_verts, int max_indices);
 
-    rizz_font_iter (*iter_init)(rizz_font fnt, sx_vec2 pos, const char* text);
-    void (*iter_next)(rizz_font fnt, rizz_font_iter* iter, rizz_font_quad* quad);
+    rizz_font_iter (*iter_init)(const rizz_font* fnt, sx_vec2 pos, const char* text);
+    void (*iter_next)(const rizz_font* fnt, rizz_font_iter* iter, rizz_font_quad* quad);
 } rizz_api_font;

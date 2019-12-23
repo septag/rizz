@@ -2,9 +2,9 @@
 #include "sx/string.h"
 #include "sx/timer.h"
 
+#include "rizz/2dtools.h"
 #include "rizz/imgui-extra.h"
 #include "rizz/imgui.h"
-#include "rizz/2dtools.h"
 #include "rizz/rizz.h"
 
 #include "../common.h"
@@ -88,6 +88,10 @@ static bool init()
     // always do this after you have mounted all virtual directories
     the_asset->load_meta_cache();
 
+    the_asset->load("font", "/assets/fonts/ariblk.ttf",
+                    &(rizz_font_load_params){ .atlas_width = 1024, .atlas_height = 1024 },
+                    RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD, NULL, 0);
+
     // register main graphics stage.
     // at least one stage should be registered if you want to draw anything
     g_ds.stage = the_gfx->stage_register("main", (rizz_gfx_stage){ .id = 0 });
@@ -113,14 +117,13 @@ static bool init()
         NULL, 0, NULL, 0);
 
     // pipeline
-    sg_pipeline_desc pip_desc = {
-        .layout.buffers[0].stride = sizeof(drawsprite_vertex),
-        .index_type = SG_INDEXTYPE_UINT16,
-        .rasterizer = { .cull_mode = SG_CULLMODE_BACK },
-        .blend = { .enabled = true,
-                   .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
-                   .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA }
-    };
+    sg_pipeline_desc pip_desc = { .layout.buffers[0].stride = sizeof(drawsprite_vertex),
+                                  .index_type = SG_INDEXTYPE_UINT16,
+                                  .rasterizer = { .cull_mode = SG_CULLMODE_BACK },
+                                  .blend = { .enabled = true,
+                                             .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
+                                             .dst_factor_rgb =
+                                                 SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA } };
     g_ds.pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
         the_gfx->shader_get(g_ds.shader), &pip_desc, &k_vertex_layout));
 

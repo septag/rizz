@@ -1240,7 +1240,7 @@ bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* ref
     the_asset = asset;
     the_refl = refl;
     the_gfx = gfx;
-    
+
     g_spr.alloc = the_core->alloc(RIZZ_MEMID_GRAPHICS);
     g_spr.name_pool = sx_strpool_create(
         g_spr.alloc, &(sx_strpool_config){ .counter_bits = SX_CONFIG_HANDLE_GEN_BITS,
@@ -1311,7 +1311,7 @@ bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* ref
         tmp_alloc, k_sprite_wire_vs_size, k_sprite_wire_vs_data, k_sprite_wire_vs_refl_size,
         k_sprite_wire_vs_refl_data, k_sprite_wire_fs_size, k_sprite_wire_fs_data,
         k_sprite_wire_fs_refl_size, k_sprite_wire_fs_refl_data);
-    g_spr.drawctx.shader = shader_wire.shd;
+    g_spr.drawctx.shader_wire = shader_wire.shd;
     pip_desc.index_type = SG_INDEXTYPE_NONE;
     g_spr.drawctx.pip_wire = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader_wire, &pip_desc, &k_sprite_wire_vertex_layout));
@@ -1782,7 +1782,7 @@ void sprite__drawdata_free(rizz_sprite_drawdata* data, const sx_alloc* alloc) {
 }
 
 void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp, 
-                               const sx_mat3* mats, sx_color* tints) {
+                        const sx_mat3* mats, sx_color* tints) {
     sx_unused(tints);   // TODO
 
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();

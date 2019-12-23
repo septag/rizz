@@ -2,6 +2,7 @@
 
 #include "rizz/2dtools.h"
 
+// sprite
 bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* refl,
                   rizz_api_gfx* gfx);
 void sprite__release(void);
@@ -60,3 +61,11 @@ bool sprite__animctrl_param_valueb(rizz_sprite_animctrl handle, const char* name
 float sprite__animctrl_param_valuef(rizz_sprite_animctrl handle, const char* name);
 int sprite__animctrl_param_valuei(rizz_sprite_animctrl handle, const char* name);
 rizz_sprite_animclip sprite__animctrl_clip(rizz_sprite_animctrl handle);
+
+// font
+bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* refl, rizz_api_gfx* gfx);
+void font__set_imgui(rizz_api_imgui* imgui);
+void font__release(void);
+void font__update(void);
+
+const rizz_font* font__get(rizz_asset font_asset);

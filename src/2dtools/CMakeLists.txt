@@ -11,11 +11,18 @@ set(2dtools_sources 2dtools.c
                     README.md)
 rizz_add_plugin(2dtools "${2dtools_sources}")
 
-set(shaders sprite.vert sprite.frag)
-set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "shaders_h")
-glslcc_target_compile_shaders_h(2dtools "${shaders}")
+set(GLSLCC_OUTPUT_DIRECTORY "shaders_h")
 
-# recompile sprite shaders with WIREFRAME flag
-set_source_files_properties(${shaders} PROPERTIES GLSLCC_COMPILE_DEFINITIONS "WIREFRAME" 
-                                                  GLSLCC_OUTPUT_FILENAME "sprite_wire")
-glslcc_target_compile_shaders_h(2dtools "${shaders}")
+# sprite shaders
+set(sprite_shaders sprite.vert sprite.frag)
+glslcc_target_compile_shaders_h(2dtools "${sprite_shaders}")
+
+# recompile sprite sprite_shaders with WIREFRAME flag
+set_source_files_properties(${sprite_shaders} PROPERTIES GLSLCC_COMPILE_DEFINITIONS "WIREFRAME" 
+                                                         GLSLCC_OUTPUT_FILENAME "sprite_wire")
+glslcc_target_compile_shaders_h(2dtools "${sprite_shaders}")
+
+# font shaders
+glslcc_target_compile_shaders_h(2dtools "font.vert;font.frag")
+
+
