@@ -309,8 +309,9 @@ static void rizz__print_error_trace(const char* source_file, int line, const cha
     }
 
 #if SX_COMPILER_MSVC && defined(_DEBUG)
-    sx_strcat(text, sizeof(text), "\n");
-    OutputDebugStringA(text);
+    char text_dbg[2048];
+    sx_snprintf(text_dbg, sizeof(text_dbg), "%s(%d): %s\n", source_file, line, text);
+    OutputDebugStringA(text_dbg);
 #endif
 
 #if SX_PLATFORM_ANDROID
