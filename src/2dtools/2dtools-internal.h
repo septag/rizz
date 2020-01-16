@@ -63,9 +63,20 @@ int sprite__animctrl_param_valuei(rizz_sprite_animctrl handle, const char* name)
 rizz_sprite_animclip sprite__animctrl_clip(rizz_sprite_animctrl handle);
 
 // font
-bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* refl, rizz_api_gfx* gfx);
+bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* refl, rizz_api_gfx* gfx,
+                rizz_api_app* app);
 void font__set_imgui(rizz_api_imgui* imgui);
 void font__release(void);
 void font__update(void);
-
 const rizz_font* font__get(rizz_asset font_asset);
+void font__draw(const rizz_font* fnt, sx_vec2 pos, const char* text);
+void font__drawf(const rizz_font* fnt, sx_vec2 pos, const char* fmt, ...);
+void font__push_state(const rizz_font* fnt, const rizz_font_state* state);
+void font__pop_state(const rizz_font* fnt);
+void font__clear_state(const rizz_font* fnt);
+rizz_font_bounds font__bounds(const rizz_font* fnt, sx_vec2 pos, const char* text);
+rizz_font_line_bounds font__line_bounds(const rizz_font* fnt, float y);
+rizz_font_vert_metrics font__vert_metrics(const rizz_font* fnt);
+bool font__resize_draw_limits(int max_verts);
+rizz_font_iter font__iter_init(const rizz_font* fnt, sx_vec2 pos, const char* text);
+rizz_font_quad font__iter_next(const rizz_font* fnt, rizz_font_iter* iter);

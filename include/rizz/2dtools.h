@@ -304,10 +304,12 @@ typedef struct rizz_font_iter {
     uint32_t codepoint;
     int16_t isize;
     int16_t iblur;
+    int prevGlyphIdx;
     uint32_t utf8state;
     const char* str;
     const char* next;
     const char* end;
+    void* _reserved;
 } rizz_font_iter;
 
 typedef struct rizz_font_vertex {
@@ -338,10 +340,10 @@ typedef struct rizz_api_font {
     void (*pop_state)(const rizz_font* fnt);
     void (*clear_state)(const rizz_font* fnt);
     
-    rizz_font_bounds (*bounds)(sx_vec2 pos, const char* text); 
-    rizz_font_line_bounds (*line_bounds)(float y);
-    rizz_font_vert_metrics (*vert_metrics)(void);
-    bool (*resize_draw_limits)(int max_verts, int max_indices);
+    rizz_font_bounds (*bounds)(const rizz_font* fnt, sx_vec2 pos, const char* text); 
+    rizz_font_line_bounds (*line_bounds)(const rizz_font* fnt, float y);
+    rizz_font_vert_metrics (*vert_metrics)(const rizz_font* fnt);
+    bool (*resize_draw_limits)(const rizz_font* fnt, int max_verts, int max_indices);
 
     rizz_font_iter (*iter_init)(const rizz_font* fnt, sx_vec2 pos, const char* text);
     void (*iter_next)(const rizz_font* fnt, rizz_font_iter* iter, rizz_font_quad* quad);

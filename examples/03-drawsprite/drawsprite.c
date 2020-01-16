@@ -23,6 +23,7 @@ RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
 RIZZ_STATE static rizz_api_camera* the_camera;
 RIZZ_STATE static rizz_api_vfs* the_vfs;
 RIZZ_STATE static rizz_api_sprite* the_sprite;
+RIZZ_STATE static rizz_api_font* the_font;
 
 typedef struct {
     sx_mat4 vp;
@@ -67,6 +68,7 @@ typedef struct {
     sg_buffer ibuff;
     rizz_camera_fps cam;
     rizz_sprite sprites[NUM_SPRITES];
+    rizz_asset font;
     bool wireframe;
     bool custom;
 } drawsprite_state;
@@ -88,7 +90,7 @@ static bool init()
     // always do this after you have mounted all virtual directories
     the_asset->load_meta_cache();
 
-    the_asset->load("font", "/assets/fonts/ariblk.ttf",
+    g_ds.font = the_asset->load("font", "/assets/fonts/ariblk.ttf",
                     &(rizz_font_load_params){ .atlas_width = 1024, .atlas_height = 1024 },
                     RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD, NULL, 0);
 
@@ -314,6 +316,10 @@ static void render()
         draw_custom(&params);
     }
 
+    const rizz_font* font = the_font->font_get(g_ds.font);
+    the_font->push_state(font, &(rizz_font_state){ .size = 30 });
+    the_font->draw(font, sx_vec2f(50.0f, 50.0f), "hello world");
+
     the_gfx->staged.end_pass();
     the_gfx->staged.end();
 
@@ -353,6 +359,7 @@ rizz_plugin_decl_main(drawsprite, plugin, e)
         the_imgui = plugin->api->get_api_byname("imgui", 0);
         the_imguix = plugin->api->get_api_byname("imgui_extra", 0);
         the_sprite = plugin->api->get_api_byname("sprite", 0);
+        the_font = plugin->api->get_api_byname("font", 0);
         sx_assert(the_sprite && "sprite plugin is not loaded!");
 
         if (!init())
