@@ -1649,8 +1649,9 @@ rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs, int n
     // sort sprites:
     //      high-bits (32): texture handle. main batching
     //      low-bits  (32): sprite index. cache coherence
-    if (num_sprites > 1)
+    if (num_sprites > 1) {
         sprite__sort_tim_sort(keys, num_sprites);
+    }
 
     memset(dd, 0x0, sizeof(rizz_sprite_drawdata));
     uint8_t* buff = (uint8_t*)(dd + 1);
@@ -1706,6 +1707,7 @@ rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs, int n
                 dst_indices[ii + 1] = src_indices[ii + 1] + vertex_start;
                 dst_indices[ii + 2] = src_indices[ii + 2] + vertex_start;
             }
+
 
             vertex_idx += aspr->num_verts;
             index_idx += aspr->num_indices;

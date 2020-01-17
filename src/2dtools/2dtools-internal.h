@@ -79,4 +79,4 @@ rizz_font_line_bounds font__line_bounds(const rizz_font* fnt, float y);
 rizz_font_vert_metrics font__vert_metrics(const rizz_font* fnt);
 bool font__resize_draw_limits(int max_verts);
 rizz_font_iter font__iter_init(const rizz_font* fnt, sx_vec2 pos, const char* text);
-rizz_font_quad font__iter_next(const rizz_font* fnt, rizz_font_iter* iter);
+bool font__iter_next(const rizz_font* fnt, rizz_font_iter* iter, rizz_font_quad* quad);

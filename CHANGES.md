@@ -64,7 +64,8 @@
 - [ ] EXPERIMENTAL: OpenGL compute-shader support
 - [x] Added `shader_get`/`texture_get` and other asset getters to all asset types
 - [x] Added basis texture support
-- [ ] Added true-type font (fontstash) support
+- [x] Added true-type font (fontstash) support through 'rizz_api_font' API
+- [ ] Sprite flip flags (flipX/flipY)
 
 ### Changed
 - [ ] try to use <sys/sem.h> instead of posix semaphores
@@ -73,7 +74,7 @@
 - [x] Improved GPU command buffers multi-threaded submission
 - [ ] Investigate and check if stage lock (`stage_lk`) is actually required
 - [ ] BREAKING: graphic helper functions/renderers should take any API
-- [ ] BREAKING: renamed _sprite_ plugin to _2dtools_ 
+- [x] BREAKING: renamed _sprite_ plugin to _2dtools_. the api name is the same, but it's now part of '2dtools' plugin
 
 ### Fixed
 - [x] fix sx_matx_inv 

@@ -90,9 +90,10 @@ static bool init()
     // always do this after you have mounted all virtual directories
     the_asset->load_meta_cache();
 
-    g_ds.font = the_asset->load("font", "/assets/fonts/ariblk.ttf",
-                    &(rizz_font_load_params){ .atlas_width = 1024, .atlas_height = 1024 },
-                    RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD, NULL, 0);
+    g_ds.font =
+        the_asset->load("font", "/assets/fonts/ariblk.ttf",
+                        &(rizz_font_load_params){ .atlas_width = 1024, .atlas_height = 1024 },
+                        RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD, NULL, 0);
 
     // register main graphics stage.
     // at least one stage should be registered if you want to draw anything
@@ -319,6 +320,18 @@ static void render()
     const rizz_font* font = the_font->font_get(g_ds.font);
     the_font->push_state(font, &(rizz_font_state){ .size = 30 });
     the_font->draw(font, sx_vec2f(50.0f, 50.0f), "hello world");
+
+#if 0
+	rizz_font_iter iter = the_font->iter_init(font, sx_vec2f(50.0f, 50.0f), "Hello world");
+	rizz_font_quad quad;
+	rizz_log_debug("BEGIN");
+	while (the_font->iter_next(font, &iter, &quad)) {
+		rizz_log_debug("p: %.2f, %.2f, %.2f, %.2f", quad.v0.pos.x, quad.v0.pos.y, quad.v1.pos.x, quad.v1.pos.y);
+        rizz_log_debug("t: %.2f, %.2f, %.2f, %.2f", quad.v0.uv.x, quad.v0.uv.y, quad.v1.uv.x,
+                       quad.v1.uv.y);
+	}
+	rizz_log_debug("END");
+#endif
 
     the_gfx->staged.end_pass();
     the_gfx->staged.end();

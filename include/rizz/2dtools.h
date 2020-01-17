@@ -343,8 +343,8 @@ typedef struct rizz_api_font {
     rizz_font_bounds (*bounds)(const rizz_font* fnt, sx_vec2 pos, const char* text); 
     rizz_font_line_bounds (*line_bounds)(const rizz_font* fnt, float y);
     rizz_font_vert_metrics (*vert_metrics)(const rizz_font* fnt);
-    bool (*resize_draw_limits)(const rizz_font* fnt, int max_verts, int max_indices);
+    bool (*resize_draw_limits)(int max_verts);
 
     rizz_font_iter (*iter_init)(const rizz_font* fnt, sx_vec2 pos, const char* text);
-    void (*iter_next)(const rizz_font* fnt, rizz_font_iter* iter, rizz_font_quad* quad);
+    bool (*iter_next)(const rizz_font* fnt, rizz_font_iter* iter, rizz_font_quad* quad);
 } rizz_api_font;

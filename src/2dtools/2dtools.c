@@ -53,14 +53,15 @@ static rizz_api_sprite the__sprite = { .create = sprite__create,
                                        .animctrl_restart = sprite__animctrl_restart,
                                        .show_debugger = sprite__show_debugger };
 
-static rizz_api_font the__font = {
-    .font_get = font__get,
-    .draw = font__draw,
-    .drawf = font__drawf,
-    .push_state = font__push_state,
-    .pop_state = font__pop_state,
-    .clear_state = font__clear_state,
-};
+static rizz_api_font the__font = { .font_get = font__get,
+                                   .draw = font__draw,
+                                   .drawf = font__drawf,
+                                   .push_state = font__push_state,
+                                   .pop_state = font__pop_state,
+                                   .clear_state = font__clear_state,
+                                   .resize_draw_limits = font__resize_draw_limits,
+                                   .iter_init = font__iter_init,
+                                   .iter_next = font__iter_next };
 
 rizz_plugin_decl_main(2dtools, plugin, e)
 {

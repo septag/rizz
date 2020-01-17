@@ -93,7 +93,7 @@ static void fons__render_draw(void* user_ptr, const float* poss, const float* tc
 
     for (int i = 0; i < nverts; i++) {
         int findex = i * 2;
-        verts[i].pos = sx_vec2f(poss[findex], h - poss[findex + 1]);
+        verts[i].pos = sx_vec2f(poss[findex], poss[findex + 1]);
         verts[i].uv = sx_vec2f(tcoords[findex], tcoords[findex + 1]);
         verts[i].color = sx_colorn(colors[i]);
     }
@@ -104,12 +104,9 @@ static void fons__render_draw(void* user_ptr, const float* poss, const float* tc
                              .vertex_buffer_offsets[0] = vb_offset,
                              .fs_images[0] = fons->f.img };
 
-    /*
-        sx_mat4 vp = sx_mat4_ortho((float)the_app->width(), (float)the_app->height(), -1.0f, 1.0f,
-       0, the_gfx->GL_family());
-    */
-
-    sx_mat4 vp = sx_mat4_ortho_offcenter(0, 0, w, h, -1.0f, 1.0f, 0, the_gfx->GL_family());
+    // note: setup ortho matrix in a way that the Y is reversed, because the input geometry is in
+    //		 screen coordinates (top-left=0)
+    sx_mat4 vp = sx_mat4_ortho_offcenter(0, h, w, 0, -1.0f, 1.0f, 0, the_gfx->GL_family());
 
     draw_api->apply_pipeline(g_font.pip);
     draw_api->apply_bindings(&bindings);
@@ -149,7 +146,7 @@ static rizz_asset_load_data font__fons_on_prepare(const rizz_asset_load_params* 
     FONSparams fons_params;
     fons_params.width = atlas_width;
     fons_params.height = atlas_height;
-    fons_params.flags = the_gfx->GL_family() ? FONS_ZERO_BOTTOMLEFT : FONS_ZERO_TOPLEFT;
+    fons_params.flags = FONS_ZERO_TOPLEFT;
     fons_params.userPtr = fons;
     fons_params.allocPtr = (void*)alloc;
     fons_params.renderCreate = fons__render_create;
@@ -309,9 +306,10 @@ bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* refl,
         k_font_fs_size, k_font_fs_data, k_font_fs_refl_size, k_font_fs_refl_data);
     g_font.shader = shader.shd;
 
+    // note: when we make the geometry, we modify the
     sg_pipeline_desc pip_desc =
         (sg_pipeline_desc){ .layout.buffers[0].stride = sizeof(rizz_font_vertex),
-                            .rasterizer = { .cull_mode = /*SG_CULLMODE_BACK*/ SG_CULLMODE_NONE },
+                            .rasterizer = { .cull_mode = SG_CULLMODE_FRONT },
                             .blend = { .enabled = true,
                                        .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
                                        .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA } };
@@ -444,76 +442,72 @@ rizz_font_iter font__iter_init(const rizz_font* fnt, sx_vec2 pos, const char* te
     const font__fons* fons = (const font__fons*)fnt;
     FONStextIter fiter;
     if (fonsTextIterInit(fons->ctx, &fiter, pos.x, pos.y, text, NULL)) {
-        return (rizz_font_iter){
-            .x = fiter.x,
-            .y = fiter.y,
-            .nextx = fiter.nextx,
-            .nexty = fiter.nexty,
-            .scale = fiter.scale,
-            .spacing = fiter.spacing,
-            .codepoint = fiter.codepoint,
-            .isize = fiter.isize,
-            .iblur = fiter.iblur,
-            .prevGlyphIdx = fiter.prevGlyphIndex,
-            .utf8state = fiter.utf8state,
-            .str = fiter.str,
-            .next = fiter.next,
-            .end = fiter.end,
-            ._reserved = fiter.font
-        };
+        return (rizz_font_iter){ .x = fiter.x,
+                                 .y = fiter.y,
+                                 .nextx = fiter.nextx,
+                                 .nexty = fiter.nexty,
+                                 .scale = fiter.scale,
+                                 .spacing = fiter.spacing,
+                                 .codepoint = fiter.codepoint,
+                                 .isize = fiter.isize,
+                                 .iblur = fiter.iblur,
+                                 .prevGlyphIdx = fiter.prevGlyphIndex,
+                                 .utf8state = fiter.utf8state,
+                                 .str = fiter.str,
+                                 .next = fiter.next,
+                                 .end = fiter.end,
+                                 ._reserved = fiter.font };
     } else {
         return (rizz_font_iter){ 0 };
     }
 }
 
-rizz_font_quad font__iter_next(const rizz_font* fnt, rizz_font_iter* iter)
+bool font__iter_next(const rizz_font* fnt, rizz_font_iter* iter, rizz_font_quad* quad)
 {
     sx_assert(iter);
 
     const font__fons* fons = (const font__fons*)fnt;
-    FONStextIter fiter = (FONStextIter){
-        .x = iter->x,
-        .y = iter->y,
-        .nextx = iter->nextx,
-        .nexty = iter->nexty,
-        .scale = iter->scale,
-        .spacing = iter->spacing,
-        .codepoint = iter->codepoint,
-        .isize = iter->isize,
-        .iblur = iter->iblur,
-        .font = iter->_reserved,
-        .prevGlyphIndex = iter->prevGlyphIdx,
-        .str = iter->str,
-        .next = iter->next,
-        .end = iter->end,
-        .utf8state = iter->utf8state
-    };
+    FONStextIter fiter = (FONStextIter){ .x = iter->x,
+                                         .y = iter->y,
+                                         .nextx = iter->nextx,
+                                         .nexty = iter->nexty,
+                                         .scale = iter->scale,
+                                         .spacing = iter->spacing,
+                                         .codepoint = iter->codepoint,
+                                         .isize = iter->isize,
+                                         .iblur = iter->iblur,
+                                         .font = iter->_reserved,
+                                         .prevGlyphIndex = iter->prevGlyphIdx,
+                                         .str = iter->str,
+                                         .next = iter->next,
+                                         .end = iter->end,
+                                         .utf8state = iter->utf8state };
 
     FONSquad fquad;
-    fonsTextIterNext(fons->ctx, &fiter, &fquad);
+    bool r = fonsTextIterNext(fons->ctx, &fiter, &fquad) ? true : false;
 
-    *iter = (rizz_font_iter){
-        .x = fiter.x,
-        .y = fiter.y,
-        .nextx = fiter.nextx,
-        .nexty = fiter.nexty,
-        .scale = fiter.scale,
-        .spacing = fiter.spacing,
-        .codepoint = fiter.codepoint,
-        .isize = fiter.isize,
-        .iblur = fiter.iblur,
-        .prevGlyphIdx = fiter.prevGlyphIndex,
-        .utf8state = fiter.utf8state,
-        .str = fiter.str,
-        .next = fiter.next,
-        .end = fiter.end,
-        ._reserved = fiter.font
-    };
+    *iter = (rizz_font_iter){ .x = fiter.x,
+                              .y = fiter.y,
+                              .nextx = fiter.nextx,
+                              .nexty = fiter.nexty,
+                              .scale = fiter.scale,
+                              .spacing = fiter.spacing,
+                              .codepoint = fiter.codepoint,
+                              .isize = fiter.isize,
+                              .iblur = fiter.iblur,
+                              .prevGlyphIdx = fiter.prevGlyphIndex,
+                              .utf8state = fiter.utf8state,
+                              .str = fiter.str,
+                              .next = fiter.next,
+                              .end = fiter.end,
+                              ._reserved = fiter.font };
 
-    return (rizz_font_quad){
+    *quad = (rizz_font_quad){
         .v0 = { .pos.x = fquad.x0, .pos.y = fquad.y0, .uv.x = fquad.s0, .uv.y = fquad.t0 },
         .v1 = { .pos.y = fquad.x1, .pos.y = fquad.y1, .uv.x = fquad.s1, .uv.y = fquad.t1 }
     };
+
+    return r;
 }
 
 #if 0    // bmfont loading
