@@ -326,7 +326,7 @@ typedef struct rizz_font_quad {
 typedef struct rizz_font {
     int img_width;
     int img_height;
-    sg_image img;
+    sg_image img_atlas;
 } rizz_font;
 
 typedef struct rizz_api_font {
@@ -339,6 +339,7 @@ typedef struct rizz_api_font {
     void (*push_state)(const rizz_font* fnt, const rizz_font_state* state);
     void (*pop_state)(const rizz_font* fnt);
     void (*clear_state)(const rizz_font* fnt);
+	void (*clear_atlas)(const rizz_font* fnt);
     
     rizz_font_bounds (*bounds)(const rizz_font* fnt, sx_vec2 pos, const char* text); 
     rizz_font_line_bounds (*line_bounds)(const rizz_font* fnt, float y);

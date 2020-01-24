@@ -30,6 +30,7 @@ RIZZ_STATE static rizz_api_app* the_app;
 typedef struct font__fons {
     rizz_font f;
     FONScontext* ctx;
+    char name[32];
     bool img_dirty;
 } font__fons;
 
@@ -55,20 +56,45 @@ static rizz_vertex_layout k_font_vertex_layout = {
 
 RIZZ_STATE static font__context g_font;
 
-static int fons__render_create(void* user_ptr, int width, int height)
+static int fons__create_fn(void* user_ptr, int width, int height)
 {
-    sx_unused(user_ptr);
-    sx_unused(width);
-    sx_unused(height);
+    font__fons* fons = user_ptr;
+    sx_assert(fons->f.img_atlas.id == 0);
+
+    // create font texture
+    fons->f.img_atlas = the_gfx->make_image(&(sg_image_desc){ .width = width,
+                                                              .height = height,
+                                                              .min_filter = SG_FILTER_LINEAR,
+                                                              .mag_filter = SG_FILTER_LINEAR,
+                                                              .usage = SG_USAGE_DYNAMIC,
+                                                              .pixel_format = SG_PIXELFORMAT_R8 });
+
+    if (!fons->f.img_atlas.id) {
+        return 0;
+    }
+
     return 1;
 }
 
-static int fons__render_resize(void* user_ptr, int width, int height)
+static int fons__resize_fn(void* user_ptr, int width, int height)
 {
-    return fons__render_create(user_ptr, width, height);
+    font__fons* fons = user_ptr;
+
+    if (fons->f.img_atlas.id) {
+        the_gfx->destroy_image(fons->f.img_atlas);
+        fons->f.img_atlas.id = 0;
+    }
+
+    if (fons__create_fn(user_ptr, width, height)) {
+        fons->f.img_width = width;
+        fons->f.img_height = height;
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
-static void fons__render_update(void* user_ptr, int* rect, const unsigned char* data)
+static void fons__update_fn(void* user_ptr, int* rect, const unsigned char* data)
 {
     sx_assert(user_ptr && rect && data);
     sx_unused(rect);
@@ -78,8 +104,8 @@ static void fons__render_update(void* user_ptr, int* rect, const unsigned char* 
     fons->img_dirty = true;
 }
 
-static void fons__render_draw(void* user_ptr, const float* poss, const float* tcoords,
-                              const unsigned int* colors, int nverts)
+static void fons__draw_fn(void* user_ptr, const float* poss, const float* tcoords,
+                          const unsigned int* colors, int nverts)
 {
     font__fons* fons = user_ptr;
     rizz_api_gfx_draw* draw_api = &the_gfx->staged;
@@ -102,7 +128,7 @@ static void fons__render_draw(void* user_ptr, const float* poss, const float* tc
 
     sg_bindings bindings = { .vertex_buffers[0] = g_font.vbuff,
                              .vertex_buffer_offsets[0] = vb_offset,
-                             .fs_images[0] = fons->f.img };
+                             .fs_images[0] = fons->f.img_atlas };
 
     // note: setup ortho matrix in a way that the Y is reversed, because the input geometry is in
     //		 screen coordinates (top-left=0)
@@ -116,9 +142,39 @@ static void fons__render_draw(void* user_ptr, const float* poss, const float* tc
     the_core->tmp_alloc_pop();
 }
 
-static void fons__render_delete(void* user_ptr)
+static void fons__delete_fn(void* user_ptr)
 {
-    sx_unused(user_ptr);
+    font__fons* fons = user_ptr;
+
+    if (fons->f.img_atlas.id) {
+        the_gfx->destroy_image(fons->f.img_atlas);
+        fons->f.img_atlas.id = 0;
+    }
+}
+
+static void fons__error_fn(void* user_ptr, int error, int val)
+{
+    font__fons* fons = user_ptr;
+
+    switch (error) {
+    case FONS_ATLAS_FULL:
+        // double the size
+        if (!fonsExpandAtlas(fons->ctx, fons->f.img_width << 1, fons->f.img_height << 1)) {
+            rizz_log_error("font: failed to resize atlas for '%s'", fons->name);
+        }
+        rizz_log_warn("font: '%s' atlas size expanded to (%d, %d)", fons->name, fons->f.img_width,
+                      fons->f.img_height);
+        break;
+    case FONS_SCRATCH_FULL:
+        rizz_log_error("font: scratch memory for glyphs '%s' is full", fons->name);
+        break;
+    case FONS_STATES_OVERFLOW:
+        rizz_log_error("font: push_states overflow for '%s'", fons->name);
+        break;
+    case FONS_STATES_UNDERFLOW:
+        rizz_log_error("font: pop_states underflow for '%s'", fons->name);
+        break;
+    }
 }
 
 static rizz_asset_load_data font__fons_on_prepare(const rizz_asset_load_params* params,
@@ -142,6 +198,7 @@ static rizz_asset_load_data font__fons_on_prepare(const rizz_asset_load_params* 
                            : sx_nearest_pow2((int)(512.0f * the_app->dpiscale()));
     fons->f.img_width = atlas_width;
     fons->f.img_height = atlas_height;
+    fons->f.img_atlas.id = 0;
 
     FONSparams fons_params;
     fons_params.width = atlas_width;
@@ -149,25 +206,17 @@ static rizz_asset_load_data font__fons_on_prepare(const rizz_asset_load_params* 
     fons_params.flags = FONS_ZERO_TOPLEFT;
     fons_params.userPtr = fons;
     fons_params.allocPtr = (void*)alloc;
-    fons_params.renderCreate = fons__render_create;
-    fons_params.renderDelete = fons__render_delete;
-    fons_params.renderDraw = fons__render_draw;
-    fons_params.renderUpdate = fons__render_update;
+    fons_params.renderCreate = fons__create_fn;
+    fons_params.renderDelete = fons__delete_fn;
+    fons_params.renderDraw = fons__draw_fn;
+    fons_params.renderUpdate = fons__update_fn;
 
     fons->ctx = fonsCreateInternal(&fons_params);
-    sx_assert(fons->ctx);
-
-    // create font texture
-    fons->f.img = the_gfx->make_image(&(sg_image_desc){ .width = atlas_width,
-                                                        .height = atlas_height,
-                                                        .min_filter = SG_FILTER_LINEAR,
-                                                        .mag_filter = SG_FILTER_LINEAR,
-                                                        .usage = SG_USAGE_DYNAMIC,
-                                                        .pixel_format = SG_PIXELFORMAT_R8 });
-
-    if (!fons->f.img.id) {
+    if (!fons->ctx) {
         return (rizz_asset_load_data){ .obj = { 0 } };
     }
+
+    fonsSetErrorCallback(fons->ctx, fons__error_fn, fons);
 
     void* buffer = sx_malloc(alloc, fmeta->ttf_size);
     if (!buffer) {
@@ -185,6 +234,8 @@ static bool font__fons_on_load(rizz_asset_load_data* data, const rizz_asset_load
 
     char name[64];
     sx_os_path_basename(name, sizeof(name), params->path);
+
+    sx_strcpy(fons->name, sizeof(fons->name), name);
 
     sx_memcpy(data->user, mem->data, mem->size);
 
@@ -225,10 +276,6 @@ static void font__fons_on_release(rizz_asset_obj obj, const sx_alloc* alloc)
 
     if (!alloc) {
         alloc = g_font.alloc;
-    }
-
-    if (fons->f.img.id) {
-        the_gfx->destroy_image(fons->f.img);
     }
 
     fonsDeleteInternal(fons->ctx);
@@ -281,9 +328,10 @@ void font__update(void)
         if (font->img_dirty) {
             font->img_dirty = false;
             the_gfx->imm.update_image(
-                font->f.img, &(sg_image_content){ .subimage[0][0].ptr = font->ctx->texData,
-                                                  .subimage[0][0].size =
-                                                      font->f.img_width * font->f.img_height });
+                font->f.img_atlas,
+                &(sg_image_content){ .subimage[0][0].ptr = font->ctx->texData,
+                                     .subimage[0][0].size =
+                                         font->f.img_width * font->f.img_height });
         }
     }
 }
@@ -309,7 +357,7 @@ bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* refl,
     // note: when we make the geometry, we modify the
     sg_pipeline_desc pip_desc =
         (sg_pipeline_desc){ .layout.buffers[0].stride = sizeof(rizz_font_vertex),
-                            .rasterizer = { .cull_mode = SG_CULLMODE_FRONT },
+                            .rasterizer = { .cull_mode = SG_CULLMODE_BACK },
                             .blend = { .enabled = true,
                                        .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
                                        .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA } };
