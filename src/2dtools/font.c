@@ -173,6 +173,7 @@ static void fons__delete_fn(void* user_ptr)
 
 static void fons__error_fn(void* user_ptr, int error, int val)
 {
+    sx_unused(val);
     font__fons* fons = user_ptr;
 
     switch (error) {
@@ -303,6 +304,8 @@ static void font__fons_on_release(rizz_asset_obj obj, const sx_alloc* alloc)
             break;
         }
     }
+
+    sx_free(alloc, fons);
 }
 
 static void font__fons_on_read_metadata(void* metadata, const rizz_asset_load_params* params,
@@ -466,6 +469,8 @@ void font__release(void)
         the_gfx->destroy_shader(g_font.shader);
     if (g_font.pip.id)
         the_gfx->destroy_pipeline(g_font.pip);
+
+    sx_array_free(g_font.alloc, g_font.fonts);
 }
 
 const rizz_font* font__get(rizz_asset font_asset)
@@ -598,8 +603,8 @@ bool font__iter_next(const rizz_font* fnt, rizz_font_iter* iter, rizz_font_quad*
                               ._reserved = fiter.font };
 
     *quad = (rizz_font_quad){
-        .v0 = { .pos.x = fquad.x0, .pos.y = fquad.y0, .uv.x = fquad.s0, .uv.y = fquad.t0 },
-        .v1 = { .pos.y = fquad.x1, .pos.y = fquad.y1, .uv.x = fquad.s1, .uv.y = fquad.t1 }
+        .v0 = { .pos = { fquad.x0, fquad.y0 }, .uv = { fquad.s0, fquad.t0 } },
+        .v1 = { .pos = { fquad.x1, fquad.y1 }, .uv = { fquad.s1, fquad.t1 } }
     };
 
     return r;

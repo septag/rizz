@@ -186,6 +186,8 @@ static void shutdown()
         the_asset->unload(g_ds.shader_wire);
     if (g_ds.pip_wire.id)
         the_gfx->destroy_pipeline(g_ds.pip_wire);
+    if (g_ds.font.id) 
+        the_asset->unload(g_ds.font);
 }
 
 static void update(float dt) {}

@@ -1267,6 +1267,10 @@ static void* dmon__thread(void* arg)
 
 _DMON_PRIVATE void dmon__unwatch(dmon__watch_state* watch)
 {
+    if (watch->fsev_stream_ref) {
+        FSEventStreamRelease(watch->fsev_stream_ref);
+    }
+
     memset(watch, 0x0, sizeof(dmon__watch_state));
 }
 
