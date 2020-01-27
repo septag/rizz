@@ -18,6 +18,7 @@ Demonstrates basic application setup. Just clears the view with blue color.
 - Basic sprite drawing
 - Custom sprite drawing
 - Wireframe mode rendering
+- Basic text drawing
 
 ![03-drawsprite](screenshots/03-drawsprite.png)
 
