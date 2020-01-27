@@ -19,7 +19,6 @@ RIZZ_STATE static rizz_api_gfx* the_gfx;
 RIZZ_STATE static rizz_api_app* the_app;
 RIZZ_STATE static rizz_api_imgui* the_imgui;
 RIZZ_STATE static rizz_api_asset* the_asset;
-RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
 RIZZ_STATE static rizz_api_camera* the_camera;
 RIZZ_STATE static rizz_api_vfs* the_vfs;
 RIZZ_STATE static rizz_api_sprite* the_sprite;
@@ -90,16 +89,16 @@ static bool init()
     // always do this after you have mounted all virtual directories
     the_asset->load_meta_cache();
 
-    g_ds.font =
-        the_asset->load("font", "/assets/fonts/ariblk.ttf",
-                        &(rizz_font_load_params){ .atlas_width = 1024, .atlas_height = 1024 },
-                        RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD, NULL, 0);
-
     // register main graphics stage.
     // at least one stage should be registered if you want to draw anything
     g_ds.stage = the_gfx->stage_register("main", (rizz_gfx_stage){ .id = 0 });
     sx_assert(g_ds.stage.id);
+    
+    // load font
+    rizz_font_load_params fparams = { 0 };
+    g_ds.font = the_asset->load("font", "/assets/fonts/sponge_bob.ttf", &fparams, 0, NULL, 0);
 
+    // sprite device objects
     g_ds.vbuff =
         the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_STREAM,
                                                 .type = SG_BUFFERTYPE_VERTEXBUFFER,
@@ -317,21 +316,30 @@ static void render()
         draw_custom(&params);
     }
 
-    const rizz_font* font = the_font->font_get(g_ds.font);
-    the_font->push_state(font, &(rizz_font_state){ .size = 30 });
-    the_font->draw(font, sx_vec2f(50.0f, 50.0f), "hello world");
+    // draw sample font
+    {
+        const rizz_font* font = the_font->font_get(g_ds.font);
+        the_font->push_state(font);
+        // note: setup ortho matrix in a way that the Y is reversed (top-left = origin)
+        float w = (float)the_app->width();
+        float h = (float)the_app->height();
+        sx_mat4 vp = sx_mat4_ortho_offcenter(0, h, w, 0, -1.0f, 1.0f, 0, the_gfx->GL_family());
 
-#if 0
-	rizz_font_iter iter = the_font->iter_init(font, sx_vec2f(50.0f, 50.0f), "Hello world");
-	rizz_font_quad quad;
-	rizz_log_debug("BEGIN");
-	while (the_font->iter_next(font, &iter, &quad)) {
-		rizz_log_debug("p: %.2f, %.2f, %.2f, %.2f", quad.v0.pos.x, quad.v0.pos.y, quad.v1.pos.x, quad.v1.pos.y);
-        rizz_log_debug("t: %.2f, %.2f, %.2f, %.2f", quad.v0.uv.x, quad.v0.uv.y, quad.v1.uv.x,
-                       quad.v1.uv.y);
-	}
-	rizz_log_debug("END");
-#endif
+        the_font->set_viewproj_mat(font, &vp);
+        the_font->set_size(font, 30.0f);
+        rizz_font_vert_metrics metrics = the_font->vert_metrics(font);
+
+        float y = metrics.lineh + 15.0f;
+        the_font->draw(font, sx_vec2f(15.0f, y), "DrawSprite Example");
+
+        the_font->push_state(font);
+        the_font->set_size(font, 16.0f);
+        the_font->draw(font, sx_vec2f(15.0f, y + metrics.lineh), "This text is drawn by font API");
+        the_font->pop_state(font);
+
+        the_font->pop_state(font);
+    }
+
 
     the_gfx->staged.end_pass();
     the_gfx->staged.end();
@@ -370,7 +378,6 @@ rizz_plugin_decl_main(drawsprite, plugin, e)
         the_camera = plugin->api->get_api(RIZZ_API_CAMERA, 0);
 
         the_imgui = plugin->api->get_api_byname("imgui", 0);
-        the_imguix = plugin->api->get_api_byname("imgui_extra", 0);
         the_sprite = plugin->api->get_api_byname("sprite", 0);
         the_font = plugin->api->get_api_byname("font", 0);
         sx_assert(the_sprite && "sprite plugin is not loaded!");

@@ -270,14 +270,6 @@ typedef enum {
 } rizz_font_align_;
 typedef uint32_t rizz_font_align;
 
-typedef struct rizz_font_state {
-    float size;
-    sx_color color;
-    float spacing;
-    float blur;
-    rizz_font_align align;
-} rizz_font_state;
-
 typedef struct rizz_font_bounds {
     sx_rect rect;
     float advance;
@@ -336,8 +328,17 @@ typedef struct rizz_api_font {
     void (*drawf)(const rizz_font* fnt, sx_vec2 pos, const char* fmt, ...);
     void (*draw_debug)(const rizz_font* fnt, sx_vec2 pos);
 
-    void (*push_state)(const rizz_font* fnt, const rizz_font_state* state);
+    void (*push_state)(const rizz_font* fnt);
     void (*pop_state)(const rizz_font* fnt);
+
+    void (*set_size)(const rizz_font* fnt, float size);
+    void (*set_color)(const rizz_font* fnt, sx_color color);
+    void (*set_align)(const rizz_font* fnt, rizz_font_align align_bits);
+    void (*set_spacing)(const rizz_font* fnt, float spacing);
+    void (*set_blur)(const rizz_font* fnt, float blur);
+    void (*set_scissor)(const rizz_font* fnt, int x, int y, int width, int height);
+    void (*set_viewproj_mat)(const rizz_font* fnt, const sx_mat4* vp);
+
     void (*clear_state)(const rizz_font* fnt);
 	void (*clear_atlas)(const rizz_font* fnt);
     
