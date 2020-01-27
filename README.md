@@ -39,7 +39,7 @@ see [CHANGELOG](CHANGES.md) for latest changes, new features and bug fixes.
 
 #### Plugins
 - [imgui](src/imgui): Dear-imgui plugin with some utility API
-- [sprite](src/sprite): 2D Sprite system
+- [2dtools](src/2dtools): 2D rendering tools, sprite, text with ttf support
 - [sound](src/sound): Simple sound system 
 - [input](src/input): Input system with gamepad and touch support
 
@@ -150,6 +150,7 @@ I will also develop additional python tools to recusively encode directories of 
 - [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo): 3D gizmo for imgui
 - [gainput](https://github.com/jkuhlmann/gainput): Input library for games
 - [basis_universal](https://github.com/BinomialLLC/basis_universal): Basis Universal GPU Texture Codec
+- [fontstash](https://github.com/memononen/fontstash): Light-weight online font texture atlas builder
 
 [License (BSD 2-clause)](https://github.com/septag/rizz/blob/master/LICENSE)
 --------------------------------------------------------------------------

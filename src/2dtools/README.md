@@ -1,14 +1,19 @@
-## Sprite Plugin
+## 2dtools Plugin
 
-Sprite plugin. Loads sprite atlases, renders/animates 2D sprites. The low-level API gives 
-the ability to extend it and make 3D billboards or any other specific rendering by the user.
+2dtools plugin. provides 2D drawing tools.
 
 ### Features
-- Atlas support
-- Alpha cropping
-- Mesh sprites
-- Animation clips
-- Animation controller (state machine)
+- **Sprites**
+    - Atlas support
+    - Alpha cropping
+    - Mesh sprites
+    - Animation clips
+    - Animation controller (state machine)
+- **Font**
+    - TTF support (fontstash)
+    - Arbitary text size drawing
+    - Text blur
+    - Low-level character quad calculation for custom rendering of characters
 
 ### Usage
 
