@@ -515,7 +515,7 @@ void font__clear_state(const rizz_font* fnt)
 rizz_font_bounds font__bounds(const rizz_font* fnt, sx_vec2 pos, const char* text)
 {
     const font__fons* fons = (const font__fons*)fnt;
-    float bounds[4];
+    float bounds[4] = { 0 };
     float advance = fonsTextBounds(fons->ctx, pos.x, pos.y, text, NULL, bounds);
     return (rizz_font_bounds){ .rect = sx_rectf(bounds[0], bounds[1], bounds[2], bounds[3]),
                                .advance = advance };
@@ -524,7 +524,7 @@ rizz_font_bounds font__bounds(const rizz_font* fnt, sx_vec2 pos, const char* tex
 rizz_font_line_bounds font__line_bounds(const rizz_font* fnt, float y)
 {
     const font__fons* fons = (const font__fons*)fnt;
-    float miny, maxy;
+    float miny = 0, maxy = 0;
     fonsLineBounds(fons->ctx, y, &miny, &maxy);
     return (rizz_font_line_bounds){ .miny = miny, .maxy = maxy };
 }
@@ -532,7 +532,7 @@ rizz_font_line_bounds font__line_bounds(const rizz_font* fnt, float y)
 rizz_font_vert_metrics font__vert_metrics(const rizz_font* fnt)
 {
     const font__fons* fons = (const font__fons*)fnt;
-    float ascender, descender, lineh;
+    float ascender = 0, descender = 0, lineh = 0;
     fonsVertMetrics(fons->ctx, &ascender, &descender, &lineh);
     return (rizz_font_vert_metrics){ .ascender = ascender, .descender = descender, .lineh = lineh };
 }
@@ -583,7 +583,7 @@ bool font__iter_next(const rizz_font* fnt, rizz_font_iter* iter, rizz_font_quad*
                                          .end = iter->end,
                                          .utf8state = iter->utf8state };
 
-    FONSquad fquad;
+    FONSquad fquad = { 0 };
     bool r = fonsTextIterNext(fons->ctx, &fiter, &fquad) ? true : false;
 
     *iter = (rizz_font_iter){ .x = fiter.x,
