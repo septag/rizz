@@ -719,7 +719,7 @@ typedef enum sg_pixel_format {
     SG_PIXELFORMAT_ETC2_RGBA8,
     SG_PIXELFORMAT_ETC2_RG11,
     SG_PIXELFORMAT_ETC2_RG11SN,
-    
+
     _SG_PIXELFORMAT_NUM,
     _SG_PIXELFORMAT_FORCE_U32 = 0x7FFFFFFF
 } sg_pixel_format;
@@ -1809,12 +1809,12 @@ typedef struct sg_pass_desc {
 /*
     sg_trace_hooks
 
-    Installable callback function to keep track of the sokol_gfx calls,
+    Installable callback functions to keep track of the sokol_gfx calls,
     this is useful for debugging, or keeping track of resource creation
     and destruction.
 
     Trace hooks are installed with sg_install_trace_hooks(), this returns
-    another sg_trace_hooks functions with the previous set of
+    another sg_trace_hooks struct with the previous set of
     trace hook function pointers. These should be invoked by the
     new trace hooks to form a proper call chain.
 */
@@ -2197,6 +2197,13 @@ SOKOL_API_DECL void sg_discard_context(sg_context ctx_id);
 #define SG_DEFAULT_CLEAR_STENCIL (0)
 #endif
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable:4201)   /* nonstandard extension used: nameless struct/union */
+#pragma warning(disable:4115)   /* named type definition in parentheses */
+#pragma warning(disable:4505)   /* unreferenced local function has been removed */
+#endif
+
 #if defined(SOKOL_GLCORE33) || defined(SOKOL_GLES2) || defined(SOKOL_GLES3)
     #ifndef GL_UNSIGNED_INT_2_10_10_10_REV
     #define GL_UNSIGNED_INT_2_10_10_10_REV 0x8368
@@ -2343,13 +2350,6 @@ SOKOL_API_DECL void sg_discard_context(sg_context ctx_id);
             #define _SG_TARGET_IOS_SIMULATOR (1)
         #endif
     #endif
-#endif
-
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable:4201)   /* nonstandard extension used: nameless struct/union */
-#pragma warning(disable:4115)   /* named type definition in parentheses */
-#pragma warning(disable:4505)   /* unreferenced local function has been removed */
 #endif
 
 /*=== PRIVATE DECLS ==========================================================*/
@@ -2843,7 +2843,7 @@ typedef struct {
 #elif defined(SOKOL_METAL)
 
 enum {
-    #if defined(_SG_TARGET_MACOS)
+    #if defined(_SG_TARGET_MACOS) || defined(_SG_TARGET_IOS_SIMULATOR)
     _SG_MTL_UB_ALIGN = 256,
     #else
     _SG_MTL_UB_ALIGN = 16,
@@ -3339,7 +3339,7 @@ _SOKOL_PRIVATE bool _sg_is_compressed_pixel_format(sg_pixel_format fmt) {
         case SG_PIXELFORMAT_ETC2_RGB8A1:
         case SG_PIXELFORMAT_ETC2_RGBA8:
         case SG_PIXELFORMAT_ETC2_RG11:
-        case SG_PIXELFORMAT_ETC2_RG11SN:
+        case SG_PIXELFORMAT_ETC2_RG11SN:        
             return true;
         default:
             return false;
@@ -3446,7 +3446,7 @@ _SOKOL_PRIVATE int _sg_row_pitch(sg_pixel_format fmt, int width) {
         case SG_PIXELFORMAT_BC7_RGBA:
         case SG_PIXELFORMAT_ETC2_RGBA8:
         case SG_PIXELFORMAT_ETC2_RG11:
-        case SG_PIXELFORMAT_ETC2_RG11SN:
+        case SG_PIXELFORMAT_ETC2_RG11SN:        
             pitch = ((width + 3) / 4) * 16;
             pitch = pitch < 16 ? 16 : pitch;
             break;
@@ -3490,7 +3490,7 @@ _SOKOL_PRIVATE int _sg_surface_pitch(sg_pixel_format fmt, int width, int height)
         case SG_PIXELFORMAT_ETC2_RGB8A1:
         case SG_PIXELFORMAT_ETC2_RGBA8:
         case SG_PIXELFORMAT_ETC2_RG11:
-        case SG_PIXELFORMAT_ETC2_RG11SN:
+        case SG_PIXELFORMAT_ETC2_RG11SN:        
         case SG_PIXELFORMAT_BC2_RGBA:
         case SG_PIXELFORMAT_BC3_RGBA:
         case SG_PIXELFORMAT_BC5_RG:
@@ -7337,8 +7337,8 @@ _SOKOL_PRIVATE ID3DBlob* _sg_d3d11_compile_shader(const sg_shader_stage_desc* st
         return NULL;
     }
     ID3DBlob* output = NULL;
-    ID3DBlob* errors = NULL;
-    _sg_d3d11_D3DCompile(
+    ID3DBlob* errors_or_warnings = NULL;
+    HRESULT hr = _sg_d3d11_D3DCompile(
         stage_desc->source,             /* pSrcData */
         strlen(stage_desc->source),     /* SrcDataSize */
         NULL,                           /* pSourceName */
@@ -7349,11 +7349,17 @@ _SOKOL_PRIVATE ID3DBlob* _sg_d3d11_compile_shader(const sg_shader_stage_desc* st
         D3DCOMPILE_PACK_MATRIX_COLUMN_MAJOR | D3DCOMPILE_OPTIMIZATION_LEVEL3,   /* Flags1 */
         0,          /* Flags2 */
         &output,    /* ppCode */
-        &errors);   /* ppErrorMsgs */
-    if (errors) {
-        SOKOL_LOG((LPCSTR)ID3D10Blob_GetBufferPointer(errors));
-        ID3D10Blob_Release(errors); errors = NULL;
-        return NULL;
+        &errors_or_warnings);   /* ppErrorMsgs */
+    if (errors_or_warnings) {
+        SOKOL_LOG((LPCSTR)ID3D10Blob_GetBufferPointer(errors_or_warnings));
+        ID3D10Blob_Release(errors_or_warnings); errors_or_warnings = NULL;
+    }
+    if (FAILED(hr)) {
+        /* just in case, usually output is NULL here */
+        if (output) {
+            ID3D10Blob_Release(output);
+            output = NULL;
+        }
     }
     return output;
 }

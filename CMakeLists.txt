@@ -11,7 +11,6 @@ else()
     option(BUILD_TOOLS "Build tools and editors" ON)
     option(BUILD_EXAMPLES "Build example projects" ON)
     option(ENABLE_HOT_LOADING "Enable hot-loading of assets and plugins" ON)
-    option(MSVC_COMPILE_SUMMARY "Enable compilation metrics for MSVC compiler" OFF)
 endif()
 
 if (${CMAKE_BUILD_TYPE} MATCHES "Release")
@@ -189,9 +188,7 @@ endif()
 if (MSVC)
     rizz__remove_compile_options(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" "/EHsc /GR")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /GR-")
-    if (MSVC_COMPILE_SUMMARY)
-        add_compile_options(/d2cgsummary)
-    endif()
+    add_compile_options(/MP)    # multiprocessor compilation
 else()
     add_compile_options(-Wno-deprecated-declarations -fPIC)
 
