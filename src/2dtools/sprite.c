@@ -1049,6 +1049,8 @@ static rizz_asset_load_data atlas__on_prepare(const rizz_asset_load_params* para
 static bool atlas__on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params,
                            const sx_mem_block* mem)
 {
+    sx_unused(mem);
+
     atlas__data* atlas = data->obj.ptr;
     atlas__predata* predata = data->user;
 
@@ -1156,13 +1158,14 @@ static bool atlas__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
 static void atlas__on_finalize(rizz_asset_load_data* data, const rizz_asset_load_params* params,
                                const sx_mem_block* mem)
 {
-    sx_unused(params);
     sx_unused(mem);
 
+    const sx_alloc* alloc = params->alloc ? params->alloc : g_spr.alloc;
     atlas__predata* predata = data->user;
     if (predata->ctx) {
         sjson_destroy_context(predata->ctx);
     }
+    sx_free(alloc, predata);
 }
 
 static void atlas__on_reload(rizz_asset handle, rizz_asset_obj prev_obj, const sx_alloc* alloc)

@@ -231,8 +231,7 @@ static void rizz__asset_on_read_complete(const char* path, sx_mem_block* mem)
                                                                .tags = a->tags,
                                                                .flags = a->load_flags };
 
-    rizz_asset_load_data load_data =
-        amgr->callbacks.on_prepare(&aparams, mem);
+    rizz_asset_load_data load_data = amgr->callbacks.on_prepare(&aparams, mem);
 
     sx_array_pop(g_asset.async_reqs, async_req_idx);
     if (!load_data.obj.id) {
