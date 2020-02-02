@@ -70,3 +70,5 @@ temp
 *.vso
 *.pyc
 *.obj
+
+*.etl

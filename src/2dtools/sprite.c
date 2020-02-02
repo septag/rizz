@@ -54,6 +54,12 @@ typedef struct atlas__sprite {
     int vb_index;
 } atlas__sprite;
 
+// data used for passing temp stuff from on_prepare to on_load
+typedef struct atlas__predata {
+    sjson_context* ctx;
+    sjson_node* root;
+} atlas__predata;
+
 typedef struct atlas__data {
     rizz_atlas a;
     atlas__sprite* sprites;
@@ -61,13 +67,6 @@ typedef struct atlas__data {
     rizz_sprite_vertex* vertices;
     uint16_t* indices;
 } atlas__data;
-
-typedef struct atlas__metadata {
-    char img_filepath[RIZZ_MAX_PATH];
-    int num_sprites;
-    int num_vertices;
-    int num_indices;
-} atlas__metadata;
 
 typedef struct sprite__animclip_frame {
     int16_t atlas_id;
@@ -951,17 +950,61 @@ static void sprite__update_bounds(sprite__data* spr)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // atlas
 static rizz_asset_load_data atlas__on_prepare(const rizz_asset_load_params* params,
-                                              const void* metadata)
+                                              const sx_mem_block* mem)
 {
     const sx_alloc* alloc = params->alloc ? params->alloc : g_spr.alloc;
-    const atlas__metadata* meta = metadata;
-    sx_assert(meta);
+    char img_filepath[RIZZ_MAX_PATH];
+    int num_sprites = 0;
+    int num_indices = 0;
+    int num_vertices = 0;
 
-    int hashtbl_cap = sx_hashtbl_valid_capacity(meta->num_sprites);
-    int total_sz = sizeof(atlas__data) + meta->num_sprites * sizeof(atlas__sprite) +
-                   meta->num_indices * sizeof(uint16_t) +
-                   meta->num_vertices * sizeof(rizz_sprite_vertex) +
-                   sx_hashtbl_fixed_size(meta->num_sprites);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    char* buff = sx_malloc(tmp_alloc, (size_t)mem->size + 1);
+    if (!buff) {
+        sx_out_of_memory();
+        return (rizz_asset_load_data){ 0 };
+    }
+    sx_memcpy(buff, mem->data, mem->size);
+    buff[mem->size] = '\0';
+
+    // pass generic heap allocator, because we want to reuse json context in `on_load` and there is
+    // no garranty that it will happen in the same frame so we can't use temp allocators
+    sjson_context* jctx = sjson_create_context(0, 0, (void*)g_spr.alloc);
+    sx_assert(jctx);
+
+    sjson_node* jroot = sjson_decode(jctx, buff);
+    the_core->tmp_alloc_pop();
+    if (!jroot) {
+        rizz_log_warn("loading atlas '%s' failed: not a valid json file", params->path);
+        return (rizz_asset_load_data){ 0 };
+    }
+
+    char dirname[RIZZ_MAX_PATH];
+    sx_os_path_dirname(dirname, sizeof(dirname), params->path);
+    sx_os_path_join(img_filepath, sizeof(img_filepath), dirname,
+                    sjson_get_string(jroot, "image", ""));
+    sx_os_path_unixpath(img_filepath, sizeof(img_filepath), img_filepath);
+
+    sjson_node* jsprites = sjson_find_member(jroot, "sprites");
+    sjson_node* jsprite;
+    sjson_foreach(jsprite, jsprites)
+    {
+        sjson_node* jmesh = sjson_find_member(jsprite, "mesh");
+        if (jmesh) {
+            num_indices += 3 * sjson_get_int(jmesh, "num_tris", 0);
+            num_vertices += sjson_get_int(jmesh, "num_vertices", 0);
+        } else {
+            num_indices += 6;
+            num_vertices += 4;
+        }
+        ++num_sprites;
+    }
+
+    // allocate memory in one go
+    int hashtbl_cap = sx_hashtbl_valid_capacity(num_sprites);
+    int total_sz = sizeof(atlas__data) + num_sprites * sizeof(atlas__sprite) +
+                   num_indices * sizeof(uint16_t) + num_vertices * sizeof(rizz_sprite_vertex) +
+                   sx_hashtbl_fixed_size(num_sprites);
     atlas__data* atlas = sx_malloc(alloc, total_sz);
     if (!atlas) {
         sx_out_of_memory();
@@ -969,54 +1012,47 @@ static rizz_asset_load_data atlas__on_prepare(const rizz_asset_load_params* para
     }
     sx_memset(atlas, 0x0, total_sz);
 
-    uint8_t* buff = (uint8_t*)(atlas + 1);
+    buff = (char*)(atlas + 1);
     atlas->sprites = (atlas__sprite*)buff;
-    buff += sizeof(atlas__sprite) * meta->num_sprites;
+    buff += sizeof(atlas__sprite) * num_sprites;
     uint32_t* keys = (uint32_t*)buff;
     buff += sizeof(uint32_t) * hashtbl_cap;
     int* values = (int*)buff;
     buff += sizeof(int) * hashtbl_cap;
     sx_hashtbl_init(&atlas->sprite_tbl, hashtbl_cap, keys, values);
     atlas->vertices = (rizz_sprite_vertex*)buff;
-    buff += sizeof(rizz_sprite_vertex) * meta->num_vertices;
+    buff += sizeof(rizz_sprite_vertex) * num_vertices;
     atlas->indices = (uint16_t*)buff;
-    buff += sizeof(uint16_t) * meta->num_indices;
+    buff += sizeof(uint16_t) * num_indices;
 
     const rizz_atlas_load_params* aparams = params->params;
     rizz_texture_load_params tparams = { .min_filter = aparams->min_filter,
                                          .mag_filter = aparams->mag_filter,
                                          .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
                                          .wrap_v = SG_WRAP_CLAMP_TO_EDGE };
-    atlas->a.texture = the_asset->load("texture", meta->img_filepath, &tparams, params->flags,
-                                       alloc, params->tags);
+    atlas->a.texture =
+        the_asset->load("texture", img_filepath, &tparams, params->flags, alloc, params->tags);
 
-    return (rizz_asset_load_data){ .obj = { .ptr = atlas }, .user = buff };
+    atlas__predata* predata = sx_malloc(g_spr.alloc, sizeof(atlas__predata));
+    if (!predata) {
+        sx_free(alloc, atlas);
+        sjson_destroy_context(jctx);
+        sx_out_of_memory();
+        return (rizz_asset_load_data){ .obj = { 0 } };
+    }
+
+    predata->ctx = jctx;
+    predata->root = jroot;
+    return (rizz_asset_load_data){ .obj = { .ptr = atlas }, .user = predata };
 }
 
 static bool atlas__on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params,
                            const sx_mem_block* mem)
 {
     atlas__data* atlas = data->obj.ptr;
+    atlas__predata* predata = data->user;
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
-
-    char* buff = sx_malloc(tmp_alloc, (size_t)mem->size + 1);
-    if (!buff) {
-        sx_out_of_memory();
-        return false;
-    }
-
-    sx_memcpy(buff, mem->data, mem->size);
-    buff[mem->size] = '\0';
-    sjson_context* jctx = sjson_create_context(0, 0, (void*)tmp_alloc);
-    sx_assert(jctx);
-
-    sjson_node* jroot = sjson_decode(jctx, buff);
-    if (!jroot) {
-        rizz_log_warn("loading atlas '%s' failed: not a valid json file", params->path);
-        return false;
-    }
-
+    sjson_node* jroot = predata->root;
     atlas->a.info.img_width = sjson_get_int(jroot, "image_width", 0);
     atlas->a.info.img_height = sjson_get_int(jroot, "image_height", 0);
     int sprite_idx = 0;
@@ -1079,7 +1115,6 @@ static bool atlas__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
                     v++;
                 }
             }
-
         } else {
             // sprite-quad
             aspr->num_indices = 6;
@@ -1115,17 +1150,19 @@ static bool atlas__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
     }
     atlas->a.info.num_sprites = sprite_idx;
 
-    the_core->tmp_alloc_pop();
-
     return true;
 }
 
 static void atlas__on_finalize(rizz_asset_load_data* data, const rizz_asset_load_params* params,
                                const sx_mem_block* mem)
 {
-    sx_unused(data);
     sx_unused(params);
     sx_unused(mem);
+
+    atlas__predata* predata = data->user;
+    if (predata->ctx) {
+        sjson_destroy_context(predata->ctx);
+    }
 }
 
 static void atlas__on_reload(rizz_asset handle, rizz_asset_obj prev_obj, const sx_alloc* alloc)
@@ -1148,56 +1185,6 @@ static void atlas__on_release(rizz_asset_obj obj, const sx_alloc* alloc)
     }
 
     sx_free(alloc, atlas);
-}
-
-static void atlas__on_read_metadata(void* metadata, const rizz_asset_load_params* params,
-                                    const sx_mem_block* mem)
-{
-    atlas__metadata* meta = metadata;
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
-
-    char* buff = sx_malloc(tmp_alloc, (size_t)mem->size + 1);
-    if (!buff) {
-        sx_out_of_memory();
-        return;
-    }
-    sx_memcpy(buff, mem->data, mem->size);
-    buff[mem->size] = '\0';
-    sjson_context* jctx = sjson_create_context(0, 0, (void*)tmp_alloc);
-    sx_assert(jctx);
-
-    sjson_node* jroot = sjson_decode(jctx, buff);
-    if (!jroot) {
-        rizz_log_warn("loading atlas '%s' failed: not a valid json file", params->path);
-        return;
-    }
-
-    char dirname[RIZZ_MAX_PATH];
-    sx_os_path_dirname(dirname, sizeof(dirname), params->path);
-    sx_os_path_join(meta->img_filepath, sizeof(meta->img_filepath), dirname,
-                    sjson_get_string(jroot, "image", ""));
-    sx_os_path_unixpath(meta->img_filepath, sizeof(meta->img_filepath), meta->img_filepath);
-
-    sjson_node* jsprites = sjson_find_member(jroot, "sprites");
-    sjson_node* jsprite;
-    int num_sprites = 0, num_indices = 0, num_vertices = 0;
-    sjson_foreach(jsprite, jsprites)
-    {
-        sjson_node* jmesh = sjson_find_member(jsprite, "mesh");
-        if (jmesh) {
-            num_indices += 3 * sjson_get_int(jmesh, "num_tris", 0);
-            num_vertices += sjson_get_int(jmesh, "num_vertices", 0);
-        } else {
-            num_indices += 6;
-            num_vertices += 4;
-        }
-        ++num_sprites;
-    }
-    meta->num_sprites = num_sprites;
-    meta->num_indices = num_indices;
-    meta->num_vertices = num_vertices;
-
-    the_core->tmp_alloc_pop();
 }
 
 bool sprite__resize_draw_limits(int max_verts, int max_indices)
@@ -1264,23 +1251,15 @@ bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* ref
     g_spr.animctrl_handles = sx_handle_create_pool(g_spr.alloc, 128);
     sx_assert(g_spr.animctrl_handles);
 
-    // register "atlas" asset type and metadata
-    rizz_refl_field(atlas__metadata, char[RIZZ_MAX_PATH], img_filepath, "img_filepath");
-    rizz_refl_field(atlas__metadata, int, num_sprites, "num_sprites");
-    rizz_refl_field(atlas__metadata, int, num_vertices, "num_vertices");
-    rizz_refl_field(atlas__metadata, int, num_indices, "num_indices");
-
-    the_asset->register_asset_type(
-        "atlas",
-        (rizz_asset_callbacks){ .on_prepare = atlas__on_prepare,
-                                .on_load = atlas__on_load,
-                                .on_finalize = atlas__on_finalize,
-                                .on_reload = atlas__on_reload,
-                                .on_release = atlas__on_release,
-                                .on_read_metadata = atlas__on_read_metadata },
-        "rizz_atlas_load_params", sizeof(rizz_atlas_load_params), "atlas__metadata",
-        sizeof(atlas__metadata), (rizz_asset_obj){ .ptr = NULL }, (rizz_asset_obj){ .ptr = NULL },
-        0);
+    the_asset->register_asset_type("atlas",
+                                   (rizz_asset_callbacks){ .on_prepare = atlas__on_prepare,
+                                                           .on_load = atlas__on_load,
+                                                           .on_finalize = atlas__on_finalize,
+                                                           .on_reload = atlas__on_reload,
+                                                           .on_release = atlas__on_release },
+                                   "rizz_atlas_load_params", sizeof(rizz_atlas_load_params),
+                                   (rizz_asset_obj){ .ptr = NULL }, (rizz_asset_obj){ .ptr = NULL },
+                                   0);
 
     // init draw context
     if (!sprite__resize_draw_limits(MAX_VERTICES, MAX_INDICES)) {

@@ -59,7 +59,7 @@ typedef struct {
 typedef struct {
     const sx_alloc* alloc;
     rizz__vfs_mount_point* mounts;
-    rizz_vfs_async_callbacks callbacks;
+    rizz_vfs_async_callbacks* callbacks;    // sx_array
     sx_thread* worker_thrd;
     sx_queue_spsc* req_queue;    // producer: main, consumer: worker, data: rizz__vfs_async_request
     sx_queue_spsc* res_queue;    // producer: worker, consumer: main, data: rizz__vfs_async_response
@@ -113,38 +113,6 @@ typedef struct dmon__result {
 } dmon__result;
 #endif    // RIZZ_CONFIG_HOT_LOADING
 
-// Dummy callbacks
-void rizz__dummy_on_read_error(const char* uri)
-{
-    rizz__log_debug("disk: read_error: %s", uri);
-}
-void rizz__dummy_on_write_error(const char* uri)
-{
-    rizz__log_debug("disk: write_error: %s", uri);
-}
-void rizz__dummy_on_read_complete(const char* uri, sx_mem_block* mem)
-{
-    rizz__log_debug("disk: read_complete: %s (size: %d kb)", uri, mem->size / 1024);
-    sx_mem_destroy_block(mem);
-}
-void rizz__dummy_on_write_complete(const char* uri, int bytes_written, sx_mem_block* mem)
-{
-    rizz__log_debug("disk: write_complete: %s (size: %d kb)", uri, bytes_written / 1024);
-    sx_mem_destroy_block(mem);
-}
-void rizz__dummy_on_modified(const char* uri)
-{
-    rizz__log_debug("disk: modified: %s", uri);
-}
-
-static rizz_vfs_async_callbacks g_vfs_dummy_callbacks = {
-    .on_read_error = rizz__dummy_on_read_error,
-    .on_write_error = rizz__dummy_on_write_error,
-    .on_read_complete = rizz__dummy_on_read_complete,
-    .on_write_complete = rizz__dummy_on_write_complete,
-    .on_modified = rizz__dummy_on_modified
-};
-
 static bool rizz__vfs_resolve_path(char* out_path, int out_path_sz, const char* path,
                                    rizz_vfs_flags flags)
 {
@@ -197,7 +165,7 @@ static sx_mem_block* rizz__vfs_read_asset_android(const char* path, const sx_all
         return NULL;
     }
 }
-#endif
+#endif // SX_PLATFORM_ANDROID
 
 static sx_mem_block* rizz__vfs_read(const char* path, rizz_vfs_flags flags, const sx_alloc* alloc)
 {
@@ -340,7 +308,6 @@ void rizz__vfs_mount_mobile_assets(const char* alias)
 bool rizz__vfs_init(const sx_alloc* alloc)
 {
     g_vfs.alloc = alloc;
-    g_vfs.callbacks = g_vfs_dummy_callbacks;
 
     g_vfs.req_queue = sx_queue_spsc_create(alloc, sizeof(rizz__vfs_async_request), 128);
     g_vfs.res_queue = sx_queue_spsc_create(alloc, sizeof(rizz__vfs_async_response), 128);
@@ -358,15 +325,15 @@ bool rizz__vfs_init(const sx_alloc* alloc)
     g_vfs.dmon_queue = sx_queue_spsc_create(alloc, sizeof(dmon__result), 128);
     if (!g_vfs.dmon_queue)
         return false;
-#endif    // RIZZ_CONFIG_HOT_LOADING
+#endif // RIZZ_CONFIG_HOT_LOADING
 
 #if SX_PLATFORM_ANDROID
     g_vfs.asset_mgr = rizz_android_asset_mgr();
-#endif
+#endif // SX_PLATFORM_ANDROID
 
 #if SX_PLATFORM_IOS
     g_vfs.assets_bundle = rizz_ios_open_bundle("assets");
-#endif
+#endif // SX_PLATFORM_IOS
 
     return true;
 }
@@ -394,8 +361,9 @@ void rizz__vfs_release()
     if (g_vfs.dmon_queue) {
         sx_queue_spsc_destroy(g_vfs.dmon_queue, g_vfs.alloc);
     }
-#endif
+#endif // RIZZ_CONFIG_HOT_LOADING
 
+    sx_array_free(g_vfs.alloc, g_vfs.callbacks);
     sx_array_free(g_vfs.alloc, g_vfs.mounts);
     g_vfs.alloc = NULL;
 }
@@ -407,19 +375,27 @@ void rizz__vfs_async_update()
     while (sx_queue_spsc_consume(g_vfs.res_queue, &res)) {
         switch (res.code) {
         case VFS_RESPONSE_READ_OK:
-            g_vfs.callbacks.on_read_complete(res.path, res.read_mem);
+            for (int i = 0, c = sx_array_count(g_vfs.callbacks); i < c; i++) {
+                g_vfs.callbacks[i].on_read_complete(res.path, res.read_mem);
+            }
             break;
 
         case VFS_RESPONSE_WRITE_OK:
-            g_vfs.callbacks.on_write_complete(res.path, res.write_bytes, res.write_mem);
+            for (int i = 0, c = sx_array_count(g_vfs.callbacks); i < c; i++) {
+                g_vfs.callbacks[i].on_write_complete(res.path, res.write_bytes, res.write_mem);
+            }
             break;
 
         case VFS_RESPONSE_READ_FAILED:
-            g_vfs.callbacks.on_read_error(res.path);
+            for (int i = 0, c = sx_array_count(g_vfs.callbacks); i < c; i++) {
+                g_vfs.callbacks[i].on_read_error(res.path);
+            }
             break;
 
         case VFS_RESPONSE_WRITE_FAILED:
-            g_vfs.callbacks.on_write_error(res.path);
+            for (int i = 0, c = sx_array_count(g_vfs.callbacks); i < c; i++) {
+                g_vfs.callbacks[i].on_write_error(res.path);
+            }
             break;
         }
     }
@@ -429,10 +405,12 @@ void rizz__vfs_async_update()
     dmon__result dmon_res;
     while (sx_queue_spsc_consume(g_vfs.dmon_queue, &dmon_res)) {
         if (dmon_res.action == DMON_ACTION_MODIFY) {
-            g_vfs.callbacks.on_modified(dmon_res.path);
+            for (int i = 0, c = sx_array_count(g_vfs.callbacks); i < c; i++) {
+                g_vfs.callbacks[i].on_modified(dmon_res.path);
+            }
         }
     }
-#endif
+#endif // RIZZ_CONFIG_HOT_LOADING
 }
 
 static void rizz__vfs_read_async(const char* path, rizz_vfs_flags flags, const sx_alloc* alloc)
@@ -451,15 +429,10 @@ static void rizz__vfs_write_async(const char* path, sx_mem_block* mem, rizz_vfs_
     sx_semaphore_post(&g_vfs.worker_sem, 1);
 }
 
-static rizz_vfs_async_callbacks rizz__vfs_set_async_callbacks(const rizz_vfs_async_callbacks* cbs)
+static void rizz__vfs_register_async_callbacks(const rizz_vfs_async_callbacks* cbs)
 {
-    rizz_vfs_async_callbacks prev = g_vfs.callbacks;
-    if (cbs) {
-        g_vfs.callbacks = *cbs;
-    } else {
-        g_vfs.callbacks = g_vfs_dummy_callbacks;
-    }
-    return prev;
+    sx_assert(cbs);
+    sx_array_push(g_vfs.alloc, g_vfs.callbacks, *cbs);
 }
 
 static bool rizz__vfs_mkdir(const char* path)
@@ -540,9 +513,9 @@ static void dmon__event_cb(dmon_watch_id watch_id, dmon_action action, const cha
         break;
     }
 }
-#endif
+#endif // RIZZ_CONFIG_HOT_LOADING
 
-rizz_api_vfs the__vfs = { .set_async_callbacks = rizz__vfs_set_async_callbacks,
+rizz_api_vfs the__vfs = { .register_async_callbacks = rizz__vfs_register_async_callbacks,
                           .mount = rizz__vfs_mount,
                           .mount_mobile_assets = rizz__vfs_mount_mobile_assets,
                           .read_async = rizz__vfs_read_async,

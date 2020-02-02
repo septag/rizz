@@ -535,45 +535,98 @@ typedef struct basisut_transcode_data {
 } basisut_transcode_data;
 
 static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_params* params,
-                                                     const void* metadata)
+                                                     const sx_mem_block* mem)
 {
     const sx_alloc* alloc = params->alloc ? params->alloc : g_gfx_alloc;
-    const rizz_texture_info* info = metadata;
 
     rizz_texture* tex = sx_malloc(alloc, sizeof(rizz_texture));
-    if (!tex || info->mem_size_bytes == 0) {
+    if (!tex) {
         sx_out_of_memory();
         return (rizz_asset_load_data){ .obj = { 0 } };
     }
-    tex->img = the__gfx.alloc_image();
-    sx_memcpy(&tex->info, info, sizeof(*info));
 
-    void* user_data;
-
-    // create extra buffer for basis transcoding
+    rizz_texture_info* info = &tex->info;
+    bool is_basis = false;
     char ext[32];
     sx_os_path_ext(ext, sizeof(ext), params->path);
     if (sx_strequalnocase(ext, ".basis")) {
+        if (basisut_validate_header(mem->data, mem->size)) {
+            bool r = basisut_image_info(mem->data, mem->size, info);
+            is_basis = true;
+            sx_unused(r);
+            sx_assert(r);
+        } else {
+            rizz__log_warn("reading texture '%s' metadata failed", params->path);
+            sx_free(alloc, tex);
+            return (rizz_asset_load_data){ .obj = { 0 } };
+        }
+    } else if (sx_strequalnocase(ext, ".dds") || sx_strequalnocase(ext, ".ktx")) {
+        ddsktx_texture_info tc = { 0 };
+        ddsktx_error err;
+        const rizz_texture_load_params* tparams = params->params;
+        if (ddsktx_parse(&tc, mem->data, mem->size, &err)) {
+            info->type = rizz__texture_get_type(&tc);
+            info->format = rizz__texture_get_texture_format(tc.format);
+            if (info->type == SG_IMAGETYPE_ARRAY) {
+                info->layers = tc.num_layers;
+            } else if (info->type == SG_IMAGETYPE_3D) {
+                info->depth = tc.depth;
+            } else {
+                info->layers = 1;
+            }
+            info->mem_size_bytes = tc.size_bytes;
+            info->width = tc.width;
+            info->height = tc.height;
+            info->mips = tc.num_mips;
+            info->bpp = tc.bpp;
+        } else {
+            rizz__log_warn("reading texture '%s' metadata failed: %s", params->path, err.msg);
+            sx_memset(info, 0x0, sizeof(rizz_texture_info));
+        }
+    } else {
+        // try to use stbi to load the image
+        int comp;
+        if (stbi_info_from_memory(mem->data, mem->size, &info->width, &info->height, &comp)) {
+            sx_assert(!stbi_is_16_bit_from_memory(mem->data, mem->size) &&
+                      "images with 16bit color channel are not supported");
+            info->type = SG_IMAGETYPE_2D;
+            info->format = SG_PIXELFORMAT_RGBA8;    // always convert to RGBA
+            info->mem_size_bytes = 4 * info->width * info->height;
+            info->layers = 1;
+            info->mips = 1;
+            info->bpp = 32;
+        } else {
+            rizz__log_warn("reading image '%s' metadata failed: %s", params->path,
+                           stbi_failure_reason());
+            sx_memset(info, 0x0, sizeof(rizz_texture_info));
+        }
+    }
+
+    tex->img = the__gfx.alloc_image();
+    sx_assert(tex->img.id);
+
+    void* user_data;
+    // create extra buffer for basis transcoding
+    if (is_basis) {
         const rizz_texture_load_params* tparams = params->params;
         sx_assert(tparams->fmt != _SG_PIXELFORMAT_DEFAULT && "fmt must be defined for basis files");
 
+        // clang-format off 
         basisut_transcoder_texture_format basis_fmt;
-        // clang-format off
         switch (tparams->fmt) {
-        case SG_PIXELFORMAT_ETC2_RGB8:          basis_fmt = cTFETC1;            break;
-        case SG_PIXELFORMAT_ETC2_RGBA8:         basis_fmt = cTFETC2;            break;
-        case SG_PIXELFORMAT_ETC2_RG11:          basis_fmt = cTFETC2_EAC_RG11;   break;
-        case SG_PIXELFORMAT_BC1_RGBA:           basis_fmt = cTFBC1;             break;
-        case SG_PIXELFORMAT_BC3_RGBA:           basis_fmt = cTFBC3;             break;
-        case SG_PIXELFORMAT_BC4_R:              basis_fmt = cTFBC4;             break;
-        case SG_PIXELFORMAT_BC5_RG:             basis_fmt = cTFBC5;             break;
-        case SG_PIXELFORMAT_BC7_RGBA:           basis_fmt = cTFBC7_M5;          break;
-        case SG_PIXELFORMAT_PVRTC_RGBA_4BPP:    basis_fmt = cTFPVRTC1_4_RGBA;   break;
-        case SG_PIXELFORMAT_PVRTC_RGB_4BPP:     basis_fmt = cTFPVRTC1_4_RGB;    break;
-        case SG_PIXELFORMAT_RGBA8:              basis_fmt = cTFRGBA32;          break;
+        case SG_PIXELFORMAT_ETC2_RGB8:      basis_fmt = cTFETC1;            break;
+        case SG_PIXELFORMAT_ETC2_RGBA8:     basis_fmt = cTFETC2;            break;
+        case SG_PIXELFORMAT_ETC2_RG11:      basis_fmt = cTFETC2_EAC_RG11;   break;
+        case SG_PIXELFORMAT_BC1_RGBA:       basis_fmt = cTFBC1;             break;
+        case SG_PIXELFORMAT_BC3_RGBA:       basis_fmt = cTFBC3;             break;
+        case SG_PIXELFORMAT_BC4_R:          basis_fmt = cTFBC4;             break;
+        case SG_PIXELFORMAT_BC5_RG:         basis_fmt = cTFBC5;             break;
+        case SG_PIXELFORMAT_BC7_RGBA:       basis_fmt = cTFBC7_M5;          break;
+        case SG_PIXELFORMAT_PVRTC_RGBA_4BPP:basis_fmt = cTFPVRTC1_4_RGBA;   break;
+        case SG_PIXELFORMAT_PVRTC_RGB_4BPP: basis_fmt = cTFPVRTC1_4_RGB;    break;
+        case SG_PIXELFORMAT_RGBA8:          basis_fmt = cTFRGBA32;          break;
         default:
-            rizz__log_warn(
-                "parsing texture '%s' failed. transcoding of specified format is not supported");
+            rizz__log_warn("parsing texture '%s' failed. transcoding of this format is not supported");
             sx_assert(0);
             return (rizz_asset_load_data){ .obj = { 0 } };
         }
@@ -806,64 +859,6 @@ static void rizz__texture_on_release(rizz_asset_obj obj, const sx_alloc* alloc)
     sx_free(alloc, tex);
 }
 
-static void rizz__texture_on_read_metadata(void* metadata, const rizz_asset_load_params* params,
-                                           const sx_mem_block* mem)
-{
-    rizz_texture_info* info = metadata;
-    char ext[32];
-    sx_os_path_ext(ext, sizeof(ext), params->path);
-    if (sx_strequalnocase(ext, ".basis")) {
-        if (basisut_validate_header(mem->data, mem->size)) {
-            bool r = basisut_image_info(mem->data, mem->size, info);
-            sx_unused(r);
-            sx_assert(r);
-        } else {
-            rizz__log_warn("reading texture '%s' metadata failed", params->path);
-            sx_memset(info, 0x0, sizeof(rizz_texture_info));
-        }
-    } else if (sx_strequalnocase(ext, ".dds") || sx_strequalnocase(ext, ".ktx")) {
-        ddsktx_texture_info tc = { 0 };
-        ddsktx_error err;
-        const rizz_texture_load_params* tparams = params->params;
-        if (ddsktx_parse(&tc, mem->data, mem->size, &err)) {
-            info->type = rizz__texture_get_type(&tc);
-            info->format = rizz__texture_get_texture_format(tc.format);
-            if (info->type == SG_IMAGETYPE_ARRAY) {
-                info->layers = tc.num_layers;
-            } else if (info->type == SG_IMAGETYPE_3D) {
-                info->depth = tc.depth;
-            } else {
-                info->layers = 1;
-            }
-            info->mem_size_bytes = tc.size_bytes;
-            info->width = tc.width;
-            info->height = tc.height;
-            info->mips = tc.num_mips;
-            info->bpp = tc.bpp;
-        } else {
-            rizz__log_warn("reading texture '%s' metadata failed: %s", params->path, err.msg);
-            sx_memset(info, 0x0, sizeof(rizz_texture_info));
-        }
-    } else {
-        // try to use stbi to load the image
-        int comp;
-        if (stbi_info_from_memory(mem->data, mem->size, &info->width, &info->height, &comp)) {
-            sx_assert(!stbi_is_16_bit_from_memory(mem->data, mem->size) &&
-                      "images with 16bit color channel are not supported");
-            info->type = SG_IMAGETYPE_2D;
-            info->format = SG_PIXELFORMAT_RGBA8;    // always convert to RGBA
-            info->mem_size_bytes = 4 * info->width * info->height;
-            info->layers = 1;
-            info->mips = 1;
-            info->bpp = 32;
-        } else {
-            rizz__log_warn("reading image '%s' metadata failed: %s", params->path,
-                          stbi_failure_reason());
-            sx_memset(info, 0x0, sizeof(rizz_texture_info));
-        }
-    }
-}
-
 static rizz_texture rizz__texture_create_checker(int checker_size, int size,
                                                  const sx_color colors[2])
 {
@@ -931,82 +926,6 @@ static rizz_texture rizz__texture_create_checker(int checker_size, int size,
 
 static void rizz__texture_init()
 {
-    // register metadata struct reflection
-    rizz__refl_enum(sg_image_type, SG_IMAGETYPE_2D);
-    rizz__refl_enum(sg_image_type, SG_IMAGETYPE_CUBE);
-    rizz__refl_enum(sg_image_type, SG_IMAGETYPE_3D);
-    rizz__refl_enum(sg_image_type, SG_IMAGETYPE_ARRAY);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_NONE);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R8);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R8SN);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R8UI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R8SI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16SN);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16UI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16SI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R16F);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG8);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG8SN);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG8UI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG8SI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R32UI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R32SI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_R32F);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16SN);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16UI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16SI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG16F);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8SN);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8UI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA8SI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BGRA8);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGB10A2);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG11B10F);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG32UI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG32SI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RG32F);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16SN);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16UI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16SI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA16F);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA32UI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA32SI);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_RGBA32F);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_DEPTH);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_DEPTH_STENCIL);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC1_RGBA);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC2_RGBA);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC3_RGBA);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC4_R);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC4_RSN);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC5_RG);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC5_RGSN);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC6H_RGBF);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC6H_RGBUF);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_BC7_RGBA);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGB_2BPP);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGB_4BPP);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGBA_2BPP);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_PVRTC_RGBA_4BPP);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RGB8);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RGB8A1);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RGBA8);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RG11);
-    rizz__refl_enum(sg_pixel_format, SG_PIXELFORMAT_ETC2_RG11SN);
-
-    rizz__refl_field(rizz_texture_info, sg_image_type, type, "texture type");
-    rizz__refl_field(rizz_texture_info, sg_pixel_format, format, "texture pixel format");
-    rizz__refl_field(rizz_texture_info, int, mem_size_bytes, "allocated texture size in bytes");
-    rizz__refl_field(rizz_texture_info, int, width, "texture width in pixels");
-    rizz__refl_field(rizz_texture_info, int, height, "texture height in pixels");
-    rizz__refl_field(rizz_texture_info, int, layers, "texture layers/depth");
-    rizz__refl_field(rizz_texture_info, int, mips, "number of texture mips");
-    rizz__refl_field(rizz_texture_info, int, bpp, "number of bits-per-pixel");
-
     static uint32_t k_white_pixel = 0xffffffff;
     static uint32_t k_black_pixel = 0xff000000;
     g_gfx.tex_mgr.white_tex = (rizz_texture){
@@ -1050,17 +969,15 @@ static void rizz__texture_init()
     g_gfx.tex_mgr.checker_tex = rizz__texture_create_checker(CHECKER_TEXTURE_SIZE / 2,
                                                              CHECKER_TEXTURE_SIZE, checker_colors);
 
-    the__asset.register_asset_type(
-        "texture",
-        (rizz_asset_callbacks){ .on_prepare = rizz__texture_on_prepare,
-                                .on_load = rizz__texture_on_load,
-                                .on_finalize = rizz__texture_on_finalize,
-                                .on_reload = rizz__texture_on_reload,
-                                .on_release = rizz__texture_on_release,
-                                .on_read_metadata = rizz__texture_on_read_metadata },
-        "rizz_texture_load_params", sizeof(rizz_texture_load_params), "rizz_texture_info",
-        sizeof(rizz_texture_info), (rizz_asset_obj){ .ptr = &g_gfx.tex_mgr.white_tex },
-        (rizz_asset_obj){ .ptr = &g_gfx.tex_mgr.white_tex }, 0);
+    the__asset.register_asset_type("texture",
+                                   (rizz_asset_callbacks){ .on_prepare = rizz__texture_on_prepare,
+                                                           .on_load = rizz__texture_on_load,
+                                                           .on_finalize = rizz__texture_on_finalize,
+                                                           .on_reload = rizz__texture_on_reload,
+                                                           .on_release = rizz__texture_on_release },
+                                   "rizz_texture_load_params", sizeof(rizz_texture_load_params),
+                                   (rizz_asset_obj){ .ptr = &g_gfx.tex_mgr.checker_tex },
+                                   (rizz_asset_obj){ .ptr = &g_gfx.tex_mgr.white_tex }, 0);
 
     // init basis
     basisut_init(g_gfx_alloc);
@@ -1798,7 +1715,7 @@ static sg_pipeline_desc* rizz__shader_bindto_pipeline_sg(sg_shader shd,
 
         if (!found) {
             rizz__log_error("vertex attribute '%s%d' does not exist in actual shader inputs",
-                           attr->semantic, attr->semantic_idx);
+                            attr->semantic, attr->semantic_idx);
             sx_assert(0);
         }
 
@@ -1825,16 +1742,58 @@ static sg_pipeline_desc* rizz__shader_bindto_pipeline(const rizz_shader* shd,
 }
 
 static rizz_asset_load_data rizz__shader_on_prepare(const rizz_asset_load_params* params,
-                                                    const void* metadata)
+                                                    const sx_mem_block* mem)
 {
     const sx_alloc* alloc = params->alloc ? params->alloc : g_gfx_alloc;
-    const rizz_shader_info* info = metadata;
 
     rizz_shader* shader = sx_malloc(alloc, sizeof(rizz_shader));
-    if (!shader)
+    if (!shader) {
         return (rizz_asset_load_data){ .obj = { 0 } };
+    }
+
+    rizz_shader_info* info = &shader->info;
+
+    sx_mem_reader reader;
+    sx_mem_init_reader(&reader, mem->data, mem->size);
+
+    uint32_t _sgs;
+    sx_mem_read_var(&reader, _sgs);
+    if (_sgs != SGS_CHUNK) {
+        sx_assert(0 && "invalid sgs file format");
+        return (rizz_asset_load_data){ .obj = { 0 } };
+    }
+    sx_mem_seekr(&reader, sizeof(uint32_t), SX_WHENCE_CURRENT);
+
+    struct sgs_chunk sinfo;
+    sx_mem_read_var(&reader, sinfo);
+
+    // read stages
+    sx_iff_chunk stage_chunk = sx_mem_get_iff_chunk(&reader, 0, SGS_CHUNK_STAG);
+    while (stage_chunk.pos != -1) {
+        uint32_t stage_type;
+        sx_mem_read_var(&reader, stage_type);
+
+        if (stage_type == SGS_STAGE_VERTEX) {
+            // look for reflection chunk
+            sx_iff_chunk reflect_chunk =
+                sx_mem_get_iff_chunk(&reader, stage_chunk.size, SGS_CHUNK_REFL);
+            if (reflect_chunk.pos != -1) {
+                const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
+                rizz_shader_refl* refl = rizz__shader_parse_reflect_bin(
+                    tmp_alloc, reader.data + reflect_chunk.pos, reflect_chunk.size);
+                sx_memcpy(info->inputs, refl->inputs,
+                          sizeof(rizz_shader_refl_input) * refl->num_inputs);
+                info->num_inputs = refl->num_inputs;
+                the__core.tmp_alloc_pop();
+            }
+        }
+
+        sx_mem_seekr(&reader, stage_chunk.pos + stage_chunk.size, SX_WHENCE_BEGIN);
+        stage_chunk = sx_mem_get_iff_chunk(&reader, 0, SGS_CHUNK_STAG);
+    }
+
     shader->shd = the__gfx.alloc_shader();
-    sx_memcpy(&shader->info, info, sizeof(*info));
+    sx_assert(shader->shd.id);
 
     return (rizz_asset_load_data){ .obj = { .ptr = shader },
                                    .user = sx_malloc(g_gfx_alloc, sizeof(sg_shader_desc)) };
@@ -1983,88 +1942,18 @@ static void rizz__shader_on_release(rizz_asset_obj obj, const sx_alloc* alloc)
     sx_free(alloc, shader);
 }
 
-static void rizz__shader_on_read_metadata(void* metadata, const rizz_asset_load_params* params,
-                                          const sx_mem_block* mem)
-{
-    sx_unused(params);
-
-    rizz_shader_info* info = metadata;
-    sx_memset(info, 0x0, sizeof(rizz_shader_info));
-
-    sx_mem_reader reader;
-    sx_mem_init_reader(&reader, mem->data, mem->size);
-
-    uint32_t _sgs;
-    sx_mem_read_var(&reader, _sgs);
-    if (_sgs != SGS_CHUNK) {
-        return;
-    }
-    sx_mem_seekr(&reader, sizeof(uint32_t), SX_WHENCE_CURRENT);
-
-    struct sgs_chunk sinfo;
-    sx_mem_read_var(&reader, sinfo);
-
-    // read stages
-    sx_iff_chunk stage_chunk = sx_mem_get_iff_chunk(&reader, 0, SGS_CHUNK_STAG);
-    while (stage_chunk.pos != -1) {
-        uint32_t stage_type;
-        sx_mem_read_var(&reader, stage_type);
-
-        if (stage_type == SGS_STAGE_VERTEX) {
-            // look for reflection chunk
-            sx_iff_chunk reflect_chunk =
-                sx_mem_get_iff_chunk(&reader, stage_chunk.size, SGS_CHUNK_REFL);
-            if (reflect_chunk.pos != -1) {
-                const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
-                rizz_shader_refl* refl = rizz__shader_parse_reflect_bin(
-                    tmp_alloc, reader.data + reflect_chunk.pos, reflect_chunk.size);
-                sx_memcpy(info->inputs, refl->inputs,
-                          sizeof(rizz_shader_refl_input) * refl->num_inputs);
-                info->num_inputs = refl->num_inputs;
-                the__core.tmp_alloc_pop();
-            }
-        }
-
-        sx_mem_seekr(&reader, stage_chunk.pos + stage_chunk.size, SX_WHENCE_BEGIN);
-        stage_chunk = sx_mem_get_iff_chunk(&reader, 0, SGS_CHUNK_STAG);
-    }
-}
-
 static void rizz__shader_init()
 {
     // NOTE: shaders are always forced to load in blocking mode
-    the__asset.register_asset_type(
-        "shader",
-        (rizz_asset_callbacks){ .on_prepare = rizz__shader_on_prepare,
-                                .on_load = rizz__shader_on_load,
-                                .on_finalize = rizz__shader_on_finalize,
-                                .on_reload = rizz__shader_on_reload,
-                                .on_release = rizz__shader_on_release,
-                                .on_read_metadata = rizz__shader_on_read_metadata },
-        NULL, 0, "rizz_shader_info", sizeof(rizz_shader_info), (rizz_asset_obj){ .ptr = NULL },
-        (rizz_asset_obj){ .ptr = NULL }, RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD);
-    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT);
-    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT2);
-    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT3);
-    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_FLOAT4);
-    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_BYTE4);
-    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_BYTE4N);
-    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_UBYTE4);
-    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_UBYTE4N);
-    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_SHORT2);
-    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_SHORT2N);
-    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_SHORT4);
-    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_SHORT4N);
-    rizz__refl_enum(sg_vertex_format, SG_VERTEXFORMAT_UINT10_N2);
-
-    rizz__refl_field(rizz_shader_refl_input, char[32], name, "shader input name");
-    rizz__refl_field(rizz_shader_refl_input, char[32], semantic, "shader semantic name");
-    rizz__refl_field(rizz_shader_refl_input, int, semantic_index, "shader semantic index");
-    rizz__refl_field(rizz_shader_refl_input, sg_vertex_format, type, "shader input type");
-
-    rizz__refl_field(rizz_shader_info, rizz_shader_refl_input[SG_MAX_VERTEX_ATTRIBUTES], inputs,
-                    "shader inputs");
-    rizz__refl_field(rizz_shader_info, int, num_inputs, "shader input count");
+    the__asset.register_asset_type("shader",
+                                   (rizz_asset_callbacks){ .on_prepare = rizz__shader_on_prepare,
+                                                           .on_load = rizz__shader_on_load,
+                                                           .on_finalize = rizz__shader_on_finalize,
+                                                           .on_reload = rizz__shader_on_reload,
+                                                           .on_release = rizz__shader_on_release },
+                                   NULL, 0, (rizz_asset_obj){ .ptr = NULL },
+                                   (rizz_asset_obj){ .ptr = NULL },
+                                   RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3899,8 +3788,8 @@ static bool rizz__imm_begin(rizz_gfx_stage stage)
 
 static void rizz__imm_end() {}
 
-void rizz__gfx_log_error(const char* source_file, int line, const char* str) 
-{ 
+void rizz__gfx_log_error(const char* source_file, int line, const char* str)
+{
     the__core.print_error_trace(source_file, line, str);
 }
 

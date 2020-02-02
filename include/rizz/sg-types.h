@@ -199,6 +199,9 @@ typedef enum sg_pixel_format {
     SG_PIXELFORMAT_PVRTC_RGBA_4BPP,
     SG_PIXELFORMAT_ETC2_RGB8,
     SG_PIXELFORMAT_ETC2_RGB8A1,
+    SG_PIXELFORMAT_ETC2_RGBA8,
+    SG_PIXELFORMAT_ETC2_RG11,
+    SG_PIXELFORMAT_ETC2_RG11SN,
 
     _SG_PIXELFORMAT_NUM,
     _SG_PIXELFORMAT_FORCE_U32 = 0x7FFFFFFF
@@ -215,6 +218,7 @@ typedef struct sg_pixelformat_info {
     bool blend;         /* alpha-blending is supported */
     bool msaa;          /* pixel format can be used as MSAA render target */
     bool depth;         /* pixel format is a depth format */
+    bool uav;           /* pixel format can be used as image store (compute-shaders) */
 } sg_pixelformat_info;
 
 /*
@@ -229,7 +233,7 @@ typedef struct sg_features {
     bool imagetype_3d;          /* creation of SG_IMAGETYPE_3D images is supported */
     bool imagetype_array;       /* creation of SG_IMAGETYPE_ARRAY images is supported */
     bool image_clamp_to_border; /* border color and clamp-to-border UV-wrap mode is supported */
-    bool compute_shaders;
+    bool compute_shaders;       /* compute-shader supported */
 } sg_features;
 
 /*
@@ -830,6 +834,8 @@ typedef struct sg_pass_action {
     - 0..1 index buffer offsets
     - 0..N vertex shader stage images
     - 0..N fragment shader stage images
+    - 0..N compute shader stage images
+    - 0..N compute shader storage buffers
 
     The max number of vertex buffer and shader stage images
     are defined by the SG_MAX_SHADERSTAGE_BUFFERS and
@@ -863,11 +869,12 @@ typedef struct sg_bindings {
 
     The default configuration is:
 
-    .size:      0       (this *must* be set to a valid size in bytes)
-    .type:      SG_BUFFERTYPE_VERTEXBUFFER
-    .usage:     SG_USAGE_IMMUTABLE
-    .content    0
-    .label      0       (optional string label for trace hooks)
+    .size:          0       (this *must* be set to a valid size in bytes)
+    .type:          SG_BUFFERTYPE_VERTEXBUFFER
+    .usage:         SG_USAGE_IMMUTABLE
+    .shader_write   false
+    .content        0
+    .label          0       (optional string label for trace hooks)
 
     The dbg_label will be ignored by sokol_gfx.h, it is only useful
     when hooking into sg_make_buffer() or sg_init_buffer() via
@@ -952,7 +959,6 @@ typedef struct sg_image_content {
 
     .type:              SG_IMAGETYPE_2D
     .render_target:     false
-    .shader_write:      false
     .width              0 (must be set to >0)
     .height             0 (must be set to >0)
     .depth/.layers:     1
@@ -1286,12 +1292,12 @@ typedef struct sg_pass_desc {
 /*
     sg_trace_hooks
 
-    Installable callback function to keep track of the sokol_gfx calls,
+    Installable callback functions to keep track of the sokol_gfx calls,
     this is useful for debugging, or keeping track of resource creation
     and destruction.
 
     Trace hooks are installed with sg_install_trace_hooks(), this returns
-    another sg_trace_hooks functions with the previous set of
+    another sg_trace_hooks struct with the previous set of
     trace hook function pointers. These should be invoked by the
     new trace hooks to form a proper call chain.
 */

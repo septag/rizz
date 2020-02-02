@@ -929,10 +929,6 @@ void rizz__core_release()
     if (g_core.coro)
         sx_coro_destroy_context(g_core.coro, alloc);
 
-#if !SX_PLATFORM_ANDROID && !SX_PLATFORM_IOS
-    rizz__asset_save_meta_cache();
-#endif
-
     if (g_core.flags & RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS)
         rizz__asset_dump_unused("unused-assets.json");
 

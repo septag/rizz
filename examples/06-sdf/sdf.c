@@ -98,10 +98,6 @@ static bool init()
     the_vfs->mount(asset_dir, "/assets");
 #endif
 
-    // load assets metadata cache to speedup asset loading
-    // always do this after you have mounted all virtual directories
-    the_asset->load_meta_cache();
-
     g_sdf.stage = the_gfx->stage_register("main", (rizz_gfx_stage){ .id = 0 });
     sx_assert(g_sdf.stage.id);
 

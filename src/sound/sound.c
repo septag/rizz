@@ -68,13 +68,6 @@ typedef enum snd__source_format {
     SND_SOURCEFORMAT_OGG
 } snd__source_format;
 
-typedef struct snd__metadata {
-    snd__source_format fmt;
-    int num_frames;
-    int num_channels;
-    int vorbis_buffer_size;
-} snd__metadata;
-
 typedef struct snd__source {
     void* data;
     float* samples;
@@ -315,11 +308,48 @@ static const char* snd__vorbis_get_error(int error)
 }
 
 static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params,
-                                            const void* metadata)
+                                            const sx_mem_block* mem)
 {
-    const snd__metadata* meta = metadata;
     const sx_alloc* alloc = params->alloc ? params->alloc : g_snd_alloc;
     const rizz_snd_load_params* sparams = params->params;
+
+    drwav wav;
+    char ext[32];
+    snd__source_format fmt;
+    uint32_t vorbis_buffer_size;
+    int num_frames;
+
+    sx_os_path_ext(ext, sizeof(ext), params->path);
+    if (sx_strequalnocase(ext, ".wav")) {
+        if (!drwav_init_memory(&wav, mem->data, mem->size)) {
+            rizz_log_warn("loading sound '%s' failed", params->path);
+            return (rizz_asset_load_data){ 0 };
+        }
+
+        sx_assert(wav.totalPCMFrameCount < INT_MAX);    // big wav files are not supported
+        fmt = SND_SOURCEFORMAT_WAV;
+        num_frames = (int)wav.totalPCMFrameCount;
+        vorbis_buffer_size = 0;
+
+        drwav_uninit(&wav);
+    } else if (sx_strequalnocase(ext, ".ogg")) {
+        int error;
+        stb_vorbis* vorbis = stb_vorbis_open_memory(mem->data, mem->size, &error, NULL);
+        if (!vorbis) {
+            rizz_log_warn("loading sound '%s' failed: %s", snd__vorbis_get_error(error));
+            return (rizz_asset_load_data){ 0 };
+        }
+        stb_vorbis_info info = stb_vorbis_get_info(vorbis);
+
+        fmt = SND_SOURCEFORMAT_OGG;
+        num_frames = stb_vorbis_stream_length_in_samples(vorbis) / info.channels;
+        vorbis_buffer_size = info.setup_memory_required + info.setup_temp_memory_required +
+                                   info.temp_memory_required;
+        stb_vorbis_close(vorbis);
+    } else {
+        sx_assert(0 && "file format not supported");
+        return (rizz_asset_load_data){ 0 };
+    }
 
     sx_handle_t handle = sx_handle_new_and_grow(g_snd.source_handles, g_snd_alloc);
     if (!handle) {
@@ -329,12 +359,12 @@ static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params
 
     snd__source_flags flags = (sparams->looping ? SND_SOURCEFLAG_LOOPING : 0) |
                               (sparams->singleton ? SND_SOURCEFLAG_SINGLETON : 0);
-    snd__source src = { .num_frames = meta->num_frames,
+    snd__source src = { .num_frames = num_frames,
                         .volume = 1.0f,
                         .name =
                             sx_strpool_add(g_snd.name_pool, params->path, sx_strlen(params->path)),
                         .flags = flags,
-                        .fmt = meta->fmt };
+                        .fmt = fmt };
 
     sx_array_push_byindex(g_snd_alloc, g_snd.sources, src, sx_handle_index(handle));
 
@@ -352,9 +382,9 @@ static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params
     *((snd__source*)buff) = src;
     buff += sizeof(snd__source);
 
-    if (meta->fmt == SND_SOURCEFORMAT_OGG) {
+    if (fmt == SND_SOURCEFORMAT_OGG) {
         // pass temp vorbis_buffer_size to loader
-        *((int*)buff) = meta->vorbis_buffer_size;
+        *((int*)buff) = vorbis_buffer_size;
         buff += sizeof(int);
     }
 
@@ -493,47 +523,6 @@ static void snd__on_release(rizz_asset_obj obj, const sx_alloc* alloc)
     snd__destroy_source(srchandle, alloc ? alloc : g_snd_alloc);
 }
 
-static void snd__on_read_metadata(void* metadata, const rizz_asset_load_params* params,
-                                  const sx_mem_block* mem)
-{
-    snd__metadata* meta = metadata;
-    drwav wav;
-    char ext[32];
-
-    sx_os_path_ext(ext, sizeof(ext), params->path);
-    if (sx_strequalnocase(ext, ".wav")) {
-        if (!drwav_init_memory(&wav, mem->data, mem->size)) {
-            rizz_log_warn("loading sound '%s' failed", params->path);
-            return;
-        }
-
-        sx_assert(wav.totalPCMFrameCount < INT_MAX);    // big wav files are not supported
-        meta->fmt = SND_SOURCEFORMAT_WAV;
-        meta->num_frames = (int)wav.totalPCMFrameCount;
-        meta->num_channels = wav.channels;
-        meta->vorbis_buffer_size = 0;
-
-        drwav_uninit(&wav);
-    } else if (sx_strequalnocase(ext, ".ogg")) {
-        int error;
-        stb_vorbis* vorbis = stb_vorbis_open_memory(mem->data, mem->size, &error, NULL);
-        if (!vorbis) {
-            rizz_log_warn("loading sound '%s' failed: %s", snd__vorbis_get_error(error));
-            return;
-        }
-        stb_vorbis_info info = stb_vorbis_get_info(vorbis);
-
-        meta->fmt = SND_SOURCEFORMAT_OGG;
-        meta->num_channels = info.channels;
-        meta->num_frames = stb_vorbis_stream_length_in_samples(vorbis) / info.channels;
-        meta->vorbis_buffer_size = info.setup_memory_required + info.setup_temp_memory_required +
-                                   info.temp_memory_required;
-        stb_vorbis_close(vorbis);
-    } else {
-        sx_assert(0 && "file format not supported");
-    }
-}
-
 static void snd__stream_cb(float* buffer, int num_frames, int num_channels)
 {
     int r = snd__ringbuffer_consume(&g_snd.mixer_buffer, buffer, num_frames * num_channels) /
@@ -655,24 +644,14 @@ static bool snd__init()
         snd__create_dummy_source((const char*)k__snd_beep, sizeof(k__snd_beep), "beep");
     g_snd.silence_src = snd__create_dummy_source(k__snd_silent, sizeof(k__snd_silent), "silence");
 
-    // register sound resources for asset loader
-    rizz_refl_enum(snd__source_format, SND_SOURCEFORMAT_WAV);
-    rizz_refl_enum(snd__source_format, SND_SOURCEFORMAT_OGG);
-    rizz_refl_field(snd__metadata, snd__source_format, fmt, "file format");
-    rizz_refl_field(snd__metadata, int, num_frames, "num_frames");
-    rizz_refl_field(snd__metadata, int, num_channels, "num_channels");
-    rizz_refl_field(snd__metadata, int, vorbis_buffer_size, "vorbis specific buff-size");
-
     the_asset->register_asset_type(
         "sound",
         (rizz_asset_callbacks){ .on_prepare = snd__on_prepare,
                                 .on_load = snd__on_load,
                                 .on_finalize = snd__on_finalize,
                                 .on_reload = snd__on_reload,
-                                .on_release = snd__on_release,
-                                .on_read_metadata = snd__on_read_metadata },
-        "rizz_snd_load_params", sizeof(rizz_snd_load_params), "snd__metadata",
-        sizeof(snd__metadata), (rizz_asset_obj){ .id = g_snd.beep_src.id },
+                                .on_release = snd__on_release },
+        "rizz_snd_load_params", sizeof(rizz_snd_load_params), (rizz_asset_obj){ .id = g_snd.beep_src.id },
         (rizz_asset_obj){ .id = g_snd.silence_src.id }, 0);
 
     g_snd.master_volume = 1.0f;

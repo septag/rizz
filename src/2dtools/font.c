@@ -36,10 +36,6 @@ typedef struct font__fons {
     bool img_dirty;
 } font__fons;
 
-typedef struct font__metadata {
-    int ttf_size;
-} font__metadata;
-
 typedef struct font__context {
     const sx_alloc* alloc;
     font__fons** fonts;    // sx_array
@@ -198,11 +194,10 @@ static void fons__error_fn(void* user_ptr, int error, int val)
 }
 
 static rizz_asset_load_data font__fons_on_prepare(const rizz_asset_load_params* params,
-                                                  const void* metadata)
+                                                  const sx_mem_block* mem)
 {
     const sx_alloc* alloc = params->alloc ? params->alloc : g_font.alloc;
     const rizz_font_load_params* fparams = params->params;
-    const font__metadata* fmeta = metadata;
 
     font__fons* fons = sx_malloc(alloc, sizeof(font__fons));
     if (!fons) {
@@ -235,7 +230,7 @@ static rizz_asset_load_data font__fons_on_prepare(const rizz_asset_load_params* 
 
     fonsSetErrorCallback(fons->ctx, fons__error_fn, fons);
 
-    void* buffer = sx_malloc(alloc, fmeta->ttf_size);
+    void* buffer = sx_malloc(alloc, mem->size);
     if (!buffer) {
         sx_out_of_memory();
         return (rizz_asset_load_data){ .obj = { 0 } };
@@ -306,15 +301,6 @@ static void font__fons_on_release(rizz_asset_obj obj, const sx_alloc* alloc)
     }
 
     sx_free(alloc, fons);
-}
-
-static void font__fons_on_read_metadata(void* metadata, const rizz_asset_load_params* params,
-                                        const sx_mem_block* mem)
-{
-    sx_unused(params);
-
-    font__metadata* fmeta = metadata;
-    fmeta->ttf_size = mem->size;
 }
 
 bool font__resize_draw_limits(int max_verts)
@@ -426,20 +412,15 @@ bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* refl,
     fonsSetColor(g_font.font_async.ctx, 0);
     sx_array_push(g_font.alloc, g_font.fonts, &g_font.font_async);
 
-    //
-    rizz_refl_field(font__metadata, int, ttf_size, "ttf_size");
-
-    the_asset->register_asset_type(
-        "font",
-        (rizz_asset_callbacks){ .on_prepare = font__fons_on_prepare,
-                                .on_load = font__fons_on_load,
-                                .on_finalize = font__fons_on_finalize,
-                                .on_reload = font__fons_on_reload,
-                                .on_release = font__fons_on_release,
-                                .on_read_metadata = font__fons_on_read_metadata },
-        "rizz_font_load_params", sizeof(rizz_font_load_params), "font__metadata",
-        sizeof(font__metadata), (rizz_asset_obj){ .ptr = &g_font.font_failed },
-        (rizz_asset_obj){ .ptr = &g_font.font_async }, 0);
+    the_asset->register_asset_type("font",
+                                   (rizz_asset_callbacks){ .on_prepare = font__fons_on_prepare,
+                                                           .on_load = font__fons_on_load,
+                                                           .on_finalize = font__fons_on_finalize,
+                                                           .on_reload = font__fons_on_reload,
+                                                           .on_release = font__fons_on_release },
+                                   "rizz_font_load_params", sizeof(rizz_font_load_params),
+                                   (rizz_asset_obj){ .ptr = &g_font.font_failed },
+                                   (rizz_asset_obj){ .ptr = &g_font.font_async }, 0);
 
     return true;
 }
@@ -602,10 +583,9 @@ bool font__iter_next(const rizz_font* fnt, rizz_font_iter* iter, rizz_font_quad*
                               .end = fiter.end,
                               ._reserved = fiter.font };
 
-    *quad = (rizz_font_quad){
-        .v0 = { .pos = { fquad.x0, fquad.y0 }, .uv = { fquad.s0, fquad.t0 } },
-        .v1 = { .pos = { fquad.x1, fquad.y1 }, .uv = { fquad.s1, fquad.t1 } }
-    };
+    *quad =
+        (rizz_font_quad){ .v0 = { .pos = { fquad.x0, fquad.y0 }, .uv = { fquad.s0, fquad.t0 } },
+                          .v1 = { .pos = { fquad.x1, fquad.y1 }, .uv = { fquad.s1, fquad.t1 } } };
 
     return r;
 }
@@ -616,43 +596,43 @@ void font__draw_debug(const rizz_font* fnt, sx_vec2 pos)
     fonsDrawDebug(fons->ctx, pos.x, pos.y);
 }
 
-void font__set_size(const rizz_font* fnt, float size) 
+void font__set_size(const rizz_font* fnt, float size)
 {
     const font__fons* fons = (const font__fons*)fnt;
     fonsSetSize(fons->ctx, size);
 }
 
-void font__set_color(const rizz_font* fnt, sx_color color) 
+void font__set_color(const rizz_font* fnt, sx_color color)
 {
     const font__fons* fons = (const font__fons*)fnt;
     fonsSetColor(fons->ctx, color.n);
 }
 
-void font__set_align(const rizz_font* fnt, rizz_font_align align_bits) 
+void font__set_align(const rizz_font* fnt, rizz_font_align align_bits)
 {
     const font__fons* fons = (const font__fons*)fnt;
     fonsSetAlign(fons->ctx, align_bits);
 }
 
-void font__set_spacing(const rizz_font* fnt, float spacing) 
+void font__set_spacing(const rizz_font* fnt, float spacing)
 {
     const font__fons* fons = (const font__fons*)fnt;
     fonsSetSpacing(fons->ctx, spacing);
 }
 
-void font__set_blur(const rizz_font* fnt, float blur) 
+void font__set_blur(const rizz_font* fnt, float blur)
 {
     const font__fons* fons = (const font__fons*)fnt;
     fonsSetBlur(fons->ctx, blur);
 }
 
-void font__set_scissor(const rizz_font* fnt, int x, int y, int width, int height) 
+void font__set_scissor(const rizz_font* fnt, int x, int y, int width, int height)
 {
     const font__fons* fons = (const font__fons*)fnt;
     fonsSetScissor(fons->ctx, x, y, width, height);
 }
 
-void font__set_viewproj_mat(const rizz_font* fnt, const sx_mat4* vp) 
+void font__set_viewproj_mat(const rizz_font* fnt, const sx_mat4* vp)
 {
     const font__fons* fons = (const font__fons*)fnt;
     fonsSetMatrix(fons->ctx, vp->f);

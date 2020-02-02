@@ -285,7 +285,7 @@ typedef struct rizz_vfs_async_callbacks {
 } rizz_vfs_async_callbacks;
 
 typedef struct rizz_api_vfs {
-    rizz_vfs_async_callbacks (*set_async_callbacks)(const rizz_vfs_async_callbacks* cbs);
+    void (*register_async_callbacks)(const rizz_vfs_async_callbacks* cbs);
     bool (*mount)(const char* path, const char* alias);
     void (*mount_mobile_assets)(const char* alias);
     void (*read_async)(const char* path, rizz_vfs_flags flags, const sx_alloc* alloc);
@@ -330,19 +330,23 @@ typedef enum rizz_asset_state {
 
 typedef struct rizz_asset_callbacks {
     // Runs on main-thread
-    // Should create a valid object and any optional user-data.
-    // 'metadata' is a custom structure defined by asset-loader, which stores important data to
-    // prepare asset memory requirements each asset has it's own metadata
-    rizz_asset_load_data (*on_prepare)(const rizz_asset_load_params* params, const void* metadata);
+    // Should create a valid device/subsystem object and any optional user-data.
+    // The reason that it is decoupled from on_load and runs on main thread is because we cannot
+    // garranty that object creation and custom memory allocation is thread-safe
+    // if rizz_asset_load_data.obj.id == 0, then the asset manager assumes that an error has occured
+    rizz_asset_load_data (*on_prepare)(const rizz_asset_load_params* params,
+                                       const sx_mem_block* mem);
 
     // Runs on worker-thread
     // File data is loaded and passed as 'mem'. Should fill the allocated object and user-data.
+    // It is recommended that you don't create/allocate any permanent objects/memory stuff here
+    // instead, do them in `on_prepare` and pass them as `data`
     bool (*on_load)(rizz_asset_load_data* data, const rizz_asset_load_params* params,
                     const sx_mem_block* mem);
 
     // Runs on main-thread
     // Any optional finalization should happen in this function.
-    // This function should free any user-data allocated in 'on_prepare' or 'on_load'
+    // This function should free any user-data allocated in 'on_prepare'
     void (*on_finalize)(rizz_asset_load_data* data, const rizz_asset_load_params* params,
                         const sx_mem_block* mem);
 
@@ -357,13 +361,6 @@ typedef struct rizz_asset_callbacks {
     // Runs on main-thread
     // asset-lib calls this if asset's refcount reaches zero.
     void (*on_release)(rizz_asset_obj obj, const sx_alloc* alloc);
-
-    // Runs on main-thread
-    // If asset's metadata is not found, asset-lib calls this function to read them (and possibly
-    // save it in cache). asset-loader should read headers or some other file data and fill
-    // 'metadata' with valid information
-    void (*on_read_metadata)(void* metadata, const rizz_asset_load_params* params,
-                             const sx_mem_block* mem);
 } rizz_asset_callbacks;
 
 // clang-format off
@@ -391,7 +388,6 @@ typedef struct rizz_asset_callbacks {
 typedef struct rizz_api_asset {
     void (*register_asset_type)(const char* name, rizz_asset_callbacks callbacks,
                                 const char* params_type_name, int params_size,
-                                const char* metadata_type_name, int metadata_size,
                                 rizz_asset_obj failed_obj, rizz_asset_obj async_obj,
                                 rizz_asset_load_flags forced_flags);
     void (*unregister_asset_type)(const char* name);
@@ -402,8 +398,6 @@ typedef struct rizz_api_asset {
                                 const void* params, rizz_asset_load_flags flags,
                                 const sx_alloc* alloc, uint32_t tags);
     void (*unload)(rizz_asset handle);
-
-    bool (*load_meta_cache)();
 
     rizz_asset_state (*state)(rizz_asset handle);
     const char* (*path)(rizz_asset handle);
@@ -717,7 +711,7 @@ typedef struct rizz_api_core {
 #define rizz_temp_alloc_end(_name) \
         (void)_temp_alloc_raii_##_name; \
         (RIZZ_CORE_API_VARNAME)->tmp_alloc_pop()
-        
+
 // clang-format on
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -738,18 +732,18 @@ typedef struct rizz_api_core {
 //       #include rizz_shader_path(shaders/include, myshader.h)
 #define rizz_shader_path(_basepath, _filename) \
     _rizz_shader_path_lang(_basepath, RIZZ_GRAPHICS_SHADER_LANG, _filename)
-    // clang-format on
+// clang-format on
 
-    typedef enum rizz_gfx_backend {
-        RIZZ_GFX_BACKEND_GLCORE33,
-        RIZZ_GFX_BACKEND_GLES2,
-        RIZZ_GFX_BACKEND_GLES3,
-        RIZZ_GFX_BACKEND_D3D11,
-        RIZZ_GFX_BACKEND_METAL_IOS,
-        RIZZ_GFX_BACKEND_METAL_MACOS,
-        RIZZ_GFX_BACKEND_METAL_SIMULATOR,
-        RIZZ_GFX_BACKEND_DUMMY,
-    } rizz_gfx_backend;
+typedef enum rizz_gfx_backend {
+    RIZZ_GFX_BACKEND_GLCORE33,
+    RIZZ_GFX_BACKEND_GLES2,
+    RIZZ_GFX_BACKEND_GLES3,
+    RIZZ_GFX_BACKEND_D3D11,
+    RIZZ_GFX_BACKEND_METAL_IOS,
+    RIZZ_GFX_BACKEND_METAL_MACOS,
+    RIZZ_GFX_BACKEND_METAL_SIMULATOR,
+    RIZZ_GFX_BACKEND_DUMMY,
+} rizz_gfx_backend;
 
 typedef enum rizz_shader_lang {
     RIZZ_SHADER_LANG_GLES,

@@ -103,10 +103,6 @@ static bool init()
     the_vfs->mount(asset_dir, "/assets");
 #endif
 
-    // load assets metadata cache to speedup asset loading
-    // always do this after you have mounted all virtual directories
-    the_asset->load_meta_cache();
-
     // register main graphics stage.
     // at least one stage should be registered if you want to draw anything
     g_nbody.stage = the_gfx->stage_register("main", (rizz_gfx_stage){ .id = 0 });
