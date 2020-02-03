@@ -1050,6 +1050,7 @@ static bool atlas__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
                            const sx_mem_block* mem)
 {
     sx_unused(mem);
+    sx_unused(params);
 
     atlas__data* atlas = data->obj.ptr;
     atlas__predata* predata = data->user;
