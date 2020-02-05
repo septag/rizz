@@ -3,6 +3,7 @@
 #include "sx/array.h"
 #include "sx/handle.h"
 #include "sx/hash.h"
+#include "sx/linear-buffer.h"
 #include "sx/os.h"
 #include "sx/pool.h"
 #include "sx/string.h"
@@ -1002,28 +1003,22 @@ static rizz_asset_load_data atlas__on_prepare(const rizz_asset_load_params* para
 
     // allocate memory in one go
     int hashtbl_cap = sx_hashtbl_valid_capacity(num_sprites);
-    int total_sz = sizeof(atlas__data) + num_sprites * sizeof(atlas__sprite) +
-                   num_indices * sizeof(uint16_t) + num_vertices * sizeof(rizz_sprite_vertex) +
-                   sx_hashtbl_fixed_size(num_sprites);
-    atlas__data* atlas = sx_malloc(alloc, total_sz);
+    sx_linear_buffer atlas_buff;
+    uint32_t* keys;
+    int* values;
+
+    sx_linear_buffer_init(&atlas_buff, atlas__data, 0);
+    sx_linear_buffer_addtype(&atlas_buff, atlas__data, atlas__sprite, sprites, num_sprites, 0);
+    sx_linear_buffer_addptr(&atlas_buff, &keys, uint32_t, hashtbl_cap, 0);
+    sx_linear_buffer_addptr(&atlas_buff, &values, int, hashtbl_cap, 0);
+    sx_linear_buffer_addtype(&atlas_buff, atlas__data, rizz_sprite_vertex, vertices, num_vertices, 0);
+    sx_linear_buffer_addtype(&atlas_buff, atlas__data, uint16_t, indices, num_indices, 0);
+    atlas__data* atlas = sx_linear_buffer_alloc(&atlas_buff, alloc);
     if (!atlas) {
         sx_out_of_memory();
         return (rizz_asset_load_data){ .obj = { 0 } };
     }
-    sx_memset(atlas, 0x0, total_sz);
-
-    buff = (char*)(atlas + 1);
-    atlas->sprites = (atlas__sprite*)buff;
-    buff += sizeof(atlas__sprite) * num_sprites;
-    uint32_t* keys = (uint32_t*)buff;
-    buff += sizeof(uint32_t) * hashtbl_cap;
-    int* values = (int*)buff;
-    buff += sizeof(int) * hashtbl_cap;
     sx_hashtbl_init(&atlas->sprite_tbl, hashtbl_cap, keys, values);
-    atlas->vertices = (rizz_sprite_vertex*)buff;
-    buff += sizeof(rizz_sprite_vertex) * num_vertices;
-    atlas->indices = (uint16_t*)buff;
-    buff += sizeof(uint16_t) * num_indices;
 
     const rizz_atlas_load_params* aparams = params->params;
     rizz_texture_load_params tparams = { .min_filter = aparams->min_filter,
