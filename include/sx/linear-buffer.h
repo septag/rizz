@@ -62,7 +62,7 @@ static inline void sx__linear_buffer_init(sx_linear_buffer* buf, const char* par
     buf->fields[0].offset = 0;
     buf->fields[0].offset_in_parent = -1;    // parent
 
-    align = sx_max(SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT, align);
+    align = sx_max(SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT, (int)align);
 
     buf->size = sx_align_mask(parent_size, align - 1);
     buf->parent_align = align;
@@ -101,7 +101,7 @@ static inline void sx__linear_buffer_add(sx_linear_buffer* buf, size_t size, int
     sx__linear_buffer_add((_buf), sizeof(_type) * (_count),                   \
                           (int)(uintptr_t) & (((_struct*)0)->_name), NULL, (_align))
 #define sx_linear_buffer_addptr(_buf, _pptr, _type, _count, _align) \
-    sx__linear_buffer_add((_buf), sizeof(_type) * (_count), -1, (_pptr), (_align))
+    sx__linear_buffer_add((_buf), sizeof(_type) * (_count), -1, (void**)(_pptr), (_align))
 
 static inline void* sx_linear_buffer_alloc(const sx_linear_buffer* buf, const sx_alloc* alloc)
 {
