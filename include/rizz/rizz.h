@@ -553,6 +553,25 @@ RIZZ_API void ANativeActivity_onCreate_(ANativeActivity*, void*, size_t);
 // return >= 0 for success and -1 for failure
 typedef int(rizz_core_cmd_cb)(int argc, char* argv[]);
 
+// logging backend entry type
+typedef enum rizz_log_entry_type {
+    RIZZ_LOG_ENTRYTYPE_INFO = 0,
+    RIZZ_LOG_ENTRYTYPE_DEBUG,
+    RIZZ_LOG_ENTRYTYPE_VERBOSE,
+    RIZZ_LOG_ENTRYTYPE_ERROR,
+    RIZZ_LOG_ENTRYTYPE_WARNING, 
+	_RIZZ_LOG_ENTRYTYPE_COUNT
+} rizz_log_entry_type;
+
+typedef struct rizz_log_entry {
+    rizz_log_entry_type type;
+    uint32_t channels;
+	int text_len;
+    const char* text;
+    const char* source_file;
+    int line;
+} rizz_log_entry;
+
 typedef enum rizz_mem_id {
     RIZZ_MEMID_CORE = 0,
     RIZZ_MEMID_GRAPHICS,
@@ -655,12 +674,15 @@ typedef struct rizz_api_core {
     void (*coro_wait)(void* pfrom, int msecs);
     void (*coro_yield)(void* pfrom, int nframes);
 
-    void (*print_info)(const char* fmt, ...);
-    void (*print_debug)(const char* fmt, ...);
-    void (*print_verbose)(const char* fmt, ...);
-    void (*print_error_trace)(const char* source_file, int line, const char* fmt, ...);
-    void (*print_error)(const char* fmt, ...);
-    void (*print_warning)(const char* fmt, ...);
+	void (*register_log_backend)(const char* name, void (*log_cb)(const rizz_log_entry* entry, void* user), void* user);
+	void (*unregister_log_backend)(const char* name);
+
+	// use rizz_log_xxxx macros instead of these
+    void (*print_info)(uint32_t channels, const char* source_file, int line, const char* fmt, ...);
+    void (*print_debug)(uint32_t channels, const char* source_file, int line, const char* fmt, ...);
+    void (*print_verbose)(uint32_t channels, const char* source_file, int line, const char* fmt, ...);
+    void (*print_error)(uint32_t channels, const char* source_file, int line, const char* fmt, ...);
+    void (*print_warning)(uint32_t channels, const char* source_file, int line, const char* fmt, ...);
 
     void (*begin_profile_sample)(const char* name, uint32_t flags, uint32_t* hash_cache);
     void (*end_profile_sample)();
@@ -669,12 +691,17 @@ typedef struct rizz_api_core {
 } rizz_api_core;
 
 // clang-format off
-#define rizz_log_info(_text, ...)     (RIZZ_CORE_API_VARNAME)->print_info(_text, ##__VA_ARGS__)
-#define rizz_log_debug(_text, ...)    (RIZZ_CORE_API_VARNAME)->print_debug(_text, ##__VA_ARGS__)
-#define rizz_log_verbose(_text, ...)  (RIZZ_CORE_API_VARNAME)->print_verbose(_text, ##__VA_ARGS__)
-#define rizz_log_error(_text, ...)    (RIZZ_CORE_API_VARNAME)->print_error_trace(__FILE__, __LINE__, _text, ##__VA_ARGS__)
-#define rizz_log_warn(_text, ...)     (RIZZ_CORE_API_VARNAME)->print_warning(_text, ##__VA_ARGS__)
+#define rizz_log_info(_text, ...)     (RIZZ_CORE_API_VARNAME)->print_info(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define rizz_log_debug(_text, ...)    (RIZZ_CORE_API_VARNAME)->print_debug(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define rizz_log_verbose(_text, ...)  (RIZZ_CORE_API_VARNAME)->print_verbose(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define rizz_log_error(_text, ...)    (RIZZ_CORE_API_VARNAME)->print_error(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define rizz_log_warn(_text, ...)     (RIZZ_CORE_API_VARNAME)->print_warning(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
 
+#define rizz_log_info_channels(_channels, _text, ...)     (RIZZ_CORE_API_VARNAME)->print_info((_channels), __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define rizz_log_debug_channels(_channels, _text, ...)    (RIZZ_CORE_API_VARNAME)->print_debug((_channels), __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define rizz_log_verbose_channels(_channels, _text, ...)  (RIZZ_CORE_API_VARNAME)->print_verbose((_channels), __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define rizz_log_error_channels(_channels, _text, ...)    (RIZZ_CORE_API_VARNAME)->print_error((_channels), __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define rizz_log_warn_channels(_channels, _text, ...)     (RIZZ_CORE_API_VARNAME)->print_warning((_channels), __FILE__, __LINE__, _text, ##__VA_ARGS__)
 // coroutines
 #ifdef __cplusplus
 #    define rizz_coro_declare(_name)     \

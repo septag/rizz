@@ -14,11 +14,11 @@
 #    define CR_EVENT_FUNC "rizz_plugin_event_handler"
 //#define CR_DEBUG 1
 #    if CR_DEBUG
-#        define CR_LOG(...) the__core.print_debug(__VA_ARGS__)
+#        define CR_LOG(...) the__core.print_debug(0, __FILE__, __LINE__, __VA_ARGS__)
 #    else
 #        define CR_LOG(...)
 #    endif
-#    define CR_ERROR(...) the__core.print_error(__VA_ARGS__)
+#    define CR_ERROR(...) the__core.print_error(0, __FILE__, __LINE__, __VA_ARGS__)
 #    define CR_HOST CR_SAFEST
 
 SX_PRAGMA_DIAGNOSTIC_PUSH()

@@ -3790,7 +3790,7 @@ static void rizz__imm_end() {}
 
 void rizz__gfx_log_error(const char* source_file, int line, const char* str)
 {
-    the__core.print_error_trace(source_file, line, str);
+    the__core.print_error(0, source_file, line, str);
 }
 
 // clang-format off

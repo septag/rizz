@@ -106,6 +106,12 @@ typedef struct rizz__tls_var {
     void* (*init_cb)(int thread_idx, uint32_t thread_id, void* user);
 } rizz__tls_var;
 
+typedef struct rizz__log_backend {
+    char name[32];
+    void* user;
+    void (*log_cb)(const rizz_log_entry* entry, void* user);
+} rizz__log_backend;
+
 typedef struct rizz__core {
     const sx_alloc* heap_alloc;
     sx_alloc heap_proxy_alloc;
@@ -131,11 +137,13 @@ typedef struct rizz__core {
     char logfile[32];
     uint32_t app_ver;
 
-    rizz__core_tmpalloc* tmp_allocs;         // count: num_threads
+    rizz__core_tmpalloc* tmp_allocs;    // count: num_threads
     int num_threads;
 
     Remotery* rmt;
-    rizz__core_cmd* console_cmds;    // sx_array
+    rizz__core_cmd* console_cmds;       // sx_array
+
+    rizz__log_backend* log_backends;    // sx_array
 
     rizz__tls_var* tls_vars;
 } rizz__core;
@@ -144,209 +152,322 @@ static rizz__core g_core;
 static rizz_api_imgui* the_imgui;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// Logging
-
+// @log
 #if SX_PLATFORM_WINDOWS
 #    define EOL "\r\n"
 #else
 #    define EOL "\n"
 #endif
 
-static void rizz__log_to_file(const char* logfile, const char* text)
+static const char* k_log_entry_types[_RIZZ_LOG_ENTRYTYPE_COUNT] = {
+	"", 
+	"DEBUG: ",
+	"VERBOSE: ",
+	"ERROR: ",
+	"WARNING: "
+};
+
+static void rizz__log_register_backend(const char* name,
+                                       void (*log_cb)(const rizz_log_entry* entry, void* user),
+                                       void* user)
 {
-    FILE* f = fopen(logfile, "at");
+    // backend name must be unique
+    for (int i = 0, c = sx_array_count(g_core.log_backends); i < c; i++) {
+		if (sx_strequal(g_core.log_backends[i].name, name)) {
+			sx_assert_rel(0 && "duplicate backend name/already registered?");
+			return;
+		}
+    }
+
+    rizz__log_backend backend = { .user = user, .log_cb = log_cb };
+    sx_strcpy(backend.name, sizeof(backend.name), name);
+    sx_array_push(g_core.heap_alloc, g_core.log_backends, backend);
+}
+
+static void rizz__log_unregister_backend(const char* name) 
+{
+    for (int i = 0, c = sx_array_count(g_core.log_backends); i < c; i++) {
+        if (sx_strequal(g_core.log_backends[i].name, name)) {
+			sx_array_pop(g_core.log_backends, i);
+            return;
+        }
+    }
+}
+
+static void rizz__log_make_source_str(char* text, int text_size, const char* file, int line)
+{
+	if (file) {
+		char filename[64];
+		sx_os_path_basename(filename, sizeof(filename), file);
+		sx_snprintf(text, text_size, "%s(%d): ", filename, line);
+	} else {
+		text[0] = '\0';
+	}
+}
+
+static void rizz__log_make_source_str_full(char* text, int text_size, const char* file, int line)
+{
+    if (file) {
+        sx_snprintf(text, text_size, "%s(%d): ", file, line);
+    } else {
+        text[0] = '\0';
+    }
+}
+
+static void rizz__log_backend_debugger(const rizz_log_entry* entry, void* user)
+{
+	sx_unused(user);
+
+#if SX_COMPILER_MSVC
+	int new_size = entry->text_len + 128;
+	char* text = alloca(new_size);
+	
+	if (text) {
+		char source[128];
+        rizz__log_make_source_str_full(source, sizeof(source), entry->source_file, entry->line);
+		sx_snprintf(text, new_size, "%s%s%s\n", source, k_log_entry_types[entry->type], entry->text);
+		OutputDebugStringA(text);
+	} else {
+		sx_assert_rel(0 && "out of stack memory");
+	}
+#else
+	sx_unused(entry);
+#endif
+}
+
+static void rizz__log_backend_terminal(const rizz_log_entry* entry, void* user)
+{
+	sx_unused(user);
+
+	int new_size = entry->text_len + 128;
+    char* text = alloca(new_size);
+
+    if (text) {
+		const char* open_fmt;
+		const char* close_fmt;
+
+		// terminal coloring
+		// clang-format off
+		switch (entry->type) {
+        case RIZZ_LOG_ENTRYTYPE_INFO:		open_fmt = "";  close_fmt = "";	break;
+        case RIZZ_LOG_ENTRYTYPE_DEBUG:		open_fmt = TERM_COLOR_DIM; close_fmt = TERM_COLOR_RESET; break;
+        case RIZZ_LOG_ENTRYTYPE_VERBOSE:	open_fmt = TERM_COLOR_DIM; close_fmt = TERM_COLOR_RESET; break;
+        case RIZZ_LOG_ENTRYTYPE_WARNING:	open_fmt = TERM_COLOR_RED; close_fmt = TERM_COLOR_RESET; break;
+        case RIZZ_LOG_ENTRYTYPE_ERROR:		open_fmt = TERM_COLOR_YELLOW; close_fmt = TERM_COLOR_RESET; break;
+		default:							open_fmt = "";	close_fmt = "";	break;
+        }
+		// clang-format on
+
+        sx_snprintf(text, new_size, "%s%s%s%s", open_fmt, k_log_entry_types[entry->type], entry->text, close_fmt);
+        puts(text);
+    } else {
+        sx_assert_rel(0 && "out of stack memory");
+    }
+}
+
+static void rizz__log_backend_file(const rizz_log_entry* entry, void* user)
+{
+    sx_unused(user);
+
+    char source[128];
+    rizz__log_make_source_str(source, sizeof(source), entry->source_file, entry->line);
+
+    FILE* f = fopen(g_core.logfile, "at");
     if (f) {
-        fprintf(f, "%s%s", text, EOL);
+        fprintf(f, "%s%s%s%s", source, k_log_entry_types[entry->type], entry->text, EOL);
         fclose(f);
     }
 }
 
-static void rizz__print_info(const char* fmt, ...)
+#if SX_PLATFORM_ANDROID
+static void rizz__log_backend_android(const rizz_log_entry* entry, void* user)
 {
-    char text[1024];
-    va_list args;
-    va_start(args, fmt);
-    sx_vsnprintf(text, sizeof(text), fmt, args);
-    va_end(args);
-    puts(text);
+    sx_unused(user);
 
-    if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_FILE)
-        rizz__log_to_file(g_core.logfile, text);
-    if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_PROFILER) {
-        rmt_LogText(text);
+    int new_size = entry->text_len + 128;
+    char* text = alloca(new_size);
+
+    if (text) {
+        char source[128];
+        rizz__log_make_source_str(source, sizeof(source), entry->source_file, entry->line);
+
+        // clang-format off
+		enum android_LogPriority apriority;
+		switch (entry->type) {
+		case RIZZ_LOG_ENTRYTYPE_INFO:		apriority = ANDROID_LOG_INFO;		break;
+		case RIZZ_LOG_ENTRYTYPE_DEBUG:		apriority = ANDROID_LOG_DEBUG;		break;
+		case RIZZ_LOG_ENTRYTYPE_VERBOSE:	apriority = ANDROID_LOG_VERBOSE;	break;
+		case RIZZ_LOG_ENTRYTYPE_WARNING:	apriority = ANDROID_LOG_ERROR;		break;
+		case RIZZ_LOG_ENTRYTYPE_ERROR:		apriority = ANDROID_LOG_WARN;		break;
+		default:							apriority = 0;						break;
+		}
+        // clang-format on
+
+		sx_snprintf(text, new_size, "%s: %s", source, entry->text);
+        __android_log_write(apriority, g_core.app_name, text);
+    } else {
+        sx_assert_rel(0 && "out of stack memory");
     }
-
-#if SX_COMPILER_MSVC && defined(_DEBUG)
-    sx_strcat(text, sizeof(text), "\n");
-    OutputDebugStringA(text);
+}
 #endif
 
+static void rizz__log_backend_remotery(const rizz_log_entry* entry, void* user)
+{
+    sx_unused(user);
+
+    int new_size = entry->text_len + 128;
+    char* text = alloca(new_size);
+
+    if (text) {
+        char source[128];
+        rizz__log_make_source_str(source, sizeof(source), entry->source_file, entry->line);
+
+        sx_snprintf(text, new_size, "%s%s%s", source, k_log_entry_types[entry->type], entry->text);
+        rmt_LogText(text);
+    } else {
+        sx_assert_rel(0 && "out of stack memory");
+    }
+}
+
+static void rizz__log_dispatch_entry(const rizz_log_entry* entry)
+{
+    // built-in backends are thread-safe, so we pass them immediately
+    rizz__log_backend_terminal(entry, NULL);
+    rizz__log_backend_debugger(entry, NULL);
+    if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_FILE) {
+        rizz__log_backend_file(entry, NULL);
+    }
+    if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_PROFILER) {
+        rizz__log_backend_remotery(entry, NULL);
+    }
+
 #if SX_PLATFORM_ANDROID
-    __android_log_write(ANDROID_LOG_INFO, g_core.app_name, text);
+    rizz__log_backend_android(entry, NULL);
 #endif
 }
 
-static void rizz__print_debug(const char* fmt, ...)
-{
-#ifdef _DEBUG
-    char text[1024];
-    char new_fmt[1024];
 
-    sx_strcpy(new_fmt, sizeof(new_fmt), "DEBUG: ");
-    sx_strcat(new_fmt, sizeof(new_fmt), fmt);
+static void rizz__print_info(uint32_t channels, const char* source_file, int line, const char* fmt, ...)
+{
+    int fmt_len = sx_strlen(fmt);
+    char* text = alloca(fmt_len + 1024);    // reserve only 1k for format replace strings
+    if (!text) {
+        sx_assert_rel(0 && "out of stack memory");
+        return;
+    }
 
     va_list args;
     va_start(args, fmt);
-    sx_vsnprintf(text, sizeof(text), new_fmt, args);
+    sx_vsnprintf(text, fmt_len + 1024, fmt, args);
     va_end(args);
-    printf("%s%s%s\n", TERM_COLOR_DIM, text, TERM_COLOR_RESET);
 
-    if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_FILE)
-        rizz__log_to_file(g_core.logfile, text);
+    rizz__log_dispatch_entry(&(rizz_log_entry){ .type = RIZZ_LOG_ENTRYTYPE_INFO,
+                                                .channels = channels,
+                                                .text_len = sx_strlen(text),
+                                                .text = text,
+                                                .source_file = source_file,
+                                                .line = line });
+}
 
-    if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_PROFILER) {
-        rmt_LogText(text);
+static void rizz__print_debug(uint32_t channels, const char* source_file, int line, const char* fmt,
+                              ...)
+{
+#ifdef _DEBUG
+    int fmt_len = sx_strlen(fmt);
+    char* text = alloca(fmt_len + 1024);    // reserve only 1k for format replace strings
+    if (!text) {
+        sx_assert_rel(0 && "out of stack memory");
+        return;
     }
 
-#    if SX_COMPILER_MSVC
-    sx_strcat(text, sizeof(text), "\n");
-    OutputDebugStringA(text);
-#    endif
+    va_list args;
+    va_start(args, fmt);
+    sx_vsnprintf(text, fmt_len + 1024, fmt, args);
+    va_end(args);
 
-#    if SX_PLATFORM_ANDROID
-    __android_log_write(ANDROID_LOG_DEBUG, g_core.app_name, text);
-#    endif
+    rizz__log_dispatch_entry(&(rizz_log_entry){ .type = RIZZ_LOG_ENTRYTYPE_DEBUG,
+                                                .channels = channels,
+                                                .text_len = sx_strlen(text),
+                                                .text = text,
+                                                .source_file = source_file,
+                                                .line = line });
 #else
+	sx_unused(channels);
+	sx_unused(source_file);
+	sx_unused(line);
     sx_unused(fmt);
 #endif
 }
 
-static void rizz__print_verbose(const char* fmt, ...)
+static void rizz__print_verbose(uint32_t channels, const char* source_file, int line,
+                                const char* fmt, ...)
 {
     if (g_core.flags & RIZZ_CORE_FLAG_VERBOSE) {
-        char text[1024];
-        char new_fmt[1024];
-        sx_strcpy(new_fmt, sizeof(new_fmt), "-- ");
-        sx_strcat(new_fmt, sizeof(new_fmt), fmt);
-        va_list args;
-        va_start(args, fmt);
-        sx_vsnprintf(text, sizeof(text), new_fmt, args);
-        va_end(args);
-
-        printf("%s%s%s\n", TERM_COLOR_DIM, text, TERM_COLOR_RESET);
-        if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_FILE)
-            rizz__log_to_file(g_core.logfile, text);
-        if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_PROFILER) {
-            rmt_LogText(text);
+        int fmt_len = sx_strlen(fmt);
+        char* text = alloca(fmt_len + 1024);    // reserve only 1k for format replace strings
+        if (!text) {
+            sx_assert_rel(0 && "out of stack memory");
+            return;
         }
 
-#if SX_COMPILER_MSVC && defined(_DEBUG)
-        sx_strcat(text, sizeof(text), "\n");
-        OutputDebugStringA(text);
-#endif
+        va_list args;
+        va_start(args, fmt);
+        sx_vsnprintf(text, fmt_len + 1024, fmt, args);
+        va_end(args);
 
-#if SX_PLATFORM_ANDROID
-        __android_log_write(ANDROID_LOG_VERBOSE, g_core.app_name, text);
-#endif
+        rizz__log_dispatch_entry(&(rizz_log_entry){ .type = RIZZ_LOG_ENTRYTYPE_VERBOSE,
+                                                    .channels = channels,
+                                                    .text_len = sx_strlen(text),
+                                                    .text = text,
+                                                    .source_file = source_file,
+                                                    .line = line });
     }
 }
 
-static void rizz__print_error(const char* fmt, ...)
+static void rizz__print_error(uint32_t channels, const char* source_file, int line, const char* fmt,
+                              ...)
 {
-    char text[1024];
-    char new_fmt[1024];
-    sx_strcpy(new_fmt, sizeof(new_fmt), "ERROR: ");
-    sx_strcat(new_fmt, sizeof(new_fmt), fmt);
+    int fmt_len = sx_strlen(fmt);
+    char* text = alloca(fmt_len + 1024);    // reserve only 1k for format replace strings
+    if (!text) {
+        sx_assert_rel(0 && "out of stack memory");
+        return;
+    }
 
     va_list args;
     va_start(args, fmt);
-    sx_vsnprintf(text, sizeof(text), new_fmt, args);
+    sx_vsnprintf(text, fmt_len + 1024, fmt, args);
     va_end(args);
-    printf("%s%s%s\n", TERM_COLOR_RED, text, TERM_COLOR_RESET);
 
-    if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_FILE)
-        rizz__log_to_file(g_core.logfile, text);
-    if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_PROFILER) {
-        rmt_LogText(text);
-    }
-#if SX_COMPILER_MSVC && defined(_DEBUG)
-    sx_strcat(text, sizeof(text), "\n");
-    OutputDebugStringA(text);
-#endif
-
-#if SX_PLATFORM_ANDROID
-    __android_log_write(ANDROID_LOG_ERROR, g_core.app_name, text);
-#endif
+    rizz__log_dispatch_entry(&(rizz_log_entry){ .type = RIZZ_LOG_ENTRYTYPE_ERROR,
+                                                .channels = channels,
+                                                .text_len = sx_strlen(text),
+                                                .text = text,
+                                                .source_file = source_file,
+                                                .line = line });
 }
 
-static void rizz__print_error_trace(const char* source_file, int line, const char* fmt, ...)
+static void rizz__print_warning(uint32_t channels, const char* source_file, int line,
+                                const char* fmt, ...)
 {
-    char text[1024];
-    char new_fmt[1024];
-
-#ifdef _DEBUG
-    char basename[32];
-    sx_os_path_basename(basename, sizeof(basename), source_file);
-    sx_snprintf(new_fmt, sizeof(new_fmt), "ERROR: %s (%s, Line: %d)", fmt, basename, line);
-#else
-    sx_unused(source_file);
-    sx_unused(line);
-
-    sx_strcpy(new_fmt, sizeof(new_fmt), "ERROR: ");
-    sx_strcat(new_fmt, sizeof(new_fmt), fmt);
-#endif
+    int fmt_len = sx_strlen(fmt);
+    char* text = alloca(fmt_len + 1024);    // reserve only 1k for format replace strings
+    if (!text) {
+        sx_assert_rel(0 && "out of stack memory");
+        return;
+    }
 
     va_list args;
     va_start(args, fmt);
-    sx_vsnprintf(text, sizeof(text), new_fmt, args);
+    sx_vsnprintf(text, fmt_len + 1024, fmt, args);
     va_end(args);
-    printf("%s%s%s\n", TERM_COLOR_RED, text, TERM_COLOR_RESET);
 
-    if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_FILE)
-        rizz__log_to_file(g_core.logfile, text);
-    if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_PROFILER) {
-        rmt_LogText(text);
-    }
-
-#if SX_COMPILER_MSVC && defined(_DEBUG)
-    char text_dbg[2048];
-    sx_snprintf(text_dbg, sizeof(text_dbg), "%s(%d): %s\n", source_file, line, text);
-    OutputDebugStringA(text_dbg);
-#endif
-
-#if SX_PLATFORM_ANDROID
-    __android_log_write(ANDROID_LOG_ERROR, g_core.app_name, text);
-#endif
-}
-
-static void rizz__print_warning(const char* fmt, ...)
-{
-    char text[1024];
-    char new_fmt[1024];
-
-    sx_strcpy(new_fmt, sizeof(new_fmt), "WARNING: ");
-    sx_strcat(new_fmt, sizeof(new_fmt), fmt);
-
-    va_list args;
-    va_start(args, fmt);
-    sx_vsnprintf(text, sizeof(text), new_fmt, args);
-    va_end(args);
-    printf("%s%s%s\n", TERM_COLOR_YELLOW, text, TERM_COLOR_RESET);
-
-    if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_FILE)
-        rizz__log_to_file(g_core.logfile, text);
-    if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_PROFILER) {
-        rmt_LogText(text);
-    }
-
-#if SX_COMPILER_MSVC && defined(_DEBUG)
-    sx_strcat(text, sizeof(text), "\n");
-    OutputDebugStringA(text);
-#endif
-
-#if SX_PLATFORM_ANDROID
-    __android_log_write(ANDROID_LOG_WARN, g_core.app_name, text);
-#endif
+    rizz__log_dispatch_entry(&(rizz_log_entry){ .type = RIZZ_LOG_ENTRYTYPE_WARNING,
+                                                .channels = channels,
+                                                .text_len = sx_strlen(text),
+                                                .text = text,
+                                                .source_file = source_file,
+                                                .line = line });
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -796,8 +917,8 @@ bool rizz__core_init(const rizz_config* conf)
         return false;
     }
     rizz__log_info("(init) jobs: threads=%d, max_fibers=%d, stack_size=%dkb",
-                  sx_job_num_worker_threads(g_core.jobs), conf->job_max_fibers,
-                  conf->job_stack_size);
+                   sx_job_num_worker_threads(g_core.jobs), conf->job_max_fibers,
+                   conf->job_stack_size);
 
     // reflection
     if (!rizz__refl_init(rizz__alloc(RIZZ_MEMID_REFLECT), 0)) {
@@ -841,7 +962,8 @@ bool rizz__core_init(const rizz_config* conf)
             profile_subsets = "cpu/gpu";
         else
             profile_subsets = "cpu";
-        rizz__log_info("(init) profiler (%s): port=%d", profile_subsets, conf->profiler_listen_port);
+        rizz__log_info("(init) profiler (%s): port=%d", profile_subsets,
+                       conf->profiler_listen_port);
     }
 
     // graphics
@@ -872,7 +994,7 @@ bool rizz__core_init(const rizz_config* conf)
         return false;
     }
     rizz__log_info("(init) coroutines: max_fibers=%d, stack_size=%dkb", conf->coro_max_fibers,
-                  conf->coro_stack_size);
+                   conf->coro_stack_size);
 
     // http client
     if (!rizz__http_init(alloc)) {
@@ -1085,7 +1207,7 @@ static int rizz__job_num_threads()
     return g_core.num_threads;
 }
 
-static int rizz__job_thread_index() 
+static int rizz__job_thread_index()
 {
     sx_assert(g_core.jobs);
     return sx_job_thread_index(g_core.jobs);
@@ -1156,7 +1278,8 @@ void rizz__core_fix_callback_ptrs(const void** ptrs, const void** new_ptrs, int 
         if (ptrs[i] && ptrs[i] != new_ptrs[i] &&
             sx_coro_replace_callback(g_core.coro, (sx_fiber_cb*)ptrs[i],
                                      (sx_fiber_cb*)new_ptrs[i])) {
-            rizz__log_warn("coroutine 0x%p replaced with 0x%p and restarted!", ptrs[i], new_ptrs[i]);
+            rizz__log_warn("coroutine 0x%p replaced with 0x%p and restarted!", ptrs[i],
+                           new_ptrs[i]);
         }
     }
 }
@@ -1231,7 +1354,6 @@ rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .print_info = rizz__print_info,
                             .print_debug = rizz__print_debug,
                             .print_verbose = rizz__print_verbose,
-                            .print_error_trace = rizz__print_error_trace,
                             .print_error = rizz__print_error,
                             .print_warning = rizz__print_warning,
                             .begin_profile_sample = rizz__begin_profile_sample,

@@ -34,11 +34,11 @@ void rizz__core_fix_callback_ptrs(const void** ptrs, const void** new_ptrs, int 
 
 // clang-format off
 // logging
-#define rizz__log_info(_text, ...)     the__core.print_info(_text, ##__VA_ARGS__)
-#define rizz__log_debug(_text, ...)    the__core.print_debug(_text, ##__VA_ARGS__)
-#define rizz__log_verbose(_text, ...)  the__core.print_verbose(_text, ##__VA_ARGS__)
-#define rizz__log_error(_text, ...)    the__core.print_error_trace(__FILE__, __LINE__, _text, ##__VA_ARGS__)
-#define rizz__log_warn(_text, ...)     the__core.print_warning(_text, ##__VA_ARGS__)
+#define rizz__log_info(_text, ...)     the__core.print_info(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define rizz__log_debug(_text, ...)    the__core.print_debug(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define rizz__log_verbose(_text, ...)  the__core.print_verbose(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define rizz__log_error(_text, ...)    the__core.print_error(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
+#define rizz__log_warn(_text, ...)     the__core.print_warning(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
 
 // coroutines
 #define rizz__coro_declare(_name)          static void coro__##_name(sx_fiber_transfer __transfer)
