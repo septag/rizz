@@ -11,6 +11,7 @@
 #include "sx/atomic.h"
 #include "sx/hash.h"
 #include "sx/jobs.h"
+#include "sx/lockless.h"
 #include "sx/os.h"
 #include "sx/rng.h"
 #include "sx/stack-alloc.h"
@@ -112,6 +113,23 @@ typedef struct rizz__log_backend {
     void (*log_cb)(const rizz_log_entry* entry, void* user);
 } rizz__log_backend;
 
+typedef struct rizz__log_entry_internal {
+    rizz_log_entry e;
+    sx_str_t text_id;
+    sx_str_t source_id;
+    int64_t timestamp;
+} rizz__log_entry_internal;
+
+typedef struct rizz__log_entry_internal_ref {
+    rizz__log_entry_internal e;
+    int pipe_idx;
+} rizz__log_entry_internal_ref;
+
+typedef struct rizz__log_pipe {
+    sx_queue_spsc* queue;    // item_type = rizz__log_entry_internal
+    sx_strpool* strpool;     //
+} rizz__log_pipe;
+
 typedef struct rizz__core {
     const sx_alloc* heap_alloc;
     sx_alloc heap_proxy_alloc;
@@ -125,6 +143,7 @@ typedef struct rizz__core {
     sx_coro_context* coro;
 
     uint32_t flags;    // sx_core_flags
+    int num_threads;
 
     int64_t frame_idx;
     uint64_t elapsed_tick;
@@ -138,18 +157,40 @@ typedef struct rizz__core {
     uint32_t app_ver;
 
     rizz__core_tmpalloc* tmp_allocs;    // count: num_threads
-    int num_threads;
+    rizz__log_pipe* log_pipes;          // count: num_threads
 
     Remotery* rmt;
     rizz__core_cmd* console_cmds;       // sx_array
-
     rizz__log_backend* log_backends;    // sx_array
-
-    rizz__tls_var* tls_vars;
+    rizz__tls_var* tls_vars;            // sx_array
+    sx_atomic_int num_log_backends;
 } rizz__core;
+
+#define SORT_NAME log__sort_entries
+#define SORT_TYPE rizz__log_entry_internal_ref
+#define SORT_CMP(x, y) ((x).e.timestamp - (y).e.timestamp)
+SX_PRAGMA_DIAGNOSTIC_PUSH()
+SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4267)
+SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4244)
+SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4146)
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG("-Wshorten-64-to-32")
+#include "sort/sort.h"
+SX_PRAGMA_DIAGNOSTIC_POP()
 
 static rizz__core g_core;
 static rizz_api_imgui* the_imgui;
+
+static const sx_alloc* rizz__alloc(rizz_mem_id id)
+{
+#if RIZZ_CONFIG_DEBUG_MEMORY
+    sx_assert(id < _RIZZ_MEMID_COUNT);
+    return &g_core.track_allocs[id].alloc;
+#else
+    sx_unused(id);
+    return &g_core.heap_proxy_alloc;
+#endif
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @log
@@ -159,36 +200,36 @@ static rizz_api_imgui* the_imgui;
 #    define EOL "\n"
 #endif
 
-static const char* k_log_entry_types[_RIZZ_LOG_ENTRYTYPE_COUNT] = {
-	"", 
-	"DEBUG: ",
-	"VERBOSE: ",
-	"ERROR: ",
-	"WARNING: "
-};
+static const char* k_log_entry_types[_RIZZ_LOG_ENTRYTYPE_COUNT] = { "",             //
+                                                                    "DEBUG: ",      //
+                                                                    "VERBOSE: ",    //
+                                                                    "ERROR: ",      //
+                                                                    "WARNING: " };
 
 static void rizz__log_register_backend(const char* name,
                                        void (*log_cb)(const rizz_log_entry* entry, void* user),
                                        void* user)
-{
-    // backend name must be unique
+{    // backend name must be unique
     for (int i = 0, c = sx_array_count(g_core.log_backends); i < c; i++) {
-		if (sx_strequal(g_core.log_backends[i].name, name)) {
-			sx_assert_rel(0 && "duplicate backend name/already registered?");
-			return;
-		}
+        if (sx_strequal(g_core.log_backends[i].name, name)) {
+            sx_assert_rel(0 && "duplicate backend name/already registered?");
+            return;
+        }
     }
 
     rizz__log_backend backend = { .user = user, .log_cb = log_cb };
     sx_strcpy(backend.name, sizeof(backend.name), name);
-    sx_array_push(g_core.heap_alloc, g_core.log_backends, backend);
+    sx_array_push(rizz__alloc(RIZZ_MEMID_CORE), g_core.log_backends, backend);
+
+    sx_atomic_incr(&g_core.num_log_backends);
 }
 
-static void rizz__log_unregister_backend(const char* name) 
+static void rizz__log_unregister_backend(const char* name)
 {
     for (int i = 0, c = sx_array_count(g_core.log_backends); i < c; i++) {
         if (sx_strequal(g_core.log_backends[i].name, name)) {
-			sx_array_pop(g_core.log_backends, i);
+            sx_array_pop(g_core.log_backends, i);
+            sx_atomic_decr(&g_core.num_log_backends);
             return;
         }
     }
@@ -196,13 +237,13 @@ static void rizz__log_unregister_backend(const char* name)
 
 static void rizz__log_make_source_str(char* text, int text_size, const char* file, int line)
 {
-	if (file) {
-		char filename[64];
-		sx_os_path_basename(filename, sizeof(filename), file);
-		sx_snprintf(text, text_size, "%s(%d): ", filename, line);
-	} else {
-		text[0] = '\0';
-	}
+    if (file) {
+        char filename[64];
+        sx_os_path_basename(filename, sizeof(filename), file);
+        sx_snprintf(text, text_size, "%s(%d): ", filename, line);
+    } else {
+        text[0] = '\0';
+    }
 }
 
 static void rizz__log_make_source_str_full(char* text, int text_size, const char* file, int line)
@@ -216,38 +257,39 @@ static void rizz__log_make_source_str_full(char* text, int text_size, const char
 
 static void rizz__log_backend_debugger(const rizz_log_entry* entry, void* user)
 {
-	sx_unused(user);
+    sx_unused(user);
 
 #if SX_COMPILER_MSVC
-	int new_size = entry->text_len + 128;
-	char* text = alloca(new_size);
-	
-	if (text) {
-		char source[128];
+    int new_size = entry->text_len + 128;
+    char* text = alloca(new_size);
+
+    if (text) {
+        char source[128];
         rizz__log_make_source_str_full(source, sizeof(source), entry->source_file, entry->line);
-		sx_snprintf(text, new_size, "%s%s%s\n", source, k_log_entry_types[entry->type], entry->text);
-		OutputDebugStringA(text);
-	} else {
-		sx_assert_rel(0 && "out of stack memory");
-	}
+        sx_snprintf(text, new_size, "%s%s%s\n", source, k_log_entry_types[entry->type],
+                    entry->text);
+        OutputDebugStringA(text);
+    } else {
+        sx_assert_rel(0 && "out of stack memory");
+    }
 #else
-	sx_unused(entry);
+    sx_unused(entry);
 #endif
 }
 
 static void rizz__log_backend_terminal(const rizz_log_entry* entry, void* user)
 {
-	sx_unused(user);
+    sx_unused(user);
 
-	int new_size = entry->text_len + 128;
+    int new_size = entry->text_len + 128;
     char* text = alloca(new_size);
 
     if (text) {
-		const char* open_fmt;
-		const char* close_fmt;
+        const char* open_fmt;
+        const char* close_fmt;
 
-		// terminal coloring
-		// clang-format off
+        // terminal coloring
+        // clang-format off
 		switch (entry->type) {
         case RIZZ_LOG_ENTRYTYPE_INFO:		open_fmt = "";  close_fmt = "";	break;
         case RIZZ_LOG_ENTRYTYPE_DEBUG:		open_fmt = TERM_COLOR_DIM; close_fmt = TERM_COLOR_RESET; break;
@@ -256,15 +298,17 @@ static void rizz__log_backend_terminal(const rizz_log_entry* entry, void* user)
         case RIZZ_LOG_ENTRYTYPE_ERROR:		open_fmt = TERM_COLOR_YELLOW; close_fmt = TERM_COLOR_RESET; break;
 		default:							open_fmt = "";	close_fmt = "";	break;
         }
-		// clang-format on
+        // clang-format on
 
-        sx_snprintf(text, new_size, "%s%s%s%s", open_fmt, k_log_entry_types[entry->type], entry->text, close_fmt);
+        sx_snprintf(text, new_size, "%s%s%s%s", open_fmt, k_log_entry_types[entry->type],
+                    entry->text, close_fmt);
         puts(text);
     } else {
         sx_assert_rel(0 && "out of stack memory");
     }
 }
 
+// TODO: backend should only just open the file once per frame 
 static void rizz__log_backend_file(const rizz_log_entry* entry, void* user)
 {
     sx_unused(user);
@@ -274,7 +318,7 @@ static void rizz__log_backend_file(const rizz_log_entry* entry, void* user)
 
     FILE* f = fopen(g_core.logfile, "at");
     if (f) {
-        fprintf(f, "%s%s%s%s", source, k_log_entry_types[entry->type], entry->text, EOL);
+        fprintf(f, "%s%s%s\n", source, k_log_entry_types[entry->type], entry->text);
         fclose(f);
     }
 }
@@ -303,7 +347,7 @@ static void rizz__log_backend_android(const rizz_log_entry* entry, void* user)
 		}
         // clang-format on
 
-		sx_snprintf(text, new_size, "%s: %s", source, entry->text);
+        sx_snprintf(text, new_size, "%s: %s", source, entry->text);
         __android_log_write(apriority, g_core.app_name, text);
     } else {
         sx_assert_rel(0 && "out of stack memory");
@@ -334,20 +378,29 @@ static void rizz__log_dispatch_entry(const rizz_log_entry* entry)
     // built-in backends are thread-safe, so we pass them immediately
     rizz__log_backend_terminal(entry, NULL);
     rizz__log_backend_debugger(entry, NULL);
-    if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_FILE) {
-        rizz__log_backend_file(entry, NULL);
-    }
-    if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_PROFILER) {
-        rizz__log_backend_remotery(entry, NULL);
-    }
 
 #if SX_PLATFORM_ANDROID
     rizz__log_backend_android(entry, NULL);
 #endif
+
+    if (g_core.num_log_backends > 0) {
+        rizz__log_pipe pipe =
+            g_core.jobs ? g_core.log_pipes[sx_job_thread_index(g_core.jobs)] : g_core.log_pipes[0];
+
+        sx_str_t text = sx_strpool_add(pipe.strpool, entry->text, entry->text_len);
+        sx_str_t source = entry->source_file ? sx_strpool_add(pipe.strpool, entry->source_file,
+                                                              sx_strlen(entry->source_file))
+                                             : 0;
+        rizz__log_entry_internal entry_internal = { .e = *entry,
+                                                    .text_id = text,
+                                                    .source_id = source,
+                                                    .timestamp = sx_cycle_clock() };
+        sx_queue_spsc_produce_and_grow(pipe.queue, &entry_internal, rizz__alloc(RIZZ_MEMID_CORE));
+    }
 }
 
-
-static void rizz__print_info(uint32_t channels, const char* source_file, int line, const char* fmt, ...)
+static void rizz__print_info(uint32_t channels, const char* source_file, int line, const char* fmt,
+                             ...)
 {
     int fmt_len = sx_strlen(fmt);
     char* text = alloca(fmt_len + 1024);    // reserve only 1k for format replace strings
@@ -392,9 +445,9 @@ static void rizz__print_debug(uint32_t channels, const char* source_file, int li
                                                 .source_file = source_file,
                                                 .line = line });
 #else
-	sx_unused(channels);
-	sx_unused(source_file);
-	sx_unused(line);
+    sx_unused(channels);
+    sx_unused(source_file);
+    sx_unused(line);
     sx_unused(fmt);
 #endif
 }
@@ -469,6 +522,51 @@ static void rizz__print_warning(uint32_t channels, const char* source_file, int 
                                                 .source_file = source_file,
                                                 .line = line });
 }
+
+static void rizz__log_update()
+{
+    for (int i = 0, c = sx_array_count(g_core.log_backends); i < c; i++) {
+        const rizz__log_backend* backend = &g_core.log_backends[i];
+        const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
+        rizz__log_entry_internal_ref* entries = NULL;
+
+        // collect all log entries from threads and sort them by timestamp
+        for (int ti = 0, tc = g_core.num_threads; ti < tc; ti++) {
+            rizz__log_pipe pipe = g_core.log_pipes[ti];
+            rizz__log_entry_internal_ref entry;
+            entry.pipe_idx = ti;
+            while (sx_queue_spsc_consume(pipe.queue, &entry.e)) {
+                entry.e.e.text = sx_strpool_cstr(pipe.strpool, entry.e.text_id);
+                entry.e.e.source_file =
+                    entry.e.source_id ? sx_strpool_cstr(pipe.strpool, entry.e.source_id) : NULL;
+                sx_array_push(tmp_alloc, entries, entry);
+            }
+        } // foreach thread
+
+        int num_entries = sx_array_count(entries);
+
+        if (num_entries > 1) {
+            log__sort_entries_tim_sort(entries, num_entries);
+
+            for (int ei = 0; ei < num_entries; ei++) {
+                rizz__log_entry_internal_ref entry = entries[ei];
+                rizz__log_pipe pipe = g_core.log_pipes[entry.pipe_idx];
+
+                backend->log_cb(&entry.e.e, backend->user);
+
+                if (entry.e.text_id) {
+                    sx_strpool_del(pipe.strpool, entry.e.text_id);
+                }
+                if (entry.e.source_id) {
+                    sx_strpool_del(pipe.strpool, entry.e.source_id);
+                }
+            }    // foreach entry
+        }
+
+        the__core.tmp_alloc_pop();
+    } // foreach backend
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static void* rmt__malloc(void* ctx, uint32_t size)
@@ -541,16 +639,16 @@ static const char* k__gfx_driver_names[RIZZ_GFX_BACKEND_DUMMY] = { "OpenGL 3.3",
                                                                    "Metal IOS",   "Metal MacOS",
                                                                    "Metal Sim" };
 
-static void rizz__init_log(const char* logfile)
+static void rizz__log_init_file(const char* logfile)
 {
     FILE* f = fopen(logfile, "wt");
     if (f) {
         time_t t = time(NULL);
         fprintf(f, "%s", asctime(localtime(&t)));
-        fprintf(f, "%s: v%d.%d.%d - rizz v%d.%d.%d%s%s", g_core.app_name,
+        fprintf(f, "%s: v%d.%d.%d - rizz v%d.%d.%d%s", g_core.app_name,
                 rizz_version_major(g_core.app_ver), rizz_version_minor(g_core.app_ver),
                 rizz_version_bugfix(g_core.app_ver), rizz_version_major(RIZZ_VERSION),
-                rizz_version_minor(RIZZ_VERSION), rizz_version_bugfix(RIZZ_VERSION), EOL, EOL);
+                rizz_version_minor(RIZZ_VERSION), rizz_version_bugfix(RIZZ_VERSION), EOL);
         fclose(f);
     } else {
         sx_assert(0 && "could not write to log file");
@@ -630,17 +728,6 @@ static void rizz__rmt_input_handler(const char* text, void* context)
     }
 
     the__core.tmp_alloc_pop();
-}
-
-static const sx_alloc* rizz__alloc(rizz_mem_id id)
-{
-#if RIZZ_CONFIG_DEBUG_MEMORY
-    sx_assert(id < _RIZZ_MEMID_COUNT);
-    return &g_core.track_allocs[id].alloc;
-#else
-    sx_unused(id);
-    return &g_core.heap_proxy_alloc;
-#endif
 }
 
 static void rizz__core_register_console_command(const char* cmd, rizz_core_cmd_cb* callback)
@@ -855,15 +942,42 @@ bool rizz__core_init(const rizz_config* conf)
     g_core.app_ver = conf->app_version;
     g_core.flags = conf->core_flags;
 
+    int num_worker_threads =
+        conf->job_num_threads >= 0 ? conf->job_num_threads : (sx_os_numcores() - 1);
+    num_worker_threads =
+        sx_max(1, num_worker_threads);              // we should have at least one worker thread
+    g_core.num_threads = num_worker_threads + 1;    // include the main-thread
+
+    // log queues per thread
+    g_core.log_pipes = sx_malloc(alloc, sizeof(rizz__log_pipe) * g_core.num_threads);
+    if (!g_core.log_pipes) {
+        sx_out_of_memory();
+        return false;
+    }
+    for (int i = 0; i < g_core.num_threads; i++) {
+        g_core.log_pipes[i].queue =
+            sx_queue_spsc_create(alloc, sizeof(rizz__log_entry_internal), 32);
+        g_core.log_pipes[i].strpool = sx_strpool_create(alloc, NULL);
+        if (!g_core.log_pipes[i].queue || !g_core.log_pipes[i].strpool) {
+            sx_out_of_memory();
+            return false;
+        }
+    }
+
 #if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
-    // remove log to file flag on mobile
+    // TEMP: remove log to file flag on mobile
     g_core.flags &= ~RIZZ_CORE_FLAG_LOG_TO_FILE;
 #endif
 
     if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_FILE) {
         sx_strcpy(g_core.logfile, sizeof(g_core.logfile), conf->app_name);
         sx_strcat(g_core.logfile, sizeof(g_core.logfile), ".log");
-        rizz__init_log(g_core.logfile);
+        rizz__log_init_file(g_core.logfile);
+        rizz__log_register_backend("file", rizz__log_backend_file, NULL);
+    }
+
+    if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_PROFILER) {
+        rizz__log_register_backend("remotery", rizz__log_backend_remotery, NULL);
     }
 
     sx_tm_init();
@@ -878,13 +992,7 @@ bool rizz__core_init(const rizz_config* conf)
     }
     rizz__log_info("(init) vfs");
 
-    int num_worker_threads =
-        conf->job_num_threads >= 0 ? conf->job_num_threads : (sx_os_numcores() - 1);
-    num_worker_threads =
-        sx_max(1, num_worker_threads);    // we should have at least one worker thread
-
     // Temp allocators
-    g_core.num_threads = num_worker_threads + 1;    // include the main-thread
     g_core.tmp_allocs = sx_malloc(alloc, sizeof(rizz__core_tmpalloc) * g_core.num_threads);
     if (!g_core.tmp_allocs) {
         sx_out_of_memory();
@@ -1048,11 +1156,13 @@ void rizz__core_release()
         g_core.jobs = NULL;
     }
 
-    if (g_core.coro)
+    if (g_core.coro) {
         sx_coro_destroy_context(g_core.coro, alloc);
+    }
 
-    if (g_core.flags & RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS)
+    if (g_core.flags & RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS) {
         rizz__asset_dump_unused("unused-assets.json");
+    }
 
     // Release native subsystems
     rizz__http_release();
@@ -1076,6 +1186,19 @@ void rizz__core_release()
         sx_free(alloc, g_core.tmp_allocs);
     }
 
+    // release log backends and queues
+    for (int i = 0; i < g_core.num_threads; i++) {
+        if (g_core.log_pipes[i].queue) {
+            sx_queue_spsc_destroy(g_core.log_pipes[i].queue, alloc);
+        }
+        if (g_core.log_pipes[i].strpool) {
+            sx_strpool_destroy(g_core.log_pipes[i].strpool, alloc);
+        }
+    }
+    sx_free(alloc, g_core.log_pipes);
+    sx_array_free(alloc, g_core.log_backends);
+    g_core.num_log_backends = 0;
+
     if (RIZZ_CONFIG_DEBUG_MEMORY) {
         for (int i = 0; i < _RIZZ_MEMID_COUNT; i++) {
             sx_array_free(g_core.heap_alloc, g_core.track_allocs[i].items);
@@ -1087,6 +1210,7 @@ void rizz__core_release()
             sx_tls_destroy(g_core.tls_vars[i].tls);
         }
     }
+
     sx_array_free(&g_core.heap_proxy_alloc, g_core.tls_vars);
 
     rizz__log_info("shutdown");
@@ -1094,6 +1218,7 @@ void rizz__core_release()
 #ifdef _DEBUG
     sx_dump_leaks(rizz__core_dump_leak);
 #endif
+
     sx_memset(&g_core, 0x0, sizeof(g_core));
 }
 
@@ -1137,6 +1262,9 @@ void rizz__core_frame()
 
     // execute remaining commands from the 'staged' API
     rizz__gfx_execute_command_buffers_final();
+
+    // flush queued logs
+    rizz__log_update();
 
     // draw imgui stuff
     the_imgui = the__plugin.get_api_byname("imgui", 0);

@@ -559,14 +559,14 @@ typedef enum rizz_log_entry_type {
     RIZZ_LOG_ENTRYTYPE_DEBUG,
     RIZZ_LOG_ENTRYTYPE_VERBOSE,
     RIZZ_LOG_ENTRYTYPE_ERROR,
-    RIZZ_LOG_ENTRYTYPE_WARNING, 
-	_RIZZ_LOG_ENTRYTYPE_COUNT
+    RIZZ_LOG_ENTRYTYPE_WARNING,
+    _RIZZ_LOG_ENTRYTYPE_COUNT
 } rizz_log_entry_type;
 
 typedef struct rizz_log_entry {
     rizz_log_entry_type type;
     uint32_t channels;
-	int text_len;
+    int text_len;
     const char* text;
     const char* source_file;
     int line;
@@ -674,15 +674,19 @@ typedef struct rizz_api_core {
     void (*coro_wait)(void* pfrom, int msecs);
     void (*coro_yield)(void* pfrom, int nframes);
 
-	void (*register_log_backend)(const char* name, void (*log_cb)(const rizz_log_entry* entry, void* user), void* user);
-	void (*unregister_log_backend)(const char* name);
+    void (*register_log_backend)(const char* name,
+                                 void (*log_cb)(const rizz_log_entry* entry, void* user),
+                                 void* user);
+    void (*unregister_log_backend)(const char* name);
 
-	// use rizz_log_xxxx macros instead of these
+    // use rizz_log_xxxx macros instead of these
     void (*print_info)(uint32_t channels, const char* source_file, int line, const char* fmt, ...);
     void (*print_debug)(uint32_t channels, const char* source_file, int line, const char* fmt, ...);
-    void (*print_verbose)(uint32_t channels, const char* source_file, int line, const char* fmt, ...);
+    void (*print_verbose)(uint32_t channels, const char* source_file, int line, const char* fmt,
+                          ...);
     void (*print_error)(uint32_t channels, const char* source_file, int line, const char* fmt, ...);
-    void (*print_warning)(uint32_t channels, const char* source_file, int line, const char* fmt, ...);
+    void (*print_warning)(uint32_t channels, const char* source_file, int line, const char* fmt,
+                          ...);
 
     void (*begin_profile_sample)(const char* name, uint32_t flags, uint32_t* hash_cache);
     void (*end_profile_sample)();
