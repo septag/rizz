@@ -72,9 +72,9 @@
 - [x] BREAKING: external macro APIS (rizz_log_xxxx) are now same as internal ones (api variable is defined in header)
 - [x] BREAKING: removed many rizz headers and joined them as one (rizz.h)
 - [x] Improved GPU command buffers multi-threaded submission
-- [ ] Investigate and check if stage lock (`stage_lk`) is actually required
 - [ ] BREAKING: graphic helper functions/renderers should take any API
 - [x] BREAKING: renamed _sprite_ plugin to _2dtools_. the api name is the same, but it's now part of '2dtools' plugin
+- [ ] BREAKING: replace sjson with cj5
 
 ### Fixed
 - [x] fix sx_matx_inv 

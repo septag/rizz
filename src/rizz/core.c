@@ -52,6 +52,12 @@ __declspec(dllimport) void __stdcall OutputDebugStringA(const char* lpOutputStri
 #define SJSON_IMPLEMENT
 #include "sjson/sjson.h"
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// cj5 implementation, external modules (non-static build) should implement it for themselves
+#define CJ5_ASSERT(e)		sx_assert(e);
+#define CJ5_IMPLEMENT
+#include "cj5/cj5.h"
+
 #define DEFAULT_TMP_SIZE    0x500000    // 5mb
 
 #if SX_PLATFORM_WINDOWS || SX_PLATFORM_IOS || SX_PLATFORM_ANDROID
