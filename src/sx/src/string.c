@@ -242,10 +242,7 @@ char* sx_strncat(char* SX_RESTRICT dst, int dst_sz, const char* SX_RESTRICT src,
 
 bool sx_isspace(char ch)
 {
-    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' /* ||
-                                                     ch == '\v' ||
-                                                     ch == '\f'*/
-        ;
+    return (uint32_t)(ch - 1) < 32 && ((0x80001F00 >> (uint32_t)(ch - 1)) & 1) == 1;
 }
 
 // https://github.com/lattera/glibc/blob/master/string/strrchr.c
