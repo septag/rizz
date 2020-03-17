@@ -266,6 +266,18 @@ static inline bool cj5__isnum(char ch)
     return cj5__isrange(ch, '0', '9');
 }
 
+static inline char* cj5__strcpy(char* CJ5__RESTRICT dst, int dst_sz, const char* CJ5__RESTRICT src,
+                                int num)
+{
+    const int _max = dst_sz - 1;
+    const int _num = (num < _max ? num : _max);
+    if (_num > 0) {
+        CJ5_MEMCPY(dst, src, _num);
+    }
+    dst[_num] = '\0';
+    return dst;
+}
+
 // https://github.com/lattera/glibc/blob/master/string/strlen.c
 static int cj5__strlen(const char* str)
 {
@@ -598,7 +610,10 @@ cj5_result cj5_parse(const char* json5, int len, cj5_token* tokens, int max_toke
             if (parser.super_id != -1) {
                 cj5_token* super_token = &tokens[parser.super_id];
                 token->parent_id = parser.super_id;
-                ++super_token->size;
+                if (++super_token->size == 1 && super_token->type == CJ5_TOKEN_STRING) {
+                    super_token->key_hash =
+                        cj5__hash_fnv32(&json5[super_token->start], &json5[super_token->end]);
+                }
             }
 
             token->type = (c == '{' ? CJ5_TOKEN_OBJECT : CJ5_TOKEN_ARRAY);
@@ -682,7 +697,7 @@ cj5_result cj5_parse(const char* json5, int len, cj5_token* tokens, int max_toke
 
         case ',':
             can_comment = false;
-            if (token != NULL && parser.super_id != -1 &&
+            if (token != NULL && parser.super_id != -1 && r.error != CJ5_ERROR_OVERFLOW &&
                 tokens[parser.super_id].type != CJ5_TOKEN_ARRAY &&
                 tokens[parser.super_id].type != CJ5_TOKEN_OBJECT) {
                 parser.super_id = tokens[parser.super_id].parent_id;
@@ -760,18 +775,6 @@ static int cj5__seek_recursive(cj5_result* r, int parent_id, uint32_t key_hash)
     }
 
     return -1;
-}
-
-static inline char* cj5__strcpy(char* CJ5__RESTRICT dst, int dst_sz, const char* CJ5__RESTRICT src,
-                                int num)
-{
-    const int _max = dst_sz - 1;
-    const int _num = (num < _max ? num : _max);
-    if (_num > 0) {
-        CJ5_MEMCPY(dst, src, _num);
-    }
-    dst[_num] = '\0';
-    return dst;
 }
 
 static bool cj5__tofloat(const char* str, double* ofloat)
@@ -1154,7 +1157,7 @@ int cj5_get_array_elem_incremental(cj5_result* r, int id, int index, int prev_el
     CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
     CJ5_ASSERT(index < tok->size);
 	int start = prev_elem <= 0 ? (id + 1) : (prev_elem + 1);
-    for (int i = prev_elem, count = index; count < tok->size; i++) {
+    for (int i = start, count = index; count < tok->size; i++) {
         if (r->tokens[i].parent_id == id) {
             if (count == index) {
                 return i;

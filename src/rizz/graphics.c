@@ -23,7 +23,6 @@
 #include "sx/os.h"
 #include "sx/string.h"
 
-//#include "sjson/sjson.h"
 #include "cj5/cj5.h"
 
 #include "Remotery.h"
@@ -1400,13 +1399,13 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
     int juniforms, jtextures, jstorage_images, jstorage_buffers;
 
     if (stage == RIZZ_SHADER_STAGE_VS) {
-        jinputs = cj5_seek(&jres, 0, "inputs");
+        jinputs = cj5_seek(&jres, jstage, "inputs");
         if (jinputs != -1) {
             num_inputs = jres.tokens[jinputs].size;
         }
     }
 
-    if ((juniforms = cj5_seek(&jres, jstage, "uniforms")) != -1) {
+    if ((juniforms = cj5_seek(&jres, jstage, "uniform_buffers")) != -1) {
         num_uniforms = jres.tokens[juniforms].size;
     }
 
@@ -1443,8 +1442,10 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
     refl->code_type = cj5_seekget_bool(&jres, 0, "bytecode", false) ? RIZZ_SHADER_CODE_BYTECODE
                                                                     : RIZZ_SHADER_CODE_SOURCE;
     refl->flatten_ubos = cj5_seekget_bool(&jres, 0, "flatten_ubos", false);
-    sx_strcpy(refl->source_file, sizeof(refl->source_file),
-              cj5_seekget_string(&jres, jstage, "file", tmpstr, sizeof(tmpstr), ""));
+	char filepath[RIZZ_MAX_PATH];
+    sx_os_path_basename(refl->source_file, sizeof(refl->source_file),
+                        cj5_seekget_string(&jres, jstage, "file", filepath, sizeof(filepath), ""));
+
     void* buff = refl + 1;
     if (jinputs != -1) {
         refl->inputs = (rizz_shader_refl_input*)buff;
@@ -1452,13 +1453,11 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
         int jinput = 0;
         for (int i = 0; i < jres.tokens[jinputs].size; i++) {
             jinput = cj5_get_array_elem_incremental(&jres, jinputs, i, jinput);
-            sx_strcpy(input->name, sizeof(input->name),
-                      cj5_seekget_string(&jres, jinput, "name", tmpstr, sizeof(tmpstr), ""));
-            sx_strcpy(input->semantic, sizeof(input->semantic),
-                      cj5_seekget_string(&jres, jinput, "semantic", tmpstr, sizeof(tmpstr), ""));
+			cj5_seekget_string(&jres, jinput, "name", input->name, sizeof(input->name), "");
+			cj5_seekget_string(&jres, jinput, "semantic", input->semantic, sizeof(input->semantic), "");
             input->semantic_index = cj5_seekget_int(&jres, jinput, "semantic_index", 0);
-            input->type = rizz__shader_str_to_vertex_format(
-                cj5_seekget_string(&jres, jinput, "type", tmpstr, sizeof(tmpstr), ""));
+			input->type = rizz__shader_str_to_vertex_format(
+				cj5_seekget_string(&jres, jinput, "type", tmpstr, sizeof(tmpstr), ""));
             ++input;
         }
         refl->num_inputs = num_inputs;
@@ -1471,8 +1470,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
         int jubo = 0;
         for (int i = 0; i < num_uniforms; i++) {
             jubo = cj5_get_array_elem_incremental(&jres, juniforms, i, jubo);
-            sx_strcpy(ubo->name, sizeof(ubo->name),
-                      cj5_seekget_string(&jres, jubo, "name", tmpstr, sizeof(tmpstr), ""));
+			cj5_seekget_string(&jres, jubo, "name", ubo->name, sizeof(ubo->name), "");
             ubo->size_bytes = cj5_seekget_int(&jres, jubo, "block_size", 0);
             ubo->binding = cj5_seekget_int(&jres, jubo, "binding", 0);
             ubo->array_size = cj5_seekget_int(&jres, jubo, "array", 1);
@@ -1491,8 +1489,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
         int jtex = 0;
         for (int i = 0; i < num_textures; i++) {
             jtex = cj5_get_array_elem_incremental(&jres, jtextures, i, jtex);
-            sx_strcpy(tex->name, sizeof(tex->name),
-                      cj5_seekget_string(&jres, jtex, "name", tmpstr, sizeof(tmpstr), ""));
+			cj5_seekget_string(&jres, jtex, "name", tex->name, sizeof(tex->name), "");
             tex->binding = cj5_seekget_int(&jres, jtex, "binding", 0);
             tex->type = rizz__shader_str_to_texture_type(
                 cj5_seekget_string(&jres, jtex, "dimension", tmpstr, sizeof(tmpstr), ""),
@@ -1509,8 +1506,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
         int jstorage_img = 0;
         for (int i = 0; i < num_storage_images; i++) {
             jstorage_img = cj5_get_array_elem_incremental(&jres, jstorage_images, i, jstorage_img);
-            sx_strcpy(img->name, sizeof(img->name),
-                      cj5_seekget_string(&jres, jstorage_img, "name", tmpstr, sizeof(tmpstr), ""));
+			cj5_seekget_string(&jres, jstorage_img, "name", img->name, sizeof(img->name), "");
             img->binding = cj5_seekget_int(&jres, jstorage_img, "binding", 0);
             img->type = rizz__shader_str_to_texture_type(
                 cj5_seekget_string(&jres, jstorage_img, "dimension", tmpstr, sizeof(tmpstr), ""),
@@ -1527,8 +1523,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
         int jstorage_buf = 0;
         for (int i = 0; i < num_storage_buffers; i++) {
             jstorage_buf = cj5_get_array_elem_incremental(&jres, jstorage_buffers, i, jstorage_buf);
-            sx_strcpy(sbuf->name, sizeof(sbuf->name),
-                      cj5_seekget_string(&jres, jstorage_buf, "name", tmpstr, sizeof(tmpstr), ""));
+			cj5_seekget_string(&jres, jstorage_buf, "name", sbuf->name, sizeof(sbuf->name), "");
             sbuf->size_bytes = cj5_seekget_int(&jres, jstorage_buf, "block_size", 0);
             sbuf->binding = cj5_seekget_int(&jres, jstorage_buf, "binding", 0);
             sbuf->array_stride = cj5_seekget_int(&jres, jstorage_buf, "unsized_array_stride", 1);
