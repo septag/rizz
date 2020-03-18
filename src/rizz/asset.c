@@ -13,8 +13,6 @@
 #include "sx/pool.h"
 #include "sx/string.h"
 
-#include "sjson/sjson.h"
-
 // Asset managers are managers for each type of asset
 // For example, 'texture' has it's own manager, 'model' has it's manager, ...
 // They handle loading, unloading, reloading asset objects
@@ -328,28 +326,19 @@ static inline int rizz__asset_find_asset_mgr(uint32_t name_hash)
 
 bool rizz__asset_dump_unused(const char* filepath)
 {
-    sjson_context* jctx = sjson_create_context(0, 0, (void*)g_asset.alloc);
-    if (!jctx)
-        return false;
-
-    sjson_node* jroot = sjson_mkarray(jctx);
-    for (int i = 0, c = sx_array_count(g_asset.resources); i < c; i++) {
-        if (!g_asset.resources[i].used) {
-            sjson_append_element(jroot, sjson_mkstring(jctx, g_asset.resources[i].path));
+    sx_file_writer f;
+    if (sx_file_open_writer(&f, filepath, 0)) {
+        for (int i = 0, c = sx_array_count(g_asset.resources); i < c; i++) {
+            if (!g_asset.resources[i].used) {
+                sx_file_write_text(&f, g_asset.resources[i].path);
+                sx_file_write(&f, "\n", 1);
+            }
         }
-    }
-
-    char* jstr = sjson_stringify(jctx, jroot, "  ");
-    if (!jstr)
+        sx_file_close_writer(&f);
+        return true;
+    } else {
         return false;
-    sx_file_writer writer;
-    if (sx_file_open_writer(&writer, filepath, 0)) {
-        sx_file_write_text(&writer, jstr);
-        sx_file_close_writer(&writer);
     }
-    sjson_free_string(jctx, jstr);
-    sjson_destroy_context(jctx);
-    return true;
 }
 // end: asset database
 

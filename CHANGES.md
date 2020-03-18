@@ -74,7 +74,7 @@
 - [x] Improved GPU command buffers multi-threaded submission
 - [ ] BREAKING: graphic helper functions/renderers should take any API
 - [x] BREAKING: renamed _sprite_ plugin to _2dtools_. the api name is the same, but it's now part of '2dtools' plugin
-- [ ] BREAKING: replace sjson with cj5
+- [x] BREAKING: replace sjson with cj5
 
 ### Fixed
 - [x] fix sx_matx_inv 

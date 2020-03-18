@@ -6,8 +6,8 @@
 // rizz__texture_xxx: texture management functions (loading, reloading, etc..)
 // rizz__shader_xxx: shader management functions (load, reload, reflection, ...)
 // rizz__cb_gpu_command: command-buffer main commands
-// rizz__cb_run_gpu_command: command-buffer deferred commands (this is actually where the command is
-// executed) rizz__gpu_command: overrides for immediate mode commands _sg_xxxx: sokol overrides
+// rizz__cb_run_gpu_command: command-buffer deferred commands (this is actually where the command is executed) 
+// rizz__gpu_command: overrides for immediate mode commands _sg_xxxx: sokol overrides
 //
 
 #include "basisut.h"
@@ -1357,7 +1357,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
                                                          int stage_refl_json_len)
 {
     cj5_token tokens[1024];
-    int max_tokens = sizeof(tokens) / sizeof(cj5_token);
+    const int max_tokens = sizeof(tokens) / sizeof(cj5_token);
     cj5_result jres = cj5_parse(stage_refl_json, stage_refl_json_len, tokens, max_tokens);
     if (jres.error) {
         if (jres.error == CJ5_ERROR_OVERFLOW) {
@@ -1442,7 +1442,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
     refl->code_type = cj5_seekget_bool(&jres, 0, "bytecode", false) ? RIZZ_SHADER_CODE_BYTECODE
                                                                     : RIZZ_SHADER_CODE_SOURCE;
     refl->flatten_ubos = cj5_seekget_bool(&jres, 0, "flatten_ubos", false);
-	char filepath[RIZZ_MAX_PATH];
+    char filepath[RIZZ_MAX_PATH];
     sx_os_path_basename(refl->source_file, sizeof(refl->source_file),
                         cj5_seekget_string(&jres, jstage, "file", filepath, sizeof(filepath), ""));
 
@@ -1453,11 +1453,12 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
         int jinput = 0;
         for (int i = 0; i < jres.tokens[jinputs].size; i++) {
             jinput = cj5_get_array_elem_incremental(&jres, jinputs, i, jinput);
-			cj5_seekget_string(&jres, jinput, "name", input->name, sizeof(input->name), "");
-			cj5_seekget_string(&jres, jinput, "semantic", input->semantic, sizeof(input->semantic), "");
+            cj5_seekget_string(&jres, jinput, "name", input->name, sizeof(input->name), "");
+            cj5_seekget_string(&jres, jinput, "semantic", input->semantic, sizeof(input->semantic),
+                               "");
             input->semantic_index = cj5_seekget_int(&jres, jinput, "semantic_index", 0);
-			input->type = rizz__shader_str_to_vertex_format(
-				cj5_seekget_string(&jres, jinput, "type", tmpstr, sizeof(tmpstr), ""));
+            input->type = rizz__shader_str_to_vertex_format(
+                cj5_seekget_string(&jres, jinput, "type", tmpstr, sizeof(tmpstr), ""));
             ++input;
         }
         refl->num_inputs = num_inputs;
@@ -1470,7 +1471,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
         int jubo = 0;
         for (int i = 0; i < num_uniforms; i++) {
             jubo = cj5_get_array_elem_incremental(&jres, juniforms, i, jubo);
-			cj5_seekget_string(&jres, jubo, "name", ubo->name, sizeof(ubo->name), "");
+            cj5_seekget_string(&jres, jubo, "name", ubo->name, sizeof(ubo->name), "");
             ubo->size_bytes = cj5_seekget_int(&jres, jubo, "block_size", 0);
             ubo->binding = cj5_seekget_int(&jres, jubo, "binding", 0);
             ubo->array_size = cj5_seekget_int(&jres, jubo, "array", 1);
@@ -1489,7 +1490,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
         int jtex = 0;
         for (int i = 0; i < num_textures; i++) {
             jtex = cj5_get_array_elem_incremental(&jres, jtextures, i, jtex);
-			cj5_seekget_string(&jres, jtex, "name", tex->name, sizeof(tex->name), "");
+            cj5_seekget_string(&jres, jtex, "name", tex->name, sizeof(tex->name), "");
             tex->binding = cj5_seekget_int(&jres, jtex, "binding", 0);
             tex->type = rizz__shader_str_to_texture_type(
                 cj5_seekget_string(&jres, jtex, "dimension", tmpstr, sizeof(tmpstr), ""),
@@ -1506,7 +1507,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
         int jstorage_img = 0;
         for (int i = 0; i < num_storage_images; i++) {
             jstorage_img = cj5_get_array_elem_incremental(&jres, jstorage_images, i, jstorage_img);
-			cj5_seekget_string(&jres, jstorage_img, "name", img->name, sizeof(img->name), "");
+            cj5_seekget_string(&jres, jstorage_img, "name", img->name, sizeof(img->name), "");
             img->binding = cj5_seekget_int(&jres, jstorage_img, "binding", 0);
             img->type = rizz__shader_str_to_texture_type(
                 cj5_seekget_string(&jres, jstorage_img, "dimension", tmpstr, sizeof(tmpstr), ""),
@@ -1523,7 +1524,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
         int jstorage_buf = 0;
         for (int i = 0; i < num_storage_buffers; i++) {
             jstorage_buf = cj5_get_array_elem_incremental(&jres, jstorage_buffers, i, jstorage_buf);
-			cj5_seekget_string(&jres, jstorage_buf, "name", sbuf->name, sizeof(sbuf->name), "");
+            cj5_seekget_string(&jres, jstorage_buf, "name", sbuf->name, sizeof(sbuf->name), "");
             sbuf->size_bytes = cj5_seekget_int(&jres, jstorage_buf, "block_size", 0);
             sbuf->binding = cj5_seekget_int(&jres, jstorage_buf, "binding", 0);
             sbuf->array_stride = cj5_seekget_int(&jres, jstorage_buf, "unsized_array_stride", 1);
@@ -3315,17 +3316,27 @@ static uint8_t* rizz__cb_run_end_profile_sample(uint8_t* buff)
     return buff;
 }
 
+// clang-format off
 static const rizz__run_command_cb k_run_cbs[_GFX_COMMAND_COUNT] = {
-    rizz__cb_run_begin_default_pass, rizz__cb_run_begin_pass,
-    rizz__cb_run_apply_viewport,     rizz__cb_run_apply_scissor_rect,
-    rizz__cb_run_apply_pipeline,     rizz__cb_run_apply_bindings,
-    rizz__cb_run_apply_uniforms,     rizz__cb_run_draw,
-    rizz__cb_run_dispatch,           rizz__cb_run_end_pass,
-    rizz__cb_run_update_buffer,      rizz__cb_run_update_image,
-    rizz__cb_run_append_buffer,      rizz__cb_run_begin_profile_sample,
-    rizz__cb_run_end_profile_sample, rizz__cb_run_begin_stage,
+    rizz__cb_run_begin_default_pass, 
+    rizz__cb_run_begin_pass,
+    rizz__cb_run_apply_viewport,     
+    rizz__cb_run_apply_scissor_rect,
+    rizz__cb_run_apply_pipeline,     
+    rizz__cb_run_apply_bindings,
+    rizz__cb_run_apply_uniforms,     
+    rizz__cb_run_draw,
+    rizz__cb_run_dispatch,           
+    rizz__cb_run_end_pass,
+    rizz__cb_run_update_buffer,      
+    rizz__cb_run_update_image,
+    rizz__cb_run_append_buffer,      
+    rizz__cb_run_begin_profile_sample,
+    rizz__cb_run_end_profile_sample, 
+    rizz__cb_run_begin_stage,
     rizz__cb_run_end_stage
 };
+// clang-format on
 
 static void rizz__gfx_validate_stage_deps()
 {

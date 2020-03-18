@@ -38,21 +38,6 @@ __declspec(dllimport) void __stdcall OutputDebugStringA(const char* lpOutputStri
     RMT_OPTIONAL(RMT_ENABLED, _rmt_BeginCPUSample(name, flags, hash_cache))
 #define rmt__end_cpu_sample() RMT_OPTIONAL(RMT_ENABLED, _rmt_EndCPUSample())
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// sjson implementation, external modules (non-static build) should implement it for themselves
-// clang-format off
-#define sjson_malloc(user, size)        sx_malloc((const sx_alloc*)(user), (size))
-#define sjson_free(user, ptr)           sx_free((const sx_alloc*)(user), (ptr))
-#define sjson_realloc(user, ptr, size)  sx_realloc((const sx_alloc*)(user), (ptr), (size))
-#define sjson_assert(e)                 sx_assert(e)
-#define sjson_out_of_memory()           sx_out_of_memory()
-#define sjson_snprintf                  sx_snprintf
-#define sjson_strlen(str)               sx_strlen((str))
-#define sjson_strcpy(a, s, b)           sx_strcpy((a), (s), (b))
-#define SJSON_IMPLEMENT
-#include "sjson/sjson.h"
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
 // cj5 implementation, external modules (non-static build) should implement it for themselves
 #define CJ5_ASSERT(e)		sx_assert(e);
 #define CJ5_IMPLEMENT
@@ -1167,7 +1152,7 @@ void rizz__core_release()
     }
 
     if (g_core.flags & RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS) {
-        rizz__asset_dump_unused("unused-assets.json");
+        rizz__asset_dump_unused("unused-assets.txt");
     }
 
     // Release native subsystems
