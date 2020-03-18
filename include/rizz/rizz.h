@@ -1096,7 +1096,7 @@ typedef struct rizz_api_gfx {
 
     // Shader
     rizz_shader_refl* (*shader_parse_reflection)(const sx_alloc* alloc, const char* stage_refl_json,
-                                                 sjson_context* jctx);
+                                                 int stage_refl_len);
     void (*shader_free_reflection)(rizz_shader_refl* refl, const sx_alloc* alloc);
     sg_shader_desc* (*shader_setup_desc)(sg_shader_desc* desc, const rizz_shader_refl* vs_refl,
                                          const void* vs, int vs_size,

@@ -55,12 +55,6 @@ typedef struct atlas__sprite {
     int vb_index;
 } atlas__sprite;
 
-// data used for passing temp stuff from on_prepare to on_load
-typedef struct atlas__predata {
-    sjson_context* ctx;
-    sjson_node* root;
-} atlas__predata;
-
 typedef struct atlas__data {
     rizz_atlas a;
     atlas__sprite* sprites;
@@ -959,41 +953,50 @@ static rizz_asset_load_data atlas__on_prepare(const rizz_asset_load_params* para
     int num_indices = 0;
     int num_vertices = 0;
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
-    char* buff = sx_malloc(tmp_alloc, (size_t)mem->size + 1);
-    if (!buff) {
-        sx_out_of_memory();
-        return (rizz_asset_load_data){ 0 };
-    }
-    sx_memcpy(buff, mem->data, mem->size);
-    buff[mem->size] = '\0';
-
     // pass generic heap allocator, because we want to reuse json context in `on_load` and there is
     // no garranty that it will happen in the same frame so we can't use temp allocators
-    sjson_context* jctx = sjson_create_context(0, 0, (void*)g_spr.alloc);
-    sx_assert(jctx);
+    cj5_token* tokens = (cj5_token*)sx_malloc(g_spr.alloc, sizeof(cj5_token)*2048);
+    if (!tokens) {
+        sx_out_of_memory();
+        return (rizz_asset_load_data) {0};
+    }
+    cj5_result jres = cj5_parse((const char*)mem->data, mem->size, tokens, 2048);
+    if (jres.error) {
+        if (jres.error == CJ5_ERROR_OVERFLOW) {
+            tokens = (cj5_token*)sx_realloc(g_spr.alloc, tokens, sizeof(cj5_token)*jres.num_tokens);
+            if (!tokens) {
+                sx_out_of_memory();
+                return (rizz_asset_load_data) { 0 };
+            }
+            jres = cj5_parse((const char*)mem->data, mem->size, tokens, jres.num_tokens);
+            if (jres.error) {
+                rizz_log_warn("loading atlas '%s' failed: not a valid json file", params->path);
+                return (rizz_asset_load_data){ 0 };
+            }
+        }
+    }
 
-    sjson_node* jroot = sjson_decode(jctx, buff);
-    the_core->tmp_alloc_pop();
-    if (!jroot) {
+    char dirname[RIZZ_MAX_PATH];
+    char tmpstr[RIZZ_MAX_PATH];
+    sx_os_path_dirname(dirname, sizeof(dirname), params->path);
+    sx_os_path_join(img_filepath, sizeof(img_filepath), dirname,
+                    cj5_seekget_string(&jres, 0, "image", tmpstr, sizeof(tmpstr), ""));
+    sx_os_path_unixpath(img_filepath, sizeof(img_filepath), img_filepath);
+
+    int jsprites = cj5_seek(&jres, 0, "sprites");
+    if (jsprites == -1) {
+        sx_free(g_spr.alloc, tokens);
         rizz_log_warn("loading atlas '%s' failed: not a valid json file", params->path);
         return (rizz_asset_load_data){ 0 };
     }
 
-    char dirname[RIZZ_MAX_PATH];
-    sx_os_path_dirname(dirname, sizeof(dirname), params->path);
-    sx_os_path_join(img_filepath, sizeof(img_filepath), dirname,
-                    sjson_get_string(jroot, "image", ""));
-    sx_os_path_unixpath(img_filepath, sizeof(img_filepath), img_filepath);
-
-    sjson_node* jsprites = sjson_find_member(jroot, "sprites");
-    sjson_node* jsprite;
-    sjson_foreach(jsprite, jsprites)
-    {
-        sjson_node* jmesh = sjson_find_member(jsprite, "mesh");
-        if (jmesh) {
-            num_indices += 3 * sjson_get_int(jmesh, "num_tris", 0);
-            num_vertices += sjson_get_int(jmesh, "num_vertices", 0);
+    int jsprite = 0;
+    for (int i = 0; i < jres.tokens[jsprites].size; i++) {
+        jsprite = cj5_get_array_elem_incremental(&jres, jsprites, i, jsprite);
+        int jmesh = cj5_seek(&jres, jsprite, "mesh");
+        if (jmesh != -1) {
+            num_indices += 3 * cj5_seekget_int(&jres, jmesh, "num_tris", 0);
+            num_vertices += cj5_seekget_int(&jres, jmesh, "num_vertices", 0);
         } else {
             num_indices += 6;
             num_vertices += 4;
@@ -1015,6 +1018,7 @@ static rizz_asset_load_data atlas__on_prepare(const rizz_asset_load_params* para
     sx_linear_buffer_addtype(&atlas_buff, atlas__data, uint16_t, indices, num_indices, 0);
     atlas__data* atlas = sx_linear_buffer_alloc(&atlas_buff, alloc);
     if (!atlas) {
+        sx_free(g_spr.alloc, tokens);
         sx_out_of_memory();
         return (rizz_asset_load_data){ .obj = { 0 } };
     }
@@ -1028,16 +1032,15 @@ static rizz_asset_load_data atlas__on_prepare(const rizz_asset_load_params* para
     atlas->a.texture =
         the_asset->load("texture", img_filepath, &tparams, params->flags, alloc, params->tags);
 
-    atlas__predata* predata = sx_malloc(g_spr.alloc, sizeof(atlas__predata));
+    cj5_result* predata = sx_malloc(g_spr.alloc, sizeof(cj5_result));
     if (!predata) {
         sx_free(alloc, atlas);
-        sjson_destroy_context(jctx);
+        sx_free(g_spr.alloc, tokens);
         sx_out_of_memory();
         return (rizz_asset_load_data){ .obj = { 0 } };
     }
+    sx_memcpy(predata, &jres, sizeof(jres));
 
-    predata->ctx = jctx;
-    predata->root = jroot;
     return (rizz_asset_load_data){ .obj = { .ptr = atlas }, .user = predata };
 }
 
@@ -1048,66 +1051,64 @@ static bool atlas__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
     sx_unused(params);
 
     atlas__data* atlas = data->obj.ptr;
-    atlas__predata* predata = data->user;
+    cj5_result* jres = data->user;
 
-    sjson_node* jroot = predata->root;
-    atlas->a.info.img_width = sjson_get_int(jroot, "image_width", 0);
-    atlas->a.info.img_height = sjson_get_int(jroot, "image_height", 0);
     int sprite_idx = 0;
-    sjson_node* jsprites = sjson_find_member(jroot, "sprites");
-    sjson_node* jsprite;
-    sx_assert(jsprites);
+    atlas->a.info.img_width = cj5_seekget_int(jres, 0, "image_width", 0);
+    atlas->a.info.img_height = cj5_seekget_int(jres, 0, "image_height", 0);
+    int jsprites = cj5_seek(jres, 0, "sprites");
+    sx_assert(jsprites != -1);
+
     sx_vec2 atlas_size = sx_vec2f((float)atlas->a.info.img_width, (float)atlas->a.info.img_height);
     sx_vec2 atlas_size_rcp = sx_vec2f(1.0f / atlas_size.x, 1.0f / atlas_size.y);
     int ib_index = 0;
     int vb_index = 0;
-    sjson_foreach(jsprite, jsprites)
-    {
-        int tmp[4];
+    char tmpstr[128];
+    int jsprite = 0;
+    for (int i = 0; i < jres->tokens[jsprites].size; i++) {
+        jsprite = cj5_get_array_elem_incremental(jres, jsprites, i, jsprite);
         atlas__sprite* aspr = &atlas->sprites[sprite_idx];
-        const char* name = sjson_get_string(jsprite, "name", "");
-        sx_hashtbl_add(&atlas->sprite_tbl, sx_hash_fnv32_str(name), sprite_idx);
+        
+        sx_hashtbl_add(&atlas->sprite_tbl,
+                       sx_hash_fnv32_str(
+                           cj5_seekget_string(jres, jsprite, "name", tmpstr, sizeof(tmpstr), "")),
+                       sprite_idx);
 
-        sjson_get_ints(tmp, 2, jsprite, "size");
-        aspr->base_size = sx_vec2f((float)tmp[0], (float)tmp[1]);
-
-        sjson_get_ints(tmp, 4, jsprite, "sprite_rect");
-        aspr->sprite_rect = sx_rectf((float)tmp[0], (float)tmp[1], (float)tmp[2], (float)tmp[3]);
-
-        sjson_get_ints(tmp, 4, jsprite, "sheet_rect");
-        aspr->sheet_rect = sx_rectf((float)tmp[0], (float)tmp[1], (float)tmp[2], (float)tmp[3]);
+        cj5_seekget_array_float(jres, jsprite, "size", aspr->base_size.f, 2);
+        cj5_seekget_array_float(jres, jsprite, "sprite_rect", aspr->sprite_rect.f, 4);
+        cj5_seekget_array_float(jres, jsprite, "sheet_rect", aspr->sheet_rect.f, 4);
 
         // load geometry
         sx_vec2 base_size_rcp = sx_vec2f(1.0f / aspr->base_size.x, 1.0f / aspr->base_size.y);
-        sjson_node* jmesh = sjson_find_member(jsprite, "mesh");
-        if (jmesh) {
+        int jmesh = cj5_seek(jres, jsprite, "mesh");
+        if (jmesh != -1) {
             // sprite-mesh
-            aspr->num_indices = sjson_get_int(jmesh, "num_tris", 0) * 3;
-            aspr->num_verts = sjson_get_int(jmesh, "num_vertices", 0);
+            aspr->num_indices = cj5_seekget_int(jres, jmesh, "num_tris", 0) * 3;
+            aspr->num_verts = cj5_seekget_int(jres, jmesh, "num_vertices", 0);
             rizz_sprite_vertex* verts = &atlas->vertices[vb_index];
             uint16_t* indices = &atlas->indices[ib_index];
-            sjson_get_uint16s(indices, aspr->num_indices, jmesh, "indices");
-            sjson_node* jposs = sjson_find_member(jmesh, "positions");
-            if (jposs) {
-                sjson_node* jpos;
+            cj5_seekget_array_uint16(jres, jmesh, "indices", indices, aspr->num_indices);
+            int jposs = cj5_seek(jres, jmesh, "positions");
+            if (jposs != -1) {
+                int jpos = 0;
                 int v = 0;
-                sjson_foreach(jpos, jposs)
-                {
+                for (int ii = 0, ic = jres->tokens[jposs].size; ii < ic; ii++) {
+                    jpos = cj5_get_array_elem_incremental(jres, jposs, ii, jpos);
                     sx_vec2 pos;
-                    sjson_get_floats(pos.f, 2, jpos, NULL);
+                    cj5_seekget_array_float(jres, jpos, NULL, pos.f, 2);
                     sx_assert(v < aspr->num_verts);
                     verts[v].pos = sprite__normalize_pos(pos, base_size_rcp);
                     v++;
                 }
             }
-            sjson_node* juvs = sjson_find_member(jmesh, "uvs");
-            if (juvs) {
-                sjson_node* juv;
+            int juvs = cj5_seek(jres, jmesh, "uvs");
+            if (juvs != -1) {
+                int juv = 0;
                 int v = 0;
-                sjson_foreach(juv, juvs)
-                {
+                for (int ii = 0, ic = jres->tokens[juvs].size; ii < ic; ii++) {
+                    juv = cj5_get_array_elem_incremental(jres, juvs, ii, juv);
                     sx_vec2 uv;
-                    sjson_get_floats(uv.f, 2, juv, NULL);
+                    cj5_seekget_array_float(jres, juv, NULL, uv.f, 2);
                     sx_assert(v < aspr->num_verts);
                     verts[v].uv = sx_vec2_mul(uv, atlas_size_rcp);
                     v++;
@@ -1155,13 +1156,13 @@ static void atlas__on_finalize(rizz_asset_load_data* data, const rizz_asset_load
                                const sx_mem_block* mem)
 {
     sx_unused(mem);
+    sx_unused(params);
 
-    const sx_alloc* alloc = params->alloc ? params->alloc : g_spr.alloc;
-    atlas__predata* predata = data->user;
-    if (predata->ctx) {
-        sjson_destroy_context(predata->ctx);
+    cj5_result* jres = data->user;
+    if (jres->tokens) {
+        sx_free(g_spr.alloc, (cj5_token*)jres->tokens);
     }
-    sx_free(alloc, predata);
+    sx_free(g_spr.alloc, jres);
 }
 
 static void atlas__on_reload(rizz_asset handle, rizz_asset_obj prev_obj, const sx_alloc* alloc)

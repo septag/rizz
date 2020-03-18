@@ -29,7 +29,7 @@ set(TEXT_FILES  ../../README.md
 set(EXTERNAL_INCLUDES ../../3rdparty/sokol/sokol_app.h 
                       ../../3rdparty/sokol/sokol_gfx.h
                       ../../3rdparty/cr/cr.h
-                      ../../include/sjson/sjson.h 
+                      ../../include/cj5/cj5.h 
                       ../../include/dds-ktx/dds-ktx.h
                       ../../3rdparty/stb/stb_image.h
                       ../../3rdparty/stb/stb_image_resize.h

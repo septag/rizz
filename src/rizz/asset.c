@@ -13,8 +13,6 @@
 #include "sx/pool.h"
 #include "sx/string.h"
 
-#include "sjson/sjson.h"
-
 // Asset managers are managers for each type of asset
 // For example, 'texture' has it's own manager, 'model' has it's manager, ...
 // They handle loading, unloading, reloading asset objects
@@ -326,121 +324,21 @@ static inline int rizz__asset_find_asset_mgr(uint32_t name_hash)
     return -1;
 }
 
-// asset database
-static void rizz__asset_meta_read_item(const rizz__refl_field* f, sjson_node* jmeta)
-{
-    const rizz_refl_info* r = &f->info;
-    void* value = f->value;
-    rizz__refl_field fields[32];
-
-    sjson_node* jfield = sjson_find_member(jmeta, r->name);
-    if (jfield) {
-        sx_assert(!(r->flags & RIZZ_REFL_FLAG_IS_PTR));
-
-        if (r->flags & RIZZ_REFL_FLAG_IS_ENUM) {
-            int eval = the__refl.get_enum(jfield->string_, 0);
-            sx_memcpy(value, &eval, r->size);
-        } else if (r->flags & RIZZ_REFL_FLAG_IS_STRUCT) {
-            if (r->flags & RIZZ_REFL_FLAG_IS_ARRAY) {
-                for (int i = 0; i < r->array_size; i++) {
-                    int num_fields = the__refl.get_fields(
-                        r->type, (uint8_t*)value + (size_t)i * (size_t)r->stride, fields,
-                        sizeof(fields) / sizeof(rizz__refl_field));
-                    for (int fi = 0; fi < num_fields; fi++) {
-                        rizz__asset_meta_read_item(&fields[fi], sjson_find_element(jfield, i));
-                    }
-                }
-            } else {
-                int num_fields = the__refl.get_fields(r->type, value, fields,
-                                                      sizeof(fields) / sizeof(rizz__refl_field));
-                for (int fi = 0; fi < num_fields; fi++) {
-                    rizz__asset_meta_read_item(&fields[fi], jfield);
-                }
-            }
-        } else {
-            if (sx_strequal(r->type, "int")) {
-                int n = (int)jfield->number_;
-                sx_memcpy(value, &n, r->size);
-            } else if (sx_strequal(r->type, "float")) {
-                float n = (float)jfield->number_;
-                sx_memcpy(value, &n, r->size);
-            } else if (sx_strequal(r->type, "bool")) {
-                sx_memcpy(value, &jfield->bool_, r->size);
-            } else if (the__refl.is_cstring(r)) {
-                sx_memcpy(value, jfield->string_, r->size);
-            }
-        }
-    }
-}
-
-static void rizz__asset_meta_write_item(const rizz__refl_field* field, sjson_context* jctx,
-                                        sjson_node* jmeta)
-{
-    const rizz_refl_info* r = &field->info;
-    void* value = field->value;
-    rizz__refl_field fields[32];
-
-    if (r->flags & RIZZ_REFL_FLAG_IS_ENUM) {
-        int _e = *(int*)value;
-        sjson_put_string(jctx, jmeta, r->name, the__refl.get_enum_name(r->type, _e));
-    } else if (r->flags & RIZZ_REFL_FLAG_IS_STRUCT) {
-        if (r->flags & RIZZ_REFL_FLAG_IS_ARRAY) {
-            sjson_node* js = sjson_put_array(jctx, jmeta, r->name);
-            for (int i = 0; i < r->array_size; i++) {
-                sjson_node* jitem = sjson_mkobject(jctx);
-                int num_fields =
-                    the__refl.get_fields(r->type, (uint8_t*)value + (size_t)i * (size_t)r->stride,
-                                         fields, sizeof(fields) / sizeof(rizz__refl_field));
-                for (int fi = 0; fi < num_fields; fi++) {
-                    rizz__asset_meta_write_item(&fields[fi], jctx, jitem);
-                }
-                sjson_append_element(js, jitem);
-            }
-        } else {
-            sjson_node* js = sjson_put_obj(jctx, jmeta, r->name);
-            int num_fields = the__refl.get_fields(r->type, value, fields,
-                                                  sizeof(fields) / sizeof(rizz__refl_field));
-            for (int fi = 0; fi < num_fields; fi++) {
-                rizz__asset_meta_write_item(&fields[fi], jctx, js);
-            }
-        }
-    } else {
-        if (sx_strequal(r->type, "int")) {
-            sjson_put_int(jctx, jmeta, r->name, *(int*)value);
-        } else if (sx_strequal(r->type, "float")) {
-            sjson_put_float(jctx, jmeta, r->name, *(float*)value);
-        } else if (sx_strequal(r->type, "bool")) {
-            sjson_put_bool(jctx, jmeta, r->name, *(bool*)value);
-        } else if (the__refl.is_cstring(r)) {
-            sjson_put_string(jctx, jmeta, r->name, (const char*)value);
-        }
-    }
-}
-
 bool rizz__asset_dump_unused(const char* filepath)
 {
-    sjson_context* jctx = sjson_create_context(0, 0, (void*)g_asset.alloc);
-    if (!jctx)
-        return false;
-
-    sjson_node* jroot = sjson_mkarray(jctx);
-    for (int i = 0, c = sx_array_count(g_asset.resources); i < c; i++) {
-        if (!g_asset.resources[i].used) {
-            sjson_append_element(jroot, sjson_mkstring(jctx, g_asset.resources[i].path));
+    sx_file_writer f;
+    if (sx_file_open_writer(&f, filepath, 0)) {
+        for (int i = 0, c = sx_array_count(g_asset.resources); i < c; i++) {
+            if (!g_asset.resources[i].used) {
+                sx_file_write_text(&f, g_asset.resources[i].path);
+                sx_file_write(&f, "\n", 1);
+            }
         }
-    }
-
-    char* jstr = sjson_stringify(jctx, jroot, "  ");
-    if (!jstr)
+        sx_file_close_writer(&f);
+        return true;
+    } else {
         return false;
-    sx_file_writer writer;
-    if (sx_file_open_writer(&writer, filepath, 0)) {
-        sx_file_write_text(&writer, jstr);
-        sx_file_close_writer(&writer);
     }
-    sjson_free_string(jctx, jstr);
-    sjson_destroy_context(jctx);
-    return true;
 }
 // end: asset database
 
