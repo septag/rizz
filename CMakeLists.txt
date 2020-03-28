@@ -188,7 +188,9 @@ endif()
 if (MSVC)
     rizz__remove_compile_options(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" "/EHsc /GR")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /GR-")
-    add_compile_options(/MP)    # multiprocessor compilation
+    if (NOT CMAKE_MAKE_PROGRAM MATCHES "ninja.exe")
+        add_compile_options(/MP)    # multiprocessor compilation
+    endif()
 else()
     add_compile_options(-Wno-deprecated-declarations -fPIC)
 
