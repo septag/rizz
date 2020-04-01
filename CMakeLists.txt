@@ -188,7 +188,6 @@ endif()
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
     file(STRINGS "VERSION" version)
     message(STATUS "Build version: ${version}")
-    add_definitions(-DRIZZ_VERSION=\"${version}\")
 endif()
 
 if (MSVC)

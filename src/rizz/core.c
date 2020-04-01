@@ -945,8 +945,10 @@ bool rizz__core_init(const rizz_config* conf)
     g_core.heap_alloc = sx_alloc_malloc();
 #endif
 
-    rizz__parse_version(RIZZ_VERSION, &g_core.ver.major, &g_core.ver.minor, &g_core.ver.fix,
-                        g_core.ver.git, sizeof(g_core.ver.git));
+#ifdef RIZZ_VERSION
+    rizz__parse_version(sx_stringize(RIZZ_VERSION), &g_core.ver.major, &g_core.ver.minor,
+                        &g_core.ver.fix, g_core.ver.git, sizeof(g_core.ver.git));
+#endif
 
     if (RIZZ_CONFIG_DEBUG_MEMORY) {
         g_core.heap_proxy_alloc =

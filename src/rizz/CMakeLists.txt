@@ -73,6 +73,11 @@ else()
     target_compile_definitions(rizz PRIVATE -DRIZZ_CONFIG_HOT_LOADING=0)
 endif()
 
+# versioning
+if (version)
+    target_compile_definitions(rizz PRIVATE -DRIZZ_VERSION=${version})
+endif()
+
 if (RPI)
     target_include_directories(rizz PRIVATE ${CMAKE_SYSROOT}/opt/vc/include)
 endif()
