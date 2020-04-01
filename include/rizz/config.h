@@ -79,9 +79,6 @@
 #    define RIZZ_REFLECT_API_VARNAME the_refl
 #endif
 
-// version
-#define RIZZ_VERSION 210
-
 // enables hot-loading for assets, plugins (+game) and shaders
 #ifndef RIZZ_CONFIG_HOT_LOADING
 #    if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS

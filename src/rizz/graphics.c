@@ -16,7 +16,7 @@
 
 #include "sx/allocator.h"
 #include "sx/array.h"
-#include "sx/atomic.h"
+#include "sx/threads.h"
 #include "sx/hash.h"
 #include "sx/io.h"
 #include "sx/lin-alloc.h"
@@ -2540,7 +2540,7 @@ static bool rizz__cb_begin_stage(rizz_gfx_stage stage)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_lock(&g_gfx.stage_lk, 1);
+    sx_lock(&g_gfx.stage_lk);
     rizz__gfx_stage* _stage = &g_gfx.stages[rizz_to_index(stage.id)];
     sx_assert(_stage->state == STAGE_STATE_NONE && "already called begin on this stage");
     bool enabled = _stage->enabled;
@@ -2563,7 +2563,7 @@ static void rizz__cb_end_stage()
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
     sx_assert(cb->running_stage.id && "must call begin_stage before this call");
 
-    sx_lock(&g_gfx.stage_lk, 1);
+    sx_lock(&g_gfx.stage_lk);
     rizz__gfx_stage* _stage = &g_gfx.stages[rizz_to_index(cb->running_stage.id)];
     sx_assert(_stage->state == STAGE_STATE_SUBMITTING && "should call begin on this stage first");
     _stage->state = STAGE_STATE_DONE;
@@ -3340,7 +3340,7 @@ static const rizz__run_command_cb k_run_cbs[_GFX_COMMAND_COUNT] = {
 
 static void rizz__gfx_validate_stage_deps()
 {
-    sx_lock(&g_gfx.stage_lk, 1);
+    sx_lock(&g_gfx.stage_lk);
     for (int i = 0, c = sx_array_count(g_gfx.stages); i < c; i++) {
         rizz__gfx_stage* _stage = &g_gfx.stages[i];
         if (_stage->state == STAGE_STATE_DONE && _stage->parent.id) {
@@ -3497,7 +3497,7 @@ static void rizz__stage_enable(rizz_gfx_stage stage)
 {
     sx_assert(stage.id);
 
-    sx_lock(&g_gfx.stage_lk, 1);
+    sx_lock(&g_gfx.stage_lk);
     rizz__gfx_stage* _stage = &g_gfx.stages[rizz_to_index(stage.id)];
     _stage->enabled = true;
     _stage->single_enabled = true;
@@ -3515,7 +3515,7 @@ static void rizz__stage_disable(rizz_gfx_stage stage)
 {
     sx_assert(stage.id);
 
-    sx_lock(&g_gfx.stage_lk, 1);
+    sx_lock(&g_gfx.stage_lk);
     rizz__gfx_stage* _stage = &g_gfx.stages[rizz_to_index(stage.id)];
     _stage->enabled = false;
     _stage->single_enabled = false;
@@ -3533,7 +3533,7 @@ static bool rizz__stage_isenabled(rizz_gfx_stage stage)
 {
     sx_assert(stage.id);
 
-    sx_lock(&g_gfx.stage_lk, 1);
+    sx_lock(&g_gfx.stage_lk);
     bool enabled = g_gfx.stages[rizz_to_index(stage.id)].enabled;
     sx_unlock(&g_gfx.stage_lk);
     return enabled;
@@ -3544,7 +3544,7 @@ static rizz_gfx_stage rizz__stage_find(const char* name)
     sx_assert(name);
 
     uint32_t name_hash = sx_hash_fnv32_str(name);
-    sx_lock(&g_gfx.stage_lk, 1);
+    sx_lock(&g_gfx.stage_lk);
     for (int i = 0, c = sx_array_count(g_gfx.stages); i < c; i++) {
         if (g_gfx.stages[i].name_hash == name_hash)
             return (rizz_gfx_stage){ .id = rizz_to_id(i) };

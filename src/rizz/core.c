@@ -108,7 +108,7 @@ typedef struct rizz__log_entry_internal {
     rizz_log_entry e;
     sx_str_t text_id;
     sx_str_t source_id;
-    int64_t timestamp;
+    uint64_t timestamp;
 } rizz__log_entry_internal;
 
 typedef struct rizz__log_entry_internal_ref {
@@ -143,9 +143,10 @@ typedef struct rizz__core {
     float fps_mean;
     float fps_frame;
 
+    rizz_version ver;
+    uint32_t app_ver;
     char app_name[32];
     char logfile[32];
-    uint32_t app_ver;
 
     rizz__core_tmpalloc* tmp_allocs;    // count: num_threads
     rizz__log_pipe* log_pipes;          // count: num_threads
@@ -159,7 +160,7 @@ typedef struct rizz__core {
 
 #define SORT_NAME log__sort_entries
 #define SORT_TYPE rizz__log_entry_internal_ref
-#define SORT_CMP(x, y) ((x).e.timestamp - (y).e.timestamp)
+#define SORT_CMP(x, y) ((x).e.timestamp < (y).e.timestamp ? -1 : 1)
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4267)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4244)
@@ -196,6 +197,42 @@ static const char* k_log_entry_types[_RIZZ_LOG_ENTRYTYPE_COUNT] = { "",         
                                                                     "VERBOSE: ",    //
                                                                     "ERROR: ",      //
                                                                     "WARNING: " };
+
+static bool rizz__parse_version(const char* version_str, int* major, int* minor, int* fix,
+                                char* git, int git_size)
+{
+    if (version_str[0] != 'v') {
+        return false;
+    }
+
+    ++version_str;
+    
+    char num[32];
+    const char* end_major = sx_strchar(version_str, '.');
+    if (!end_major) {
+        return false;
+    }
+    sx_strncpy(num, sizeof(num), version_str + 1, (int)(intptr_t)(end_major - version_str - 1));
+    *major = sx_toint(num);
+
+    const char* end_minor = sx_strchar(end_major + 1, '.');
+    if (!end_minor) {
+        return false;
+    }
+    sx_strncpy(num, sizeof(num), end_major + 1, (int)(intptr_t)(end_minor - end_major - 1));
+    *minor = sx_toint(num);
+
+    const char* end_fix = sx_strchar(end_minor + 1, '-');
+    if (!end_fix) {
+        return false;
+    }
+    sx_strncpy(num, sizeof(num), end_minor + 1, (int)(intptr_t)(end_fix - end_minor - 1));
+    *fix = sx_toint(num);
+
+    sx_strcpy(git, git_size, end_fix + 1);
+
+    return true;
+}
 
 static void rizz__log_register_backend(const char* name,
                                        void (*log_cb)(const rizz_log_entry* entry, void* user),
@@ -636,10 +673,6 @@ static void rizz__log_init_file(const char* logfile)
     if (f) {
         time_t t = time(NULL);
         fprintf(f, "%s", asctime(localtime(&t)));
-        fprintf(f, "%s: v%d.%d.%d - rizz v%d.%d.%d%s", g_core.app_name,
-                rizz_version_major(g_core.app_ver), rizz_version_minor(g_core.app_ver),
-                rizz_version_bugfix(g_core.app_ver), rizz_version_major(RIZZ_VERSION),
-                rizz_version_minor(RIZZ_VERSION), rizz_version_bugfix(RIZZ_VERSION), EOL);
         fclose(f);
     } else {
         sx_assert(0 && "could not write to log file");
@@ -837,7 +870,7 @@ static void* rizz__track_alloc_cb(void* ptr, size_t size, uint32_t align, const 
         // free
         if (ptr) {
             const rizz__proxy_alloc_header* header = (rizz__proxy_alloc_header*)ptr - 1;
-            sx_lock(&talloc->_lk, 1);
+            sx_lock(&talloc->_lk);
             sx_assert(header->track_item_idx >= 0 &&
                       header->track_item_idx < sx_array_count(talloc->items));
             talloc->size -= header->size;
@@ -868,7 +901,7 @@ static void* rizz__track_alloc_cb(void* ptr, size_t size, uint32_t align, const 
         sx_os_path_basename(mem_item.file, sizeof(mem_item.file), file);
         sx_strcpy(mem_item.func, sizeof(mem_item.func), func);
 
-        sx_lock(&talloc->_lk, 1);
+        sx_lock(&talloc->_lk);
         talloc->size += header->size;
         talloc->peak = sx_max(talloc->peak, talloc->size);
         header->track_item_idx = sx_array_count(talloc->items);
@@ -885,7 +918,7 @@ static void* rizz__track_alloc_cb(void* ptr, size_t size, uint32_t align, const 
         sx_assert(ptr);
         const rizz__proxy_alloc_header* header = (rizz__proxy_alloc_header*)ptr - 1;
 
-        sx_lock(&talloc->_lk, 1);
+        sx_lock(&talloc->_lk);
         sx_assert(header->track_item_idx >= 0 &&
                   header->track_item_idx < sx_array_count(talloc->items));
         int64_t size_diff = header->size - prev_size;
@@ -911,6 +944,9 @@ bool rizz__core_init(const rizz_config* conf)
 #else
     g_core.heap_alloc = sx_alloc_malloc();
 #endif
+
+    rizz__parse_version(RIZZ_VERSION, &g_core.ver.major, &g_core.ver.minor, &g_core.ver.fix,
+                        g_core.ver.git, sizeof(g_core.ver.git));
 
     if (RIZZ_CONFIG_DEBUG_MEMORY) {
         g_core.heap_proxy_alloc =
@@ -970,6 +1006,10 @@ bool rizz__core_init(const rizz_config* conf)
     if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_PROFILER) {
         rizz__log_register_backend("remotery", rizz__log_backend_remotery, NULL);
     }
+
+    // log version
+    rizz__log_info("version: %d.%d.%d-%s", g_core.ver.major, g_core.ver.minor, g_core.ver.fix,
+                   g_core.ver.git);
 
     sx_tm_init();
     sx_rng_seed(&g_core.rng, sizeof(time_t) == sizeof(uint64_t)
@@ -1442,6 +1482,11 @@ static void* rizz__core_tls_var(const char* name)
     return NULL;
 }
 
+static rizz_version rizz__version(void)
+{
+    return g_core.ver;
+}
+
 // Core API
 rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .tmp_alloc_push = rizz__core_tmp_alloc_push,
@@ -1450,6 +1495,7 @@ rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .tls_var = rizz__core_tls_var,
                             .alloc = rizz__alloc,
                             .get_mem_info = rizz__get_mem_info,
+                            .version = rizz__version,
                             .rand = rizz__rand,
                             .randf = rizz__randf,
                             .rand_range = rizz__rand_range,

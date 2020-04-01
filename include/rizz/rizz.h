@@ -619,6 +619,13 @@ typedef struct rizz_mem_info {
     int heap_count;
 } rizz_mem_info;
 
+typedef struct rizz_version {
+    int major;
+    int minor;
+    int fix;
+    char git[32];
+} rizz_version;
+
 typedef struct rizz_api_core {
     // heap allocator: thread-safe, allocates dynamically from heap (libc->malloc)
     const sx_alloc* (*heap_alloc)();
@@ -644,6 +651,8 @@ typedef struct rizz_api_core {
     const sx_alloc* (*alloc)(rizz_mem_id id);
 
     void (*get_mem_info)(rizz_mem_info* info);
+
+    rizz_version (*version)(void);
 
     // random
     uint32_t (*rand)();                       // 0..UNT32_MAX

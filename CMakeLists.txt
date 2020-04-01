@@ -185,6 +185,12 @@ if (RPI)
     add_definitions(-D__RPI__)
 endif()
 
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
+    file(STRINGS "VERSION" version)
+    message(STATUS "Build version: ${version}")
+    add_definitions(-DRIZZ_VERSION=\"${version}\")
+endif()
+
 if (MSVC)
     rizz__remove_compile_options(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" "/EHsc /GR")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /GR-")
@@ -211,13 +217,25 @@ get_directory_property(has_parent PARENT_DIRECTORY)
 # include directory is for all projects
 include_directories(include)
 
-# native projects
+# native projects + installed plugins
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/plugins")
+    file(STRINGS "plugins" installed_plugins)
+endif()
+
 set(native_projects sx 
-                    rizz
+                    rizz 
                     imgui
                     2dtools
                     sound
                     input)
+
+if (installed_plugins)
+    message(STATUS "The following plugins are found:")
+    foreach (plugin ${installed_plugins})
+        message(STATUS "    ${plugin}")
+    endforeach()
+    list(APPEND native_projects ${installed_plugins})
+endif()
 
 # 3rdparty projects
 set(3rdparty_projects cimgui

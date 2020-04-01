@@ -5,7 +5,7 @@
 #include "internal.h"
 
 #include "sx/array.h"
-#include "sx/atomic.h"
+#include "sx/threads.h"
 #include "sx/handle.h"
 #include "sx/hash.h"
 #include "sx/jobs.h"
@@ -400,7 +400,7 @@ static rizz_asset rizz__asset_create_new(const char* path, const void* params, r
     // have to protected this block of code with a lock
     // because we may regrow the asset-array
     // asset-array may be accessed in worker-threads with `obj_threadsafe()` function
-    sx_lock(&g_asset.assets_lk, 1);
+    sx_lock(&g_asset.assets_lk);
     sx_array_push_byindex(g_asset.alloc, g_asset.assets, asset, sx_handle_index(handle));
     sx_unlock(&g_asset.assets_lk);
 
@@ -972,7 +972,7 @@ static rizz_asset_obj rizz__asset_obj_threadsafe(rizz_asset asset)
 {
     sx_assert_rel(sx_handle_valid(g_asset.asset_handles, asset.id));
 
-    sx_lock(&g_asset.assets_lk, 1);
+    sx_lock(&g_asset.assets_lk);
     rizz_asset_obj obj = g_asset.assets[sx_handle_index(asset.id)].obj;
     sx_unlock(&g_asset.assets_lk);
     return obj;
