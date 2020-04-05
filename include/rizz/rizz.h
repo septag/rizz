@@ -934,9 +934,9 @@ typedef struct sjson_context sjson_context;    // shader_parse_reflection
 //
 // Immediate API: access directly to GPU graphics API. this is actually a thin wrapper over backend
 //                Calls are executed immediately and sequentially, unlike _staged_ API (see below)
-// Note: this API is NOT multi-threaded
-//       Immediate mode is more of a direct and immediate graphics API
-//       It is recommended to use staged API mentioned below,
+//                Note: this API is NOT multi-threaded
+//                Immediate mode is more of a direct and immediate graphics API
+//                It is recommended to use staged API mentioned below,
 //
 // Staged API:   staged (deferred calls), multi-threaded API.
 //               Contains only a selection of drawing functions
@@ -1020,11 +1020,11 @@ typedef struct rizz_api_gfx {
     // NOTE: care must be taken when calling this function, first of all, it should be called on
     //       the main thread. And should never be called when rendering jobs are running or
     //       undefined behviour will occur. see documentation for more info.
-    void (*present_commands)();
+    void (*present_commands)(void);
     // call this function to submit queued commands to the gpu. it will be also called automatically
     // at the end of the frame. User must call `present_commands` before making this call
     // NOTE: should call this function only on the main thread. see documentation for more info.
-    void (*commit_commands)();
+    void (*commit_commands)(void);
 
     // resource creation, destruction and updating
     sg_buffer (*make_buffer)(const sg_buffer_desc* desc);

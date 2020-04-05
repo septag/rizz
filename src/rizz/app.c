@@ -309,7 +309,7 @@ sapp_desc sokol_main(int argc, char* argv[])
                          .plugin_path = "",
                          .app_version = 1000,
                          .app_flags = RIZZ_APP_FLAG_USER_CURSOR,
-                         .core_flags = RIZZ_CORE_FLAG_LOG_TO_FILE | RIZZ_CORE_FLAG_LOG_TO_PROFILER,
+                         .core_flags = 0,
                          .window_width = 640,
                          .window_height = 480,
                          .multisample_count = 1,

@@ -3437,14 +3437,14 @@ void rizz__gfx_execute_command_buffers_final()
 // Note: presents the `feed` buffer for rendering. must run on main thread
 //       we couldn't automate this. because there could be multiple jobs doing rendering and the
 //       user should be aware to call this when no other threaded rendering is being done
-static void rizz__gfx_swap_command_buffers()
+static void rizz__gfx_swap_command_buffers(void)
 {
     sx_assert(the__core.job_thread_index() == 0);
 
     sx_swap(g_gfx.cmd_buffers_feed, g_gfx.cmd_buffers_render, rizz__gfx_cmdbuffer*);
 }
 
-static void rizz__gfx_commit()
+static void rizz__gfx_commit(void)
 {
     sx_assert(the__core.job_thread_index() == 0);
 
@@ -3472,8 +3472,9 @@ static rizz_gfx_stage rizz__stage_register(const char* name, rizz_gfx_stage pare
     sx_array_push(g_gfx_alloc, g_gfx.stages, _stage);
 
     // add to dependency graph
-    if (parent_stage.id)
+    if (parent_stage.id) {
         rizz__stage_add_child(parent_stage, stage);
+    }
 
     // dependency order
     // higher 6 bits: depth
@@ -3877,6 +3878,8 @@ rizz_api_gfx the__gfx = {
     .GL_family                  = rizz__gfx_GL_family,
     .GLES_family                = rizz__gfx_GLES_family,
     .reset_state_cache          = sg_reset_state_cache,
+    .present_commands           = rizz__gfx_swap_command_buffers,
+    .commit_commands            = rizz__gfx_commit,
     .make_buffer                = rizz__make_buffer,
     .make_image                 = sg_make_image,
     .make_shader                = sg_make_shader,

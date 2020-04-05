@@ -553,28 +553,30 @@ static void rizz__print_warning(uint32_t channels, const char* source_file, int 
 
 static void rizz__log_update()
 {
-    for (int i = 0, c = sx_array_count(g_core.log_backends); i < c; i++) {
-        const rizz__log_backend* backend = &g_core.log_backends[i];
-        const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
-        rizz__log_entry_internal_ref* entries = NULL;
+    const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
+    rizz__log_entry_internal_ref* entries = NULL;
+    
+    // collect all log entries from threads and sort them by timestamp
+    for (int ti = 0, tc = g_core.num_threads; ti < tc; ti++) {
+        rizz__log_pipe pipe = g_core.log_pipes[ti];
+        rizz__log_entry_internal_ref entry;
+        entry.pipe_idx = ti;
+        while (sx_queue_spsc_consume(pipe.queue, &entry.e)) {
+            entry.e.e.text = sx_strpool_cstr(pipe.strpool, entry.e.text_id);
+            entry.e.e.source_file =
+                entry.e.source_id ? sx_strpool_cstr(pipe.strpool, entry.e.source_id) : NULL;
+            sx_array_push(tmp_alloc, entries, entry);
+        }
+    } // foreach thread
+    
+    int num_entries = sx_array_count(entries);
+    if (num_entries > 1) {
+        log__sort_entries_tim_sort(entries, num_entries);
+    }
 
-        // collect all log entries from threads and sort them by timestamp
-        for (int ti = 0, tc = g_core.num_threads; ti < tc; ti++) {
-            rizz__log_pipe pipe = g_core.log_pipes[ti];
-            rizz__log_entry_internal_ref entry;
-            entry.pipe_idx = ti;
-            while (sx_queue_spsc_consume(pipe.queue, &entry.e)) {
-                entry.e.e.text = sx_strpool_cstr(pipe.strpool, entry.e.text_id);
-                entry.e.e.source_file =
-                    entry.e.source_id ? sx_strpool_cstr(pipe.strpool, entry.e.source_id) : NULL;
-                sx_array_push(tmp_alloc, entries, entry);
-            }
-        } // foreach thread
-
-        int num_entries = sx_array_count(entries);
-
-        if (num_entries > 1) {
-            log__sort_entries_tim_sort(entries, num_entries);
+    if (num_entries > 0) {
+        for (int i = 0, c = sx_array_count(g_core.log_backends); i < c; i++) {
+            const rizz__log_backend* backend = &g_core.log_backends[i];
 
             for (int ei = 0; ei < num_entries; ei++) {
                 rizz__log_entry_internal_ref entry = entries[ei];
@@ -589,10 +591,10 @@ static void rizz__log_update()
                     sx_strpool_del(pipe.strpool, entry.e.source_id);
                 }
             }    // foreach entry
-        }
-
-        the__core.tmp_alloc_pop();
-    } // foreach backend
+        } // foreach backend
+    }
+    
+    the__core.tmp_alloc_pop();
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -719,8 +721,8 @@ static void rizz__rmt_input_handler(const char* text, void* context)
     if (argc == 0)
         return;
 
-    const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
-    char** argv = sx_malloc(tmp_alloc, sizeof(char*) * argc);
+    const sx_alloc* alloc = the__core.alloc(RIZZ_MEMID_CORE);
+    char** argv = sx_malloc(alloc, sizeof(char*) * argc);
     sx_assert(argv);
 
     cline = sx_skip_whitespace(text);
@@ -733,13 +735,15 @@ static void rizz__rmt_input_handler(const char* text, void* context)
         }
         arg[char_idx] = '\0';
         cline = sx_skip_whitespace(cline);
-        argv[arg_idx] = sx_malloc(tmp_alloc, (size_t)strlen(arg) + 1);
+        argv[arg_idx] = sx_malloc(alloc, (size_t)strlen(arg) + 1);
         sx_assert(argv);
         sx_strcpy(argv[arg_idx++], sizeof(arg), arg);
     }
 
+    bool cmd_found = false;
     for (int i = 0; i < sx_array_count(g_core.console_cmds); i++) {
         if (sx_strequal(g_core.console_cmds[i].name, argv[0])) {
+            cmd_found = true;
             int r;
             if ((r = g_core.console_cmds[i].callback(argc, argv)) < 0) {
                 char err_msg[256];
@@ -751,7 +755,11 @@ static void rizz__rmt_input_handler(const char* text, void* context)
         }
     }
 
-    the__core.tmp_alloc_pop();
+    if (!cmd_found) {
+        char msg[256];
+        sx_snprintf(msg, sizeof(msg), "command '%s' not found", argv[0]);
+        rmt_LogText(msg);
+    }
 }
 
 static void rizz__core_register_console_command(const char* cmd, rizz_core_cmd_cb* callback)
