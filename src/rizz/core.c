@@ -947,11 +947,9 @@ static void* rizz__track_alloc_cb(void* ptr, size_t size, uint32_t align, const 
 
 bool rizz__core_init(const rizz_config* conf)
 {
-#ifdef _DEBUG
-    g_core.heap_alloc = sx_alloc_malloc_leak_detect();
-#else
-    g_core.heap_alloc = sx_alloc_malloc();
-#endif
+    g_core.heap_alloc = (conf->core_flags & RIZZ_CORE_FLAG_DETECT_LEAKS)
+                            ? sx_alloc_malloc_leak_detect()
+                            : sx_alloc_malloc();
 
 #ifdef RIZZ_VERSION
     rizz__parse_version(sx_stringize(RIZZ_VERSION), &g_core.ver.major, &g_core.ver.minor,

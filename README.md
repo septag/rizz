@@ -6,11 +6,8 @@
 Rizz (ریز) is a tiny, multi-platform, and minimal game/app development framework, Written in C language.  
 It's currently a work in progress, features and improvements will be added constantly to different platforms.
 
-## Design Principles
-I'm not gonna waste time by rewriting the same stuff that others put it a lot better than me.  
-Design principles of _rizz_ is pretty much same as 
-[The Machinery's](https://ourmachinery.com/files/guidebook.md.html#omg-design:designprinciples). 
-I will try to stick to these as much as possible, and I recommend every programmer to practice these principles too.
+## Design and Basic usage
+For more detailed information about design principles, architecture and basic usage of the framework, please read the document [rizz Architecture and Basic usage](http://glitterbombg.com/devblog/posts/rizz-basics/)
 
 #### Note
 This is not a game engine, it's a relatively low-level framework for programmers to build their own engine/renderer/physics on top of it. The core of _rizz_ does not and will not implement any rendering techniques/physics or impose any specific entity system to the user. It just provides the basic building blocks for game developers. Other features will be implemented as plugins.
@@ -94,39 +91,6 @@ But as the engine is in it's early age, the current platforms are built and test
 - **MSVC_COMPILE_SUMMARY** (default=0, windows/msvc=1)
   On msvc compiler, enables `/d2cgsummary` flag for detailed compile stats. Read more about this 
   [here](https://aras-p.info/blog/2017/10/23/Best-unknown-MSVC-flag-d2cgsummary/)
-
-#### shaders
-shader builds can be integrated into cmake builds with ```glslcc_target_compile_shaders_xxx``` family of cmake functions. see [cmake/glslcc.cmake](cmake/glslcc.cmake) file for more information.
-
-#### ispc 
-ISPC files can be integrated into cmake builds with ```ispc_target_add_files``` cmake function.
-see [cmake/ispc.cmake](cmake/ispc.cmake) file for more information.
-
-## Usage
-To build a compatible game/app module for _rizz_ you should do the following steps:
-- Add `rizz_plugin_decl_main(proj_name, plugin, event) {}` to your source. This is actually the main 
-  function of your app. Main events like `STEP`, `INIT` and `SHUTDOWN` gets posted to this function and
-  can be enumerated with `event` parameter.
-- Add `rizz_plugin_implement_info(proj_name, version, "Title", 0);` to your source file. Every plugin
-  needs to implement this in order to get recognized by _rizz_.
-- Add `rizz_game_decl_config(conf) {}` to your source, and modify the config (see `rizz_config`) before
-  initialization.
-- To Receive windows events, Add `rizz_plugin_decl_event_handler(proj_name, event) {}` to your source file.
-  _rizz_ will fill `rizz_app_event` struct and pass window messages to your application.
-- The low-level graphics api is almost as same as [sokol_gfx](https://github.com/floooh/sokol/blob/master/sokol_gfx.h).
-  So all documentation and examples of *sokol_gfx* also applies here, except the little concept called _stages_ that is 
-  explained in [rizz.h](https://github.com/septag/rizz/blob/master/include/rizz/rizz.h) in more detail.
-
-Currently, the documentation is lacking. But you can check out the `/examples` directory and figure out how to get started.
-
-#### basisu
-_rizz_ comes with basis texture support. It is recommended that you use basis textures especially for 
-multiplatform projects. But you should provide `.fmt` flag in `rizz_texture_load_params` struct when 
-loading these files, because this format should be transcoded to any platform specific formats on load.  
-To make .basis files, `basisu` binary is provided in `tools` directory. You can also provide your own 
-binary by fetching the source from it's [repo](https://github.com/BinomialLLC/basis_universal) and build it.
-
-I will also develop additional python tools to recusively encode directories of images into basis files.
 
 ## Open-Source libraries used
 #### Primarily developed for rizz

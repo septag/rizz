@@ -326,6 +326,9 @@ sapp_desc sokol_main(int argc, char* argv[])
         conf.core_flags |= RIZZ_CORE_FLAG_PROFILE_GPU;
     if (dump_unused_assets)
         conf.core_flags |= RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS;
+#ifdef _DEBUG
+    conf.core_flags |= RIZZ_CORE_FLAG_DETECT_LEAKS;
+#endif
 
     game_config_fn(&conf, argc, argv);
 

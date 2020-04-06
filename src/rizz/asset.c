@@ -487,6 +487,8 @@ static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, 
         return (rizz_asset){ 0 };
     }
 
+    sx_assert(the__core.job_thread_index() == 0 && "must call this function in the main thread");
+
     if (flags & RIZZ_ASSET_LOAD_FLAG_RELOAD)
         flags |= RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD;
 
@@ -852,6 +854,7 @@ static void rizz__asset_unload(rizz_asset asset)
 {
     sx_assert(asset.id);
     sx_assert_rel(sx_handle_valid(g_asset.asset_handles, asset.id));
+    sx_assert(the__core.job_thread_index() == 0 && "must call this function in the main thread");
 
     rizz__asset* a = &g_asset.assets[sx_handle_index(asset.id)];
     sx_assert(a->ref_count > 0);
@@ -915,6 +918,17 @@ static void rizz__unregister_asset_type(const char* name)
     sx_assert(amgr_id != -1 && "asset type is not registered");
     rizz__asset_mgr* amgr = &g_asset.asset_mgrs[amgr_id];
     amgr->unreg = true;
+}
+
+static void rizz__update_asset_callbacks(const char* name, rizz_asset_callbacks callbacks)
+{
+    uint32_t name_hash = sx_hash_fnv32_str(name);
+    for (int i = 0; i < sx_array_count(g_asset.asset_name_hashes); i++) {
+        if (name_hash == g_asset.asset_name_hashes[i]) {
+            g_asset.asset_mgrs[i].callbacks = callbacks;
+            return;
+        }
+    }
 }
 
 static rizz_asset_state rizz__asset_state(rizz_asset asset)
@@ -1232,6 +1246,7 @@ static int rizz__asset_group_gather(rizz_asset_group group, rizz_asset* out_hand
 
 rizz_api_asset the__asset = { .register_asset_type = rizz__register_asset_type,
                               .unregister_asset_type = rizz__unregister_asset_type,
+                              .update_asset_callbacks = rizz__update_asset_callbacks,
                               .load = rizz__asset_load,
                               .load_from_mem = rizz__asset_load_from_mem,
                               .unload = rizz__asset_unload,

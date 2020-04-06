@@ -391,6 +391,7 @@ typedef struct rizz_api_asset {
                                 rizz_asset_obj failed_obj, rizz_asset_obj async_obj,
                                 rizz_asset_load_flags forced_flags);
     void (*unregister_asset_type)(const char* name);
+    void (*update_asset_callbacks)(const char* name, rizz_asset_callbacks callbacks);
 
     rizz_asset (*load)(const char* name, const char* path, const void* params,
                        rizz_asset_load_flags flags, const sx_alloc* alloc, uint32_t tags);
@@ -490,7 +491,8 @@ enum rizz_core_flags_ {
     RIZZ_CORE_FLAG_LOG_TO_FILE = 0x02,          // log to file defined by `app_name.log`
     RIZZ_CORE_FLAG_LOG_TO_PROFILER = 0x04,      // log to remote profiler
     RIZZ_CORE_FLAG_PROFILE_GPU = 0x08,          // enable GPU profiling
-    RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS = 0x10    // write `unused-assets.json` on exit
+    RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS = 0x10,   // write `unused-assets.json` on exit
+    RIZZ_CORE_FLAG_DETECT_LEAKS = 0x20          // Detect memory leaks
 };
 typedef uint32_t rizz_core_flags;
 

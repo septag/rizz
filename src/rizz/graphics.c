@@ -3439,14 +3439,14 @@ void rizz__gfx_execute_command_buffers_final()
 //       user should be aware to call this when no other threaded rendering is being done
 static void rizz__gfx_swap_command_buffers(void)
 {
-    sx_assert(the__core.job_thread_index() == 0);
+    sx_assert(the__core.job_thread_index() == 0 && "must be called only from the main thread");
 
     sx_swap(g_gfx.cmd_buffers_feed, g_gfx.cmd_buffers_render, rizz__gfx_cmdbuffer*);
 }
 
 static void rizz__gfx_commit(void)
 {
-    sx_assert(the__core.job_thread_index() == 0);
+    sx_assert(the__core.job_thread_index() == 0 && "must be called only from the main thread");
 
     rizz__gfx_validate_stage_deps();
 
