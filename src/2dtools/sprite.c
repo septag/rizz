@@ -1259,7 +1259,7 @@ bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* ref
                                                            .on_release = atlas__on_release },
                                    "rizz_atlas_load_params", sizeof(rizz_atlas_load_params),
                                    (rizz_asset_obj){ .ptr = NULL }, (rizz_asset_obj){ .ptr = NULL },
-                                   0);
+                                   RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD);
 
     // init draw context
     if (!sprite__resize_draw_limits(MAX_VERTICES, MAX_INDICES)) {
