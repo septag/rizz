@@ -102,8 +102,8 @@ typedef struct rizz_atlas_load_params {
 
 typedef struct rizz_sprite_animclip_frame_desc {
     const char* name;   // name reference in atlas
-    rizz_event  event;
     bool        trigger_event;
+    rizz_event  event;
 } rizz_sprite_animclip_frame_desc;
 
 typedef struct rizz_sprite_animclip_desc {

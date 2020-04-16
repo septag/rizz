@@ -66,6 +66,12 @@
 - [x] Added basis texture support
 - [x] Added true-type font (fontstash) support through 'rizz_api_font' API
 - [ ] Sprite flip flags (flipX/flipY)
+- [x] Asset manager internal refactors (obj_threadsafe)
+- [ ] Refactor IFF
+- [ ] sprite anim/controller loading from data
+- [ ] sprite simpler draw api
+- [x] Add Async vfs call to get individual files 
+- [ ] Change SX io to native instead of fopen
 
 ### Changed
 - [ ] try to use <sys/sem.h> instead of posix semaphores

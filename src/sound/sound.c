@@ -774,8 +774,8 @@ static void snd__queue_play(rizz_snd_instance insthandle)
     sx_assert_rel(sx_handle_valid(g_snd.instance_handles, insthandle.id));
     snd__instance* inst = &g_snd.instances[sx_handle_index(insthandle.id)];
     int bus_id = inst->bus_id;
-    sx_assert_rel(g_snd.buses[bus_id].max_lanes >
-                  0);    // bus is not initialized. call `bus_set_max_lanes` on bus_id
+    sx_assert_rel(g_snd.buses[bus_id].max_lanes > 0 &&
+                  "bus is not initialized. call `bus_set_max_lanes` on bus_id"); 
 
     sx_assert_rel(sx_handle_valid(g_snd.source_handles, inst->srchandle.id));
 
@@ -884,7 +884,7 @@ static void snd__stop(rizz_snd_instance insthandle)
     }
 }
 
-static void snd__stop_all()
+static void snd__stop_all(void)
 {
     for (int i = 0, c = g_snd.num_plays; i < c; i++) {
         snd__destroy_instance(g_snd.playlist[i], true);
@@ -941,7 +941,7 @@ static void snd__mix(float* dst, int dst_num_frames, int dst_num_channels, int d
     float master_pan_ch1 = g_snd.master_pan > 0.0f ? (1.0f - g_snd.master_pan) : 1.0f;
     float master_pan_ch2 = g_snd.master_pan < 0.0f ? (1.0f + g_snd.master_pan) : 1.0f;
 
-    int garbage[RIZZ_SND_DEVICE_MAX_LANES];    // indices to g_snd.playlist
+    rizz_snd_instance garbage[RIZZ_SND_DEVICE_MAX_LANES];
     int num_garbage = 0;
     sx_assert(g_snd.num_plays <= RIZZ_SND_DEVICE_MAX_LANES);
 
@@ -975,9 +975,8 @@ static void snd__mix(float* dst, int dst_num_frames, int dst_num_channels, int d
 
         // remove sound if EOF / loop
         if (inst->pos >= src->num_frames) {
-
             if (!(src->flags & SND_SOURCEFLAG_LOOPING)) {
-                garbage[num_garbage++] = i;
+                garbage[num_garbage++] = insthandle;
             } else {
                 inst->pos = 0;
             }
@@ -1020,11 +1019,16 @@ static void snd__mix(float* dst, int dst_num_frames, int dst_num_channels, int d
                   (dst_num_frames - frames_written) * dst_num_channels * sizeof(float));
     }
 
-    // delete garbage instances
+    // delete garbage instances and remove from playlist
     for (int i = 0; i < num_garbage; i++) {
-        rizz_snd_instance insthandle = g_snd.playlist[garbage[i]];
-        sx_swap(g_snd.playlist[garbage[i]], g_snd.playlist[g_snd.num_plays - 1], rizz_snd_instance);
-        --g_snd.num_plays;
+        rizz_snd_instance insthandle = garbage[i];
+        for (int k = 0; k < g_snd.num_plays; k++) {
+            if (insthandle.id == g_snd.playlist[k].id) {
+                sx_swap(g_snd.playlist[k], g_snd.playlist[g_snd.num_plays - 1], rizz_snd_instance);
+                --g_snd.num_plays;
+                break;
+            }
+        }
         snd__destroy_instance(insthandle, true);
     }
 }
@@ -1398,7 +1402,7 @@ static void snd__show_debugger(bool* p_open)
     the_imgui->End();
 }
 
-static float snd__master_volume()
+static float snd__master_volume(void)
 {
     return g_snd.master_volume;
 }
@@ -1408,7 +1412,7 @@ static void snd__set_master_volume(float vol)
     g_snd.master_volume = sx_clamp(vol, 0.0f, 1.2f);
 }
 
-static float snd__master_pan()
+static float snd__master_pan(void)
 {
     return g_snd.master_pan;
 }
@@ -1761,7 +1765,10 @@ static rizz_api_snd the__snd = { .queued = { .play = snd__cb_play,
                                              .source_set_volume = snd__cb_source_set_volume },
                                  .play = snd__play,
                                  .play_clocked = snd__play_clocked,
+                                 .stop = snd__stop,
+                                 .stop_all = snd__stop_all,
                                  .bus_set_max_lanes = snd__bus_set_max_lanes,
+                                 .bus_stop = snd__bus_stop,
                                  .master_volume = snd__master_volume,
                                  .set_master_volume = snd__set_master_volume,
                                  .master_pan = snd__master_pan,

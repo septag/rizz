@@ -3459,7 +3459,7 @@ static void rizz__gfx_commit(void)
 static rizz_gfx_stage rizz__stage_register(const char* name, rizz_gfx_stage parent_stage)
 {
     sx_assert(name);
-    sx_assert(parent_stage.id == 0 || parent_stage.id < (uint32_t)sx_array_count(g_gfx.stages));
+    sx_assert(parent_stage.id == 0 || parent_stage.id <= (uint32_t)sx_array_count(g_gfx.stages));
     sx_assert(sx_array_count(g_gfx.stages) < MAX_STAGES && "maximum stages exceeded");
 
     rizz__gfx_stage _stage = { .name_hash = sx_hash_fnv32_str(name),
@@ -3469,7 +3469,6 @@ static rizz_gfx_stage rizz__stage_register(const char* name, rizz_gfx_stage pare
     sx_strcpy(_stage.name, sizeof(_stage.name), name);
 
     rizz_gfx_stage stage = { .id = rizz_to_id(sx_array_count(g_gfx.stages)) };
-    sx_array_push(g_gfx_alloc, g_gfx.stages, _stage);
 
     // add to dependency graph
     if (parent_stage.id) {
@@ -3490,6 +3489,7 @@ static rizz_gfx_stage rizz__stage_register(const char* name, rizz_gfx_stage pare
 
     _stage.order = ((depth << STAGE_ORDER_DEPTH_BITS) & STAGE_ORDER_DEPTH_MASK) |
                    (uint16_t)(rizz_to_index(stage.id) & STAGE_ORDER_ID_MASK);
+    sx_array_push(g_gfx_alloc, g_gfx.stages, _stage);
 
     return stage;
 }

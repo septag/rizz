@@ -276,22 +276,27 @@ enum rizz_vfs_flags_ {
 };
 typedef uint32_t rizz_vfs_flags;
 
-typedef struct rizz_vfs_async_callbacks {
-    void (*on_read_error)(const char* path);
-    void (*on_write_error)(const char* path);
-    void (*on_read_complete)(const char* path, sx_mem_block* mem);
-    void (*on_write_complete)(const char* path, int bytes_written, sx_mem_block* mem);
-    void (*on_modified)(const char* path);
-} rizz_vfs_async_callbacks;
+// if mem == NULL, then there was an error opening the file
+typedef void(rizz_vfs_async_read_cb)(const char* path, sx_mem_block* mem, void* user);
+// if bytes_written == -1, then there was an error writing to file
+typedef void(rizz_vfs_async_write_cb)(const char* path, int bytes_written, sx_mem_block* mem, void* user);
+
+typedef void(rizz_vfs_async_modify_cb)(const char* path);
 
 typedef struct rizz_api_vfs {
-    void (*register_async_callbacks)(const rizz_vfs_async_callbacks* cbs);
+    void (*register_modify)(rizz_vfs_async_modify_cb* modify_fn);
+
     bool (*mount)(const char* path, const char* alias);
     void (*mount_mobile_assets)(const char* alias);
-    void (*read_async)(const char* path, rizz_vfs_flags flags, const sx_alloc* alloc);
-    void (*write_async)(const char* path, sx_mem_block* mem, rizz_vfs_flags flags);
+
+    void (*read_async)(const char* path, rizz_vfs_flags flags, const sx_alloc* alloc,
+                       rizz_vfs_async_read_cb* read_fn, void* user);
+    void (*write_async)(const char* path, sx_mem_block* mem, rizz_vfs_flags flags,
+                        rizz_vfs_async_write_cb* write_fn, void* user);
+
     sx_mem_block* (*read)(const char* path, rizz_vfs_flags flags, const sx_alloc* alloc);
     int (*write)(const char* path, const sx_mem_block* mem, rizz_vfs_flags flags);
+
     bool (*mkdir)(const char* path);
     bool (*is_dir)(const char* path);
     bool (*is_file)(const char* path);
@@ -368,7 +373,7 @@ typedef struct rizz_asset_callbacks {
 //      Internally, the asset system is offloading some work to worker threads, but the API is not
 //      thread-safe 
 //          1) Have to load all your assets on the main thread 
-//          2) You can only use `rizz_api_asset.obj_threadsafe()` in worker threads.
+//          2) You can only use `rizz_api_asset.obj()` in worker threads.
 //              So basically, you have to load the assets, and pass handles to threads, 
 //              and they can only fetch the object pointer
 //          3) Loading can be performed in the main thread while working threads are using the API 
@@ -380,7 +385,7 @@ typedef struct rizz_asset_callbacks {
 // So basically the multi-threading usage pattern is:
 //      - Always Load your stuff in main update (main-thread) before running tasks that use those
 //        assets
-//      - in game-update function: spawn jobs and use `rizz_api_asset.obj_threadsafe()` to access
+//      - in game-update function: spawn jobs and use `rizz_api_asset.obj()` to access
 //        asset objects
 //      - always wait/end these tasks before game-update functions ends
 //      - unload assets only when the scene is not updated or no game-update tasks is running
@@ -406,7 +411,7 @@ typedef struct rizz_api_asset {
     const void* (*params)(rizz_asset handle);
     uint32_t (*tags)(rizz_asset handle);
     rizz_asset_obj (*obj)(rizz_asset handle);
-    rizz_asset_obj (*obj_threadsafe)(rizz_asset handle);
+    rizz_asset_obj (*obj_unsafe)(rizz_asset handle);
 
     int (*ref_add)(rizz_asset handle);
     int (*ref_count)(rizz_asset handle);

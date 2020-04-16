@@ -96,7 +96,6 @@ typedef struct {
     const sx_alloc* alloc;    // allocator passed on init
     char asset_db_file[RIZZ_MAX_PATH];
     char variation[32];
-    rizz_vfs_async_callbacks vfs_callbacks;    // vfs async-io
     rizz__asset_mgr* asset_mgrs;               // sx_array
     uint32_t* asset_name_hashes;               // sx_array (count = count(asset_mgrs))
     rizz__asset* assets;                       // loaded assets
@@ -167,31 +166,6 @@ static inline void rizz__asset_job_remove_list(rizz__asset_async_job** pfirst,
     node->prev = node->next = NULL;
 }
 
-// async callbacks
-static void rizz__asset_on_read_error(const char* path)
-{
-    int async_req_idx = rizz__asset_find_async_req(path);
-    if (async_req_idx != -1) {
-        rizz__asset_async_load_req* req = &g_asset.async_reqs[async_req_idx];
-        rizz_asset asset = req->asset;
-        rizz__asset* a = &g_asset.assets[sx_handle_index(asset.id)];
-        sx_assert(a->resource_id);
-        rizz__asset_resource* res = &g_asset.resources[rizz_to_index(a->resource_id)];
-        rizz__asset_mgr* amgr = &g_asset.asset_mgrs[a->asset_mgr_id];
-
-        rizz__asset_errmsg(res->path, res->real_path, "opening");
-        a->state = RIZZ_ASSET_STATE_FAILED;
-        a->obj = amgr->failed_obj;
-
-        sx_array_pop(g_asset.async_reqs, async_req_idx);
-    }
-}
-
-static void rizz__asset_on_write_error(const char* path)
-{
-    sx_unused(path);
-}
-
 static void rizz__asset_load_job_cb(int start, int end, int thrd_index, void* user)
 {
     sx_unused(start);
@@ -204,10 +178,29 @@ static void rizz__asset_load_job_cb(int start, int end, int thrd_index, void* us
                       : ASSET_JOB_STATE_LOAD_FAILED;
 }
 
-static void rizz__asset_on_read_complete(const char* path, sx_mem_block* mem)
+// async callback
+static void rizz__asset_on_read(const char* path, sx_mem_block* mem, void* user)
 {
     int async_req_idx = rizz__asset_find_async_req(path);
-    if (async_req_idx == -1) {
+
+    if (!mem) {
+        // error opening the file
+        if (async_req_idx != -1) {
+            rizz__asset_async_load_req* req = &g_asset.async_reqs[async_req_idx];
+            rizz_asset asset = req->asset;
+            rizz__asset* a = &g_asset.assets[sx_handle_index(asset.id)];
+            sx_assert(a->resource_id);
+            rizz__asset_resource* res = &g_asset.resources[rizz_to_index(a->resource_id)];
+            rizz__asset_mgr* amgr = &g_asset.asset_mgrs[a->asset_mgr_id];
+
+            rizz__asset_errmsg(res->path, res->real_path, "opening");
+            a->state = RIZZ_ASSET_STATE_FAILED;
+            a->obj = amgr->failed_obj;
+
+            sx_array_pop(g_asset.async_reqs, async_req_idx);
+        }
+        return;
+    } else if (async_req_idx == -1) {
         sx_mem_destroy_block(mem);
         return;
     }
@@ -259,13 +252,6 @@ static void rizz__asset_on_read_complete(const char* path, sx_mem_block* mem)
 
     ajob->job = the__core.job_dispatch(1, rizz__asset_load_job_cb, ajob, SX_JOB_PRIORITY_HIGH, 0);
     rizz__asset_job_add_list(&g_asset.async_job_list, &g_asset.async_job_list_last, ajob);
-}
-
-static void rizz__asset_on_write_complete(const char* path, int bytes_written, sx_mem_block* mem)
-{
-    sx_unused(path);
-    sx_unused(bytes_written);
-    sx_unused(mem);
 }
 
 static void rizz__asset_on_modified(const char* path)
@@ -399,7 +385,7 @@ static rizz_asset rizz__asset_create_new(const char* path, const void* params, r
 
     // have to protected this block of code with a lock
     // because we may regrow the asset-array
-    // asset-array may be accessed in worker-threads with `obj_threadsafe()` function
+    // asset-array may be accessed in worker-threads with `obj()` function
     sx_lock(&g_asset.assets_lk);
     sx_array_push_byindex(g_asset.alloc, g_asset.assets, asset, sx_handle_index(handle));
     sx_unlock(&g_asset.assets_lk);
@@ -527,7 +513,7 @@ static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, 
             the__vfs.read_async(
                 real_path,
                 (flags & RIZZ_ASSET_LOAD_FLAG_ABSOLUTE_PATH) ? RIZZ_VFS_FLAG_ABSOLUTE_PATH : 0,
-                the__core.alloc(RIZZ_MEMID_CORE));
+                the__core.alloc(RIZZ_MEMID_CORE), rizz__asset_on_read, NULL);
         } else {
             // Blocking load (+ reloads)
             asset =
@@ -606,13 +592,7 @@ bool rizz__asset_init(const sx_alloc* alloc, const char* dbfile, const char* var
     sx_strcpy(g_asset.variation, sizeof(g_asset.variation), variation);
     sx_strcpy(g_asset.asset_db_file, sizeof(g_asset.asset_db_file), dbfile);
 
-    g_asset.vfs_callbacks =
-        (rizz_vfs_async_callbacks){ .on_read_error = rizz__asset_on_read_error,
-                                    .on_write_error = rizz__asset_on_write_error,
-                                    .on_read_complete = rizz__asset_on_read_complete,
-                                    .on_write_complete = rizz__asset_on_write_complete,
-                                    .on_modified = rizz__asset_on_modified };
-    the__vfs.register_async_callbacks(&g_asset.vfs_callbacks);
+    the__vfs.register_modify(rizz__asset_on_modified);
 
     g_asset.asset_tbl = sx_hashtbl_create(alloc, RIZZ_CONFIG_ASSET_POOL_SIZE);
     g_asset.resource_tbl = sx_hashtbl_create(alloc, RIZZ_CONFIG_ASSET_POOL_SIZE);
@@ -794,7 +774,7 @@ static rizz_asset rizz__asset_load_from_mem(const char* name, const char* path_a
                                               .asset = asset };
             sx_array_push(g_asset.alloc, g_asset.async_reqs, req);
 
-            rizz__asset_on_read_complete(real_path, mem);
+            rizz__asset_on_read(real_path, mem, NULL);
         } else {
             // Blocking load (+ reloads)
             // Add asset entry
@@ -974,7 +954,7 @@ static uint32_t rizz__asset_tags(rizz_asset asset)
     return a->tags;
 }
 
-static rizz_asset_obj rizz__asset_obj(rizz_asset asset)
+static rizz_asset_obj rizz__asset_obj_unsafe(rizz_asset asset)
 {
     sx_assert_rel(sx_handle_valid(g_asset.asset_handles, asset.id));
 
@@ -982,7 +962,7 @@ static rizz_asset_obj rizz__asset_obj(rizz_asset asset)
     return a->obj;
 }
 
-static rizz_asset_obj rizz__asset_obj_threadsafe(rizz_asset asset)
+static rizz_asset_obj rizz__asset_obj(rizz_asset asset)
 {
     sx_assert_rel(sx_handle_valid(g_asset.asset_handles, asset.id));
 
@@ -1256,7 +1236,7 @@ rizz_api_asset the__asset = { .register_asset_type = rizz__register_asset_type,
                               .params = rizz__asset_params,
                               .tags = rizz__asset_tags,
                               .obj = rizz__asset_obj,
-                              .obj_threadsafe = rizz__asset_obj_threadsafe,
+                              .obj_unsafe = rizz__asset_obj_unsafe,
                               .ref_add = rizz__asset_ref_add,
                               .ref_count = rizz__asset_ref_count,
                               .reload_by_type = rizz__asset_reload_by_type,

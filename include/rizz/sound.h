@@ -51,14 +51,14 @@ typedef struct rizz_api_snd {
     rizz_snd_instance (*play_clocked)(rizz_snd_source src, float wait_tm, int bus, float volume,
                                       float pan);
     void (*stop)(rizz_snd_instance inst);
-    void (*stop_all)();
+    void (*stop_all)(void);
     void (*resume)(rizz_snd_instance inst);
 
     void (*bus_set_max_lanes)(int bus, int max_lanes);
     void (*bus_stop)(int bus);
 
-    float (*master_volume)();
-    float (*master_pan)();
+    float (*master_volume)(void);
+    float (*master_pan)(void);
     void (*set_master_volume)(float volume);
     void (*set_master_pan)(float pan);
 
@@ -69,6 +69,7 @@ typedef struct rizz_api_snd {
     void (*source_set_looping)(rizz_snd_source src, bool loop);
     void (*source_set_singleton)(rizz_snd_source src, bool singleton);
     void (*source_set_volume)(rizz_snd_source src, float vol);
+
     rizz_snd_source (*source_get)(rizz_asset snd_asset);
 
     void (*show_debugger)(bool* p_open);

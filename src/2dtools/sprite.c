@@ -85,7 +85,7 @@ typedef struct sprite__animclip {
 #if RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES > 0
     sprite__animclip_frame frames[RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES];
 #else
-    sprite__animclip_frame* frames;
+    sprite__animclip_frame* frames; // count = num_frames
 #endif
 } sprite__animclip;
 
@@ -234,19 +234,32 @@ rizz_sprite_animclip sprite__animclip_create(const rizz_sprite_animclip_desc* de
 {
     sx_handle_t handle = sx_handle_new_and_grow(g_spr.animclip_handles, g_spr.alloc);
     sx_assert(handle);
-    sx_assert(desc->num_frames > 0);
 
     const sx_alloc* alloc = desc->alloc ? desc->alloc : g_spr.alloc;
 
+    // if num_frames == 0, then try to guess it by counting the frames until .name==NULL
+    int num_frames = RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES > 0
+                         ? sx_min(RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES, desc->num_frames)
+                         : desc->num_frames;
+    if (num_frames == 0) {
+        while (num_frames < UINT16_MAX) {
+            if (desc->frames[num_frames].name) {
+                num_frames++;
+            } else {
+                break;
+            }
+        }
+        sx_assert(num_frames < UINT16_MAX);
+    }
+    sx_assert(num_frames > 0);
+
     sprite__animclip clip = { .atlas = desc->atlas,
-                              .num_frames =
-                                  RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES > 0
-                                      ? sx_min(RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES, desc->num_frames)
-                                      : desc->num_frames,
+                              .num_frames = num_frames,
                               .fps = desc->fps,
                               .len = desc->length,
                               .trigger_end_event = desc->trigger_end_event,
                               .alloc = alloc };
+
     if (clip.num_frames < desc->num_frames) {
         rizz_log_warn("num_frames exceeded maximum amount (%d) for sprite-animclip: 0x%x",
                       RIZZ_SPRITE_ANIMCLIP_MAX_FRAMES, handle);
@@ -284,9 +297,12 @@ rizz_sprite_animclip sprite__animclip_create(const rizz_sprite_animclip_desc* de
         if (sidx != -1) {
             frame->atlas_id = sx_hashtbl_get(&atlas->sprite_tbl, sidx);
         } else {
+            frame->atlas_id = -1;
             rizz_log_warn("sprite not found: '%s' in '%s'", frame_desc->name,
                           the_asset->path(desc->atlas));
         }
+        frame->trigger = frame_desc->trigger_event;
+        frame->e = frame_desc->event;
     }
 
     sx_array_push_byindex(g_spr.alloc, g_spr.animclips, clip, sx_handle_index(handle));
@@ -556,17 +572,40 @@ rizz_event_queue* sprite__animctrl_events(rizz_sprite_animctrl handle)
 
 rizz_sprite_animctrl sprite__animctrl_create(const rizz_sprite_animctrl_desc* desc)
 {
+    sx_assert(desc->start_state);
+
+    int num_states = desc->num_states;
+    if (num_states == 0) {
+        while (num_states < UINT16_MAX) {
+            if (desc->states[num_states].name) {
+                num_states++;
+            } else {
+                break;
+            }
+        }
+        sx_assert(num_states < UINT16_MAX);
+    }
+
+    int num_transitions = desc->num_transitions;
+    if (num_transitions == 0) {
+        while (num_transitions < UINT16_MAX) {
+            if (desc->transitions[num_transitions].state) {
+                num_transitions++;
+            } else {
+                break;
+            }
+        }
+        sx_assert(num_transitions < UINT16_MAX);
+    }
+
     sx_assert(desc->num_states > 1);
     sx_assert(desc->num_transitions > 0);
-    sx_assert(desc->start_state);
 
     const sx_alloc* alloc = desc->alloc ? desc->alloc : g_spr.alloc;
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
     sx_handle_t handle = sx_handle_new_and_grow(g_spr.animctrl_handles, g_spr.alloc);
     sx_assert(handle);
-    int num_states = desc->num_states;
-    int num_transitions = desc->num_transitions;
 
     uint32_t* hashes = sx_malloc(tmp_alloc, sizeof(uint32_t) * num_states);
     sx_assert(hashes);
@@ -922,7 +961,7 @@ static void sprite__update_bounds(sprite__data* spr)
 
     sx_rect rect = sx_rectf(-0.5f, -0.5f, 0.5f, 0.5f);
     if (spr->atlas.id && spr->atlas_sprite_id >= 0) {
-        const atlas__data* atlas = (atlas__data*)the_asset->obj_threadsafe(spr->atlas).ptr;
+        const atlas__data* atlas = (atlas__data*)the_asset->obj(spr->atlas).ptr;
         const atlas__sprite* aspr = &atlas->sprites[spr->atlas_sprite_id];
         sx_vec2 size = sprite__calc_size(spr->size, aspr->base_size, spr->flip);
         sx_vec2 origin = spr->origin;
@@ -936,7 +975,7 @@ static void sprite__update_bounds(sprite__data* spr)
         spr->bounds = sx_rectv(sx_vec2_mul(sx_vec2_sub(rect.vmin, origin), size),
                                sx_vec2_mul(sx_vec2_sub(rect.vmax, origin), size));
     } else {
-        rizz_texture* tex = (rizz_texture*)the_asset->obj_threadsafe(spr->texture).ptr;
+        rizz_texture* tex = (rizz_texture*)the_asset->obj(spr->texture).ptr;
         sx_assert(tex);
         sx_vec2 base_size = sx_vec2f((float)tex->info.width, (float)tex->info.height);
         sx_vec2 size = sprite__calc_size(spr->size, base_size, spr->flip);
@@ -1594,7 +1633,7 @@ rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs, int n
         }
 
         if (spr->atlas.id && spr->atlas_sprite_id >= 0) {
-            const atlas__data* atlas = (atlas__data*)the_asset->obj_threadsafe(spr->atlas).ptr;
+            const atlas__data* atlas = (atlas__data*)the_asset->obj(spr->atlas).ptr;
             sx_assert(spr->atlas_sprite_id < atlas->a.info.num_sprites);
 
             const atlas__sprite* aspr = &atlas->sprites[spr->atlas_sprite_id];
@@ -1671,7 +1710,7 @@ rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs, int n
         //  - single texture sprites
         if (spr->atlas.id && spr->atlas_sprite_id >= 0) {
             // extract sprite rectangle and uv from atlas
-            const atlas__data* atlas = (atlas__data*)the_asset->obj_threadsafe(spr->atlas).ptr;
+            const atlas__data* atlas = (atlas__data*)the_asset->obj(spr->atlas).ptr;
             const atlas__sprite* aspr = &atlas->sprites[spr->atlas_sprite_id];
             sx_vec2 size = sprite__calc_size(spr->size, aspr->base_size, spr->flip);
             sx_vec2 origin = spr->origin;
@@ -1698,7 +1737,7 @@ rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs, int n
             index_idx += aspr->num_indices;
         } else {
             // normal texture sprite: there is no atalas. sprite takes the whole texture
-            rizz_texture* tex = (rizz_texture*)the_asset->obj_threadsafe(spr->texture).ptr;
+            rizz_texture* tex = (rizz_texture*)the_asset->obj(spr->texture).ptr;
             sx_assert(tex);
             sx_vec2 base_size = sx_vec2f((float)tex->info.width, (float)tex->info.height);
             sx_vec2 size = sprite__calc_size(spr->size, base_size, spr->flip);
@@ -1835,7 +1874,7 @@ void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4*
     // draw with batching
     for (int i = 0; i < dd->num_batches; i++)  {
         rizz_sprite_drawbatch* batch = &dd->batches[i];
-        bindings.fs_images[0] = ((rizz_texture*)the_asset->obj_threadsafe(batch->texture).ptr)->img;
+        bindings.fs_images[0] = ((rizz_texture*)the_asset->obj(batch->texture).ptr)->img;
         the_gfx->staged.apply_bindings(&bindings);
         the_gfx->staged.draw(batch->index_start, batch->index_count, 1);
     }    
@@ -1904,7 +1943,7 @@ void sprite__draw_wireframe_batch(const rizz_sprite* sprs, int num_sprites, cons
     // draw with batching
     for (int i = 0; i < dd->num_batches; i++)  {
         rizz_sprite_drawbatch* batch = &dd->batches[i];
-        bindings.fs_images[0] = ((rizz_texture*)the_asset->obj_threadsafe(batch->texture).ptr)->img;
+        bindings.fs_images[0] = ((rizz_texture*)the_asset->obj(batch->texture).ptr)->img;
         the_gfx->staged.apply_bindings(&bindings);
         the_gfx->staged.draw(batch->index_start, batch->index_count, 1);
     }    

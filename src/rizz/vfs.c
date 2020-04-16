@@ -35,6 +35,11 @@ typedef struct {
     char path[RIZZ_MAX_PATH];
     sx_mem_block* write_mem;
     const sx_alloc* alloc;
+    union {
+        rizz_vfs_async_read_cb* read_fn;
+        rizz_vfs_async_write_cb* write_fn;
+    };
+    void* user;
 } rizz__vfs_async_request;
 
 typedef struct {
@@ -43,7 +48,12 @@ typedef struct {
         sx_mem_block* read_mem;
         sx_mem_block* write_mem;
     };
-    int write_bytes;    // on writes, it's the number of written bytes. on reads, it's 0
+    union {
+        rizz_vfs_async_read_cb* read_fn;
+        rizz_vfs_async_write_cb* write_fn;
+    };
+    void* user;
+    int write_bytes;    // on writes, it's the number of written bytes. on reads, it's -1
     char path[RIZZ_MAX_PATH];
 } rizz__vfs_async_response;
 
@@ -59,7 +69,7 @@ typedef struct {
 typedef struct {
     const sx_alloc* alloc;
     rizz__vfs_mount_point* mounts;
-    rizz_vfs_async_callbacks* callbacks;    // sx_array
+    rizz_vfs_async_modify_cb** modify_cbs;    // sx_array
     sx_thread* worker_thrd;
     sx_queue_spsc* req_queue;    // producer: main, consumer: worker, data: rizz__vfs_async_request
     sx_queue_spsc* res_queue;    // producer: worker, consumer: main, data: rizz__vfs_async_response
@@ -223,13 +233,13 @@ static int rizz__vfs_worker(void* user1, void* user2)
     while (!g_vfs.quit) {
         rizz__vfs_async_request req;
         if (sx_queue_spsc_consume(g_vfs.req_queue, &req)) {
-            rizz__vfs_async_response res;
-            res.read_mem = NULL;
-            res.write_bytes = 0;
+            rizz__vfs_async_response res = { .write_bytes = -1 };
             sx_strcpy(res.path, sizeof(res.path), req.path);
+            res.user = req.user;
 
             switch (req.cmd) {
             case VFS_COMMAND_READ: {
+                res.read_fn = req.read_fn;
                 sx_mem_block* mem = rizz__vfs_read(req.path, req.flags, req.alloc);
 
                 if (mem) {
@@ -243,6 +253,7 @@ static int rizz__vfs_worker(void* user1, void* user2)
             }
 
             case VFS_COMMAND_WRITE: {
+                res.write_fn = req.write_fn;
                 int written = rizz__vfs_write(req.path, req.write_mem, req.flags);
 
                 if (written > 0) {
@@ -363,7 +374,7 @@ void rizz__vfs_release()
     }
 #endif // RIZZ_CONFIG_HOT_LOADING
 
-    sx_array_free(g_vfs.alloc, g_vfs.callbacks);
+    sx_array_free(g_vfs.alloc, g_vfs.modify_cbs);
     sx_array_free(g_vfs.alloc, g_vfs.mounts);
     g_vfs.alloc = NULL;
 }
@@ -375,27 +386,13 @@ void rizz__vfs_async_update()
     while (sx_queue_spsc_consume(g_vfs.res_queue, &res)) {
         switch (res.code) {
         case VFS_RESPONSE_READ_OK:
-            for (int i = 0, c = sx_array_count(g_vfs.callbacks); i < c; i++) {
-                g_vfs.callbacks[i].on_read_complete(res.path, res.read_mem);
-            }
+        case VFS_RESPONSE_READ_FAILED:
+            res.read_fn(res.path, res.read_mem, res.user);
             break;
 
         case VFS_RESPONSE_WRITE_OK:
-            for (int i = 0, c = sx_array_count(g_vfs.callbacks); i < c; i++) {
-                g_vfs.callbacks[i].on_write_complete(res.path, res.write_bytes, res.write_mem);
-            }
-            break;
-
-        case VFS_RESPONSE_READ_FAILED:
-            for (int i = 0, c = sx_array_count(g_vfs.callbacks); i < c; i++) {
-                g_vfs.callbacks[i].on_read_error(res.path);
-            }
-            break;
-
         case VFS_RESPONSE_WRITE_FAILED:
-            for (int i = 0, c = sx_array_count(g_vfs.callbacks); i < c; i++) {
-                g_vfs.callbacks[i].on_write_error(res.path);
-            }
+            res.write_fn(res.path, res.write_bytes, res.write_mem, res.user);
             break;
         }
     }
@@ -405,34 +402,44 @@ void rizz__vfs_async_update()
     dmon__result dmon_res;
     while (sx_queue_spsc_consume(g_vfs.dmon_queue, &dmon_res)) {
         if (dmon_res.action == DMON_ACTION_MODIFY) {
-            for (int i = 0, c = sx_array_count(g_vfs.callbacks); i < c; i++) {
-                g_vfs.callbacks[i].on_modified(dmon_res.path);
+            for (int i = 0, c = sx_array_count(g_vfs.modify_cbs); i < c; i++) {
+                g_vfs.modify_cbs[i](dmon_res.path);
             }
         }
     }
 #endif // RIZZ_CONFIG_HOT_LOADING
 }
 
-static void rizz__vfs_read_async(const char* path, rizz_vfs_flags flags, const sx_alloc* alloc)
+static void rizz__vfs_read_async(const char* path, rizz_vfs_flags flags, const sx_alloc* alloc,
+                                 rizz_vfs_async_read_cb* read_fn, void* user)
 {
-    rizz__vfs_async_request req = { .cmd = VFS_COMMAND_READ, .flags = flags, .alloc = alloc };
+    rizz__vfs_async_request req = { .cmd = VFS_COMMAND_READ,    //
+                                    .flags = flags,
+                                    .alloc = alloc,
+                                    .read_fn = read_fn,
+                                    .user = user };
     sx_strcpy(req.path, sizeof(req.path), path);
     sx_queue_spsc_produce_and_grow(g_vfs.req_queue, &req, g_vfs.alloc);
     sx_semaphore_post(&g_vfs.worker_sem, 1);
 }
 
-static void rizz__vfs_write_async(const char* path, sx_mem_block* mem, rizz_vfs_flags flags)
+static void rizz__vfs_write_async(const char* path, sx_mem_block* mem, rizz_vfs_flags flags,
+                                  rizz_vfs_async_write_cb* write_fn, void* user)
 {
-    rizz__vfs_async_request req = { .cmd = VFS_COMMAND_WRITE, .flags = flags, .write_mem = mem };
+    rizz__vfs_async_request req = { .cmd = VFS_COMMAND_WRITE,
+                                    .flags = flags,
+                                    .write_mem = mem,
+                                    .write_fn = write_fn,
+                                    .user = user };
     sx_strcpy(req.path, sizeof(req.path), path);
     sx_queue_spsc_produce_and_grow(g_vfs.req_queue, &req, g_vfs.alloc);
     sx_semaphore_post(&g_vfs.worker_sem, 1);
 }
 
-static void rizz__vfs_register_async_callbacks(const rizz_vfs_async_callbacks* cbs)
+static void rizz__vfs_register_modify(rizz_vfs_async_modify_cb* modify_cb)
 {
-    sx_assert(cbs);
-    sx_array_push(g_vfs.alloc, g_vfs.callbacks, *cbs);
+    sx_assert(modify_cb);
+    sx_array_push(g_vfs.alloc, g_vfs.modify_cbs, modify_cb);
 }
 
 static bool rizz__vfs_mkdir(const char* path)
@@ -515,7 +522,7 @@ static void dmon__event_cb(dmon_watch_id watch_id, dmon_action action, const cha
 }
 #endif // RIZZ_CONFIG_HOT_LOADING
 
-rizz_api_vfs the__vfs = { .register_async_callbacks = rizz__vfs_register_async_callbacks,
+rizz_api_vfs the__vfs = { .register_modify = rizz__vfs_register_modify,
                           .mount = rizz__vfs_mount,
                           .mount_mobile_assets = rizz__vfs_mount_mobile_assets,
                           .read_async = rizz__vfs_read_async,
