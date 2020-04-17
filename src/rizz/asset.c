@@ -181,6 +181,8 @@ static void rizz__asset_load_job_cb(int start, int end, int thrd_index, void* us
 // async callback
 static void rizz__asset_on_read(const char* path, sx_mem_block* mem, void* user)
 {
+    sx_unused(user);
+
     int async_req_idx = rizz__asset_find_async_req(path);
 
     if (!mem) {
@@ -623,8 +625,8 @@ void rizz__asset_release()
             rizz__asset* a = &g_asset.assets[sx_handle_index(handle)];
             if (a->state == RIZZ_ASSET_STATE_OK) {
                 sx_assert(a->resource_id);
-                rizz__log_warn("un-released asset: %s",
-                               g_asset.resources[rizz_to_index(a->resource_id)].path);
+                rizz__log_warn("un-released asset: %s (ref_count = %d)",
+                               g_asset.resources[rizz_to_index(a->resource_id)].path, a->ref_count);
                 if (a->obj.id) {
                     rizz__asset_mgr* amgr = &g_asset.asset_mgrs[a->asset_mgr_id];
                     if (!amgr->unreg)

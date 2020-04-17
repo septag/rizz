@@ -60,9 +60,16 @@ __declspec(dllimport) void __stdcall OutputDebugStringA(const char* lpOutputStri
 #endif
 // clang-format on
 
-static const char* k__memid_names[_RIZZ_MEMID_COUNT] = { "Core",  "Graphics",   "Audio",
-                                                         "IO",    "Reflection", "Other",
-                                                         "Debug", "Toolset",    "Game" };
+static const char* k__memid_names[_RIZZ_MEMID_COUNT] = { "Core",          //
+                                                         "Graphics",      //
+                                                         "Audio",         //
+                                                         "IO",            //
+                                                         "Reflection",    //
+                                                         "Other",         //
+                                                         "Debug",         //
+                                                         "Toolset",       //
+                                                         "Input",         //
+                                                         "Game" };
 
 
 typedef struct rizz__core_tmpalloc {
@@ -906,8 +913,12 @@ static void* rizz__track_alloc_cb(void* ptr, size_t size, uint32_t align, const 
         sx_assert(ptr);
         rizz__proxy_alloc_header* header = (rizz__proxy_alloc_header*)ptr - 1;
         rizz_track_alloc_item mem_item = { .ptr = ptr, .line = line, .size = header->size };
-        sx_os_path_basename(mem_item.file, sizeof(mem_item.file), file);
-        sx_strcpy(mem_item.func, sizeof(mem_item.func), func);
+        if (file) {
+            sx_os_path_basename(mem_item.file, sizeof(mem_item.file), file);
+        }
+        if (func) {
+            sx_strcpy(mem_item.func, sizeof(mem_item.func), func);
+        }
 
         sx_lock(&talloc->_lk);
         talloc->size += header->size;
@@ -934,8 +945,12 @@ static void* rizz__track_alloc_cb(void* ptr, size_t size, uint32_t align, const 
         if (size_diff > 0)
             talloc->peak = sx_max(talloc->peak, talloc->size);
         rizz_track_alloc_item* mem_item = &talloc->items[header->track_item_idx];
-        sx_os_path_basename(mem_item->file, sizeof(mem_item->file), file);
-        sx_strcpy(mem_item->func, sizeof(mem_item->func), func);
+        if (file) {
+            sx_os_path_basename(mem_item->file, sizeof(mem_item->file), file);
+        }
+        if (func) {
+            sx_strcpy(mem_item->func, sizeof(mem_item->func), func);
+        }
         mem_item->ptr = ptr;
         mem_item->line = line;
         mem_item->size = header->size;
@@ -1413,6 +1428,7 @@ static void rizz__get_mem_info(rizz_mem_info* info)
                                   .peak = g_core.tmp_allocs[i].stack_alloc.peak };
     }
 
+    info->num_trackers = RIZZ_CONFIG_DEBUG_MEMORY ? _RIZZ_MEMID_COUNT : 0;
     info->num_temp_allocs = g_core.num_threads;
     info->heap = g_core.heap_size;
     info->heap_max = g_core.heap_max;

@@ -110,11 +110,7 @@
 #endif
 
 #ifndef RIZZ_CONFIG_DEBUG_MEMORY
-#    ifdef _DEBUG
-#        define RIZZ_CONFIG_DEBUG_MEMORY 1
-#    else
-#        define RIZZ_CONFIG_DEBUG_MEMORY 0
-#    endif
+#   define RIZZ_CONFIG_DEBUG_MEMORY 1
 #endif
 
 #ifndef RIZZ_CONFIG_MAX_PLUGINS

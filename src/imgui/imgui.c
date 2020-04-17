@@ -1329,7 +1329,7 @@ static void imgui__memory_debugger(const rizz_mem_info* info, bool* p_open)
                                        size_text);
             }
 
-            for (int i = 0; i < _RIZZ_MEMID_COUNT; i++) {
+            for (int i = 0; i < info->num_trackers; i++) {
                 const rizz_trackalloc_info* t = &info->trackers[i];
                 if (peaks)
                     sx_snprintf(peak_text, sizeof(peak_text), "%$.2d", t->peak);

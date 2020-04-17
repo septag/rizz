@@ -72,6 +72,7 @@
 - [ ] sprite simpler draw api
 - [x] Add Async vfs call to get individual files 
 - [ ] Change SX io to native instead of fopen
+- [ ] Add an API to render a set of sprites with a set of clips, so we won't have to duplicate data
 
 ### Changed
 - [ ] try to use <sys/sem.h> instead of posix semaphores
@@ -81,6 +82,7 @@
 - [ ] BREAKING: graphic helper functions/renderers should take any API
 - [x] BREAKING: renamed _sprite_ plugin to _2dtools_. the api name is the same, but it's now part of '2dtools' plugin
 - [x] BREAKING: replace sjson with cj5
+- [ ] Find a way to better streamline the sprite system and animations. AnimClips should just have frames in them and controlled by another state data
 
 ### Fixed
 - [x] fix sx_matx_inv 
