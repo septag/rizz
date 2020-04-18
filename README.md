@@ -91,6 +91,10 @@ But as the engine is in it's early age, the current platforms are built and test
 - **MSVC_COMPILE_SUMMARY** (default=0, windows/msvc=1)
   On msvc compiler, enables `/d2cgsummary` flag for detailed compile stats. Read more about this 
   [here](https://aras-p.info/blog/2017/10/23/Best-unknown-MSVC-flag-d2cgsummary/)
+  
+## Examples
+- Basic examples are in [examples](examples) directory. 
+- Space invaders clone - [link](https://github.com/septag/rizz-space-invaders)
 
 ## Open-Source libraries used
 #### Primarily developed for rizz
