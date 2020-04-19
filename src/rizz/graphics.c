@@ -9,6 +9,7 @@
 // rizz__cb_run_gpu_command: command-buffer deferred commands (this is actually where the command is executed) 
 // rizz__gpu_command: overrides for immediate mode commands _sg_xxxx: sokol overrides
 //
+#include <alloca.h>
 
 #include "basisut.h"
 
@@ -27,7 +28,6 @@
 
 #include "Remotery.h"
 
-#include <alloca.h>
 
 // clang-format off
 #define MAX_STAGES                  1024
@@ -2487,7 +2487,7 @@ static void rizz__cb_record_begin_stage(const char* name, int name_sz)
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff = rizz__cb_alloc_params_buff(cb, name_sz, &offset);
 
     rizz__gfx_cmdbuffer_ref ref = { .key =
@@ -2581,7 +2581,7 @@ static void rizz__cb_begin_default_pass(const sg_pass_action* pass_action, int w
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff =
         rizz__cb_alloc_params_buff(cb, sizeof(sg_pass_action) + sizeof(int) * 2, &offset);
     sx_assert(buff);
@@ -2622,7 +2622,7 @@ static void rizz__cb_begin_pass(sg_pass pass, const sg_pass_action* pass_action)
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff =
         rizz__cb_alloc_params_buff(cb, sizeof(sg_pass_action) + sizeof(sg_pass), &offset);
     sx_assert(buff);
@@ -2662,7 +2662,7 @@ static void rizz__cb_apply_viewport(int x, int y, int width, int height, bool or
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(int) * 4 + sizeof(bool), &offset);
     sx_assert(buff);
 
@@ -2711,7 +2711,7 @@ static void rizz__cb_apply_scissor_rect(int x, int y, int width, int height, boo
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(int) * 4 + sizeof(bool), &offset);
     sx_assert(buff);
 
@@ -2760,7 +2760,7 @@ static void rizz__cb_apply_pipeline(sg_pipeline pip)
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(sg_pipeline), &offset);
     sx_assert(buff);
 
@@ -2796,7 +2796,7 @@ static void rizz__cb_apply_bindings(const sg_bindings* bind)
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(sg_bindings), &offset);
     sx_assert(buff);
 
@@ -2918,7 +2918,7 @@ static void rizz__cb_apply_uniforms(sg_shader_stage stage, int ub_index, const v
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff = rizz__cb_alloc_params_buff(
         cb, sizeof(sg_shader_stage) + sizeof(int) * 2 + num_bytes, &offset);
     sx_assert(buff);
@@ -2962,7 +2962,7 @@ static void rizz__cb_draw(int base_element, int num_elements, int num_instances)
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(int) * 3, &offset);
     sx_assert(buff);
 
@@ -3002,7 +3002,7 @@ static void rizz__cb_dispatch(int thread_group_x, int thread_group_y, int thread
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(int) * 3, &offset);
     sx_assert(buff);
 
@@ -3067,7 +3067,7 @@ static void rizz__cb_update_buffer(sg_buffer buf, const void* data_ptr, int data
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff =
         rizz__cb_alloc_params_buff(cb, sizeof(sg_buffer) + data_size + sizeof(int), &offset);
     sx_assert(buff);
@@ -3125,7 +3125,7 @@ static int rizz__cb_append_buffer(sg_buffer buf, const void* data_ptr, int data_
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff =
         rizz__cb_alloc_params_buff(cb, data_size + sizeof(int) * 3 + sizeof(sg_buffer), &offset);
     sx_assert(buff);
@@ -3192,7 +3192,7 @@ static void rizz__cb_update_image(sg_image img, const sg_image_content* data)
         }
     }
 
-    int offset;
+    int offset = 0;
     uint8_t* buff =
         rizz__cb_alloc_params_buff(cb, sizeof(sg_image) + sizeof(sg_image_content), &offset);
     sx_assert(buff);
@@ -3261,7 +3261,7 @@ static void rizz__cb_begin_profile_sample(const char* name, uint32_t* hash_cache
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff = rizz__cb_alloc_params_buff(cb, 32 + sizeof(uint32_t*), &offset);
     sx_assert(buff);
 

@@ -1535,7 +1535,7 @@ static void snd__cb_play(rizz_snd_source src, int bus, float volume, float pan, 
     snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
     sx_assert(cb->cmd_idx < INT_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(snd__play_params), &offset);
     sx_assert(buff);
 
@@ -1563,7 +1563,7 @@ static void snd__cb_play_clocked(rizz_snd_source src, float wait_tm, int bus, fl
     snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
     sx_assert(cb->cmd_idx < INT_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(snd__play_params), &offset);
     sx_assert(buff);
 
@@ -1590,7 +1590,7 @@ static void snd__cb_bus_stop(int bus)
     snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
     sx_assert(cb->cmd_idx < INT_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(int), &offset);
     sx_assert(buff);
 
@@ -1616,7 +1616,7 @@ static void snd__cb_set_master_volume(float volume)
     snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
     sx_assert(cb->cmd_idx < INT_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(int), &offset);
     sx_assert(buff);
 
@@ -1642,7 +1642,7 @@ static void snd__cb_set_master_pan(float pan)
     snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
     sx_assert(cb->cmd_idx < INT_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(int), &offset);
     sx_assert(buff);
 
@@ -1668,7 +1668,7 @@ static void snd__cb_source_stop(rizz_snd_source src)
     snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
     sx_assert(cb->cmd_idx < INT_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(rizz_snd_source), &offset);
     sx_assert(buff);
 
@@ -1694,7 +1694,7 @@ static void snd__cb_source_set_volume(rizz_snd_source src, float vol)
     snd__cmdbuffer* cb = the_core->tls_var("snd_cmdbuffer");
     sx_assert(cb->cmd_idx < INT_MAX);
 
-    int offset;
+    int offset = 0;
     uint8_t* buff = snd__cb_alloc_params_buff(cb, sizeof(rizz_snd_source) + sizeof(float), &offset);
     sx_assert(buff);
 
