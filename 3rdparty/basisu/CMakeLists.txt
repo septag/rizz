@@ -10,6 +10,9 @@ add_library(basisu STATIC basisu_transcoder.h
 
 if (MSVC)
     target_compile_options(basisu PRIVATE /wd4190)
+    if (CLANG_CL)
+        target_compile_options(basisu PRIVATE -Wno-unused-variable)
+    endif()
 else()
     target_compile_options(basisu PRIVATE -fno-strict-aliasing)
 endif()

@@ -19,10 +19,26 @@ else ()
     option(ENABLE_PROFILER "Enable profiler" ON)
 endif()
 
+# Clang-Cl detection
+if (CMAKE_C_COMPILER_ID MATCHES "Clang" AND MSVC)
+    set(CLANG_CL 1 CACHE INTERNAL BOOl "")
+    message(STATUS "using clang-cl compiler")
+endif()
+
+if (MSVC)
+    option(MSVC_STATIC_RUNTIME "Link with MSVC static runtime. Only sets for 'Release' build" OFF)
+    option(MSVC_MULTITHREADED_COMPILE "Multi-threaded compilation in MSVC." ON)
+endif()
+
+if (CMAKE_C_COMPILER_ID MATCHES "Clang")
+    option(CLANG_ENABLE_PROFILER "Enable clang build profiler ('-ftime-trace') flag" OFF)
+endif()
+
 # set MACOSX_BUNDLE_ROOT_DIR to define the path that cmake can find resource/plist files
 if (NOT MACOSX_BUNDLE_ROOT_DIR)
     set (MACOSX_BUNDLE_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
+
 
 # output directories for binary files
 if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
@@ -193,8 +209,14 @@ endif()
 if (MSVC)
     rizz__remove_compile_options(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" "/EHsc /GR")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /GR-")
-    if (NOT CMAKE_MAKE_PROGRAM MATCHES "ninja.exe")
+    if (MSVC_MULTITHREADED_COMPILE AND NOT CMAKE_MAKE_PROGRAM MATCHES "ninja.exe")
         add_compile_options(/MP)    # multiprocessor compilation
+    endif()
+    if (MSVC_STATIC_RUNTIME) 
+        rizz__remove_compile_options(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}" "/MD")
+        rizz__remove_compile_options(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}" "/MD")
+		set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
+		set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
     endif()
 else()
     add_compile_options(-Wno-deprecated-declarations -fPIC)
@@ -209,6 +231,26 @@ else()
     if (CMAKE_C_COMPILER_ID MATCHES "GNU")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-format-truncation")
     endif()    
+endif()
+
+if (CLANG_ENABLE_PROFILER)
+    string(FIND ${CMAKE_C_COMPILER_VERSION} "." major_ver_end)
+    if (${major_ver_end} GREATER 0)
+        string(SUBSTRING ${CMAKE_C_COMPILER_VERSION} 0 ${major_ver_end} clang_major_version)
+        if (${clang_major_version} GREATER_EQUAL 9)
+            # https://aras-p.info/blog/2019/01/16/time-trace-timeline-flame-chart-profiler-for-Clang/
+            # https://github.com/aras-p/ClangBuildAnalyzer
+            message(STATUS "Enabling clang built-in profiler: -ftime-trace")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_RELEASE} -ftime-trace")
+            set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS_RELEASE} -ftime-trace")            
+        else()
+            message(WARNING "Current clang version does not support built-in profiler")
+        endif()
+    endif()
+endif()
+
+if (CLANG_CL)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-return-type-c-linkage")
 endif()
 
 get_directory_property(has_parent PARENT_DIRECTORY)

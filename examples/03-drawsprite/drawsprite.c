@@ -234,7 +234,7 @@ static void draw_custom(const drawsprite_params* params)
         drawsprite_vertex* verts =
             sx_malloc(tmp_alloc, sizeof(drawsprite_vertex) * dd->num_indices);
         sx_assert(verts);
-        const sx_vec3 bcs[] = { { 1.0f, 0, 0 }, { 0, 1.0f, 0 }, { 0, 0, 1.0f } };
+        const sx_vec3 bcs[] = { { { 1.0f, 0, 0 } }, { { 0, 1.0f, 0 } }, { { 0, 0, 1.0f } } };
 
         float start_x = -3.0f;
         float start_y = -1.5f;

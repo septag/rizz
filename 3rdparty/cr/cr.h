@@ -1098,12 +1098,12 @@ static so_handle cr_so_load(const std::string &filename) {
 
 static void* cr_so_symbol(so_handle handle, const char* name) {
     CR_ASSERT(handle);
-    void* sym = GetProcAddress(handle, name);
+    FARPROC sym = GetProcAddress(handle, name);
     if (!sym) {
         CR_ERROR("Couldn't find plugin entry point '%s': %d\n", name,
                  GetLastError());
     }
-    return sym;
+    return (void*)sym;
 }
 
 static void cr_plat_init() {

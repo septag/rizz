@@ -1,4 +1,9 @@
-set (RIZZ_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/rizz/ PARENT_SCOPE)
+get_directory_property(has_parent PARENT_DIRECTORY)
+if (has_parent) 
+    set (RIZZ_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/rizz/ PARENT_SCOPE)
+else()
+    set (RIZZ_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/rizz/)
+endif()
 
 function(generate_bundle_file_internal plugins filepath func_name game_name)
     message(STATUS "generating header file: ${filepath}")

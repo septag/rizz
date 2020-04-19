@@ -563,7 +563,6 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
     } else if (sx_strequalnocase(ext, ".dds") || sx_strequalnocase(ext, ".ktx")) {
         ddsktx_texture_info tc = { 0 };
         ddsktx_error err;
-        const rizz_texture_load_params* tparams = params->params;
         if (ddsktx_parse(&tc, mem->data, mem->size, &err)) {
             info->type = rizz__texture_get_type(&tc);
             info->format = rizz__texture_get_texture_format(tc.format);

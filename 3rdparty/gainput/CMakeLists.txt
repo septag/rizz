@@ -4,13 +4,17 @@ set(GAINPUT_MINOR_VERSION 0)
 set(GAINPUT_PATCH_VERSION 0)
 set(GAINPUT_VERSION ${GAINPUT_MAJOR_VERSION}.${GAINPUT_MINOR_VERSION}.${GAINPUT_PATCH_VERSION})
 
-if(!WIN32)
+if(NOT WIN32)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic -Wextra")
 else()
 	set(XINPUT "Xinput9_1_0")
 	if ( ${CMAKE_SYSTEM_VERSION} LESS 6.1 )
 		set(XINPUT, "xinput")
 	endif()
+endif()
+
+if (CLANG_CL)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-private-field")
 endif()
 
 rizz__remove_compile_options(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}" "-fobjc-arc")

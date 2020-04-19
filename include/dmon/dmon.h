@@ -156,7 +156,7 @@ void dmon_unwatch(dmon_watch_id id);
 #    include <sys/time.h>
 #    include <time.h>
 #    include <unistd.h>
-
+#    include <stdlib.h>
 #elif DMON_OS_MACOS
 #   include <pthread.h>
 #   include <CoreServices/CoreServices.h>
@@ -281,11 +281,13 @@ _DMON_PRIVATE char* dmon__unixpath(char* dst, int size, const char* path)
     return dst;
 }
 
+#if DMON_OS_LINUX || DMON_OS_MACOS
 _DMON_PRIVATE char* dmon__strcat(char* dst, int dst_sz, const char* src)
 {
     int len = (int)strlen(dst);
     return dmon__strcpy(dst + len, dst_sz - len, src);
 }
+#endif // DMON_OS_LINUX || DMON_OS_MACOS
 
 // stretchy buffer: https://github.com/nothings/stb/blob/master/stretchy_buffer.h
 #define stb_sb_free(a)         ((a) ? DMON_FREE(stb__sbraw(a)),0 : 0)

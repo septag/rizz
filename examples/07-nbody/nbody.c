@@ -337,7 +337,6 @@ rizz_plugin_decl_event_handler(nbody, e)
     static float last_mouse_x = 0;
     float dt = (float)sx_tm_sec(the_core->delta_tick());
     const float rotate_speed = 5.0f;
-    const float move_speed = 3.0f;
 
     switch (e->type) {
     case RIZZ_APP_EVENTTYPE_SUSPENDED:

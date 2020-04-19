@@ -103,10 +103,10 @@ static bool init()
 
     // clang-format off
     sdf_vertex vertices[] = { 
-        {{-1.0f, -1.0f}}, 
-        {{1.0f,  -1.0f}},
-        {{1.0f,  1.0f}}, 
-        {{-1.0f, 1.0f}} 
+        {{{-1.0f, -1.0f}}}, 
+        {{{1.0f,  -1.0f}}},
+        {{{1.0f,  1.0f}}}, 
+        {{{-1.0f, 1.0f}}} 
     };
     // clang-format on
 
@@ -165,7 +165,6 @@ static void shutdown()
 static void update(float dt)
 {
     // update sphere position (bouncing animation)
-    static int phase = 0;
     const float max_height = 2.0f;
     float t = rizz_tween_update(&g_sdf.tween, dt, g_sdf.anim_duration);
     float z = sx_easein_bounce(sx_linearstep(t, 0, 0.5f));
@@ -301,7 +300,6 @@ rizz_plugin_decl_event_handler(sdf, e)
     static float last_mouse_x = 0;
     float dt = (float)sx_tm_sec(the_core->delta_tick());
     const float rotate_speed = 5.0f;
-    const float move_speed = 3.0f;
 
     switch (e->type) {
     case RIZZ_APP_EVENTTYPE_MOUSE_DOWN:

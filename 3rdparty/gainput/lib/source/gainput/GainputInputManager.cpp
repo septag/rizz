@@ -149,7 +149,7 @@ InputManager::GetTime() const
 	uint64_t t = ts.tv_sec*1000ul + ts.tv_nsec/1000000ul;
 	return t;
 #elif defined(GAINPUT_PLATFORM_WIN)
-	static LARGE_INTEGER perfFreq = { 0 };
+	static LARGE_INTEGER perfFreq = { { 0, 0 } };
 	if (perfFreq.QuadPart == 0)
 	{
 		QueryPerformanceFrequency(&perfFreq);

@@ -12,8 +12,6 @@ RIZZ_STATE static rizz_api_gfx* the_gfx;
 RIZZ_STATE static rizz_api_app* the_app;
 RIZZ_STATE static rizz_api_imgui* the_imgui;
 RIZZ_STATE static rizz_api_asset* the_asset;
-RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
-RIZZ_STATE static rizz_api_camera* the_camera;
 RIZZ_STATE static rizz_api_vfs* the_vfs;
 RIZZ_STATE static rizz_api_snd* the_sound;
 

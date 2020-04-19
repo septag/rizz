@@ -14,7 +14,10 @@
 #define FONS_REALLOC(alloc, ptr, sz) sx_realloc((const sx_alloc*)alloc, ptr, sz)
 #define FONS_FREE(alloc, ptr) sx_free((const sx_alloc*)alloc, ptr)
 #define FONTSTASH_IMPLEMENTATION
+SX_PRAGMA_DIAGNOSTIC_PUSH()
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG("-Wunused-function")
 #include "fontstash/fontstash.h"
+SX_PRAGMA_DIAGNOSTIC_POP()
 
 #include rizz_shader_path(shaders_h, font.vert.h)
 #include rizz_shader_path(shaders_h, font.frag.h)
@@ -223,7 +226,8 @@ static rizz_asset_load_data font__fons_on_prepare(const rizz_asset_load_params* 
                                                   .renderCreate = fons__create_fn,
                                                   .renderDelete = fons__delete_fn,
                                                   .renderDraw = fons__draw_fn,
-                                                  .renderUpdate = fons__update_fn });
+                                                  .renderUpdate = fons__update_fn,
+                                                  .renderResize = fons__resize_fn });
     if (!fons->ctx) {
         return (rizz_asset_load_data){ .obj = { 0 } };
     }
@@ -584,8 +588,8 @@ bool font__iter_next(const rizz_font* fnt, rizz_font_iter* iter, rizz_font_quad*
                               ._reserved = fiter.font };
 
     *quad =
-        (rizz_font_quad){ .v0 = { .pos = { fquad.x0, fquad.y0 }, .uv = { fquad.s0, fquad.t0 } },
-                          .v1 = { .pos = { fquad.x1, fquad.y1 }, .uv = { fquad.s1, fquad.t1 } } };
+        (rizz_font_quad){ .v0 = { .pos = {{ fquad.x0, fquad.y0 }}, .uv = {{ fquad.s0, fquad.t0 }} },
+                          .v1 = { .pos = {{ fquad.x1, fquad.y1 }}, .uv = {{ fquad.s1, fquad.t1 }} } };
 
     return r;
 }

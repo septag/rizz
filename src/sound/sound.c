@@ -49,6 +49,7 @@ RIZZ_STATE static const sx_alloc* g_snd_alloc;
 #define SOKOL_IMPL
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-parameter")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG("-Wunused-function")
 #include "sokol/sokol_audio.h"
 SX_PRAGMA_DIAGNOSTIC_POP()
 
@@ -1767,6 +1768,7 @@ static rizz_api_snd the__snd = { .queued = { .play = snd__cb_play,
                                  .play_clocked = snd__play_clocked,
                                  .stop = snd__stop,
                                  .stop_all = snd__stop_all,
+                                 .resume = snd__resume,
                                  .bus_set_max_lanes = snd__bus_set_max_lanes,
                                  .bus_stop = snd__bus_stop,
                                  .master_volume = snd__master_volume,

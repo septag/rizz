@@ -943,6 +943,7 @@ static inline sx_vec2 sprite__normalize_pos(const sx_vec2 pos_px, const sx_vec2 
     return sx_vec2f(n.x - 0.5f, 0.5f - n.y);    // flip-y and transform to (0.5f, 0.5f) space
 }
 
+#if 0
 static inline void sprite__calc_coords(sx_vec2* points, int num_points, const sx_vec2* points_px,
                                        const sx_vec2 size, const sx_vec2 origin)
 {
@@ -953,6 +954,7 @@ static inline void sprite__calc_coords(sx_vec2* points, int num_points, const sx
         points[i] = sx_vec2_mul(sx_vec2_sub(n, origin), size);    // offset by origin and resize
     }
 }
+#endif
 
 static void sprite__update_bounds(sprite__data* spr)
 {

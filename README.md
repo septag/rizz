@@ -88,9 +88,9 @@ But as the engine is in it's early age, the current platforms are built and test
 - **ENABLE_PROFILER** (default=0/debug, default=1/release)
 - **BUILD_EXAMPLES** (default=1, android/ios=0)
   Build example projects in `/examples` directory. 
-- **MSVC_COMPILE_SUMMARY** (default=0, windows/msvc=1)
-  On msvc compiler, enables `/d2cgsummary` flag for detailed compile stats. Read more about this 
-  [here](https://aras-p.info/blog/2017/10/23/Best-unknown-MSVC-flag-d2cgsummary/)
+- **MSVC_STATIC_RUNTIME** (default=0): MSVC specific. Compiles the _RELEASE_ config with '/MT' flag instead of '/MD'
+- **MSVC_MULTITHREADED_COMPILE** (default=1): MSVC specific. Turns on multi-threaded compilation (turns it off with Ninja)
+- **CLANG_ENABLE_PROFILER** (default=0): Clang specific. Turns on `-ftime-trace` flag. Only supported in clang-9 and higher
 
 ## Open-Source libraries used
 #### Primarily developed for rizz

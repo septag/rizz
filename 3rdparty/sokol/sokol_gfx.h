@@ -6931,7 +6931,7 @@ _SOKOL_PRIVATE sg_resource_state _sg_create_buffer(_sg_buffer_t* buf, const sg_b
         ID3D11Buffer_AddRef(buf->d3d11_buf);
     }
     else {
-        UINT bind_flags;
+        UINT bind_flags = 0;
         switch (buf->type) {
             case SG_BUFFERTYPE_VERTEXBUFFER:    bind_flags = D3D11_BIND_VERTEX_BUFFER; break;
             case SG_BUFFERTYPE_INDEXBUFFER:     bind_flags = D3D11_BIND_INDEX_BUFFER; break;
