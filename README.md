@@ -92,6 +92,10 @@ But as the engine is in it's early age, the current platforms are built and test
 - **MSVC_MULTITHREADED_COMPILE** (default=1): MSVC specific. Turns on multi-threaded compilation (turns it off with Ninja)
 - **CLANG_ENABLE_PROFILER** (default=0): Clang specific. Turns on `-ftime-trace` flag. Only supported in clang-9 and higher
 
+## Examples
+- Basic examples are included with this repo, in [examples](examples) directory. 
+- Space invaders clone - [link](https://github.com/septag/rizz-space-invaders)
+
 ## Open-Source libraries used
 #### Primarily developed for rizz
 - [sx](https://github.com/septag/sx): Portable base library
