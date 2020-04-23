@@ -550,8 +550,8 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
     char ext[32];
     sx_os_path_ext(ext, sizeof(ext), params->path);
     if (sx_strequalnocase(ext, ".basis")) {
-        if (basisut_validate_header(mem->data, mem->size)) {
-            bool r = basisut_image_info(mem->data, mem->size, info);
+        if (basisut_validate_header(mem->data, (uint32_t)mem->size)) {
+            bool r = basisut_image_info(mem->data, (uint32_t)mem->size, info);
             is_basis = true;
             sx_unused(r);
             sx_assert(r);
@@ -563,7 +563,7 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
     } else if (sx_strequalnocase(ext, ".dds") || sx_strequalnocase(ext, ".ktx")) {
         ddsktx_texture_info tc = { 0 };
         ddsktx_error err;
-        if (ddsktx_parse(&tc, mem->data, mem->size, &err)) {
+        if (ddsktx_parse(&tc, mem->data, (uint32_t)mem->size, &err)) {
             info->type = rizz__texture_get_type(&tc);
             info->format = rizz__texture_get_texture_format(tc.format);
             if (info->type == SG_IMAGETYPE_ARRAY) {
@@ -585,8 +585,8 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
     } else {
         // try to use stbi to load the image
         int comp;
-        if (stbi_info_from_memory(mem->data, mem->size, &info->width, &info->height, &comp)) {
-            sx_assert(!stbi_is_16_bit_from_memory(mem->data, mem->size) &&
+        if (stbi_info_from_memory(mem->data, (int)mem->size, &info->width, &info->height, &comp)) {
+            sx_assert(!stbi_is_16_bit_from_memory(mem->data, (int)mem->size) &&
                       "images with 16bit color channel are not supported");
             info->type = SG_IMAGETYPE_2D;
             info->format = SG_PIXELFORMAT_RGBA8;    // always convert to RGBA
@@ -729,7 +729,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
         sx_assert(tparams->fmt != _SG_PIXELFORMAT_DEFAULT);
         if (tparams->fmt != _SG_PIXELFORMAT_DEFAULT) {
             uint8_t* transcoder_obj_buffer = (uint8_t*)(desc + 1);
-            void* trans = basisut_start_transcoding(transcoder_obj_buffer, mem->data, mem->size);
+            void* trans = basisut_start_transcoding(transcoder_obj_buffer, mem->data, (uint32_t)mem->size);
             sx_assert(trans);
 
             // we have extra buffers for this particular type of file
@@ -749,7 +749,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
                     int dst_mip = mip - tparams->first_mip;
                     int mip_size = transcode_data->mip_size[dst_mip];
                     bool r = basisut_transcode_image_level(
-                        trans, mem->data, mem->size, 0, mip, transcode_buff,
+                        trans, mem->data, (uint32_t)mem->size, 0, mip, transcode_buff,
                         mip_size / bytes_per_block, transcode_data->fmt, 0);
                     sx_unused(r);
                     sx_assert(r && "basis transcode failed");
@@ -765,7 +765,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
     } else if (sx_strequalnocase(ext, ".dds") || sx_strequalnocase(ext, ".ktx")) {
         ddsktx_texture_info tc = { 0 };
         ddsktx_error err;
-        if (ddsktx_parse(&tc, mem->data, mem->size, &err)) {
+        if (ddsktx_parse(&tc, mem->data, (int)mem->size, &err)) {
             sx_assert(tc.num_mips <= SG_MAX_MIPMAPS);
 
             switch (tex->info.type) {
@@ -773,7 +773,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
                 for (int mip = tparams->first_mip; mip < tc.num_mips; mip++) {
                     int dst_mip = mip - tparams->first_mip;
                     ddsktx_sub_data sub_data;
-                    ddsktx_get_sub(&tc, &sub_data, mem->data, mem->size, 0, 0, mip);
+                    ddsktx_get_sub(&tc, &sub_data, mem->data, (int)mem->size, 0, 0, mip);
                     desc->content.subimage[0][dst_mip].ptr = sub_data.buff;
                     desc->content.subimage[0][dst_mip].size = sub_data.size_bytes;
                 }
@@ -783,7 +783,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
                     for (int mip = tparams->first_mip; mip < tc.num_mips; mip++) {
                         int dst_mip = mip - tparams->first_mip;
                         ddsktx_sub_data sub_data;
-                        ddsktx_get_sub(&tc, &sub_data, mem->data, mem->size, 0, face, mip);
+                        ddsktx_get_sub(&tc, &sub_data, mem->data, (int)mem->size, 0, face, mip);
                         desc->content.subimage[face][dst_mip].ptr = sub_data.buff;
                         desc->content.subimage[face][dst_mip].size = sub_data.size_bytes;
                     }
@@ -794,7 +794,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
                     for (int mip = tparams->first_mip; mip < tc.num_mips; mip++) {
                         int dst_mip = mip - tparams->first_mip;
                         ddsktx_sub_data sub_data;
-                        ddsktx_get_sub(&tc, &sub_data, mem->data, mem->size, 0, depth, mip);
+                        ddsktx_get_sub(&tc, &sub_data, mem->data, (int)mem->size, 0, depth, mip);
                         desc->content.subimage[depth][dst_mip].ptr = sub_data.buff;
                         desc->content.subimage[depth][dst_mip].size = sub_data.size_bytes;
                     }
@@ -805,7 +805,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
                     for (int mip = tparams->first_mip; mip < tc.num_mips; mip++) {
                         int dst_mip = mip - tparams->first_mip;
                         ddsktx_sub_data sub_data;
-                        ddsktx_get_sub(&tc, &sub_data, mem->data, mem->size, array, 0, mip);
+                        ddsktx_get_sub(&tc, &sub_data, mem->data, (int)mem->size, array, 0, mip);
                         desc->content.subimage[array][dst_mip].ptr = sub_data.buff;
                         desc->content.subimage[array][dst_mip].size = sub_data.size_bytes;
                     }
@@ -820,7 +820,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
         }
     } else {
         int w, h, comp;
-        stbi_uc* pixels = stbi_load_from_memory(mem->data, mem->size, &w, &h, &comp, 4);
+        stbi_uc* pixels = stbi_load_from_memory(mem->data, (int)mem->size, &w, &h, &comp, 4);
         if (pixels) {
             sx_assert(tex->info.width == w && tex->info.height == h);
             desc->content.subimage[0][0].ptr = pixels;

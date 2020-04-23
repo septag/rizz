@@ -279,7 +279,7 @@ typedef uint32_t rizz_vfs_flags;
 // if mem == NULL, then there was an error opening the file
 typedef void(rizz_vfs_async_read_cb)(const char* path, sx_mem_block* mem, void* user);
 // if bytes_written == -1, then there was an error writing to file
-typedef void(rizz_vfs_async_write_cb)(const char* path, int bytes_written, sx_mem_block* mem, void* user);
+typedef void(rizz_vfs_async_write_cb)(const char* path, int64_t bytes_written, sx_mem_block* mem, void* user);
 
 typedef void(rizz_vfs_async_modify_cb)(const char* path);
 
@@ -295,7 +295,7 @@ typedef struct rizz_api_vfs {
                         rizz_vfs_async_write_cb* write_fn, void* user);
 
     sx_mem_block* (*read)(const char* path, rizz_vfs_flags flags, const sx_alloc* alloc);
-    int (*write)(const char* path, const sx_mem_block* mem, rizz_vfs_flags flags);
+    int64_t (*write)(const char* path, const sx_mem_block* mem, rizz_vfs_flags flags);
 
     bool (*mkdir)(const char* path);
     bool (*is_dir)(const char* path);
@@ -602,9 +602,9 @@ typedef struct rizz_track_alloc_item {
 } rizz_track_alloc_item;
 
 typedef struct {
-    int offset;
-    int size;
-    int peak;
+    int64_t offset;
+    int64_t size;
+    int64_t peak;
 } rizz_linalloc_info;
 
 typedef struct {

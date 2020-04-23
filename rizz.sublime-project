@@ -1,0 +1,21 @@
+{
+	"folders": [
+		{
+			"path": ".",
+			"folder_exclude_patterns": [
+				"build*", 
+				".vscode", 
+				"bin", 
+				"tools",
+				"misc",
+				"scripts"
+			],
+			"file_exclude_patterns": [
+				".gitignore",
+				".travis.yml",
+				".gitmodules",
+				".clang-format"
+			]
+		},
+	]
+}

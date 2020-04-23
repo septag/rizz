@@ -314,15 +314,15 @@ static inline int rizz__asset_find_asset_mgr(uint32_t name_hash)
 
 bool rizz__asset_dump_unused(const char* filepath)
 {
-    sx_file_writer f;
-    if (sx_file_open_writer(&f, filepath, 0)) {
+    sx_file f;
+    if (sx_file_open(&f, filepath, SX_FILE_WRITE)) {
         for (int i = 0, c = sx_array_count(g_asset.resources); i < c; i++) {
             if (!g_asset.resources[i].used) {
                 sx_file_write_text(&f, g_asset.resources[i].path);
                 sx_file_write(&f, "\n", 1);
             }
         }
-        sx_file_close_writer(&f);
+        sx_file_close(&f);
         return true;
     } else {
         return false;

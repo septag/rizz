@@ -1006,7 +1006,7 @@ static rizz_asset_load_data atlas__on_prepare(const rizz_asset_load_params* para
         sx_out_of_memory();
         return (rizz_asset_load_data) {0};
     }
-    cj5_result jres = cj5_parse((const char*)mem->data, mem->size, tokens, 2048);
+    cj5_result jres = cj5_parse((const char*)mem->data, (int)mem->size, tokens, 2048);
     if (jres.error) {
         if (jres.error == CJ5_ERROR_OVERFLOW) {
             tokens = (cj5_token*)sx_realloc(g_spr.alloc, tokens, sizeof(cj5_token)*jres.num_tokens);
@@ -1014,7 +1014,7 @@ static rizz_asset_load_data atlas__on_prepare(const rizz_asset_load_params* para
                 sx_out_of_memory();
                 return (rizz_asset_load_data) { 0 };
             }
-            jres = cj5_parse((const char*)mem->data, mem->size, tokens, jres.num_tokens);
+            jres = cj5_parse((const char*)mem->data, (int)mem->size, tokens, jres.num_tokens);
             if (jres.error) {
                 rizz_log_warn("loading atlas '%s' failed: not a valid json file", params->path);
                 return (rizz_asset_load_data){ 0 };

@@ -53,7 +53,7 @@ typedef struct {
         rizz_vfs_async_write_cb* write_fn;
     };
     void* user;
-    int write_bytes;    // on writes, it's the number of written bytes. on reads, it's -1
+    int64_t write_bytes;    // on writes, it's the number of written bytes. on reads, it's -1
     char path[RIZZ_MAX_PATH];
 } rizz__vfs_async_response;
 
@@ -202,7 +202,7 @@ static sx_mem_block* rizz__vfs_read(const char* path, rizz_vfs_flags flags, cons
                                               : sx_file_load_text(alloc, resolved_path);
 }
 
-static int rizz__vfs_write(const char* path, const sx_mem_block* mem, rizz_vfs_flags flags)
+static int64_t rizz__vfs_write(const char* path, const sx_mem_block* mem, rizz_vfs_flags flags)
 {
 #if SX_PLATFORM_ANDROID
     if (sx_strnequal(path, g_vfs.assets_alias, g_vfs.assets_alias_len)) {
@@ -212,14 +212,14 @@ static int rizz__vfs_write(const char* path, const sx_mem_block* mem, rizz_vfs_f
 #endif
 
     char resolved_path[RIZZ_MAX_PATH];
-    sx_file_writer writer;
+    sx_file f;
 
     rizz__vfs_resolve_path(resolved_path, sizeof(resolved_path), path, flags);
-    bool r = sx_file_open_writer(&writer, resolved_path,
-                                 !(flags & RIZZ_VFS_FLAG_APPEND) ? 0 : SX_FILE_OPEN_APPEND);
+    bool r = sx_file_open(&f, resolved_path, SX_FILE_WRITE|SX_FILE_NOCACHE|
+                          ((flags & RIZZ_VFS_FLAG_APPEND) ? SX_FILE_APPEND : 0));
     if (r) {
-        int written = sx_file_write(&writer, mem->data, mem->size);
-        sx_file_close_writer(&writer);
+        int64_t written = sx_file_write(&f, mem->data, mem->size);
+        sx_file_close(&f);
         return written;
     } else {
         return -1;
@@ -254,7 +254,7 @@ static int rizz__vfs_worker(void* user1, void* user2)
 
             case VFS_COMMAND_WRITE: {
                 res.write_fn = req.write_fn;
-                int written = rizz__vfs_write(req.path, req.write_mem, req.flags);
+                int64_t written = rizz__vfs_write(req.path, req.write_mem, req.flags);
 
                 if (written > 0) {
                     res.code = VFS_RESPONSE_WRITE_OK;

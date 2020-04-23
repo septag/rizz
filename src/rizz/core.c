@@ -18,7 +18,7 @@
 #include "sx/string.h"
 #include "sx/threads.h"
 #include "sx/timer.h"
-#include "sx/virtual-alloc.h"
+#include "sx/vmem.h"
 
 #include <alloca.h>
 #include <stdio.h>
@@ -73,8 +73,10 @@ static const char* k__memid_names[_RIZZ_MEMID_COUNT] = { "Core",          //
 
 
 typedef struct rizz__core_tmpalloc {
+    sx_alloc alloc;
+    sx_vmem_context vmem;
     sx_stackalloc stack_alloc;
-    int* offset_stack;    // sx_array - keep offsets in a stack for push()/pop()
+    size_t* offset_stack;    // sx_array - keep offsets in a stack for push()/pop()
 } rizz__core_tmpalloc;
 
 typedef struct rizz__core_cmd {
@@ -789,6 +791,25 @@ static inline void rizz__atomic_max(sx_atomic_size* _max, intptr_t val)
     }
 }
 
+static void* rizz__tmp_alloc_cb(void* ptr, size_t size, uint32_t align, const char* file,
+                                  const char* func, uint32_t line, void* user_data)
+{
+    rizz__core_tmpalloc* alloc = user_data;
+    size_t raw_size = sx_stackalloc_real_alloc_size(size, align);
+    if ((raw_size + alloc->stack_alloc.offset) > alloc->stack_alloc.size) {
+        // maximum reached, extend it by allocating new pages
+        size_t size_needed = raw_size + alloc->stack_alloc.offset - alloc->stack_alloc.size;
+        int num_pages = (int)(size_needed + alloc->vmem.page_size - 1) / alloc->vmem.page_size;
+        if (!sx_vmem_commit_pages(&alloc->vmem, alloc->vmem.num_pages, num_pages)) {
+            sx_out_of_memory();
+            return NULL;
+        }
+        alloc->stack_alloc.size = sx_vmem_commit_size(&alloc->vmem);
+    }
+
+    return sx__realloc(&alloc->stack_alloc.alloc, ptr, size, align, file, func, line);
+}
+
 static void* rizz__proxy_alloc_cb(void* ptr, size_t size, uint32_t align, const char* file,
                                   const char* func, uint32_t line, void* user_data)
 {
@@ -1047,25 +1068,33 @@ bool rizz__core_init(const rizz_config* conf)
     rizz__log_info("(init) vfs");
 
     // Temp allocators
-    g_core.tmp_allocs = sx_malloc(alloc, sizeof(rizz__core_tmpalloc) * g_core.num_threads);
-    if (!g_core.tmp_allocs) {
-        sx_out_of_memory();
-        return false;
-    }
-    int tmp_size = (int)sx_align_mask(
-        conf->tmp_mem_max > 0 ? conf->tmp_mem_max * 1024 : DEFAULT_TMP_SIZE, sx_os_pagesz() - 1);
-
-    for (int i = 0; i < g_core.num_threads; i++) {
-        rizz__core_tmpalloc* t = &g_core.tmp_allocs[i];
-        void* mem = sx_virtual_commit(sx_virtual_reserve(tmp_size), tmp_size);
-        if (!mem) {
+    {
+        g_core.tmp_allocs = sx_malloc(alloc, sizeof(rizz__core_tmpalloc) * g_core.num_threads);
+        if (!g_core.tmp_allocs) {
             sx_out_of_memory();
             return false;
         }
-        sx_stackalloc_init(&t->stack_alloc, mem, tmp_size);
-        t->offset_stack = NULL;
+        size_t page_sz = sx_os_pagesz();
+        size_t tmp_size = sx_align_mask(
+            conf->tmp_mem_max > 0 ? conf->tmp_mem_max * 1024 : DEFAULT_TMP_SIZE, page_sz - 1);
+        int num_tmp_pages =  sx_vmem_get_needed_pages(tmp_size);
+
+        for (int i = 0; i < g_core.num_threads; i++) {
+            rizz__core_tmpalloc* t = &g_core.tmp_allocs[i];
+            t->alloc = (sx_alloc) {
+                .alloc_cb = rizz__tmp_alloc_cb,
+                .user_data = t
+            };
+            if (!sx_vmem_init(&t->vmem, 0, num_tmp_pages)) {
+                sx_out_of_memory();
+                return false;
+            }
+            sx_vmem_commit_page(&t->vmem, 0);
+            sx_stackalloc_init(&t->stack_alloc, t->vmem.ptr, page_sz);
+            t->offset_stack = NULL;
+        }
+        rizz__log_info("(init) temp memory: %dx%d kb", g_core.num_threads, tmp_size / 1024);
     }
-    rizz__log_info("(init) temp memory: %dx%d kb", g_core.num_threads, tmp_size / 1024);
 
     // job dispatcher
     g_core.jobs = sx_job_create_context(
@@ -1232,9 +1261,7 @@ void rizz__core_release()
 
     if (g_core.tmp_allocs) {
         for (int i = 0; i < g_core.num_threads; i++) {
-            void* mem = g_core.tmp_allocs[i].stack_alloc.ptr;
-            if (mem)
-                sx_virtual_release(mem, g_core.tmp_allocs[i].stack_alloc.size);
+            sx_vmem_release(&g_core.tmp_allocs[i].vmem);
             sx_array_free(alloc, g_core.tmp_allocs[i].offset_stack);
         }
         sx_free(alloc, g_core.tmp_allocs);
@@ -1300,8 +1327,12 @@ void rizz__core_frame()
     rizz__gfx_trace_reset_frame_stats();
 
     // reset temp allocators
+    size_t page_sz = sx_os_pagesz();
     for (int i = 0, c = g_core.num_threads; i < c; i++) {
-        sx_stackalloc_reset(&g_core.tmp_allocs[i].stack_alloc);
+        rizz__core_tmpalloc* t = &g_core.tmp_allocs[i];
+        sx_vmem_free_pages(&t->vmem, 1, t->vmem.num_pages - 1);
+        sx_stackalloc_reset(&t->stack_alloc);
+        t->stack_alloc.size = page_sz;
     }
 
     // update internal sub-systems
@@ -1335,14 +1366,14 @@ static const sx_alloc* rizz__core_tmp_alloc_push()
 {
     rizz__core_tmpalloc* talloc = &g_core.tmp_allocs[sx_job_thread_index(g_core.jobs)];
     sx_array_push(rizz__alloc(RIZZ_MEMID_CORE), talloc->offset_stack, talloc->stack_alloc.offset);
-    return &talloc->stack_alloc.alloc;
+    return &talloc->alloc;
 }
 
 static void rizz__core_tmp_alloc_pop()
 {
     rizz__core_tmpalloc* talloc = &g_core.tmp_allocs[sx_job_thread_index(g_core.jobs)];
     if (sx_array_count(talloc->offset_stack)) {
-        int last_offset = sx_array_last(talloc->offset_stack);
+        size_t last_offset = sx_array_last(talloc->offset_stack);
         sx_array_pop_last(talloc->offset_stack);
         talloc->stack_alloc.offset = last_offset;
         talloc->stack_alloc.last_ptr_offset = 0;

@@ -335,7 +335,7 @@ static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params
         drwav_uninit(&wav);
     } else if (sx_strequalnocase(ext, ".ogg")) {
         int error;
-        stb_vorbis* vorbis = stb_vorbis_open_memory(mem->data, mem->size, &error, NULL);
+        stb_vorbis* vorbis = stb_vorbis_open_memory(mem->data, (int)mem->size, &error, NULL);
         if (!vorbis) {
             rizz_log_warn("loading sound '%s' failed: %s", snd__vorbis_get_error(error));
             return (rizz_asset_load_data){ 0 };
@@ -465,7 +465,7 @@ static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_param
         float* tmp_buff = sx_malloc(tmp_alloc, sizeof(float) * 4096);
 
         stb_vorbis* vorbis =
-            stb_vorbis_open_memory(mem->data, mem->size, &vorbis_err,
+            stb_vorbis_open_memory(mem->data, (int)mem->size, &vorbis_err,
                                    &(stb_vorbis_alloc){
                                        .alloc_buffer = vorbis_buff,
                                        .alloc_buffer_length_in_bytes = vorbis_buffer_size,

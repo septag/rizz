@@ -119,9 +119,11 @@ static void fons__draw_fn(void* user_ptr, const float* poss, const float* tcoord
     sx_assert(verts);
 
     sx_assert(nverts % 3 == 0);
+    int ntris = nverts / 3;
+
     // flip the orders of each triangle, because Y is reversed (thus the triangle ordering)
     // so the flip the triangle to properly cull with BACK
-    for (int i = 0; i < nverts; i++) {
+    for (int i = 0; i < ntris; i++) {
         int vindex = i * 3;
 
         int findex = vindex * 2;
@@ -255,7 +257,7 @@ static bool font__fons_on_load(rizz_asset_load_data* data, const rizz_asset_load
 
     sx_memcpy(data->user, mem->data, mem->size);
 
-    int fons_id = fonsAddFontMem(fons->ctx, name, data->user, mem->size, 1);
+    int fons_id = fonsAddFontMem(fons->ctx, name, data->user, (int)mem->size, 1);
     if (fons_id == FONS_INVALID) {
         rizz_log_warn("loading font '%s' failed: invalid TTF file", params->path);
         return false;
