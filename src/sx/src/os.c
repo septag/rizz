@@ -390,7 +390,7 @@ sx_file_info sx_os_stat(const char* filepath)
     tm.HighPart = fad.ftLastWriteTime.dwHighDateTime;
     tm.LowPart = fad.ftLastWriteTime.dwLowDateTime;
     info.last_modified = (uint64_t)(tm.QuadPart / 10000000 - 11644473600LL);
-#else
+#else // if SX_PLATFORM_WINDOWS
     struct stat st;
     int32_t result = stat(filepath, &st);
     if (0 != result)
@@ -406,7 +406,7 @@ sx_file_info sx_os_stat(const char* filepath)
 #    else
     info.last_modified = st.st_mtim.tv_sec;
 #    endif
-#endif    // SX_COMPILER_MSVC
+#endif    // else SX_PLATFORM_WINDOWS
 
     return info;
 }

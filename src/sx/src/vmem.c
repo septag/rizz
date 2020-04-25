@@ -109,7 +109,7 @@ void* sx_vmem_commit_pages(sx_vmem_context* vmem, int start_page_id, int num_pag
     }
 
     void* ptr = (uint8_t*)vmem->ptr + vmem->page_size * start_page_id;
-    if (!VirtualAlloc(ptr, vmem->page_size*num_pages, MEM_COMMIT, PAGE_READWRITE)) {
+    if (!VirtualAlloc(ptr, (size_t)vmem->page_size*(size_t)num_pages, MEM_COMMIT, PAGE_READWRITE)) {
         return NULL;
     }
     vmem->num_pages += num_pages;
@@ -133,6 +133,109 @@ void sx_vmem_free_pages(sx_vmem_context* vmem, int start_page_id, int num_pages)
     }
 }
 
+#elif SX_PLATFORM_POSIX // if SX_PLATFORM_WINDOWS
+
+bool sx_vmem_init(sx_vmem_context* vmem, sx_vmem_flags flags, int max_pages)
+{
+    sx_assert(vmem);
+    sx_assert(max_pages > 0);
+    sx_unused(flags);
+
+    vmem->page_size = (int)sx_os_pagesz();
+    vmem->num_pages = 0;
+    vmem->max_pages = max_pages;
+    vmem->ptr = mmap(NULL, (size_t)vmem->page_size * (size_t)max_pages, PROT_NONE,
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (vmem->ptr == MAP_FAILED) {
+        vmem->ptr = NULL;
+        return false;
+    }
+
+    return true;
+}
+
+void sx_vmem_release(sx_vmem_context* vmem)
+{
+    sx_assert(vmem);
+
+    if (vmem->ptr) {
+        munmap(vmem->ptr, (size_t)vmem->page_size * (size_t)vmem->max_pages);
+    }
+    vmem->num_pages = vmem->max_pages = 0;
+}
+
+void* sx_vmem_commit_page(sx_vmem_context* vmem, int page_id)
+{
+    sx_assert(vmem);
+    sx_assert(vmem->ptr);
+    
+    if (page_id >= vmem->max_pages || vmem->num_pages == vmem->max_pages) {
+        return NULL;
+    }
+
+    void* ptr = (uint8_t*)vmem->ptr + vmem->page_size * page_id;
+    if (mmap(ptr, vmem->page_size, PROT_READ | PROT_WRITE,
+             MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) == MAP_FAILED) {
+        return NULL;
+    }
+
+    ++vmem->num_pages;
+    return ptr;
+}
+
+void sx_vmem_free_page(sx_vmem_context* vmem, int page_id)
+{
+    sx_assert(vmem);
+    sx_assert(vmem->ptr);
+    sx_assert(page_id < vmem->max_pages);
+    sx_assert(vmem->num_pages > 0);
+
+    void* ptr = (uint8_t*)vmem->ptr + vmem->page_size * page_id;
+    int r = munmap(ptr, vmem->page_size);
+    sx_unused(r);
+    sx_assert(r == 0);
+    --vmem->num_pages;
+}
+
+void* sx_vmem_commit_pages(sx_vmem_context* vmem, int start_page_id, int num_pages)
+{
+    sx_assert(vmem);
+    sx_assert(vmem->ptr);
+    
+    if ((start_page_id + num_pages) > vmem->max_pages ||
+        (vmem->num_pages + num_pages) > vmem->max_pages)
+    {
+        return NULL;
+    }
+
+    void* ptr = (uint8_t*)vmem->ptr + vmem->page_size * start_page_id;
+    if (mmap(ptr, (size_t)vmem->page_size*(size_t)num_pages, PROT_READ | PROT_WRITE,
+             MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) == MAP_FAILED) {
+        return NULL;
+    }
+
+    vmem->num_pages += num_pages;
+    return ptr;
+}
+
+void sx_vmem_free_pages(sx_vmem_context* vmem, int start_page_id, int num_pages)
+{
+    sx_assert(vmem);
+    sx_assert(vmem->ptr);
+    sx_assert((start_page_id + num_pages) <= vmem->max_pages);
+    sx_assert(vmem->num_pages >= num_pages);
+
+    if (num_pages > 0) {
+        void* ptr = (uint8_t*)vmem->ptr + vmem->page_size * start_page_id;
+        int r = munmap(ptr, (size_t)vmem->page_size*(size_t)num_pages);
+        sx_unused(r);
+        sx_assert(r == 0);
+        vmem->num_pages -= num_pages;
+    }
+}
+
+#endif // elif SX_PLATFORM_POSIX
+
 void* sx_vmem_get_page(sx_vmem_context* vmem, int page_id)
 {
     sx_assert(vmem);
@@ -146,6 +249,3 @@ size_t sx_vmem_commit_size(sx_vmem_context* vmem)
 {
     return (size_t)vmem->page_size * (size_t)vmem->num_pages;
 }
-
-
-#endif // SX_PLATFORM_WINDOWS
