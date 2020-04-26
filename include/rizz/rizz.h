@@ -708,6 +708,10 @@ typedef struct rizz_api_core {
     void (*end_profile_sample)();
 
     void (*register_console_command)(const char* cmd, rizz_core_cmd_cb* callback);
+
+    // debugging
+    void (*show_graphics_debugger)(bool* p_open);
+    void (*show_memory_debugger)(bool* p_open);
 } rizz_api_core;
 
 // clang-format off
@@ -912,18 +916,31 @@ typedef struct rizz_texture {
     rizz_texture_info info;
 } rizz_texture;
 
-typedef struct rizz_gfx_trace_info {
+// per-frame stats
+typedef enum rizz_gfx_perframe_trace_zone {
+    RIZZ_GFX_TRACE_COMMON = 0,
+    RIZZ_GFX_TRACE_IMGUI,
+    _RIZZ_GFX_TRACE_COUNT
+} rizz_gfx_perframe_trace_zone;
+
+typedef struct rizz_gfx_perframe_trace_info {
     int num_draws;
     int num_instances;
+    int num_apply_pipelines;
+    int num_apply_passes;
     int num_elements;
+} rizz_gfx_perframe_trace_info;
+
+typedef struct rizz_gfx_trace_info {
+    // per-frame stats
+    rizz_gfx_perframe_trace_info pf[_RIZZ_GFX_TRACE_COUNT];
+
+    // persistent stats
     int num_pipelines;
     int num_shaders;
     int num_passes;
     int num_images;
     int num_buffers;
-
-    int num_apply_pipelines;
-    int num_apply_passes;
 
     int64_t texture_size;
     int64_t texture_peak;
@@ -933,6 +950,7 @@ typedef struct rizz_gfx_trace_info {
 
     int64_t render_target_size;
     int64_t render_target_peak;
+    // end: persistent stats
 } rizz_gfx_trace_info;
 
 typedef struct sjson_context sjson_context;    // shader_parse_reflection

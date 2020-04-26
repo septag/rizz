@@ -5,7 +5,9 @@
 #include "internal.h"
 
 #include "rizz/imgui.h"
+#include "rizz/imgui-extra.h"
 
+#include "rizz/rizz.h"
 #include "sx/allocator.h"
 #include "sx/array.h"
 #include "sx/atomic.h"
@@ -130,6 +132,11 @@ typedef struct rizz__log_pipe {
     sx_strpool* strpool;     //
 } rizz__log_pipe;
 
+typedef struct rizz__show_debugger_deferred {
+    bool show;
+    bool* p_open;
+} rizz__show_debugger_deferred;
+
 typedef struct rizz__core {
     const sx_alloc* heap_alloc;
     sx_alloc heap_proxy_alloc;
@@ -146,6 +153,7 @@ typedef struct rizz__core {
     int num_threads;
 
     int64_t frame_idx;
+    int64_t frame_stats_reset;  // frame index that draw stats was reset
     uint64_t elapsed_tick;
     uint64_t delta_tick;
     uint64_t last_tick;
@@ -165,6 +173,9 @@ typedef struct rizz__core {
     rizz__log_backend* log_backends;    // sx_array
     rizz__tls_var* tls_vars;            // sx_array
     sx_atomic_int num_log_backends;
+
+    rizz__show_debugger_deferred show_memory;
+    rizz__show_debugger_deferred show_graphics;
 } rizz__core;
 
 #define SORT_NAME log__sort_entries
@@ -180,7 +191,6 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG("-Wshorten-64-to-32")
 SX_PRAGMA_DIAGNOSTIC_POP()
 
 static rizz__core g_core;
-static rizz_api_imgui* the_imgui;
 
 static const sx_alloc* rizz__alloc(rizz_mem_id id)
 {
@@ -798,13 +808,19 @@ static void* rizz__tmp_alloc_cb(void* ptr, size_t size, uint32_t align, const ch
     size_t raw_size = sx_stackalloc_real_alloc_size(size, align);
     if ((raw_size + alloc->stack_alloc.offset) > alloc->stack_alloc.size) {
         // maximum reached, extend it by allocating new pages
-        size_t size_needed = raw_size + alloc->stack_alloc.offset - alloc->stack_alloc.size;
-        int num_pages = (int)(size_needed + alloc->vmem.page_size - 1) / alloc->vmem.page_size;
-        if (!sx_vmem_commit_pages(&alloc->vmem, alloc->vmem.num_pages, num_pages)) {
+        // size_t size_needed = raw_size + alloc->stack_alloc.offset - alloc->stack_alloc.size;
+        // int num_pages = (int)(size_needed + alloc->vmem.page_size - 1) / alloc->vmem.page_size;
+        int num_pages = (int)(raw_size + alloc->vmem.page_size - 1) / alloc->vmem.page_size;
+        void* page_ptr = sx_vmem_commit_pages(&alloc->vmem, alloc->vmem.num_pages, num_pages);
+        if (page_ptr == NULL) {
             sx_out_of_memory();
             return NULL;
         }
         alloc->stack_alloc.size = sx_vmem_commit_size(&alloc->vmem);
+        // align offset to nearest page
+        size_t new_offset = (uintptr_t)page_ptr - (uintptr_t)alloc->vmem.ptr;
+        sx_assert(new_offset % alloc->vmem.page_size == 0);
+        alloc->stack_alloc.offset = new_offset;
     }
 
     return sx__realloc(&alloc->stack_alloc.alloc, ptr, size, align, file, func, line);
@@ -1321,11 +1337,6 @@ void rizz__core_frame()
         g_core.fps_frame = (float)fps;
     }
 
-    // submit render commands to the gpu
-    // currently, we are submitting the calls from the previous frame
-    // because submitting commands
-    rizz__gfx_trace_reset_frame_stats();
-
     // reset temp allocators
     size_t page_sz = sx_os_pagesz();
     for (int i = 0, c = g_core.num_threads; i < c; i++) {
@@ -1334,6 +1345,8 @@ void rizz__core_frame()
         sx_stackalloc_reset(&t->stack_alloc);
         t->stack_alloc.size = page_sz;
     }
+
+    rizz__gfx_trace_reset_frame_stats(RIZZ_GFX_TRACE_COMMON);
 
     // update internal sub-systems
     rizz__http_update();
@@ -1352,14 +1365,27 @@ void rizz__core_frame()
     rizz__log_update();
 
     // draw imgui stuff
-    the_imgui = the__plugin.get_api_byname("imgui", 0);
+    rizz_api_imgui* the_imgui = the__plugin.get_api_byname("imgui", 0);
     if (the_imgui) {
+        rizz_api_imgui_extra* the_imguix = the__plugin.get_api_byname("imgui_extra", 0);
+        if (g_core.show_memory.show) {
+            rizz_mem_info minfo;
+            the__core.get_mem_info(&minfo);
+            the_imguix->memory_debugger(&minfo, g_core.show_memory.p_open);
+            g_core.show_memory.show = false;
+        }
+        if (g_core.show_graphics.show) {
+            the_imguix->graphics_debugger(the__gfx.trace_info(), g_core.show_graphics.p_open);
+            g_core.show_graphics.show = false;
+        }
+
+        rizz__gfx_trace_reset_frame_stats(RIZZ_GFX_TRACE_IMGUI);
         the_imgui->Render();
     }
 
     rizz__gfx_commit_gpu();
-
     ++g_core.frame_idx;
+
 }
 
 static const sx_alloc* rizz__core_tmp_alloc_push()
@@ -1542,6 +1568,18 @@ static rizz_version rizz__version(void)
     return g_core.ver;
 }
 
+static void rizz__show_graphics_debugger(bool* p_open) 
+{
+    g_core.show_graphics.show = true;
+    g_core.show_graphics.p_open = p_open;
+}
+
+static void rizz__show_memory_debugger(bool* p_open)
+{
+    g_core.show_memory.show = true;
+    g_core.show_memory.p_open = p_open;
+}
+
 // Core API
 rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .tmp_alloc_push = rizz__core_tmp_alloc_push,
@@ -1580,4 +1618,6 @@ rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .print_warning = rizz__print_warning,
                             .begin_profile_sample = rizz__begin_profile_sample,
                             .end_profile_sample = rizz__end_profile_sample,
-                            .register_console_command = rizz__core_register_console_command };
+                            .register_console_command = rizz__core_register_console_command,
+                            .show_graphics_debugger = rizz__show_graphics_debugger,
+                            .show_memory_debugger = rizz__show_memory_debugger };

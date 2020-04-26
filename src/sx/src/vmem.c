@@ -174,8 +174,8 @@ void* sx_vmem_commit_page(sx_vmem_context* vmem, int page_id)
     }
 
     void* ptr = (uint8_t*)vmem->ptr + vmem->page_size * page_id;
-    if (mmap(ptr, vmem->page_size, PROT_READ | PROT_WRITE,
-             MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) == MAP_FAILED) {
+    if (mprotect(ptr, vmem->page_size, PROT_READ | PROT_WRITE) != 0) {
+        sx_assert_rel(0);
         return NULL;
     }
 
@@ -192,6 +192,7 @@ void sx_vmem_free_page(sx_vmem_context* vmem, int page_id)
 
     void* ptr = (uint8_t*)vmem->ptr + vmem->page_size * page_id;
     int r = munmap(ptr, vmem->page_size);
+    madvise(ptr, vmem->page_size, MADV_DONTNEED);
     sx_unused(r);
     sx_assert(r == 0);
     --vmem->num_pages;
@@ -209,8 +210,8 @@ void* sx_vmem_commit_pages(sx_vmem_context* vmem, int start_page_id, int num_pag
     }
 
     void* ptr = (uint8_t*)vmem->ptr + vmem->page_size * start_page_id;
-    if (mmap(ptr, (size_t)vmem->page_size*(size_t)num_pages, PROT_READ | PROT_WRITE,
-             MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) == MAP_FAILED) {
+    if (mprotect(ptr, (size_t)vmem->page_size*(size_t)num_pages, PROT_READ | PROT_WRITE) != 0) {
+        sx_assert_rel(0);
         return NULL;
     }
 
@@ -227,7 +228,7 @@ void sx_vmem_free_pages(sx_vmem_context* vmem, int start_page_id, int num_pages)
 
     if (num_pages > 0) {
         void* ptr = (uint8_t*)vmem->ptr + vmem->page_size * start_page_id;
-        int r = munmap(ptr, (size_t)vmem->page_size*(size_t)num_pages);
+        int r = madvise(ptr, (size_t)vmem->page_size*(size_t)num_pages, MADV_DONTNEED);
         sx_unused(r);
         sx_assert(r == 0);
         vmem->num_pages -= num_pages;

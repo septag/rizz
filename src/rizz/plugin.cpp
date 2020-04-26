@@ -23,6 +23,7 @@
 
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG("-Wunused-variable")
 #    include "../../3rdparty/cr/cr.h"
 SX_PRAGMA_DIAGNOSTIC_POP()
 #else

@@ -1214,12 +1214,13 @@ static void imgui__graphics_debugger(const rizz_gfx_trace_info* info, bool* p_op
     if (the__imgui.Begin("Graphics Debugger", p_open, 0)) {
         if (the__imgui.BeginTabBar("#gfx_debugger_tabs", 0)) {
             if (the__imgui.BeginTabItem("General", NULL, 0)) {
-                the__imgui.LabelText("Draws", "%d", info->num_draws);
-                the__imgui.LabelText("Instances", "%d", info->num_instances);
-                the__imgui.LabelText("Elements", "%d", info->num_elements);
+                const rizz_gfx_perframe_trace_info* pf = &info->pf[RIZZ_GFX_TRACE_COMMON];
+                the__imgui.LabelText("Draws", "%d", pf->num_draws);
+                the__imgui.LabelText("Instances", "%d", pf->num_instances);
+                the__imgui.LabelText("Elements", "%d", pf->num_elements);
                 the__imgui.Separator();
-                the__imgui.LabelText("Active Pipelines", "%d", info->num_apply_pipelines);
-                the__imgui.LabelText("Active Passes", "%d", info->num_apply_passes);
+                the__imgui.LabelText("Active Pipelines", "%d", pf->num_apply_pipelines);
+                the__imgui.LabelText("Active Passes", "%d", pf->num_apply_passes);
                 the__imgui.Separator();
                 the__imgui.LabelText("Pipelines", "%d", info->num_pipelines);
                 the__imgui.LabelText("Shaders", "%d", info->num_shaders);
@@ -1283,6 +1284,14 @@ static void imgui__graphics_debugger(const rizz_gfx_trace_info* info, bool* p_op
             }
             if (the__imgui.BeginTabItem("Caps", NULL, 0)) {
                 sg_imgui_draw_capabilities_content(&g_imgui.sg_imgui);
+                the__imgui.EndTabItem();
+            }
+
+            if (the__imgui.BeginTabItem("ImGui", NULL, 0)) {
+                const rizz_gfx_perframe_trace_info* pf = &info->pf[RIZZ_GFX_TRACE_IMGUI];
+                the__imgui.LabelText("Draws", "%d", pf->num_draws);
+                the__imgui.LabelText("Instances", "%d", pf->num_instances);
+                the__imgui.LabelText("Elements", "%d", pf->num_elements);
                 the__imgui.EndTabItem();
             }
 

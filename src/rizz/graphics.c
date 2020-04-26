@@ -263,6 +263,7 @@ typedef struct rizz__trace_gfx {
     rizz_gfx_trace_info t;
     sx_mem_writer make_cmds_writer;
     sg_trace_hooks hooks;
+    rizz_gfx_perframe_trace_info* active_trace;
 } rizz__trace_gfx;
 
 typedef struct rizz__gfx {
@@ -855,9 +856,6 @@ static void rizz__texture_on_finalize(rizz_asset_load_data* data,
     }
 
     sx_free(g_gfx_alloc, data->user);
-
-    g_gfx.trace.t.texture_size += tex->info.mem_size_bytes;
-    g_gfx.trace.t.texture_peak = sx_max(g_gfx.trace.t.texture_peak, g_gfx.trace.t.texture_size);
 }
 
 static void rizz__texture_on_reload(rizz_asset handle, rizz_asset_obj prev_obj,
@@ -2036,18 +2034,22 @@ static void rizz__trace_make_image(const sg_image_desc* desc, sg_image result, v
         sx_mem_write(&g_gfx.trace.make_cmds_writer, desc, sizeof(sg_image_desc));
     }
 
+    int bytesize = _sg_is_valid_rendertarget_depth_format(desc->pixel_format)
+                        ? 4
+                        : _sg_pixelformat_bytesize(desc->pixel_format);
+    int pixels = desc->width * desc->height * desc->layers;
+    int64_t size = (int64_t)pixels * bytesize;
+
     if (desc->render_target && _sg_is_valid_rendertarget_color_format(desc->pixel_format) &&
         _sg_is_valid_rendertarget_depth_format(desc->pixel_format)) {
         sx_assert(desc->num_mipmaps == 1);
 
-        int bytesize = _sg_is_valid_rendertarget_depth_format(desc->pixel_format)
-                           ? 4
-                           : _sg_pixelformat_bytesize(desc->pixel_format);
-        int pixels = desc->width * desc->height * desc->layers;
-        int64_t size = (int64_t)pixels * bytesize;
         g_gfx.trace.t.render_target_size += size;
         g_gfx.trace.t.render_target_peak =
             sx_max(g_gfx.trace.t.render_target_peak, g_gfx.trace.t.render_target_size);
+    } else {
+        g_gfx.trace.t.texture_size += size;
+        g_gfx.trace.t.texture_peak = sx_max(g_gfx.trace.t.texture_peak, g_gfx.trace.t.texture_size);
     }
 
     ++g_gfx.trace.t.num_images;
@@ -2148,7 +2150,7 @@ static void rizz__trace_begin_pass(sg_pass pass, const sg_pass_action* pass_acti
     sx_unused(user_data);
     sx_unused(pass);
     sx_unused(pass_action);
-    ++g_gfx.trace.t.num_apply_passes;
+    ++g_gfx.trace.active_trace->num_apply_passes;
 }
 
 static void rizz__trace_begin_default_pass(const sg_pass_action* pass_action, int width, int height,
@@ -2158,14 +2160,14 @@ static void rizz__trace_begin_default_pass(const sg_pass_action* pass_action, in
     sx_unused(width);
     sx_unused(height);
     sx_unused(user_data);
-    ++g_gfx.trace.t.num_apply_passes;
+    ++g_gfx.trace.active_trace->num_apply_passes;
 }
 
 static void rizz__trace_apply_pipeline(sg_pipeline pip, void* user_data)
 {
     sx_unused(user_data);
     sx_unused(pip);
-    ++g_gfx.trace.t.num_apply_pipelines;
+    ++g_gfx.trace.active_trace->num_apply_pipelines;
 }
 
 static void rizz__trace_draw(int base_element, int num_elements, int num_instances, void* user_data)
@@ -2173,18 +2175,22 @@ static void rizz__trace_draw(int base_element, int num_elements, int num_instanc
     sx_unused(user_data);
     sx_unused(base_element);
 
-    ++g_gfx.trace.t.num_draws;
-    g_gfx.trace.t.num_instances += num_instances;
-    g_gfx.trace.t.num_elements += num_elements;
+    ++g_gfx.trace.active_trace->num_draws;
+    g_gfx.trace.active_trace->num_instances += num_instances;
+    g_gfx.trace.active_trace->num_elements += num_elements;
 }
 
-void rizz__gfx_trace_reset_frame_stats()
+void rizz__gfx_trace_reset_frame_stats(rizz_gfx_perframe_trace_zone zone)
 {
-    g_gfx.trace.t.num_draws = 0;
-    g_gfx.trace.t.num_instances = 0;
-    g_gfx.trace.t.num_elements = 0;
-    g_gfx.trace.t.num_apply_pipelines = 0;
-    g_gfx.trace.t.num_apply_passes = 0;
+    sx_assert(zone < _RIZZ_GFX_TRACE_COUNT);
+    rizz_gfx_perframe_trace_info* pf = &g_gfx.trace.t.pf[zone];
+    pf->num_draws = 0;
+    pf->num_instances = 0;
+    pf->num_elements = 0;
+    pf->num_apply_pipelines = 0;
+    pf->num_apply_passes = 0;
+
+    g_gfx.trace.active_trace = pf;
 }
 
 static void rizz__gfx_collect_garbage(int64_t frame)
@@ -2310,6 +2316,7 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
     g_gfx_alloc = alloc;
     sg_setup(desc);
     g_gfx.enable_profile = enable_profile;
+    g_gfx.trace.active_trace = &g_gfx.trace.t.pf[RIZZ_GFX_TRACE_COMMON];
 
     // command buffers
     g_gfx.cmd_buffers_feed = rizz__gfx_create_command_buffers(alloc);
@@ -3169,6 +3176,7 @@ static uint8_t* rizz__cb_run_append_buffer(uint8_t* buff)
     sx_assert(stream_index < sx_array_count(g_gfx.stream_buffs));
     sx_assert(g_gfx.stream_buffs);
     rizz__gfx_stream_buffer* sbuff = &g_gfx.stream_buffs[stream_index];
+    sx_unused(sbuff);
     sx_assert(sbuff->buf.id == buf.id &&
               "streaming buffers probably destroyed during render/update");
     sg_map_buffer(buf, stream_offset, buff, data_size);

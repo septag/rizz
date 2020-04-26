@@ -12,13 +12,16 @@
 #if SX_PLATFORM_WINDOWS
 #    define WIN32_LEAN_AND_MEAN
 #    include "windows.h"
-#elif SX_PLATFORM_ANDROID || SX_PLATFORM_LINUX || SX_PLATFORM_EMSCRIPTEN || SX_PLATFORM_RPI
+#elif SX_PLATFORM_POSIX
 #    define _LARGEFILE64_SOURCE
 #    include <sys/stat.h>
 #    include <sys/types.h>
 #    include <fcntl.h>
 #    include <unistd.h>
 #    undef _LARGEFILE64_SOURCE
+#    ifndef __O_LARGEFILE
+#        define __O_LARGEFILE 0
+#    endif
 #endif    // SX_
 
 sx_mem_block* sx_mem_create_block(const sx_alloc* alloc, int64_t size, const void* data, int align)
@@ -346,20 +349,28 @@ int64_t sx_file_seek(sx_file* file, int64_t offset, sx_whence whence)
     return -1;
 }
 
-#elif SX_PLATFORM_LINUX || SX_PLATFORM_RPI || SX_PLATFORM_ANDROID // if SX_PLATFORM_WINDOWS
+int64_t sx_file_size(const sx_file* file)
+{
+    sx_assert(file);
 
-typedef struct sx__file_linux {
+    sx__file_win32* f = (sx__file_win32*)file;
+    return f->size;
+}
+
+#elif SX_PLATFORM_POSIX // if SX_PLATFORM_WINDOWS
+
+typedef struct sx__file_posix {
     int id;
     int64_t size;
-} sx__file_linux;
+} sx__file_posix;
 
 bool sx_file_open(sx_file* file, const char* filepath, sx_file_open_flags flags)
 {
     sx_assert((flags & (SX_FILE_READ|SX_FILE_WRITE)) != (SX_FILE_READ|SX_FILE_WRITE));
     sx_assert((flags & (SX_FILE_READ|SX_FILE_WRITE)) != 0);
 
-    sx__file_linux* f = (sx__file_linux*)file;
-    sx_memset(f, 0x0, sizeof(sx__file_linux));
+    sx__file_posix* f = (sx__file_posix*)file;
+    sx_memset(f, 0x0, sizeof(sx__file_posix));
     
     int open_flags = __O_LARGEFILE;
     mode_t mode = 0;
@@ -376,18 +387,24 @@ bool sx_file_open(sx_file* file, const char* filepath, sx_file_open_flags flags)
         }
     }
 
-    if (flags & SX_FILE_NOCACHE) {
-        open_flags |= (__O_DIRECT | O_SYNC);
-    }
-
+#if (SX_PLATFORM_LINUX || SX_PLATFORM_RPI || SX_PLATFORM_ANDROID)
     if (flags & SX_FILE_TEMP) {
         open_flags |= __O_TMPFILE;
     }
+#endif // 
 
     int file_id = open(filepath, open_flags, mode);
     if (file_id == -1) {
         return false;
     }
+
+#if SX_PLATFORM_APPLE
+    if (flags & SX_FILE_NOCACHE) {
+        if (fcntl(file_id, F_NOCACHE) != 0) {
+            return false;
+        }
+    }
+#endif
 
     struct stat _stat;
     int sr = fstat(file_id, &_stat);
@@ -403,7 +420,7 @@ bool sx_file_open(sx_file* file, const char* filepath, sx_file_open_flags flags)
 void sx_file_close(sx_file* file)
 {
     sx_assert(file);
-    sx__file_linux* f = (sx__file_linux*)file;
+    sx__file_posix* f = (sx__file_posix*)file;
     if (f->id) {
         close(f->id);
         f->id = 0;
@@ -413,7 +430,7 @@ void sx_file_close(sx_file* file)
 int64_t sx_file_read(sx_file* file, void* data, int64_t size)
 {
     sx_assert(file);
-    sx__file_linux* f = (sx__file_linux*)file;
+    sx__file_posix* f = (sx__file_posix*)file;
 
     sx_assert(f->id && f->id != -1);
     return read(f->id, data, (size_t)size);
@@ -422,7 +439,7 @@ int64_t sx_file_read(sx_file* file, void* data, int64_t size)
 int64_t sx_file_write(sx_file* file, const void* data, int64_t size)
 {
     sx_assert(file);
-    sx__file_linux* f = (sx__file_linux*)file;
+    sx__file_posix* f = (sx__file_posix*)file;
 
     sx_assert(f->id && f->id != -1);
     int64_t bytes_written = write(f->id, data, (size_t)size);
@@ -436,7 +453,7 @@ int64_t sx_file_seek(sx_file* file, int64_t offset, sx_whence whence)
 {
     sx_assert(file);
 
-    sx__file_linux* f = (sx__file_linux*)file;
+    sx__file_posix* f = (sx__file_posix*)file;
     sx_assert(f->id && f->id != -1);
 
     int _whence = 0;
@@ -453,15 +470,16 @@ int64_t sx_file_seek(sx_file* file, int64_t offset, sx_whence whence)
 
     return lseek(f->id, offset, _whence);
 }
-#endif  // elif SX_PLATFORM_POSIX
 
 int64_t sx_file_size(const sx_file* file)
 {
     sx_assert(file);
 
-    sx__file_linux* f = (sx__file_linux*)file;
+    sx__file_posix* f = (sx__file_posix*)file;
     return f->size;
 }
+
+#endif  // elif SX_PLATFORM_POSIX
 
 
 sx_mem_block* sx_file_load_text(const sx_alloc* alloc, const char* filepath)

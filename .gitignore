@@ -23,6 +23,7 @@ ipch
 __pycache__
 Thumbs.db
 .build*
+.clangd
 
 # Gradle
 .gradle

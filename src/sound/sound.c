@@ -324,7 +324,7 @@ static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params
     if (sx_strequalnocase(ext, ".wav")) {
         if (!drwav_init_memory(&wav, mem->data, mem->size)) {
             rizz_log_warn("loading sound '%s' failed", params->path);
-            return (rizz_asset_load_data){ 0 };
+            return (rizz_asset_load_data){ {0} };
         }
 
         sx_assert(wav.totalPCMFrameCount < INT_MAX);    // big wav files are not supported
@@ -338,7 +338,7 @@ static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params
         stb_vorbis* vorbis = stb_vorbis_open_memory(mem->data, (int)mem->size, &error, NULL);
         if (!vorbis) {
             rizz_log_warn("loading sound '%s' failed: %s", snd__vorbis_get_error(error));
-            return (rizz_asset_load_data){ 0 };
+            return (rizz_asset_load_data){ {0} };
         }
         stb_vorbis_info info = stb_vorbis_get_info(vorbis);
 
@@ -349,7 +349,7 @@ static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params
         stb_vorbis_close(vorbis);
     } else {
         sx_assert(0 && "file format not supported");
-        return (rizz_asset_load_data){ 0 };
+        return (rizz_asset_load_data){ {0} };
     }
 
     sx_handle_t handle = sx_handle_new_and_grow(g_snd.source_handles, g_snd_alloc);

@@ -62,7 +62,7 @@ void rizz__asset_update();
 
 bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_profile);
 void rizz__gfx_release();
-void rizz__gfx_trace_reset_frame_stats();
+void rizz__gfx_trace_reset_frame_stats(rizz_gfx_perframe_trace_zone zone);
 void rizz__gfx_execute_command_buffers_final();
 void rizz__gfx_update();
 void rizz__gfx_commit_gpu();

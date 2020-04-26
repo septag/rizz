@@ -11,6 +11,8 @@ typedef struct ImDrawList ImDrawList;
 typedef enum { GIZMO_MODE_LOCAL, GIZMO_MODE_WORLD } gizmo_mode;
 
 typedef struct rizz_api_imgui_extra {
+    // these ebuggers are used to monitor inner workings of the engine
+    // recommended usage is to use `the_core` API equivalants instead
     void (*memory_debugger)(const rizz_mem_info* info, bool* p_open);
     void (*graphics_debugger)(const rizz_gfx_trace_info* info, bool* p_open);
 
