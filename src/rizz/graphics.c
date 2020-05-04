@@ -143,6 +143,13 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 
 // clang-format on
 
+typedef struct rizz__sgs_chunk {
+    int64_t pos;
+    uint32_t size;
+    uint32_t fourcc;
+    int parent_id;
+} rizz__sgs_chunk;
+
 typedef struct rizz__gfx_texture_mgr {
     rizz_texture white_tex;
     rizz_texture black_tex;
@@ -1771,6 +1778,37 @@ static sg_pipeline_desc* rizz__shader_bindto_pipeline(const rizz_shader* shd,
                                            vl);
 }
 
+static rizz__sgs_chunk rizz__sgs_get_iff_chunk(sx_mem_reader* reader, int64_t size, uint32_t fourcc)
+{
+    int64_t end = (size > 0) ? sx_min(reader->pos + size, reader->top) : reader->top;
+    end -= 8;
+    if (reader->pos >= end) {
+        return (rizz__sgs_chunk){ .pos = -1 };
+    }
+
+    uint32_t ch = *((uint32_t*)(reader->data + reader->pos));
+    if (ch == fourcc) {
+        reader->pos += sizeof(uint32_t);
+        uint32_t chunk_size;
+        sx_mem_read_var(reader, chunk_size);
+        return (rizz__sgs_chunk){ .pos = reader->pos, .size = chunk_size };
+    }
+
+    // chunk not found at start position, try to find it in the remaining data by brute-force
+    const uint8_t* buff = reader->data;
+    for (int64_t offset = reader->pos; offset < end; offset++) {
+        ch = *((uint32_t*)(buff + offset));
+        if (ch == fourcc) {
+            reader->pos = offset + sizeof(uint32_t);
+            uint32_t chunk_size;
+            sx_mem_read_var(reader, chunk_size);
+            return (rizz__sgs_chunk){ .pos = reader->pos, .size = chunk_size };
+        }
+    }
+
+    return (rizz__sgs_chunk){ .pos = -1 };
+}
+
 static rizz_asset_load_data rizz__shader_on_prepare(const rizz_asset_load_params* params,
                                                     const sx_mem_block* mem)
 {
@@ -1798,15 +1836,15 @@ static rizz_asset_load_data rizz__shader_on_prepare(const rizz_asset_load_params
     sx_mem_read_var(&reader, sinfo);
 
     // read stages
-    sx_iff_chunk stage_chunk = sx_mem_get_iff_chunk(&reader, 0, SGS_CHUNK_STAG);
+    rizz__sgs_chunk stage_chunk = rizz__sgs_get_iff_chunk(&reader, 0, SGS_CHUNK_STAG);
     while (stage_chunk.pos != -1) {
         uint32_t stage_type;
         sx_mem_read_var(&reader, stage_type);
 
         if (stage_type == SGS_STAGE_VERTEX) {
             // look for reflection chunk
-            sx_iff_chunk reflect_chunk =
-                sx_mem_get_iff_chunk(&reader, stage_chunk.size, SGS_CHUNK_REFL);
+            rizz__sgs_chunk reflect_chunk =
+                rizz__sgs_get_iff_chunk(&reader, stage_chunk.size, SGS_CHUNK_REFL);
             if (reflect_chunk.pos != -1) {
                 const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
                 rizz_shader_refl* refl = rizz__shader_parse_reflect_bin(
@@ -1819,7 +1857,7 @@ static rizz_asset_load_data rizz__shader_on_prepare(const rizz_asset_load_params
         }
 
         sx_mem_seekr(&reader, stage_chunk.pos + stage_chunk.size, SX_WHENCE_BEGIN);
-        stage_chunk = sx_mem_get_iff_chunk(&reader, 0, SGS_CHUNK_STAG);
+        stage_chunk = rizz__sgs_get_iff_chunk(&reader, 0, SGS_CHUNK_STAG);
     }
 
     shader->shd = the__gfx.alloc_shader();
@@ -1854,7 +1892,7 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
     sx_mem_read_var(&reader, sinfo);
 
     // read stages
-    sx_iff_chunk stage_chunk = sx_mem_get_iff_chunk(&reader, 0, SGS_CHUNK_STAG);
+    rizz__sgs_chunk stage_chunk = rizz__sgs_get_iff_chunk(&reader, 0, SGS_CHUNK_STAG);
     while (stage_chunk.pos != -1) {
         uint32_t stage_type;
         sx_mem_read_var(&reader, stage_type);
@@ -1862,9 +1900,9 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
         rizz_shader_code_type code_type = RIZZ_SHADER_CODE_SOURCE;
         rizz_shader_stage stage;
 
-        sx_iff_chunk code_chunk = sx_mem_get_iff_chunk(&reader, stage_chunk.size, SGS_CHUNK_CODE);
+        rizz__sgs_chunk code_chunk = rizz__sgs_get_iff_chunk(&reader, stage_chunk.size, SGS_CHUNK_CODE);
         if (code_chunk.pos == -1) {
-            code_chunk = sx_mem_get_iff_chunk(&reader, stage_chunk.size, SGS_CHUNK_DATA);
+            code_chunk = rizz__sgs_get_iff_chunk(&reader, stage_chunk.size, SGS_CHUNK_DATA);
             if (code_chunk.pos == -1)
                 return false;    // nor data or code chunk is found!
             code_type = RIZZ_SHADER_CODE_BYTECODE;
@@ -1889,8 +1927,8 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
 
         // look for reflection chunk
         sx_mem_seekr(&reader, code_chunk.size, SX_WHENCE_CURRENT);
-        sx_iff_chunk reflect_chunk =
-            sx_mem_get_iff_chunk(&reader, stage_chunk.size - code_chunk.size, SGS_CHUNK_REFL);
+        rizz__sgs_chunk reflect_chunk =
+            rizz__sgs_get_iff_chunk(&reader, stage_chunk.size - code_chunk.size, SGS_CHUNK_REFL);
         if (reflect_chunk.pos != -1) {
             rizz_shader_refl* refl = rizz__shader_parse_reflect_bin(
                 tmp_alloc, reader.data + reflect_chunk.pos, reflect_chunk.size);
@@ -1911,7 +1949,7 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
 
 
         sx_mem_seekr(&reader, stage_chunk.pos + stage_chunk.size, SX_WHENCE_BEGIN);
-        stage_chunk = sx_mem_get_iff_chunk(&reader, 0, SGS_CHUNK_STAG);
+        stage_chunk = rizz__sgs_get_iff_chunk(&reader, 0, SGS_CHUNK_STAG);
     }
 
     if (cs_refl && cs_data) {

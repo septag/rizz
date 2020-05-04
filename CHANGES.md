@@ -67,11 +67,11 @@
 - [x] Added true-type font (fontstash) support through 'rizz_api_font' API
 - [ ] Sprite flip flags (flipX/flipY)
 - [x] Asset manager internal refactors (obj_threadsafe)
-- [ ] Refactor IFF
+- [x] Refactor IFF
 - [ ] sprite anim/controller loading from data
 - [ ] sprite simpler draw api
 - [x] Add Async vfs call to get individual files 
-- [ ] Change SX io to native instead of fopen
+- [x] Change SX io to native instead of fopen
 - [ ] Add an API to render a set of sprites with a set of clips, so we won't have to duplicate data
 - [x] Update to new `docking` branch of ImGui
 - [ ] Update sokol
