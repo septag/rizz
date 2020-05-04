@@ -73,6 +73,9 @@
 - [x] Add Async vfs call to get individual files 
 - [ ] Change SX io to native instead of fopen
 - [ ] Add an API to render a set of sprites with a set of clips, so we won't have to duplicate data
+- [x] Update to new `docking` branch of ImGui
+- [ ] Update sokol
+- [ ] Implement multi-view and docking for UI and tools
 
 ### Changed
 - [ ] try to use <sys/sem.h> instead of posix semaphores

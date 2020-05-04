@@ -6,14 +6,15 @@
 # You must first preprocess the cimgui.h before submitting it to this program
 # Here's clang command to preprocess the file first:
 # Make sure to extract fake_libc_includes.zip to the current directory
-#   clang -P -E -DCIMGUI_DEFINE_ENUMS_AND_STRUCTS -Ifake_libc_include cimgui.h -D__int64="long long" -D"__declspec(dllexport)=\"\"" -Dextern="" > cimgui.i
+#   clang -P -E -DCIMGUI_DEFINE_ENUMS_AND_STRUCTS -Ifake_libc_include cimgui.h -D__int64="long long" -D"__declspec(dllexport)=" -Dextern="" > cimgui.i
 #   python generate-imgui.py cimgui.i imgui-defs.h
 #   Now extract the bindings and copy/paste them into imgui.h/imgui.c
 #   change ImVec2 and ImVec4 typedefs:
 #       typedef union sx_vec2 ImVec2;
 #       typedef union sx_vec4 ImVec4;
 #   remove 'struct ImNewDummy {};'
-#
+#   in imgui.h, change `#ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS` to `#if !defined(CIMGUI_DEFINE_ENUMS_AND_STRUCTS) && !defined(RIZZ__IMGUI)`
+#   Change `.Render = imgui__render` in the api struct def
 from __future__ import print_function
 import sys
 import os

@@ -391,7 +391,7 @@ static void input__show_debugger(bool* p_open)
                     0xff00ffff, 4.0f);
                 break;
             case input__debug_item::Text:
-                the_imgui->ImDrawList_AddText(
+                the_imgui->ImDrawList_AddTextVec2(
                     drawlist,
                     convert_debug_coords(window_size, window_pos,
                                          sx_vec2f(item.params.x, item.params.y), false),
@@ -408,7 +408,7 @@ static void input__show_debugger(bool* p_open)
         the_imgui->Columns(2, nullptr, false);
         the_imgui->SetColumnWidth(0, 150.0f);
 
-        the_imgui->BeginChild("input_list_parent", sx_vec2f(0, 0), true, 0);
+        the_imgui->BeginChildStr("input_list_parent", sx_vec2f(0, 0), true, 0);
         the_imgui->Columns(3, nullptr, false);
         the_imgui->SetColumnWidth(0, 30.0f);
         the_imgui->SetColumnWidth(1, 70.0f);
@@ -420,7 +420,7 @@ static void input__show_debugger(bool* p_open)
         the_imgui->NextColumn();
         the_imgui->Columns(1, nullptr, false);
         the_imgui->Separator();
-        the_imgui->BeginChild("input_list",
+        the_imgui->BeginChildStr("input_list",
                               sx_vec2f(the_imgui->GetWindowContentRegionWidth(), 150.0f), false, 0);
 
         the_imgui->Columns(3, nullptr, false);
@@ -433,7 +433,7 @@ static void input__show_debugger(bool* p_open)
         while (the_imgui->ImGuiListClipper_Step(&clipper)) {
             for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
                 sx_snprintf(row_str, sizeof(row_str), "%d", i + 1);
-                if (the_imgui->Selectable(row_str, selected_input == i,
+                if (the_imgui->SelectableBool(row_str, selected_input == i,
                                           ImGuiSelectableFlags_SpanAllColumns, SX_VEC2_ZERO)) {
                     selected_input = i;
 
@@ -485,13 +485,15 @@ static void input__show_debugger(bool* p_open)
         if (selected_input != -1) {
             sx_assert(g_input.devices);
             rizz_input_device_type type = g_input.devices[selected_input].type;
-            float w = the_imgui->GetContentRegionAvailWidth();
-            the_imgui->BeginChild("input_debugger_view", sx_vec2f(w, w), true,
+            sx_vec2 region;
+            the_imgui->GetContentRegionAvail(&region);
+            float w = region.x;
+            the_imgui->BeginChildStr("input_debugger_view", sx_vec2f(w, w), true,
                                   ImGuiWindowFlags_NoScrollbar);
             sx_vec2 view_size;
             sx_vec2 view_pos;
-            the_imgui->GetWindowSize_nonUDT(&view_size);
-            the_imgui->GetWindowPos_nonUDT(&view_pos);
+            the_imgui->GetWindowSize(&view_size);
+            the_imgui->GetWindowPos(&view_pos);
             draw_debug_items(g_input.debug_items, sx_array_count(g_input.debug_items), view_size,
                              view_pos, the_imgui->GetWindowDrawList(),
                              type == RIZZ_INPUT_DEVICETYPE_PAD);

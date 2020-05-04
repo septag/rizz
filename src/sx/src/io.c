@@ -257,9 +257,6 @@ bool sx_file_open(sx_file* file, const char* filepath, sx_file_open_flags flags)
 
     HANDLE hfile = CreateFileA(filepath, access_flags, share_flags, NULL, create_flags, attrs, NULL);
     if (hfile == INVALID_HANDLE_VALUE) {
-        if (GetLastError() != ERROR_FILE_NOT_FOUND ) {
-            sx_assert_rel(0 && "Unknown CreateFile error");
-        }
         return false;
     }
 
@@ -553,3 +550,76 @@ sx_iff_chunk sx_mem_get_iff_chunk(sx_mem_reader* reader, int64_t size, uint32_t 
     return (sx_iff_chunk){ .pos = -1 };
 }
 
+#if 0
+//
+void sx_iff_init_from_file(sx_iff_file* iff, sx_file* file, sx_iff_flags flags, const sx_alloc* alloc)
+{
+    sx_assert(iff);
+    sx_assert(file);
+
+    *iff = (sx_iff_file) {
+        .type = SX_IFFTYPE_DISK,
+        .alloc = alloc,
+        .disk = file
+    };
+
+    if (flags & SX_IFFFLAG_READ_ALL_CHUNKS) {
+        // 
+    }
+}
+
+void sx_iff_init_from_mem_reader(sx_iff_file* iff, sx_mem_reader* mread, sx_iff_flags flags,
+                                 const sx_alloc* alloc)
+{
+    sx_assert(iff);
+    sx_assert(mread);
+
+    *iff = (sx_iff_file) {
+        .type = SX_IFFTYPE_MEM_READER,
+        .alloc = alloc,
+        .mread = mread
+    };
+
+    if (flags & SX_IFFFLAG_READ_ALL_CHUNKS) {
+        // 
+    }
+}
+
+void sx_iff_init_from_mem_writer(sx_iff_file* iff, sx_mem_writer* mwrite, sx_iff_flags flags,
+                                 const sx_alloc* alloc)
+{
+    sx_assert(iff);
+    sx_assert(mwrite);
+
+    *iff = (sx_iff_file) {
+        .type = SX_IFFTYPE_MEM_WRITER,
+        .alloc = alloc,
+        .mwrite = mwrite
+    };
+
+    if (flags & SX_IFFFLAG_READ_ALL_CHUNKS) {
+        // 
+    }
+}
+
+void sx_iff_release(sx_iff_file* iff)
+{
+
+}
+
+int sx_iff_get_chunk(sx_iff_file* iff, uint32_t fourcc, int parent_chunk)
+{
+    return 0;
+}
+
+int sx_iff_get_next_chunk(sx_iff_file* iff, int chunk_id, int prev_chunk)
+{
+    return 0;
+}
+
+int sx_iff_put_chunk(sx_iff_file* iff, int parent_id, uint32_t fourcc, const void* chunk_data, 
+                     uint32_t size)
+{
+    return 0;
+}
+#endif

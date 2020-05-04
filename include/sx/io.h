@@ -34,29 +34,21 @@
 //              sx_mem_get_iff_chunk        helper for reading IFF chunks
 //                                          searches `size` bytes from the current location for
 //                                          FOURCC chunk type. if `size` <= 0, searches till the end
-//                                          if chunk is not found, returning `pos` variable will be
-//                                          -1
+//                                          if chunk is not found, returning `pos` variable will be -1                                    -1
 //
-//      sx_file_writer: Opens a file and writes to it just like stdc file IO
-//              sx_file_open_writer         opens a file for writing, can provide optional optional
-//                                          sx_file_open_flags bitsets
-//              sx_file_close_writer        closes the file
-//              sx_file_write               writes a piece of data to file
-//              sx_file_seekw               seeks inside the file
-//              sx_file_write_var           helper macro to write single variables
-//
-//      sx_file_reader: Opens a file and reads from it just like stdc file IO
-//              sx_file_open_reader         opens a file for writing, flags does not have any effect
-//                                          in this mode currently
-//              sx_file_close_reader        close the file
-//              sx_file_read                reads a piece of data from file to memory
-//              sx_file_seekr               seeks inside the file
-//              sx_file_read_var            helper macro to read a single variable
-//              sx_file_load_text           utility function to load text files directly into a
-//                                          block of memory the returned data in memory-block is
-//                                          always null-terminated
-//              sx_file_load_bin            utility function to load binary files directly into a
-//                                          block of memory
+//      sx_file: file related IO functions
+//              sx_file_open                opens a file for writing or reading, initiates file objects
+//              sx_file_close               closes an opened file
+//              sx_file_read                Reads a buffer from file, offsets file pointer 
+//              sx_file_write               Writes a buffer to file, offsets file pointer
+//              sx_file_seek                Sets file pointer, offset is in bytes
+//              
+//              sx_file_load_bin            allocates memory and loads the file data into it
+//              sx_file_load_text           Same as binary, but appends a null terminator to the end of the buffer
+//              
+//              sx_file_write_var           Helper macro: writes a variable to file (no need for sizeof)
+//              sx_file_write_text          Helper macro: writes a string to file (no need for strlen)
+//              sx_file_read_var            Helper macro: reads a variable from file (no need for sizeof)
 //
 #pragma once
 
@@ -136,8 +128,8 @@ typedef enum sx_file_open_flag {
     SX_FILE_READ = 0x01,            // open for reading
     SX_FILE_WRITE = 0x02,           // open for writing
     SX_FILE_APPEND = 0x04,          // append to the end of the file (write mode only)
-    SX_FILE_NOCACHE = 0x08,         // disable cache
-    SX_FILE_WRITE_THROUGH = 0x10,   // write-through
+    SX_FILE_NOCACHE = 0x08,         // disable cache, suitable for large files, best bet is to align buffers to virtual memory pages
+    SX_FILE_WRITE_THROUGH = 0x10,   // write-through, write meta information to disk immediately
     SX_FILE_SEQ_SCAN = 0x20,        // optimize cache for sequential scan (not used in NOCACHE)
     SX_FILE_RANDOM_ACCESS = 0x40,   // optimize cache for random access (not used in NOCACHE)
     SX_FILE_TEMP = 0x80
@@ -159,6 +151,7 @@ SX_API sx_mem_block* sx_file_load_bin(const sx_alloc* alloc, const char* filepat
 #define sx_file_write_text(w, s) sx_file_write((w), (s), sx_strlen(s))
 #define sx_file_read_var(w, v) sx_file_read((w), &(v), sizeof(v))
 
+#if 0
 typedef struct sx_iff_chunk {
     int64_t pos;
     uint32_t size;
@@ -167,51 +160,22 @@ typedef struct sx_iff_chunk {
 } sx_iff_chunk;
 
 SX_API sx_iff_chunk sx_mem_get_iff_chunk(sx_mem_reader* reader, int64_t size, uint32_t fourcc);
-
-
-#if 0
-typedef struct sx_file_writer {
-    sx_align_decl(16, uint8_t) data[16];
-} sx_file_writer;
-
-SX_API bool sx_file_open_writer(sx_file_writer* writer, const char* filepath,
-                                sx_file_open_flags flags sx_default(0));
-SX_API void sx_file_close_writer(sx_file_writer* writer);
-SX_API int sx_file_write(sx_file_writer* writer, const void* data, int size);
-SX_API int64_t sx_file_seekw(sx_file_writer* writer, int64_t offset,
-                             sx_whence whence sx_default(SX_WHENCE_CURRENT));
-
-#define sx_file_write_var(w, v) sx_file_write((w), &(v), sizeof(v))
-#define sx_file_write_text(w, s) sx_file_write((w), (s), sx_strlen(s))
-
-// sx_file_reader
-typedef struct sx_file_reader {
-    sx_align_decl(16, uint8_t) data[16];
-} sx_file_reader;
-
-SX_API bool sx_file_open_reader(sx_file_reader* reader, const char* filepath);
-SX_API void sx_file_close_reader(sx_file_reader* reader);
-SX_API int sx_file_read(sx_file_reader* reader, void* data, int size);
-SX_API int64_t sx_file_seekr(sx_file_reader* reader, int64_t offset,
-                             sx_whence whence sx_default(SX_WHENCE_CURRENT));
-
-SX_API sx_mem_block* sx_file_load_text(const sx_alloc* alloc, const char* filepath);
-SX_API sx_mem_block* sx_file_load_bin(const sx_alloc* alloc, const char* filepath);
-
-#define sx_file_read_var(w, v) sx_file_read((w), &(v), sizeof(v))
+#endif
 
 // IFF file
 // https://en.wikipedia.org/wiki/Interchange_File_Format
 //
 typedef struct sx_iff_chunk {
-    int64_t pos;
+    int64_t next_chunk_offset;
+    int64_t next_child_offset;
     uint32_t size;
     uint32_t fourcc;
     int parent_id;
 } sx_iff_chunk;
 
 typedef enum sx_iff_type {
-    SX_IFFTYPE_MEM,
+    SX_IFFTYPE_MEM_READER,
+    SX_IFFTYPE_MEM_WRITER,
     SX_IFFTYPE_DISK
 } sx_iff_type;
 
@@ -220,19 +184,28 @@ typedef enum sx_iff_flag {
 } sx_iff_flag;
 typedef uint32_t sx_iff_flags;
 
-typedef struct sx_iff_reader {
+typedef struct sx_iff_file {
     sx_iff_type type;
     sx_iff_chunk* chunks;    // sx_array
     const sx_alloc* alloc;
     union {
-        sx_mem_reader* mem_reader;
-        sx_file_reader* disk_reader;
+        sx_mem_reader* mread;
+        sx_mem_writer* mwrite;
+        sx_file* disk;
     };
-} sx_iff_reader;
+} sx_iff_file;
 
-SX_API void sx_iff_init_reader(sx_iff_reader* reader, sx_iff_flags flags);
-SX_API int sx_iff_get_chunk(sx_iff_reader* reader, uint32_t fourcc, int parent_chunk);
-SX_API int sx_iff_get_next_chunk(sx_iff_reader* reader, int chunk_id, int prev_chunk);
-SX_API bool sx_iff_read_chunk();
+SX_API void sx_iff_init_from_file(sx_iff_file* iff, sx_file* file, sx_iff_flags flags,
+                                  const sx_alloc* alloc);
+SX_API void sx_iff_init_from_mem_reader(sx_iff_file* iff, sx_mem_reader* mread, sx_iff_flags flags,
+                                        const sx_alloc* alloc);
+SX_API void sx_iff_init_from_mem_writer(sx_iff_file* iff, sx_mem_writer* mwrite, sx_iff_flags flags,
+                                        const sx_alloc* alloc);
+SX_API void sx_iff_release(sx_iff_file* iff);
+SX_API void sx_iff_commit(sx_iff_file* iff);
 
-#endif
+SX_API int sx_iff_get_chunk(sx_iff_file* iff, uint32_t fourcc, int parent_chunk);
+SX_API int sx_iff_get_next_chunk(sx_iff_file* iff, int chunk_id, int prev_chunk);
+
+SX_API int sx_iff_put_chunk(sx_iff_file* iff, int parent_id, uint32_t fourcc,
+                            const void* chunk_data, uint32_t size);

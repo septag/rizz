@@ -2462,12 +2462,12 @@ _SOKOL_PRIVATE bool _sg_imgui_draw_resid_list_item(uint32_t res_id, const char* 
     the__imgui.PushIDInt((int)res_id);
     bool res;
     if (label[0]) {
-        res = the__imgui.Selectable(label, selected, 0, sx_vec2f(0, 0));
+        res = the__imgui.SelectableBool(label, selected, 0, sx_vec2f(0, 0));
     }
     else {
         sg_imgui_str_t str;
         _sg_imgui_snprintf(&str, "0x%08X", res_id);
-        res = the__imgui.Selectable(str.buf, selected, 0, sx_vec2f(0, 0));
+        res = the__imgui.SelectableBool(str.buf, selected, 0, sx_vec2f(0, 0));
     }
     the__imgui.PopID();
     return res;
@@ -2533,7 +2533,7 @@ _SOKOL_PRIVATE void _sg_imgui_show_shader(sg_imgui_t* ctx, sg_shader shd) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_buffer_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChild("buffer_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChildStr("buffer_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     for (int i = 0; i < ctx->buffers.num_slots; i++) {
         sg_buffer buf = ctx->buffers.slots[i].res_id;
         sg_resource_state state = ctx->api->query_buffer_state(buf);
@@ -2548,7 +2548,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_buffer_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_image_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChild("image_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChildStr("image_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     for (int i = 0; i < ctx->images.num_slots; i++) {
         sg_image img = ctx->images.slots[i].res_id;
         sg_resource_state state = ctx->api->query_image_state(img);
@@ -2563,7 +2563,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_image_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_shader_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChild("shader_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChildStr("shader_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     for (int i = 0; i < ctx->shaders.num_slots; i++) {
         sg_shader shd = ctx->shaders.slots[i].res_id;
         sg_resource_state state = ctx->api->query_shader_state(shd);
@@ -2578,7 +2578,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_shader_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_pipeline_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChild("pipeline_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChildStr("pipeline_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     for (int i = 1; i < ctx->pipelines.num_slots; i++) {
         sg_pipeline pip = ctx->pipelines.slots[i].res_id;
         sg_resource_state state = ctx->api->query_pipeline_state(pip);
@@ -2593,7 +2593,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_pipeline_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_pass_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChild("pass_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChildStr("pass_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     for (int i = 1; i < ctx->passes.num_slots; i++) {
         sg_pass pass = ctx->passes.slots[i].res_id;
         sg_resource_state state = ctx->api->query_pass_state(pass);
@@ -2608,7 +2608,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_pass_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_capture_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChild("capture_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChildStr("capture_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     const uint32_t num_items = _sg_imgui_capture_num_read_items(ctx);
     uint64_t group_stack = 1;   /* bit set: group unfolded, cleared: folded */
     for (uint32_t i = 0; i < num_items; i++) {
@@ -2635,7 +2635,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_capture_list(sg_imgui_t* ctx) {
         }
         else if (group_stack & 1) {
             the__imgui.PushIDInt(i);
-            if (the__imgui.Selectable(item_string.buf, ctx->capture.sel_item == i, 0, sx_vec2f(0, 0))) {
+            if (the__imgui.SelectableBool(item_string.buf, ctx->capture.sel_item == i, 0, sx_vec2f(0, 0))) {
                 ctx->capture.sel_item = i;
             }
             if (the__imgui.IsItemHovered(0)) {
@@ -2650,7 +2650,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_capture_list(sg_imgui_t* ctx) {
 
 _SOKOL_PRIVATE void _sg_imgui_draw_buffer_panel(sg_imgui_t* ctx, sg_buffer buf) {
     if (buf.id != SG_INVALID_ID) {
-        the__imgui.BeginChild("buffer", sx_vec2f(0,0), false, 0);
+        the__imgui.BeginChildStr("buffer", sx_vec2f(0,0), false, 0);
         sg_buffer_info info = ctx->api->query_buffer_info(buf);
         if (info.slot.state == SG_RESOURCESTATE_VALID) {
             const sg_imgui_buffer_t* buf_ui = &ctx->buffers.slots[_sg_imgui_slot_index(buf.id)];
@@ -2700,7 +2700,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_embedded_image(sg_imgui_t* ctx, sg_image img,
 }
 _SOKOL_PRIVATE void _sg_imgui_draw_image_panel(sg_imgui_t* ctx, sg_image img) {
     if (img.id != SG_INVALID_ID) {
-        the__imgui.BeginChild("image", sx_vec2f(0,0), false, 0);
+        the__imgui.BeginChildStr("image", sx_vec2f(0,0), false, 0);
         sg_image_info info = ctx->api->query_image_info(img);
         if (info.slot.state == SG_RESOURCESTATE_VALID) {
             sg_imgui_image_t* img_ui = &ctx->images.slots[_sg_imgui_slot_index(img.id)];
@@ -2816,7 +2816,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_shader_stage(sg_imgui_t* ctx, const sg_shader
 
 _SOKOL_PRIVATE void _sg_imgui_draw_shader_panel(sg_imgui_t* ctx, sg_shader shd) {
     if (shd.id != SG_INVALID_ID) {
-        the__imgui.BeginChild("shader", sx_vec2f(0,0), false, ImGuiWindowFlags_HorizontalScrollbar);
+        the__imgui.BeginChildStr("shader", sx_vec2f(0,0), false, ImGuiWindowFlags_HorizontalScrollbar);
         sg_shader_info info = ctx->api->query_shader_info(shd);
         if (info.slot.state == SG_RESOURCESTATE_VALID) {
             const sg_imgui_shader_t* shd_ui = &ctx->shaders.slots[_sg_imgui_slot_index(shd.id)];
@@ -2929,7 +2929,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_rasterizer_state(const sg_rasterizer_state* r
 
 _SOKOL_PRIVATE void _sg_imgui_draw_pipeline_panel(sg_imgui_t* ctx, sg_pipeline pip) {
     if (pip.id != SG_INVALID_ID) {
-        the__imgui.BeginChild("pipeline", sx_vec2f(0,0), false, 0);
+        the__imgui.BeginChildStr("pipeline", sx_vec2f(0,0), false, 0);
         sg_pipeline_info info = ctx->api->query_pipeline_info(pip);
         if (info.slot.state == SG_RESOURCESTATE_VALID) {
             const sg_imgui_pipeline_t* pip_ui = &ctx->pipelines.slots[_sg_imgui_slot_index(pip.id)];
@@ -2978,7 +2978,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_attachment(sg_imgui_t* ctx, const sg_attachme
 
 _SOKOL_PRIVATE void _sg_imgui_draw_pass_panel(sg_imgui_t* ctx, sg_pass pass) {
     if (pass.id != SG_INVALID_ID) {
-        the__imgui.BeginChild("pass", sx_vec2f(0,0), false, 0);
+        the__imgui.BeginChildStr("pass", sx_vec2f(0,0), false, 0);
         sg_pass_info info = ctx->api->query_pass_info(pass);
         if (info.slot.state == SG_RESOURCESTATE_VALID) {
             sg_imgui_pass_t* pass_ui = &ctx->passes.slots[_sg_imgui_slot_index(pass.id)];
@@ -3199,7 +3199,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_capture_panel(sg_imgui_t* ctx) {
         return;
     }
     sg_imgui_capture_item_t* item = _sg_imgui_capture_read_item_at(ctx, sel_item_index);
-    the__imgui.BeginChild("capture_item", sx_vec2f(0, 0), false, 0);
+    the__imgui.BeginChildStr("capture_item", sx_vec2f(0, 0), false, 0);
     the__imgui.PushStyleColorU32(ImGuiCol_Text, item->color);
     the__imgui.Text("%s", _sg_imgui_capture_item_string(ctx, sel_item_index, item).buf);
     the__imgui.PopStyleColor(1);

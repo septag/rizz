@@ -1097,7 +1097,9 @@ static void snd__plot_samples_rms(const char* label, const float* samples, int n
 {
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
-    int width = (int)the_imgui->GetContentRegionAvailWidth();
+    sx_vec2 region;
+    the_imgui->GetContentRegionAvail(&region);
+    int width = (int)region.x;
     int num_values;
     float* values;
     const int optimal_values = 50;
@@ -1143,7 +1145,9 @@ static void snd__plot_samples_wav(const char* label, const float* samples, int n
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
     sx_assert(num_samples > 0);
 
-    int width = (int)the_imgui->GetContentRegionAvailWidth();
+    sx_vec2 region;
+    the_imgui->GetContentRegionAvail(&region);
+    int width = (int)region.x;
     const int optimal_values = 50;
 
     int num_values = width * optimal_values / 250;
@@ -1179,7 +1183,7 @@ static void snd__plot_samples_wav(const char* label, const float* samples, int n
         plot_samples += block_sz;
     }
 
-    the_imgui->PlotLines(label, values, num_values * 2, 0, NULL, -1.0f, 1.0f,
+    the_imgui->PlotLinesFloatPtr(label, values, num_values * 2, 0, NULL, -1.0f, 1.0f,
                          sx_vec2f((float)width, (float)height), sizeof(float));
     the_core->tmp_alloc_pop();
 }
@@ -1203,7 +1207,9 @@ static void snd__show_mixer_tab_contents()
     }
     num_samples =
         snd__ringbuffer_consume(&g_snd.mixer_plot_buffer, samples, sx_min(512, num_samples));
-    float plot_width = (float)the_imgui->GetContentRegionAvailWidth();
+    sx_vec2 region;
+    the_imgui->GetContentRegionAvail(&region);
+    float plot_width = region.x;
     the_imgui->Columns(num_channels + 1, "mixer_wav_cols", false);
     the_imgui->SetColumnWidth(0, 25.0f);
     plot_width -= 25.0f;
@@ -1241,7 +1247,7 @@ static void snd__show_mixer_tab_contents()
         the_imgui->Separator();
 
         the_imgui->Columns(1, NULL, false);
-        the_imgui->BeginChild("mixer_sound_list",
+        the_imgui->BeginChildStr("mixer_sound_list",
                               sx_vec2f(the_imgui->GetWindowContentRegionWidth(), -1.0f), false, 0);
         the_imgui->Columns(4, NULL, false);
         the_imgui->SetColumnWidth(0, 30.0f);
@@ -1307,7 +1313,7 @@ static void snd__show_sources_tab_contents()
     the_imgui->NextColumn();
     the_imgui->Separator();
     the_imgui->Columns(1, NULL, false);
-    the_imgui->BeginChild("source_list", sx_vec2f(the_imgui->GetWindowContentRegionWidth(), 200.0f),
+    the_imgui->BeginChildStr("source_list", sx_vec2f(the_imgui->GetWindowContentRegionWidth(), 200.0f),
                           false, 0);
     the_imgui->Columns(3, NULL, false);
     the_imgui->SetColumnWidth(0, 30.0f);
@@ -1325,7 +1331,7 @@ static void snd__show_sources_tab_contents()
             const snd__source* src = &g_snd.sources[sx_handle_index(handle)];
 
             sx_snprintf(row_str, sizeof(row_str), "%d", i + 1);
-            if (the_imgui->Selectable(row_str, selected_source == i,
+            if (the_imgui->SelectableBool(row_str, selected_source == i,
                                       ImGuiSelectableFlags_SpanAllColumns, SX_VEC2_ZERO)) {
                 selected_source = i;
             }
