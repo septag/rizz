@@ -819,6 +819,7 @@ int sx_iff_get_next_chunk(sx_iff_file* iff)
         for (int i = cur_chunk_id + 1, c = sx_array_count(iff->chunks); i < c; i++) {
             const sx_iff_chunk* test_chunk = &iff->chunks[i];
             if (test_chunk->fourcc == chunk->fourcc && test_chunk->parent_id == parent_id) {
+                iff->cur_chunk_id = i;
                 return i;
             }
         }

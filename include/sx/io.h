@@ -2,7 +2,8 @@
 // Copyright 2018 Sepehr Taghdisian (septag@github). All rights reserved.
 // License: https://github.com/septag/sx#license-bsd-2-clause
 //
-// stream-io.h v1.0: Some streaming primitives
+// clang-format off
+// io.h v1.0: Some IO primitives like streaming memory reader/writer. File and IFF format implementation
 //      sx_mem_block: Memory block represents a piece of memory that can also grow with an allocator
 //              sx_mem_create_block         allocates the entire continous block object with it's
 //                                          memory. this type CAN NOT grow
@@ -50,6 +51,42 @@
 //              sx_file_write_text          Helper macro: writes a string to file (no need for strlen)
 //              sx_file_read_var            Helper macro: reads a variable from file (no need for sizeof)
 //
+//      sx_iff_file: binary IFF-like file writer/reader
+//                   IFF is an old binary format, that is chunked-based. Each chunk has a FOURCC Id 
+//                   and can have multiple chunks as a child. 
+//                   There is no TOC, so new chunks can be appended to the end of the file, 
+//                   you can even mix different types of data into a single IFF file
+//                   Reference: https://en.wikipedia.org/wiki/Interchange_File_Format   
+//              
+//          sx_iff_init_from_file_reader: initialize IFF file for reading from a disk file. 
+//                                        needs an already opened file with read access
+//          sx_iff_init_from_file_writer: initialize IFF file for writing to a disk file
+//                                        needs an already opened file with write access
+//          sx_iff_init_from_mem_reader:  initialize IFF file for reading from memory buffer
+//          sx_iff_init_from_mem_writer:  initialize IFF file for writing to memory buffer
+//          sx_iff_release:               release any internal arrays and TOCs of chunks
+//                                        you should close any file handle (sx_file) after release
+//          sx_iff_get_chunk:             searches for a specific chunk with a FOURCC code and 
+//                                        a parent_id, parent_id should be 0 if it's on the root level
+//                                        Returns the index to sx_iff_file.chunks array if found and -1 if not
+//          sx_iff_get_next_chunk:        Searches for the next chunk with the same FOURCC code and 
+//                                        the same level (same parent) as the previous one
+//                                        The search patterns of multiple chunks would be like:
+//                                              int chunk = sx_iff_get_chunk(iff, fourcc, parent_id);
+//                                              while (chunk != -1) {
+//                                                  sx_iff_read_chunk(chunk, data, ..);
+//                                                  chunk = sx_iff_get_next_chunk(iff);
+//                                              }
+//          sx_iff_read_chunk:            Read chunk data. You should provide the chunk_id returned 
+//                                        by get_chunk family of functions
+//          sx_iff_put_chunk:             Writes a chunk to IFF file 
+//                                        you should provide parent_id (0 if has no parent)
+//                                        and memory to be written
+//                                        optionally, you can provide compression values for the chunk
+//                                        For example, if you have zipped the data, then you can provide 
+//                                        uncompressed_size or hash value to later properly decompress the chunk data
+//
+// clang-format on                                      
 #pragma once
 
 #include "sx.h"
@@ -173,8 +210,10 @@ typedef enum sx_iff_type {
 } sx_iff_type;
 
 typedef enum sx_iff_flag {
-    SX_IFFFLAG_READ_ALL_CHUNKS = 0x1,
-    SX_IFFFLAG_APPEND = 0x2
+    SX_IFFFLAG_READ_ALL_CHUNKS = 0x1,   // Read all chunks on initialize. This may be faster for 
+                                        // searching through multiple chunks, but not recommended 
+                                        // for sequntial reading of binary files
+    SX_IFFFLAG_APPEND = 0x2             // initialize IFF as writing and appending to the end
 } sx_iff_flag;
 typedef uint32_t sx_iff_flags;
 
