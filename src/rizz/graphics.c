@@ -2392,7 +2392,7 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
             rmt_BindD3D11((void*)rizz__app_d3d11_device(), (void*)rizz__app_d3d11_device_context());
         } else if (RMT_USE_OPENGL) {
             rmt_BindOpenGL();
-        }
+        } 
     }
 
     // debug draw

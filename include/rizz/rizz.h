@@ -1166,6 +1166,16 @@ typedef struct rizz_api_gfx {
     const rizz_gfx_trace_info* (*trace_info)();
 } rizz_api_gfx;
 
+// using these macros are preferred to draw_api->begin_profile_sample() and draw_api->end_profile_sample()
+// because They provide cache variables for name hashing and also somewhat emulates C++ RAII
+#define rizz_gfx_profile_begin(_draw_api, _name)        \
+    static uint32_t rmt_gpu_sample_hash_##_name = 0; \
+    uint32_t rmt_gpu_sample_raii_##_name;            \
+    (_draw_api)->begin_profile_sample(#_name, &rmt_gpu_sample_hash_##_name)
+#define rizz_gfx_profile_end(_draw_api, _name)    \
+    (void)rmt_gpu_sample_raii_##_name; \
+    (_draw_api)->end_profile_sample();
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @plugin
 
