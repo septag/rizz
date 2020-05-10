@@ -231,7 +231,6 @@ rizz_game_decl_config(conf)
     conf->app_title = "02 - Quad";
     conf->window_width = 800;
     conf->window_height = 600;
-    conf->core_flags |= RIZZ_CORE_FLAG_VERBOSE;
     conf->swap_interval = 2;
     conf->plugins[0] = "imgui";
 }
