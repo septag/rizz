@@ -677,6 +677,8 @@ void rizz__asset_release()
 
 void rizz__asset_update()
 {
+    rizz__profile_begin(Asset_update, 0);
+
     rizz__asset_async_job* ajob = g_asset.async_job_list;
     while (ajob) {
         rizz__asset_async_job* next = ajob->next;
@@ -718,6 +720,8 @@ void rizz__asset_update()
 
         ajob = next;
     }
+
+    rizz__profile_end(Asset_update);
 }
 
 static rizz_asset rizz__asset_load(const char* name, const char* path, const void* params,

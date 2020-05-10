@@ -76,6 +76,7 @@
 - [x] Update to new `docking` branch of ImGui
 - [ ] Update sokol
 - [ ] Implement multi-view and docking for UI and tools
+- [ ] Added imgui log window
 
 ### Changed
 - [ ] try to use <sys/sem.h> instead of posix semaphores
@@ -90,3 +91,4 @@
 ### Fixed
 - [x] fix sx_matx_inv 
 - [x] Error handling for missing shaders so they won't crash
+- [ ] Fix wierd crash on clang-cl and job dispatcher

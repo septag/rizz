@@ -15,6 +15,7 @@ typedef struct rizz_api_imgui_extra {
     // recommended usage is to use `the_core` API equivalants instead
     void (*memory_debugger)(const rizz_mem_info* info, bool* p_open);
     void (*graphics_debugger)(const rizz_gfx_trace_info* info, bool* p_open);
+    void (*show_log)(bool* p_open);
 
     // Full screen 2D drawing
     // You can begin by calling `begin_fullscreen_draw`, fetch and keep the ImDrawList

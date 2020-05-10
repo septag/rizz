@@ -486,20 +486,29 @@ enum rizz_app_flags_ {
     RIZZ_APP_FLAG_PRESERVE_DRAWING_BUFFER = 0x10,
     RIZZ_APP_FLAG_HTML5_CANVAS_RESIZE = 0x20,
     RIZZ_APP_FLAG_IOS_KEYBOARD_RESIZES_CANVAS = 0x40,
-    RIZZ_APP_FLAG_USER_CURSOR = 0x80,
+    RIZZ_APP_FLAG_USER_CURSOR = 0x80,           // manage cursor image in RIZZ_APP_EVENTTYPE_UPDATE_CURSOR event
     RIZZ_APP_FLAG_FORCE_GLES2 = 0x100
 };
 typedef uint32_t rizz_app_flags;
 
 enum rizz_core_flags_ {
-    RIZZ_CORE_FLAG_VERBOSE = 0x01,              // activate verbose logging
-    RIZZ_CORE_FLAG_LOG_TO_FILE = 0x02,          // log to file defined by `app_name.log`
-    RIZZ_CORE_FLAG_LOG_TO_PROFILER = 0x04,      // log to remote profiler
-    RIZZ_CORE_FLAG_PROFILE_GPU = 0x08,          // enable GPU profiling
-    RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS = 0x10,   // write `unused-assets.json` on exit
-    RIZZ_CORE_FLAG_DETECT_LEAKS = 0x20          // Detect memory leaks
+    RIZZ_CORE_FLAG_LOG_TO_FILE = 0x01,          // log to file defined by `app_name.log`
+    RIZZ_CORE_FLAG_LOG_TO_PROFILER = 0x02,      // log to remote profiler
+    RIZZ_CORE_FLAG_PROFILE_GPU = 0x04,          // enable GPU profiling
+    RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS = 0x08,   // write `unused-assets.json` on exit
+    RIZZ_CORE_FLAG_DETECT_LEAKS = 0x10          // Detect memory leaks (default on in _DEBUG builds)
 };
 typedef uint32_t rizz_core_flags;
+
+// logging backend entry type
+typedef enum rizz_log_level {
+    RIZZ_LOG_LEVEL_ERROR = 0,
+    RIZZ_LOG_LEVEL_WARNING,
+    RIZZ_LOG_LEVEL_INFO,
+    RIZZ_LOG_LEVEL_VERBOSE,
+    RIZZ_LOG_LEVEL_DEBUG,
+    _RIZZ_LOG_LEVEL_COUNT
+} rizz_log_level;
 
 // main app/game config
 typedef struct rizz_config {
@@ -510,8 +519,10 @@ typedef struct rizz_config {
     uint32_t app_version;
     rizz_app_flags app_flags;
     rizz_core_flags core_flags;
+    rizz_log_level log_level;   // default = RIZZ_LOG_LEVEL_INFO 
+
     const char* plugins[RIZZ_CONFIG_MAX_PLUGINS];
-    const char* _dummy;
+    const char* _dummy;     // this is always initialized to 0, so we can count plugins array
 
     int window_width;
     int window_height;
@@ -521,16 +532,16 @@ typedef struct rizz_config {
     rizz_app_event_cb* event_cb;
 
     int job_num_threads;    // number of worker threads (default:-1, then it will be num_cores-1)
-    int job_max_fibers;     // maximum running jobs at a time
-    int job_stack_size;     // in kbytes
+    int job_max_fibers;     // maximum active jobs at a time (default = 64)
+    int job_stack_size;     // jobs stack size, in kbytes (default = 1mb)
 
-    int coro_max_fibers;    // maximum running (active) coroutines at a time
-    int coro_stack_size;    // in kbytes
+    int coro_max_fibers;    // maximum running (active) coroutines at a time. (default = 64)
+    int coro_stack_size;    // coroutine stack size (default = 2mb). in kbytes
 
-    int tmp_mem_max;    // in kbytes (defaut: 5mb per-thread)
+    int tmp_mem_max;        // per-frame temp memory size. in kbytes (defaut: 5mb per-thread)
 
-    int profiler_listen_port;
-    int profiler_update_interval_ms;    // default: 10
+    int profiler_listen_port;           // default: 17815
+    int profiler_update_interval_ms;    // default: 10ms
 } rizz_config;
 
 // Game plugins should implement this function (name should be "rizz_game_config")
@@ -560,20 +571,11 @@ RIZZ_API void ANativeActivity_onCreate_(ANativeActivity*, void*, size_t);
 // return >= 0 for success and -1 for failure
 typedef int(rizz_core_cmd_cb)(int argc, char* argv[]);
 
-// logging backend entry type
-typedef enum rizz_log_entry_type {
-    RIZZ_LOG_ENTRYTYPE_INFO = 0,
-    RIZZ_LOG_ENTRYTYPE_DEBUG,
-    RIZZ_LOG_ENTRYTYPE_VERBOSE,
-    RIZZ_LOG_ENTRYTYPE_ERROR,
-    RIZZ_LOG_ENTRYTYPE_WARNING,
-    _RIZZ_LOG_ENTRYTYPE_COUNT
-} rizz_log_entry_type;
-
 typedef struct rizz_log_entry {
-    rizz_log_entry_type type;
+    rizz_log_level type;
     uint32_t channels;
     int text_len;
+    int source_file_len;
     const char* text;
     const char* source_file;
     int line;
@@ -632,6 +634,12 @@ typedef struct rizz_version {
     int fix;
     char git[32];
 } rizz_version;
+
+typedef enum rizz_profile_flag {
+    RIZZ_PROFILE_FLAG_AGGREGATE = 1, // Search parent for same-named samples and merge timing instead of adding a new sample
+    RIZZ_PROFILE_FLAG_RECURSIVE = 2, // Merge sample with parent if it's the same sample
+} rizz_profile_flag;
+typedef uint32_t rizz_profile_flags;
 
 typedef struct rizz_api_core {
     // heap allocator: thread-safe, allocates dynamically from heap (libc->malloc)
@@ -703,8 +711,9 @@ typedef struct rizz_api_core {
     void (*print_error)(uint32_t channels, const char* source_file, int line, const char* fmt, ...);
     void (*print_warning)(uint32_t channels, const char* source_file, int line, const char* fmt,
                           ...);
+    void (*set_log_level)(rizz_log_level level);
 
-    void (*begin_profile_sample)(const char* name, uint32_t flags, uint32_t* hash_cache);
+    void (*begin_profile_sample)(const char* name, rizz_profile_flags flags, uint32_t* hash_cache);
     void (*end_profile_sample)();
 
     void (*register_console_command)(const char* cmd, rizz_core_cmd_cb* callback);
@@ -712,6 +721,7 @@ typedef struct rizz_api_core {
     // debugging
     void (*show_graphics_debugger)(bool* p_open);
     void (*show_memory_debugger)(bool* p_open);
+    void (*show_log)(bool* p_open);
 } rizz_api_core;
 
 // clang-format off

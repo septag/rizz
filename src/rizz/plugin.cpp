@@ -406,6 +406,8 @@ bool rizz__plugin_load_abs(const char* filepath, bool entry, const char** edeps,
         }
 
         get_info(&item.info);
+    } else {
+        sx_strcpy(item.info.name, sizeof(item.info.name), the__app.name());
     }
 
     sx_strcpy(item.filepath, sizeof(item.filepath), filepath);
@@ -427,8 +429,9 @@ bool rizz__plugin_load_abs(const char* filepath, bool entry, const char** edeps,
 
     item.order = -1;
 
-    if (dll)
+    if (dll) {
         sx_os_dlclose(dll);
+    }
 
     sx_array_push(g_plugin.alloc, g_plugin.plugins, item);
     sx_array_push(g_plugin.alloc, g_plugin.plugin_update_order,
@@ -477,6 +480,12 @@ void rizz__plugin_update(float dt)
             plugin->update_tm = 0;
         }
 
+        if (i == c - 1) {
+            static uint32_t game_name_cache = 0;
+            const char* name = plugin->info.name[0] ? plugin->info.name : "Game";
+            the__core.begin_profile_sample(name, 0, &game_name_cache);
+        }
+
         int r = cr_plugin_update(plugin->p, check_reload);
         if (r == -2) {
             rizz__log_error("plugin '%s' failed to reload", g_plugin.plugins[i].info.name);
@@ -487,6 +496,10 @@ void rizz__plugin_update(float dt)
             } else {
                 rizz__log_error("plugin '%s' crashed", g_plugin.plugins[i].info.name);
             }
+        }
+
+        if (i == c - 1) {
+            the__core.end_profile_sample();
         }
     }
 }

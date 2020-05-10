@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.1)
 project(imgui)
 
 set(imgui_sources imgui.c 
+                  log-window.c 
                   ../../include/rizz/imgui.h
                   ../../include/rizz/imgui-extra.h
                   README.md)

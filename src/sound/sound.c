@@ -23,7 +23,7 @@
 #define FIXPOINT_FRAC_MASK ((1 << FIXPOINT_FRAC_BITS) - 1)
 
 RIZZ_STATE static rizz_api_plugin* the_plugin;
-RIZZ_STATE static rizz_api_core* the_core;
+RIZZ_STATE static rizz_api_core* the_core; 
 RIZZ_STATE static rizz_api_asset* the_asset;
 RIZZ_STATE static rizz_api_refl* the_refl;
 RIZZ_STATE static rizz_api_imgui* the_imgui;
@@ -1795,8 +1795,10 @@ rizz_plugin_decl_main(sound, plugin, e)
 {
     switch (e) {
     case RIZZ_PLUGIN_EVENT_STEP: {
+        rizz_profile_begin(Sound, 0);
         snd__execute_command_buffers();
         snd__update((float)sx_tm_sec(the_core->delta_tick()));
+        rizz_profile_end(Sound);
         break;
     }
     case RIZZ_PLUGIN_EVENT_INIT:

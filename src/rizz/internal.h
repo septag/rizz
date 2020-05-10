@@ -48,6 +48,15 @@ void rizz__core_fix_callback_ptrs(const void** ptrs, const void** new_ptrs, int 
 #define rizz__coro_yield()                 the__core.coro_yield(&__transfer.from, 1)
 #define rizz__coro_yieldn(_n)              the__core.coro_yield(&__transfer.from, (_n))
 #define rizz__coro_invoke(_name, _user)    the__core.coro_invoke(coro__##_name, (_user))
+
+#define rizz__profile_begin(_name, _flags) \
+        static uint32_t rmt_sample_hash_##_name = 0; \
+        uint32_t rmt_sample_raii_##_name; \
+        the__core.begin_profile_sample(#_name, _flags, &rmt_sample_hash_##_name)
+#define rizz__profile_end(_name)               \
+        (void)rmt_sample_raii_##_name;   \
+        the__core.end_profile_sample();
+
 // clang-format on
 
 bool rizz__vfs_init(const sx_alloc* alloc);

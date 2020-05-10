@@ -310,6 +310,7 @@ sapp_desc sokol_main(int argc, char* argv[])
                          .app_version = 1000,
                          .app_flags = RIZZ_APP_FLAG_USER_CURSOR,
                          .core_flags = 0,
+                         .log_level = RIZZ_LOG_LEVEL_INFO,
                          .window_width = 640,
                          .window_height = 480,
                          .multisample_count = 1,

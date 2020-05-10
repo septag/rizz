@@ -33,7 +33,7 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 #endif
 
 //
-#define IMGUI_VERSION "1.69"
+#define IMGUI_VERSION "1.77"
 #define MAX_VERTS 32768      // 32k
 #define MAX_INDICES 98304    // 96k
 
@@ -45,9 +45,14 @@ RIZZ_STATE static rizz_api_plugin* the_plugin;
 RIZZ_STATE static rizz_api_gfx* the_gfx;
 RIZZ_STATE static rizz_api_app* the_app;
 
+// fwd: log-window.c
+void imgui__show_log(bool* p_open);
+bool imgui__log_init(rizz_api_core* core, const sx_alloc* alloc, uint32_t buffer_size);
+void imgui__log_release(void);
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // API
-static rizz_api_imgui the__imgui = {
+rizz_api_imgui the__imgui = {
     .CreateContext = igCreateContext,
     .DestroyContext = igDestroyContext,
     .GetCurrentContext = igGetCurrentContext,
@@ -1775,6 +1780,7 @@ static void imgui__memory_debugger(const rizz_mem_info* info, bool* p_open)
 static rizz_api_imgui_extra the__imgui_debug_tools = {
     .memory_debugger = imgui__memory_debugger,
     .graphics_debugger = imgui__graphics_debugger,
+    .show_log = imgui__show_log,
     .begin_fullscreen_draw = imgui__begin_fullscreen_draw,
     .draw_cursor = imgui__draw_cursor,
     .project_to_screen = imgui__project_to_screen,
@@ -1904,9 +1910,10 @@ static void imgui__submit_make_commands(const void* cmdbuff, int cmdbuff_sz)
 rizz_plugin_decl_main(imgui, plugin, e)
 {
     switch (e) {
-    case RIZZ_PLUGIN_EVENT_STEP:
+    case RIZZ_PLUGIN_EVENT_STEP: {
         imgui__frame();
         break;
+    }
 
     case RIZZ_PLUGIN_EVENT_INIT: {
         the_plugin = plugin->api;
@@ -1933,7 +1940,7 @@ rizz_plugin_decl_main(imgui, plugin, e)
             imgui__submit_make_commands(make_cmdbuff, make_cmdbuff_sz);
         }
 
-        // imgui__frame();
+        imgui__log_init(the_core, g_sg_imgui_alloc, 64*1024);
         break;
     }
 
@@ -1950,6 +1957,7 @@ rizz_plugin_decl_main(imgui, plugin, e)
 
     case RIZZ_PLUGIN_EVENT_SHUTDOWN:
         sx_assert(the_plugin);
+        imgui__log_release();
         sg_imgui_discard(&g_imgui.sg_imgui);
         imgui__release();
         the_plugin->remove_api("imgui", 0);
@@ -1960,4 +1968,4 @@ rizz_plugin_decl_main(imgui, plugin, e)
     return 0;
 }
 
-rizz_plugin_implement_info(imgui, 1690, "dear-imgui plugin", NULL, 0);
+rizz_plugin_implement_info(imgui, 1770, "dear-imgui plugin", NULL, 0);
