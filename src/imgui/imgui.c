@@ -1748,6 +1748,7 @@ static void imgui__memory_debugger(const rizz_mem_info* info, bool* p_open)
                     the__imgui.EndChild();
                 }    //
             }        // list-clipper
+            the__imgui.TreePop();
         }            // Heap
 
         // temp allocators
@@ -1766,6 +1767,8 @@ static void imgui__memory_debugger(const rizz_mem_info* info, bool* p_open)
                 the__imgui.SameLine(100.0f, -1);
                 imgui__dual_progress_bar(o, p, sx_vec2f(-1.0f, 14.0f), size_text, peak_text);
             }
+
+            the__imgui.TreePop();
         }
     }
 
