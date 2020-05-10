@@ -135,6 +135,8 @@ void imgui__show_log(bool* p_open)
 
 static void imgui__log_entryfn(const rizz_log_entry* entry, void* user)
 {
+    sx_unused(user);
+    
     char filename[64];
     int source_file_len = 0;
     if (entry->source_file && entry->source_file_len > 0) {
