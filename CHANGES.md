@@ -83,7 +83,7 @@
 - [x] BREAKING: external macro APIS (rizz_log_xxxx) are now same as internal ones (api variable is defined in header)
 - [x] BREAKING: removed many rizz headers and joined them as one (rizz.h)
 - [x] Improved GPU command buffers multi-threaded submission
-- [ ] BREAKING: graphic helper functions/renderers should take any API
+- [x] graphic helper functions/renderers should take any API
 - [x] BREAKING: renamed _sprite_ plugin to _2dtools_. the api name is the same, but it's now part of '2dtools' plugin
 - [x] BREAKING: replace sjson with cj5
 - [ ] Find a way to better streamline the sprite system and animations. AnimClips should just have frames in them and controlled by another state data
@@ -91,4 +91,4 @@
 ### Fixed
 - [x] fix sx_matx_inv 
 - [x] Error handling for missing shaders so they won't crash
-- [ ] Fix wierd crash on clang-cl and job dispatcher
+- [x] Fix crash on clang-cl and job dispatcher

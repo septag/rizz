@@ -41,6 +41,7 @@ typedef struct font__fons {
 
 typedef struct font__context {
     const sx_alloc* alloc;
+    rizz_api_gfx_draw* draw_api;
     font__fons** fonts;    // sx_array
     sg_pipeline pip;
     sg_buffer vbuff;
@@ -111,7 +112,7 @@ static void fons__draw_fn(void* user_ptr, const float* poss, const float* tcoord
                           const unsigned int* colors, int nverts)
 {
     font__fons* fons = user_ptr;
-    rizz_api_gfx_draw* draw_api = &the_gfx->staged;
+    rizz_api_gfx_draw* draw_api = g_font.draw_api;
 
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
@@ -353,8 +354,9 @@ bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* refl,
     the_refl = refl;
     the_gfx = gfx;
     the_app = app;
-
+    
     g_font.alloc = the_core->alloc(RIZZ_MEMID_GRAPHICS);
+    g_font.draw_api = &the_gfx->staged;
 
     // gfx objects
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
@@ -642,4 +644,10 @@ void font__set_viewproj_mat(const rizz_font* fnt, const sx_mat4* vp)
 {
     const font__fons* fons = (const font__fons*)fnt;
     fonsSetMatrix(fons->ctx, vp->f);
+}
+
+void font__set_draw_api(rizz_api_gfx_draw* api)
+{
+    sx_assert(api);
+    g_font.draw_api = api;
 }

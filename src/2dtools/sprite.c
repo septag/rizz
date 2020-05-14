@@ -144,6 +144,7 @@ typedef struct sprite__draw_context {
 
 typedef struct sprite__context {
     const sx_alloc* alloc;
+    rizz_api_gfx_draw* draw_api;
     sx_strpool* name_pool;
     sx_handle_pool* sprite_handles;
     sprite__data* sprites;
@@ -1275,6 +1276,7 @@ bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* ref
     the_gfx = gfx;
 
     g_spr.alloc = the_core->alloc(RIZZ_MEMID_GRAPHICS);
+    g_spr.draw_api = &the_gfx->staged;
     g_spr.name_pool = sx_strpool_create(
         g_spr.alloc, &(sx_strpool_config){ .counter_bits = SX_CONFIG_HANDLE_GEN_BITS,
                                            .index_bits = 32 - SX_CONFIG_HANDLE_GEN_BITS,
@@ -1834,9 +1836,9 @@ void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4*
     const sprite__draw_context* dc = &g_spr.drawctx;
 
     // append drawdata to buffers
-    int ib_offset = the_gfx->staged.append_buffer(dc->ibuff, dd->indices, 
+    int ib_offset = g_spr.draw_api->append_buffer(dc->ibuff, dd->indices, 
                                                   sizeof(uint16_t)*dd->num_indices);
-    int vb_offset1 = the_gfx->staged.append_buffer(dc->vbuff[0], dd->verts, 
+    int vb_offset1 = g_spr.draw_api->append_buffer(dc->vbuff[0], dd->verts, 
                                                    sizeof(rizz_sprite_vertex)*dd->num_verts);
 
     sprite__vertex_transform* tverts = sx_malloc(tmp_alloc, 
@@ -1858,7 +1860,7 @@ void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4*
             tverts[v].color = tints[orig_index].n;
         }
     }
-    int vb_offset2 = the_gfx->staged.append_buffer(dc->vbuff[1], tverts, 
+    int vb_offset2 = g_spr.draw_api->append_buffer(dc->vbuff[1], tverts, 
                                                    sizeof(sprite__vertex_transform)*dd->num_verts);
 
     sg_bindings bindings = {
@@ -1870,15 +1872,15 @@ void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4*
         .index_buffer_offset = ib_offset,
     };
 
-    the_gfx->staged.apply_pipeline(dc->pip);
-    the_gfx->staged.apply_uniforms(SG_SHADERSTAGE_VS, 0, vp, sizeof(*vp));
+    g_spr.draw_api->apply_pipeline(dc->pip);
+    g_spr.draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, vp, sizeof(*vp));
 
     // draw with batching
     for (int i = 0; i < dd->num_batches; i++)  {
         rizz_sprite_drawbatch* batch = &dd->batches[i];
         bindings.fs_images[0] = ((rizz_texture*)the_asset->obj(batch->texture).ptr)->img;
-        the_gfx->staged.apply_bindings(&bindings);
-        the_gfx->staged.draw(batch->index_start, batch->index_count, 1);
+        g_spr.draw_api->apply_bindings(&bindings);
+        g_spr.draw_api->draw(batch->index_start, batch->index_count, 1);
     }    
 
     the_core->tmp_alloc_pop();
@@ -1927,9 +1929,9 @@ void sprite__draw_wireframe_batch(const rizz_sprite* sprs, int num_sprites, cons
         }
     }
     
-    int vb_offset1 = the_gfx->staged.append_buffer(dc->vbuff[0], verts, 
+    int vb_offset1 = g_spr.draw_api->append_buffer(dc->vbuff[0], verts, 
                                                    sizeof(rizz_sprite_vertex)*dd->num_indices);
-    int vb_offset2 = the_gfx->staged.append_buffer(dc->vbuff[1], tverts, 
+    int vb_offset2 = g_spr.draw_api->append_buffer(dc->vbuff[1], tverts, 
                                                    sizeof(sprite__vertex_transform)*dd->num_indices);
 
     sg_bindings bindings = {
@@ -1939,15 +1941,15 @@ void sprite__draw_wireframe_batch(const rizz_sprite* sprs, int num_sprites, cons
         .vertex_buffer_offsets[1] = vb_offset2,
     };
 
-    the_gfx->staged.apply_pipeline(dc->pip_wire);
-    the_gfx->staged.apply_uniforms(SG_SHADERSTAGE_VS, 0, vp, sizeof(*vp));
+    g_spr.draw_api->apply_pipeline(dc->pip_wire);
+    g_spr.draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, vp, sizeof(*vp));
 
     // draw with batching
     for (int i = 0; i < dd->num_batches; i++)  {
         rizz_sprite_drawbatch* batch = &dd->batches[i];
         bindings.fs_images[0] = ((rizz_texture*)the_asset->obj(batch->texture).ptr)->img;
-        the_gfx->staged.apply_bindings(&bindings);
-        the_gfx->staged.draw(batch->index_start, batch->index_count, 1);
+        g_spr.draw_api->apply_bindings(&bindings);
+        g_spr.draw_api->draw(batch->index_start, batch->index_count, 1);
     }    
 
     the_core->tmp_alloc_pop();
@@ -2287,4 +2289,10 @@ const rizz_atlas* sprite__atlas_get(rizz_asset atlas_asset)
 void sprite__set_imgui(rizz_api_imgui* imgui)
 {
     the_imgui = imgui;
+}
+
+void sprite__set_draw_api(rizz_api_gfx_draw* draw_api) 
+{
+    sx_assert(draw_api);
+    g_spr.draw_api = draw_api;
 }

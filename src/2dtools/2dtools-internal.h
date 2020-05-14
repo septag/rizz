@@ -2,6 +2,8 @@
 
 #include "rizz/2dtools.h"
 
+typedef struct rizz_api_imgui rizz_api_imgui;
+
 // sprite
 bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* refl,
                   rizz_api_gfx* gfx);
@@ -61,6 +63,7 @@ bool sprite__animctrl_param_valueb(rizz_sprite_animctrl handle, const char* name
 float sprite__animctrl_param_valuef(rizz_sprite_animctrl handle, const char* name);
 int sprite__animctrl_param_valuei(rizz_sprite_animctrl handle, const char* name);
 rizz_sprite_animclip sprite__animctrl_clip(rizz_sprite_animctrl handle);
+void sprite__set_draw_api(rizz_api_gfx_draw* draw_api);
 
 // font
 bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* refl, rizz_api_gfx* gfx,
@@ -88,3 +91,4 @@ rizz_font_vert_metrics font__vert_metrics(const rizz_font* fnt);
 bool font__resize_draw_limits(int max_verts);
 rizz_font_iter font__iter_init(const rizz_font* fnt, sx_vec2 pos, const char* text);
 bool font__iter_next(const rizz_font* fnt, rizz_font_iter* iter, rizz_font_quad* quad);
+void font__set_draw_api(rizz_api_gfx_draw* draw_api);

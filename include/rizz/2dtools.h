@@ -212,7 +212,10 @@ typedef struct rizz_api_sprite {
     void (*draw_wireframe_batch)(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp,
                                  const sx_mat3* mats);                       
     void (*draw_wireframe)(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat);
+
+    // draw properties
     bool (*resize_draw_limits)(int max_verts, int max_indices);
+    void (*set_draw_api)(rizz_api_gfx_draw* draw_api);
 
     // anim-clip
     rizz_sprite_animclip (*animclip_create)(const rizz_sprite_animclip_desc* desc);
@@ -346,6 +349,7 @@ typedef struct rizz_api_font {
     rizz_font_line_bounds (*line_bounds)(const rizz_font* fnt, float y);
     rizz_font_vert_metrics (*vert_metrics)(const rizz_font* fnt);
     bool (*resize_draw_limits)(int max_verts);
+    void (*set_draw_api)(rizz_api_gfx_draw* draw_api);
 
     rizz_font_iter (*iter_init)(const rizz_font* fnt, sx_vec2 pos, const char* text);
     bool (*iter_next)(const rizz_font* fnt, rizz_font_iter* iter, rizz_font_quad* quad);
