@@ -214,10 +214,10 @@ static rizz_asset_load_data font__fons_on_prepare(const rizz_asset_load_params* 
 
     float dpiscale = fparams->ignore_dpiscale ? 1.0f : the_app->dpiscale();
     int atlas_width = fparams->atlas_width > 0
-                          ? (fparams->atlas_width * dpiscale)
+                          ? (int)((float)fparams->atlas_width * dpiscale)
                           : sx_nearest_pow2((int)(512.0f * dpiscale));
     int atlas_height = fparams->atlas_height > 0
-                           ? (fparams->atlas_height * dpiscale)
+                           ? (int)((float)fparams->atlas_height * dpiscale)
                            : sx_nearest_pow2((int)(512.0f * dpiscale));
     fons->f.img_width = atlas_width;
     fons->f.img_height = atlas_height;
