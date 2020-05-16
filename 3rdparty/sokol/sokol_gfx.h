@@ -12250,6 +12250,9 @@ static inline void _sg_dispatch(int thread_group_x, int thread_group_y, int thre
     #if defined(SOKOL_D3D11)
     _sg_d3d11_dispatch(thread_group_x, thread_group_y, thread_group_z);
     #else
+    _SOKOL_UNUSED(thread_group_x);
+    _SOKOL_UNUSED(thread_group_y);
+    _SOKOL_UNUSED(thread_group_z);
     SOKOL_ASSERT(0 && "Not implemented");
     #endif
 }

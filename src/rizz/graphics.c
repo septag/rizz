@@ -88,7 +88,6 @@ static void rizz__gfx_log_error(const char* source_file, int line, const char* s
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-variable")
-SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-parameter")
 #define SOKOL_IMPL
 #define SOKOL_API_DECL static
 #define SOKOL_API_IMPL static
@@ -424,7 +423,7 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
     sx_unused(desc);
 
     pip->shader = shd;
-    pip->shader_id = shader_id;
+    pip->cmn.shader_id = shader_id;
 
     // check that vertex attributes are not changed
     // When vertex attributes change, the required data to re-evaluate attributes will be missing
@@ -434,9 +433,9 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
     for (int attr_index = 0; attr_index < num_attrs; attr_index++) {
         const rizz_shader_refl_input* in = &info->inputs[attr_index];
         SOKOL_ASSERT(in->name);
-        GLint attr_loc = glGetAttribLocation(shd->gl_prog, in->name);
+        GLint attr_loc = glGetAttribLocation(shd->gl.prog, in->name);
         if (attr_loc != -1) {
-            _sg_gl_attr_t* gl_attr = &pip->gl_attrs[attr_loc];
+            _sg_gl_attr_t* gl_attr = &pip->gl.attrs[attr_loc];
             SOKOL_ASSERT(gl_attr->size == (uint8_t)_sg_gl_vertexformat_size(in->type));
             SOKOL_ASSERT(gl_attr->type == _sg_gl_vertexformat_type(in->type));
             SOKOL_ASSERT(gl_attr->normalized == _sg_gl_vertexformat_normalized(in->type));
