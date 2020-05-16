@@ -156,7 +156,7 @@ rizz_game_decl_config(conf)
     conf->app_flags |= RIZZ_APP_FLAG_HIGHDPI;
     conf->window_width = 800;
     conf->window_height = 600;
-    conf->swap_interval = 2;
+    conf->swap_interval = 1;
     conf->plugins[0] = "imgui";
     conf->plugins[1] = "sound";
 }

@@ -233,7 +233,7 @@ static bool rizz__parse_version(const char* version_str, int* major, int* minor,
     if (!end_major) {
         return false;
     }
-     sx_strncpy(num, sizeof(num), version_str + 1, (int)(intptr_t)(end_major - version_str - 1));
+     sx_strncpy(num, sizeof(num), version_str, (int)(intptr_t)(end_major - version_str));
     *major = sx_toint(num);
 
     const char* end_minor = sx_strchar(end_major + 1, '-');
