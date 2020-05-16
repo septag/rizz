@@ -79,6 +79,7 @@ typedef enum sg_backend {
     SG_BACKEND_METAL_IOS,
     SG_BACKEND_METAL_MACOS,
     SG_BACKEND_METAL_SIMULATOR,
+    SG_BACKEND_WGPU,
     SG_BACKEND_DUMMY,
 } sg_backend;
 
@@ -112,7 +113,7 @@ typedef enum sg_backend {
         - render: the pixelformat can be used for render targets
         - blend:  blending is supported when using the pixelformat for
                   render targets
-        - msaa:   multisample-antiliasing is supported when using the
+        - msaa:   multisample-antialiasing is supported when using the
                   pixelformat for render targets
         - depth:  the pixelformat can be used for depth-stencil attachments
 
@@ -243,8 +244,8 @@ typedef struct sg_limits {
     uint32_t max_image_size_2d;         /* max width/height of SG_IMAGETYPE_2D images */
     uint32_t max_image_size_cube;       /* max width/height of SG_IMAGETYPE_CUBE images */
     uint32_t max_image_size_3d;         /* max width/height/depth of SG_IMAGETYPE_3D images */
-    uint32_t max_image_size_array;
-    uint32_t max_image_array_layers;
+    uint32_t max_image_size_array;      /* max width/height pf SG_IMAGETYPE_ARRAY images */
+    uint32_t max_image_array_layers;    /* max number of layers in SG_IMAGETYPE_ARRAY images */
     uint32_t max_vertex_attrs;          /* <= SG_MAX_VERTEX_ATTRIBUTES (only on some GLES2 impls) */
 } sg_limits;
 
@@ -284,7 +285,7 @@ typedef enum sg_resource_state {
     and images:
 
     SG_USAGE_IMMUTABLE:     the resource will never be updated with
-                            new data, instead the data content of the
+                            new data, instead the content of the
                             resource must be provided on creation
     SG_USAGE_DYNAMIC:       the resource will be updated infrequently
                             with new data (this could range from "once
@@ -303,7 +304,7 @@ typedef enum sg_resource_state {
     application must update all data required for rendering (this
     means that the update data can be smaller than the resource size,
     if only a part of the overall resource size is used for rendering,
-    you only need to make sure that the data that *is* used is valid.
+    you only need to make sure that the data that *is* used is valid).
 
     The default usage is SG_USAGE_IMMUTABLE.
 */
@@ -355,10 +356,12 @@ typedef enum sg_index_type {
 /*
     sg_image_type
 
-    Indicates the basic image type (2D-texture, cubemap, 3D-texture
-    or 2D-array-texture). 3D- and array-textures are not supported
-    on the GLES2/WebGL backend. The image type is used in the
-    sg_image_desc.type member when creating an image.
+    Indicates the basic type of an image object (2D-texture, cubemap,
+    3D-texture or 2D-array-texture). 3D- and array-textures are not supported
+    on the GLES2/WebGL backend (use sg_query_features().imagetype_3d and
+    sg_query_features().imagetype_array to check for support). The image type
+    is used in the sg_image_desc.type member when creating an image, and
+    in sg_shader_image_desc when describing a shader's texture sampler binding.
 
     The default image type when creating an image is SG_IMAGETYPE_2D.
 */
@@ -371,6 +374,23 @@ typedef enum sg_image_type {
     _SG_IMAGETYPE_NUM,
     _SG_IMAGETYPE_FORCE_U32 = 0x7FFFFFFF
 } sg_image_type;
+
+/*
+    sg_sampler_type
+
+    Indicates the basic data type of a shader's texture sampler which
+    can be float , unsigned integer or signed integer. The sampler
+    type is used in the sg_shader_image_desc to describe the
+    sampler type of a shader's texture sampler binding.
+
+    The default sampler type is SG_SAMPLERTYPE_FLOAT.
+*/
+typedef enum sg_sampler_type {
+    _SG_SAMPLERTYPE_DEFAULT,  /* value 0 reserved for default-init */
+    SG_SAMPLERTYPE_FLOAT,
+    SG_SAMPLERTYPE_SINT,
+    SG_SAMPLERTYPE_UINT,
+} sg_sampler_type;
 
 /*
     sg_cube_face
@@ -737,6 +757,10 @@ typedef enum sg_blend_op {
     sg_pipeline_desc.blend.color_write_mask when creating a pipeline object.
 
     The default colormask is SG_COLORMASK_RGBA (write all colors channels)
+
+    NOTE: since the color mask value 0 is reserved for the default value
+    (SG_COLORMASK_RGBA), use SG_COLORMASK_NONE if all color channels
+    should be disabled.
 */
 typedef enum sg_color_mask {
     _SG_COLORMASK_DEFAULT = 0,      /* value 0 reserved for default-init */
@@ -841,8 +865,8 @@ typedef struct sg_pass_action {
     are defined by the SG_MAX_SHADERSTAGE_BUFFERS and
     SG_MAX_SHADERSTAGE_IMAGES configuration constants.
 
-    The optional buffer offsets can be used to group different chunks
-    of vertex- and/or index-data into the same buffer objects.
+    The optional buffer offsets can be used to put different unrelated
+    chunks of vertex- and/or index-data into the same buffer objects.
 */
 typedef struct sg_bindings {
     uint32_t _start_canary;
@@ -876,9 +900,9 @@ typedef struct sg_bindings {
     .content        0
     .label          0       (optional string label for trace hooks)
 
-    The dbg_label will be ignored by sokol_gfx.h, it is only useful
+    The label will be ignored by sokol_gfx.h, it is only useful
     when hooking into sg_make_buffer() or sg_init_buffer() via
-    the sg_install_trace_hook
+    the sg_install_trace_hooks() function.
 
     ADVANCED TOPIC: Injecting native 3D-API buffers:
 
@@ -917,6 +941,8 @@ typedef struct sg_buffer_desc {
     const void* mtl_buffers[SG_NUM_INFLIGHT_FRAMES];
     /* D3D11 specific */
     const void* d3d11_buffer;
+    /* WebGPU specific */
+    const void* wgpu_buffer;
     uint32_t _end_canary;
 } sg_buffer_desc;
 
@@ -959,14 +985,14 @@ typedef struct sg_image_content {
 
     .type:              SG_IMAGETYPE_2D
     .render_target:     false
+    .shader_write       false
     .width              0 (must be set to >0)
     .height             0 (must be set to >0)
     .depth/.layers:     1
     .num_mipmaps:       1
     .usage:             SG_USAGE_IMMUTABLE
-    .pixel_format:      SG_PIXELFORMAT_RGBA8 for textures, backend-dependent
-                        for render targets (RGBA8 or BGRA8)
-    .sample_count:      1 (only used in render_targets)
+    .pixel_format:      SG_PIXELFORMAT_RGBA8 for textures, or sg_desc.context.color_format for render targets
+    .sample_count:      1 for textures, or sg_desc.context.sample_count for render target
     .min_filter:        SG_FILTER_NEAREST
     .mag_filter:        SG_FILTER_NEAREST
     .wrap_u:            SG_WRAP_REPEAT
@@ -978,6 +1004,17 @@ typedef struct sg_image_content {
     .max_lod            FLT_MAX
     .content            an sg_image_content struct to define the initial content
     .label              0       (optional string label for trace hooks)
+
+    Q: Why is the default sample_count for render targets identical with the
+    "default sample count" from sg_desc.context.sample_count?
+
+    A: So that it matches the default sample count in pipeline objects. Even
+    though it is a bit strange/confusing that offscreen render targets by default
+    get the same sample count as the default framebuffer, but it's better that
+    an offscreen render target created with default parameters matches
+    a pipeline object created with default parameters.
+
+    NOTE:
 
     SG_IMAGETYPE_ARRAY and SG_IMAGETYPE_3D are not supported on
     WebGL/GLES2, use sg_query_features().imagetype_array and
@@ -1032,6 +1069,8 @@ typedef struct sg_image_desc {
     const void* mtl_textures[SG_NUM_INFLIGHT_FRAMES];
     /* D3D11 specific */
     const void* d3d11_texture;
+    /* WebGPU specific */
+    const void* wgpu_texture;
     uint32_t _end_canary;
 } sg_image_desc;
 
@@ -1055,6 +1094,7 @@ typedef struct sg_image_desc {
                 - if the member is an array, the number of array items
         - reflection info for the texture images used by the shader stage:
             - the image type (SG_IMAGETYPE_xxx)
+            - the sampler type (SG_SAMPLERTYPE_xxx, default is SG_SAMPLERTYPE_FLOAT)
             - the name of the texture sampler (required for GLES2, optional everywhere else)
 
     For all GL backends, shader source-code must be provided. For D3D11 and Metal,
@@ -1082,7 +1122,8 @@ typedef struct sg_shader_uniform_block_desc {
 
 typedef struct sg_shader_image_desc {
     const char* name;
-    sg_image_type type;
+    sg_image_type type;         /* FIXME: should this be renamed to 'image_type'? */
+    sg_sampler_type sampler_type;
 } sg_shader_image_desc;
 
 typedef struct sg_shader_stage_desc {
@@ -1121,9 +1162,9 @@ typedef struct sg_shader_desc {
 
     If the vertex data has no gaps between vertex components, you can omit
     the .layout.buffers[].stride and layout.attrs[].offset items (leave them
-    default-initialized to 0), sokol will then compute the offsets and strides
-    from the vertex component formats (.layout.attrs[].offset). Please note
-    that ALL vertex attribute offsets must be 0 in order for the the
+    default-initialized to 0), sokol-gfx will then compute the offsets and strides
+    from the vertex component formats (.layout.attrs[].format). Please note
+    that ALL vertex attribute offsets must be 0 in order for the
     automatic offset computation to kick in.
 
     The default configuration is as follows:
@@ -1137,7 +1178,7 @@ typedef struct sg_shader_desc {
             .buffer_index   0 the vertex buffer bind slot
             .offset         0 (offsets can be omitted if the vertex layout has no gaps)
             .format         SG_VERTEXFORMAT_INVALID (must be initialized!)
-    .shader:            0 (must be intilized with a valid sg_shader id!)
+    .shader:            0 (must be initialized with a valid sg_shader id!)
     .primitive_type:    SG_PRIMITIVETYPE_TRIANGLES
     .index_type:        SG_INDEXTYPE_NONE
     .depth_stencil:
@@ -1169,7 +1210,7 @@ typedef struct sg_shader_desc {
         .alpha_to_coverage_enabled:     false
         .cull_mode:                     SG_CULLMODE_NONE
         .face_winding:                  SG_FACEWINDING_CW
-        .sample_count:                  1
+        .sample_count:                  sg_desc.context.sample_count
         .depth_bias:                    0.0f
         .depth_bias_slope_scale:        0.0f
         .depth_bias_clamp:              0.0f
@@ -1257,7 +1298,7 @@ typedef struct sg_pipeline_desc {
     A pass object contains 1..4 color-attachments and none, or one,
     depth-stencil-attachment. Each attachment consists of
     an image, and two additional indices describing
-    which subimage the pass will render: one mipmap index, and
+    which subimage the pass will render to: one mipmap index, and
     if the image is a cubemap, array-texture or 3D-texture, the
     face-index, array-layer or depth-slice.
 
@@ -1268,8 +1309,7 @@ typedef struct sg_pipeline_desc {
     - the same size
     - the same sample count
 
-    In addition, all color-attachment images must have the same
-    pixel format.
+    In addition, all color-attachment images must have the same pixel format.
 */
 typedef struct sg_attachment_desc {
     sg_image image;
@@ -1292,7 +1332,7 @@ typedef struct sg_pass_desc {
 /*
     sg_trace_hooks
 
-    Installable callback functions to keep track of the sokol_gfx calls,
+    Installable callback functions to keep track of the sokol-gfx calls,
     this is useful for debugging, or keeping track of resource creation
     and destruction.
 
@@ -1386,6 +1426,7 @@ typedef struct sg_buffer_info {
     sg_slot_info slot;              /* resource pool slot info */
     uint32_t update_frame_index;    /* frame index of last sg_update_buffer() */
     uint32_t append_frame_index;    /* frame index of last sg_append_buffer() */
+    uint32_t map_frame_index;
     int append_pos;                 /* current position in buffer for sg_append_buffer() */
     bool append_overflow;           /* is buffer in overflow state (due to sg_append_buffer) */
     int num_slots;                  /* number of renaming-slots for dynamically updated buffers */
@@ -1417,20 +1458,32 @@ typedef struct sg_pass_info {
     The sg_desc struct contains configuration values for sokol_gfx,
     it is used as parameter to the sg_setup() call.
 
+    FIXME: explain the various configuration options
+
     The default configuration is:
 
-    .buffer_pool_size:      128
-    .image_pool_size:       128
-    .shader_pool_size:      32
-    .pipeline_pool_size:    64
-    .pass_pool_size:        16
-    .context_pool_size:     16
+    .buffer_pool_size       128
+    .image_pool_size        128
+    .shader_pool_size       32
+    .pipeline_pool_size     64
+    .pass_pool_size         16
+    .context_pool_size      16
+    .sampler_cache_size     64
+    .uniform_buffer_size    4 MB (4*1024*1024)
+    .staging_buffer_size    8 MB (8*1024*1024)
+
+    .context.color_format: default value depends on selected backend:
+        all GL backends:    SG_PIXELFORMAT_RGBA8
+        Metal and D3D11:    SG_PIXELFORMAT_BGRA8
+        WGPU:               *no default* (must be queried from WGPU swapchain)
+    .context.depth_format   SG_PIXELFORMAT_DEPTH_STENCIL
+    .context.sample_count   1
 
     GL specific:
-    .gl_force_gles2
-        if this is true the GL backend will act in "GLES2 fallback mode" even
-        when compiled with SOKOL_GLES3, this is useful to fall back
-        to traditional WebGL if a browser doesn't support a WebGL2 context
+        .context.gl.force_gles2
+            if this is true the GL backend will act in "GLES2 fallback mode" even
+            when compiled with SOKOL_GLES3, this is useful to fall back
+            to traditional WebGL if a browser doesn't support a WebGL2 context
 
     Metal specific:
         (NOTE: All Objective-C object references are transferred through
@@ -1440,42 +1493,89 @@ typedef struct sg_pass_info {
         must hold a strong reference to the Objective-C object for the
         duration of the sokol_gfx call!
 
-    .mtl_device
-        a pointer to the MTLDevice object
-    .mtl_renderpass_descriptor_cb
-        a C callback function to obtain the MTLRenderPassDescriptor for the
-        current frame when rendering to the default framebuffer, will be called
-        in sg_begin_default_pass()
-    .mtl_drawable_cb
-        a C callback function to obtain a MTLDrawable for the current
-        frame when rendering to the default framebuffer, will be called in
-        sg_end_pass() of the default pass
-    .mtl_global_uniform_buffer_size
-        the size of the global uniform buffer in bytes, this must be big
-        enough to hold all uniform block updates for a single frame,
-        the default value is 4 MByte (4 * 1024 * 1024)
-    .mtl_sampler_cache_size
-        the number of slots in the sampler cache, the Metal backend
-        will share texture samplers with the same state in this
-        cache, the default value is 64
+        .context.metal.device
+            a pointer to the MTLDevice object
+        .context.metal.renderpass_descriptor_cb
+            a C callback function to obtain the MTLRenderPassDescriptor for the
+            current frame when rendering to the default framebuffer, will be called
+            in sg_begin_default_pass()
+        .context.metal.drawable_cb
+            a C callback function to obtain a MTLDrawable for the current
+            frame when rendering to the default framebuffer, will be called in
+            sg_end_pass() of the default pass
 
     D3D11 specific:
-    .d3d11_device
-        a pointer to the ID3D11Device object, this must have been created
-        before sg_setup() is called
-    .d3d11_device_context
-        a pointer to the ID3D11DeviceContext object
-    .d3d11_render_target_view_cb
-        a C callback function to obtain a pointer to the current
-        ID3D11RenderTargetView object of the default framebuffer,
-        this function will be called in sg_begin_pass() when rendering
-        to the default framebuffer
-    .d3d11_depth_stencil_view_cb
-        a C callback function to obtain a pointer to the current
-        ID3D11DepthStencilView object of the default framebuffer,
-        this function will be called in sg_begin_pass() when rendering
-        to the default framebuffer
+        .context.d3d11.device
+            a pointer to the ID3D11Device object, this must have been created
+            before sg_setup() is called
+        .context..d3d11.device_context
+            a pointer to the ID3D11DeviceContext object
+        .context..d3d11.render_target_view_cb
+            a C callback function to obtain a pointer to the current
+            ID3D11RenderTargetView object of the default framebuffer,
+            this function will be called in sg_begin_pass() when rendering
+            to the default framebuffer
+        .context.d3d11.depth_stencil_view_cb
+            a C callback function to obtain a pointer to the current
+            ID3D11DepthStencilView object of the default framebuffer,
+            this function will be called in sg_begin_pass() when rendering
+            to the default framebuffer
+
+    WebGPU specific:
+        .context.wgpu.device
+            a WGPUDevice handle
+        .context.wgpu.render_format
+            WGPUTextureFormat of the swap chain surface
+        .context.wgpu.render_view_cb
+            callback to get the current WGPUTextureView of the swapchain's
+            rendering attachment (may be an MSAA surface)
+        .context.wgpu.resolve_view_cb
+            callback to get the current WGPUTextureView of the swapchain's
+            MSAA-resolve-target surface, must return 0 if not MSAA rendering
+        .context.wgpu.depth_stencil_view_cb
+            callback to get current default-pass depth-stencil-surface WGPUTextureView
+            the pixel format of the default WGPUTextureView must be WGPUTextureFormat_Depth24Plus8
+
+    When using sokol_gfx.h and sokol_app.h together, consider using the
+    helper function sapp_sgcontext() in the sokol_glue.h header to
+    initialize the sg_desc.context nested struct. sapp_sgcontext() returns
+    a completely initialized sg_context_desc struct with information
+    provided by sokol_app.h.
 */
+typedef struct sg_gl_context_desc {
+    bool force_gles2;
+} sg_gl_context_desc;
+
+typedef struct sg_mtl_context_desc {
+    const void* device;
+    const void* (*renderpass_descriptor_cb)(void);
+    const void* (*drawable_cb)(void);
+} sg_metal_context_desc;
+
+typedef struct sg_d3d11_context_desc {
+    const void* device;
+    const void* device_context;
+    const void* (*render_target_view_cb)(void);
+    const void* (*depth_stencil_view_cb)(void);
+} sg_d3d11_context_desc;
+
+typedef struct sg_wgpu_context_desc {
+    const void* device;                    /* WGPUDevice */
+    const void* (*render_view_cb)(void);   /* returns WGPUTextureView */
+    const void* (*resolve_view_cb)(void);  /* returns WGPUTextureView */
+    const void* (*depth_stencil_view_cb)(void);    /* returns WGPUTextureView, must be WGPUTextureFormat_Depth24Plus8 */
+} sg_wgpu_context_desc;
+
+typedef struct sg_context_desc {
+    sg_pixel_format color_format;
+    sg_pixel_format depth_format;
+    int sample_count;
+    sg_gl_context_desc gl;
+    sg_metal_context_desc metal;
+    sg_d3d11_context_desc d3d11;
+    sg_wgpu_context_desc wgpu;
+} sg_context_desc;
+
 typedef struct sg_desc {
     uint32_t _start_canary;
     int buffer_pool_size;
@@ -1484,19 +1584,10 @@ typedef struct sg_desc {
     int pipeline_pool_size;
     int pass_pool_size;
     int context_pool_size;
-    /* GL specific */
-    bool gl_force_gles2;
-    /* Metal-specific */
-    const void* mtl_device;
-    const void* (*mtl_renderpass_descriptor_cb)(void);
-    const void* (*mtl_drawable_cb)(void);
-    int mtl_global_uniform_buffer_size;
-    int mtl_sampler_cache_size;
-    /* D3D11-specific */
-    const void* d3d11_device;
-    const void* d3d11_device_context;
-    const void* (*d3d11_render_target_view_cb)(void);
-    const void* (*d3d11_depth_stencil_view_cb)(void);
+    int uniform_buffer_size;
+    int staging_buffer_size;
+    int sampler_cache_size;
+    sg_context_desc context;
     uint32_t _end_canary;
 } sg_desc;
 

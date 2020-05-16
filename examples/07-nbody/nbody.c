@@ -369,6 +369,7 @@ rizz_game_decl_config(conf)
     conf->app_name = "nbody";
     conf->app_version = 1000;
     conf->app_title = "nbody";
+    conf->app_flags |= RIZZ_APP_FLAG_HIGHDPI;
     conf->window_width = 800;
     conf->window_height = 600;
     conf->swap_interval = 1;

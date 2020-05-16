@@ -219,8 +219,8 @@ static const char* k_log_entry_types[_RIZZ_LOG_LEVEL_COUNT] = { "ERROR: ",      
                                                                 "VERBOSE: ",    //
                                                                 "DEBUG: " };
 
-static bool rizz__parse_version(const char* version_str, int* major, int* minor, int* fix,
-                                char* git, int git_size)
+static bool rizz__parse_version(const char* version_str, int* major, int* minor, char* git,
+                                int git_size)
 {
     if (version_str[0] != 'v') {
         return false;
@@ -236,21 +236,14 @@ static bool rizz__parse_version(const char* version_str, int* major, int* minor,
      sx_strncpy(num, sizeof(num), version_str + 1, (int)(intptr_t)(end_major - version_str - 1));
     *major = sx_toint(num);
 
-    const char* end_minor = sx_strchar(end_major + 1, '.');
+    const char* end_minor = sx_strchar(end_major + 1, '-');
     if (!end_minor) {
         return false;
     }
     sx_strncpy(num, sizeof(num), end_major + 1, (int)(intptr_t)(end_minor - end_major - 1));
     *minor = sx_toint(num);
 
-    const char* end_fix = sx_strchar(end_minor + 1, '-');
-    if (!end_fix) {
-        return false;
-    }
-    sx_strncpy(num, sizeof(num), end_minor + 1, (int)(intptr_t)(end_fix - end_minor - 1));
-    *fix = sx_toint(num);
-
-    sx_strcpy(git, git_size, end_fix + 1);
+    sx_strcpy(git, git_size, end_minor + 1);
 
     return true;
 }
@@ -1035,8 +1028,8 @@ bool rizz__core_init(const rizz_config* conf)
                             : sx_alloc_malloc();
 
 #ifdef RIZZ_VERSION
-    rizz__parse_version(sx_stringize(RIZZ_VERSION), &g_core.ver.major, &g_core.ver.minor,
-                        &g_core.ver.fix, g_core.ver.git, sizeof(g_core.ver.git));
+    rizz__parse_version(sx_stringize(RIZZ_VERSION), &g_core.ver.major, &g_core.ver.minor, 
+                        g_core.ver.git, sizeof(g_core.ver.git));
 #endif
 
     if (RIZZ_CONFIG_DEBUG_MEMORY) {
@@ -1100,8 +1093,7 @@ bool rizz__core_init(const rizz_config* conf)
     }
 
     // log version
-    rizz__log_info("version: %d.%d.%d-%s", g_core.ver.major, g_core.ver.minor, g_core.ver.fix,
-                   g_core.ver.git);
+    rizz__log_info("version: %d.%d-%s", g_core.ver.major, g_core.ver.minor, g_core.ver.git);
 
     sx_tm_init();
     sx_rng_seed(&g_core.rng, sizeof(time_t) == sizeof(uint64_t)
@@ -1208,7 +1200,7 @@ bool rizz__core_init(const rizz_config* conf)
     // graphics
     sg_desc gfx_desc;
     rizz__app_init_gfx_desc(&gfx_desc);    // fill initial bindings for graphics/app
-    // TODO:
+    // TODO: override these default values with config
     //  mtl_global_uniform_buffer_size
     //  mtl_sampler_cache_size
     // .buffer_pool_size:      128
@@ -1217,6 +1209,12 @@ bool rizz__core_init(const rizz_config* conf)
     // .pipeline_pool_size:    64
     // .pass_pool_size:        16
     // .context_pool_size:     16
+    // .sampler_cache_size     64
+    // .uniform_buffer_size    4 MB (4*1024*1024)
+    // .staging_buffer_size    8 MB (8*1024*1024)
+    // .context.color_format
+    // .context.depth_format
+    gfx_desc.context.sample_count = conf->multisample_count;
     if (!rizz__gfx_init(rizz__alloc(RIZZ_MEMID_GRAPHICS), &gfx_desc,
                         (conf->core_flags & RIZZ_CORE_FLAG_PROFILE_GPU) ? true : false)) {
         rizz__log_error("initializing graphics failed");

@@ -399,14 +399,16 @@ void rizz__app_init_gfx_desc(sg_desc* desc)
     sx_assert(sapp_isvalid());
 
     sx_memset(desc, 0x0, sizeof(sg_desc));
-    desc->gl_force_gles2 = sapp_gles2();
-    desc->mtl_device = sapp_metal_get_device();
-    desc->mtl_renderpass_descriptor_cb = sapp_metal_get_renderpass_descriptor;
-    desc->mtl_drawable_cb = sapp_metal_get_drawable;
-    desc->d3d11_device = sapp_d3d11_get_device();
-    desc->d3d11_device_context = sapp_d3d11_get_device_context();
-    desc->d3d11_render_target_view_cb = sapp_d3d11_get_render_target_view;
-    desc->d3d11_depth_stencil_view_cb = sapp_d3d11_get_depth_stencil_view;
+    sg_context_desc* context = &desc->context;
+
+    context->gl.force_gles2 = sapp_gles2();
+    context->metal.device = sapp_metal_get_device();
+    context->metal.renderpass_descriptor_cb = sapp_metal_get_renderpass_descriptor;
+    context->metal.drawable_cb = sapp_metal_get_drawable;
+    context->d3d11.device = sapp_d3d11_get_device();
+    context->d3d11.device_context = sapp_d3d11_get_device_context();
+    context->d3d11.render_target_view_cb = sapp_d3d11_get_render_target_view;
+    context->d3d11.depth_stencil_view_cb = sapp_d3d11_get_depth_stencil_view;
 }
 
 const void* rizz__app_d3d11_device()

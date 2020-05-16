@@ -37,6 +37,7 @@ typedef struct font__fons {
     FONScontext* ctx;
     char name[32];
     bool img_dirty;
+    bool ignore_dpiscale;
 } font__fons;
 
 typedef struct font__context {
@@ -211,15 +212,17 @@ static rizz_asset_load_data font__fons_on_prepare(const rizz_asset_load_params* 
         return (rizz_asset_load_data){ .obj = { 0 } };
     }
 
+    float dpiscale = fparams->ignore_dpiscale ? 1.0f : the_app->dpiscale();
     int atlas_width = fparams->atlas_width > 0
-                          ? fparams->atlas_width
-                          : sx_nearest_pow2((int)(512.0f * the_app->dpiscale()));
+                          ? (fparams->atlas_width * dpiscale)
+                          : sx_nearest_pow2((int)(512.0f * dpiscale));
     int atlas_height = fparams->atlas_height > 0
-                           ? fparams->atlas_height
-                           : sx_nearest_pow2((int)(512.0f * the_app->dpiscale()));
+                           ? (fparams->atlas_height * dpiscale)
+                           : sx_nearest_pow2((int)(512.0f * dpiscale));
     fons->f.img_width = atlas_width;
     fons->f.img_height = atlas_height;
     fons->f.img_atlas.id = 0;
+    fons->ignore_dpiscale = fparams->ignore_dpiscale;
 
     fons->ctx = fonsCreateInternal(&(FONSparams){ .width = atlas_width,
                                                   .height = atlas_height,
@@ -265,6 +268,7 @@ static bool font__fons_on_load(rizz_asset_load_data* data, const rizz_asset_load
     }
 
     fonsSetFont(fons->ctx, fons_id);
+    fonsSetSize(fons->ctx, 12.0f * (fons->ignore_dpiscale ? 1.0f : the_app->dpiscale()));
 
     return true;
 }
@@ -607,7 +611,7 @@ void font__draw_debug(const rizz_font* fnt, sx_vec2 pos)
 void font__set_size(const rizz_font* fnt, float size)
 {
     const font__fons* fons = (const font__fons*)fnt;
-    fonsSetSize(fons->ctx, size);
+    fonsSetSize(fons->ctx, size * (fons->ignore_dpiscale ? 1.0f : the_app->dpiscale()));
 }
 
 void font__set_color(const rizz_font* fnt, sx_color color)

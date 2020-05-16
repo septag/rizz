@@ -229,6 +229,7 @@ rizz_game_decl_config(conf)
     conf->app_name = "quad";
     conf->app_version = 1000;
     conf->app_title = "02 - Quad";
+    conf->app_flags |= RIZZ_APP_FLAG_HIGHDPI;
     conf->window_width = 800;
     conf->window_height = 600;
     conf->swap_interval = 2;

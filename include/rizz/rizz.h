@@ -631,7 +631,6 @@ typedef struct rizz_mem_info {
 typedef struct rizz_version {
     int major;
     int minor;
-    int fix;
     char git[32];
 } rizz_version;
 

@@ -258,6 +258,7 @@ typedef struct rizz_api_sprite {
 typedef struct rizz_font_load_params {
     int atlas_width;
     int atlas_height;
+    bool ignore_dpiscale;
 } rizz_font_load_params;
 
 typedef enum {

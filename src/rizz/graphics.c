@@ -323,11 +323,11 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
                                             const sg_pipeline_desc* desc)
 {
     SOKOL_ASSERT(shd->slot.state == SG_RESOURCESTATE_VALID);
-    SOKOL_ASSERT(shd->d3d11_vs_blob && shd->d3d11_vs_blob_length > 0);
+    SOKOL_ASSERT(shd->d3d11.vs_blob && shd->d3d11.vs_blob_length > 0);
     sx_unused(desc);
 
     pip->shader = shd;
-    pip->shader_id = shader_id;
+    pip->cmn.shader_id = shader_id;
 }
 #elif defined(SOKOL_METAL)
 _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shader_id,
@@ -453,7 +453,7 @@ static void sg_set_pipeline_shader(sg_pipeline pip_id, sg_shader prev_shader_id,
     SOKOL_ASSERT(pip_id.id != SG_INVALID_ID);
     _sg_pipeline_t* pip = _sg_lookup_pipeline(&_sg.pools, pip_id.id);
     SOKOL_ASSERT(pip && pip->slot.state == SG_RESOURCESTATE_VALID);
-    if (pip->shader_id.id == prev_shader_id.id) {
+    if (pip->cmn.shader_id.id == prev_shader_id.id) {
         _sg_shader_t* shd = _sg_lookup_shader(&_sg.pools, shader_id.id);
         SOKOL_ASSERT(shd && shd->slot.state == SG_RESOURCESTATE_VALID);
         _sg_set_pipeline_shader(pip, shader_id, shd, info, desc);
@@ -465,25 +465,25 @@ static void sg_map_buffer(sg_buffer buf_id, int offset, const void* data, int nu
     _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, buf_id.id);
     if (buf) {
         /* rewind append cursor in a new frame */
-        if (buf->map_frame_index != _sg.frame_index) {
-            buf->append_pos = 0;
-            buf->append_overflow = false;
+        if (buf->cmn.map_frame_index != _sg.frame_index) {
+            buf->cmn.append_pos = 0;
+            buf->cmn.append_overflow = false;
         }
 
-        if ((offset + num_bytes) > buf->size) {
-            buf->append_overflow = true;
+        if ((offset + num_bytes) > buf->cmn.size) {
+            buf->cmn.append_overflow = true;
         }
 
         if (buf->slot.state == SG_RESOURCESTATE_VALID) {
-            buf->append_pos = offset;    // alter append_pos, so we write at offset
+            buf->cmn.append_pos = offset;    // alter append_pos, so we write at offset
             if (_sg_validate_append_buffer(buf, data, num_bytes)) {
-                if (!buf->append_overflow && (num_bytes > 0)) {
+                if (!buf->cmn.append_overflow && (num_bytes > 0)) {
                     /* update and append and map on same buffer in same frame not allowed */
-                    SOKOL_ASSERT(buf->update_frame_index != _sg.frame_index);
-                    SOKOL_ASSERT(buf->append_frame_index != _sg.frame_index);
+                    SOKOL_ASSERT(buf->cmn.update_frame_index != _sg.frame_index);
+                    SOKOL_ASSERT(buf->cmn.append_frame_index != _sg.frame_index);
                     _sg_append_buffer(buf, data, num_bytes,
-                                      buf->map_frame_index != _sg.frame_index);
-                    buf->map_frame_index = _sg.frame_index;
+                                      buf->cmn.map_frame_index != _sg.frame_index);
+                    buf->cmn.map_frame_index = _sg.frame_index;
                 }
             }
         }
@@ -678,7 +678,7 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
         for (int i = 0; i < num_images; i++) {
             for (int mip = 0; mip < num_mips; mip++) {
                 if (mip >= tparams->first_mip) {
-                    int image_sz = _sg_surface_pitch(tparams->fmt, w, h);
+                    int image_sz = _sg_surface_pitch(tparams->fmt, w, h, 1);
                     mip_size[mip - tparams->first_mip] = image_sz;
                     total_sz += image_sz;
                 }
@@ -2140,7 +2140,7 @@ static void rizz__trace_destroy_buffer(sg_buffer buf_id, void* user_data)
 {
     sx_unused(user_data);
     _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, buf_id.id);
-    g_gfx.trace.t.buffer_size -= buf->size;
+    g_gfx.trace.t.buffer_size -= buf->cmn.size;
     --g_gfx.trace.t.num_buffers;
 }
 
@@ -2148,14 +2148,14 @@ static void rizz__trace_destroy_image(sg_image img_id, void* user_data)
 {
     sx_unused(user_data);
     _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
-    if (img->render_target && _sg_is_valid_rendertarget_color_format(img->pixel_format) &&
-        _sg_is_valid_rendertarget_depth_format(img->pixel_format)) {
-        sx_assert(img->num_mipmaps == 1);
+    if (img->cmn.render_target && _sg_is_valid_rendertarget_color_format(img->cmn.pixel_format) &&
+        _sg_is_valid_rendertarget_depth_format(img->cmn.pixel_format)) {
+        sx_assert(img->cmn.num_mipmaps == 1);
 
-        int bytesize = _sg_is_valid_rendertarget_depth_format(img->pixel_format)
+        int bytesize = _sg_is_valid_rendertarget_depth_format(img->cmn.pixel_format)
                            ? 4
-                           : _sg_pixelformat_bytesize(img->pixel_format);
-        int pixels = img->width * img->height * img->depth;
+                           : _sg_pixelformat_bytesize(img->cmn.pixel_format);
+        int pixels = img->cmn.width * img->cmn.height * img->cmn.depth;
         int64_t size = (int64_t)pixels * bytesize;
         g_gfx.trace.t.render_target_size -= size;
     }
@@ -2246,8 +2246,8 @@ static void rizz__gfx_collect_garbage(int64_t frame)
     for (int i = 0, c = sx_array_count(g_gfx.destroy_buffers); i < c; i++) {
         sg_buffer buf_id = g_gfx.destroy_buffers[i];
         _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, buf_id.id);
-        if (frame > buf->used_frame + 1) {
-            if (buf->usage == SG_USAGE_STREAM) {
+        if (frame > buf->cmn.used_frame + 1) {
+            if (buf->cmn.usage == SG_USAGE_STREAM) {
                 for (int ii = 0, cc = sx_array_count(g_gfx.stream_buffs); ii < cc; ii++) {
                     if (g_gfx.stream_buffs[ii].buf.id == buf_id.id) {
                         sx_array_pop(g_gfx.stream_buffs, ii);
@@ -2266,7 +2266,7 @@ static void rizz__gfx_collect_garbage(int64_t frame)
     for (int i = 0, c = sx_array_count(g_gfx.destroy_pips); i < c; i++) {
         sg_pipeline pip_id = g_gfx.destroy_pips[i];
         _sg_pipeline_t* pip = _sg_lookup_pipeline(&_sg.pools, pip_id.id);
-        if (frame > pip->used_frame + 1) {
+        if (frame > pip->cmn.used_frame + 1) {
 #if RIZZ_CONFIG_HOT_LOADING
             for (int ii = 0, cc = sx_array_count(g_gfx.pips); ii < cc; ii++) {
 #    if defined(SOKOL_METAL)
@@ -2290,7 +2290,7 @@ static void rizz__gfx_collect_garbage(int64_t frame)
     // shaders
     for (int i = 0, c = sx_array_count(g_gfx.destroy_shaders); i < c; i++) {
         _sg_pipeline_t* shd = _sg_lookup_pipeline(&_sg.pools, g_gfx.destroy_shaders[i].id);
-        if (shd && frame > shd->used_frame + 1) {
+        if (shd && frame > shd->cmn.used_frame + 1) {
             sg_destroy_shader(g_gfx.destroy_shaders[i]);
             sx_array_pop(g_gfx.destroy_shaders, i);
             i--;
@@ -2306,7 +2306,7 @@ static void rizz__gfx_collect_garbage(int64_t frame)
     // passes
     for (int i = 0, c = sx_array_count(g_gfx.destroy_passes); i < c; i++) {
         _sg_pass_t* pass = _sg_lookup_pass(&_sg.pools, g_gfx.destroy_passes[i].id);
-        if (frame > pass->used_frame + 1) {
+        if (frame > pass->cmn.used_frame + 1) {
             sg_destroy_pass(g_gfx.destroy_passes[i]);
             sx_array_pop(g_gfx.destroy_passes, i);
             i--;
@@ -2317,7 +2317,7 @@ static void rizz__gfx_collect_garbage(int64_t frame)
     // images
     for (int i = 0, c = sx_array_count(g_gfx.destroy_images); i < c; i++) {
         _sg_image_t* img = _sg_lookup_image(&_sg.pools, g_gfx.destroy_images[i].id);
-        if (frame > img->used_frame + 1) {
+        if (frame > img->cmn.used_frame + 1) {
             sg_destroy_image(g_gfx.destroy_images[i]);
             sx_array_pop(g_gfx.destroy_images, i);
             i--;
@@ -2755,7 +2755,7 @@ static void rizz__cb_begin_pass(sg_pass pass, const sg_pass_action* pass_action)
     *((sg_pass*)buff) = pass;
 
     _sg_pass_t* _pass = _sg_lookup_pass(&_sg.pools, pass.id);
-    _pass->used_frame = the__core.frame_index();
+    _pass->cmn.used_frame = the__core.frame_index();
 }
 
 static uint8_t* rizz__cb_run_begin_pass(uint8_t* buff)
@@ -2890,7 +2890,7 @@ static void rizz__cb_apply_pipeline(sg_pipeline pip)
     *((sg_pipeline*)buff) = pip;
 
     _sg_pipeline_t* _pip = _sg_lookup_pipeline(&_sg.pools, pip.id);
-    _pip->used_frame = _pip->shader->used_frame = the__core.frame_index();
+    _pip->cmn.used_frame = _pip->shader->cmn.used_frame = the__core.frame_index();
 }
 
 static uint8_t* rizz__cb_run_apply_pipeline(uint8_t* buff)
@@ -2930,7 +2930,7 @@ static void rizz__cb_apply_bindings(const sg_bindings* bind)
     for (int i = 0; i < SG_MAX_SHADERSTAGE_BUFFERS; i++) {
         if (bind->vertex_buffers[i].id) {
             _sg_buffer_t* vb = _sg_lookup_buffer(&_sg.pools, bind->vertex_buffers[i].id);
-            vb->used_frame = frame_idx;
+            vb->cmn.used_frame = frame_idx;
         } else {
             break;
         }
@@ -2938,13 +2938,13 @@ static void rizz__cb_apply_bindings(const sg_bindings* bind)
 
     if (bind->index_buffer.id) {
         _sg_buffer_t* ib = _sg_lookup_buffer(&_sg.pools, bind->index_buffer.id);
-        ib->used_frame = frame_idx;
+        ib->cmn.used_frame = frame_idx;
     }
 
     for (int i = 0; i < SG_MAX_SHADERSTAGE_IMAGES; i++) {
         if (bind->vs_images[i].id) {
             _sg_image_t* img = _sg_lookup_image(&_sg.pools, bind->vs_images[i].id);
-            img->used_frame = frame_idx;
+            img->cmn.used_frame = frame_idx;
         } else {
             break;
         }
@@ -2953,7 +2953,7 @@ static void rizz__cb_apply_bindings(const sg_bindings* bind)
     for (int i = 0; i < SG_MAX_SHADERSTAGE_BUFFERS; i++) {
         if (bind->vs_buffers[i].id) {
             _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, bind->vs_buffers[i].id);
-            buf->used_frame = frame_idx;
+            buf->cmn.used_frame = frame_idx;
         } else {
             break;
         }
@@ -2962,7 +2962,7 @@ static void rizz__cb_apply_bindings(const sg_bindings* bind)
     for (int i = 0; i < SG_MAX_SHADERSTAGE_IMAGES; i++) {
         if (bind->fs_images[i].id) {
             _sg_image_t* img = _sg_lookup_image(&_sg.pools, bind->fs_images[i].id);
-            img->used_frame = frame_idx;
+            img->cmn.used_frame = frame_idx;
         } else {
             break;
         }
@@ -2971,7 +2971,7 @@ static void rizz__cb_apply_bindings(const sg_bindings* bind)
     for (int i = 0; i < SG_MAX_SHADERSTAGE_BUFFERS; i++) {
         if (bind->fs_buffers[i].id) {
             _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, bind->fs_buffers[i].id);
-            buf->used_frame = frame_idx;
+            buf->cmn.used_frame = frame_idx;
         } else {
             break;
         }
@@ -2980,7 +2980,7 @@ static void rizz__cb_apply_bindings(const sg_bindings* bind)
     for (int i = 0; i < SG_MAX_SHADERSTAGE_IMAGES; i++) {
         if (bind->cs_images[i].id) {
             _sg_image_t* img = _sg_lookup_image(&_sg.pools, bind->cs_images[i].id);
-            img->used_frame = frame_idx;
+            img->cmn.used_frame = frame_idx;
         } else {
             break;
         }
@@ -2989,7 +2989,7 @@ static void rizz__cb_apply_bindings(const sg_bindings* bind)
     for (int i = 0; i < SG_MAX_SHADERSTAGE_BUFFERS; i++) {
         if (bind->cs_buffers[i].id) {
             _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, bind->cs_buffers[i].id);
-            buf->used_frame = frame_idx;
+            buf->cmn.used_frame = frame_idx;
         } else {
             break;
         }
@@ -2998,7 +2998,7 @@ static void rizz__cb_apply_bindings(const sg_bindings* bind)
     for (int i = 0; i < SG_MAX_SHADERSTAGE_UAVS; i++) {
         if (bind->cs_buffer_uavs[i].id) {
             _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, bind->cs_buffer_uavs[i].id);
-            buf->used_frame = frame_idx;
+            buf->cmn.used_frame = frame_idx;
         } else {
             break;
         }
@@ -3007,7 +3007,7 @@ static void rizz__cb_apply_bindings(const sg_bindings* bind)
     for (int i = 0; i < SG_MAX_SHADERSTAGE_UAVS; i++) {
         if (bind->cs_image_uavs[i].id) {
             _sg_image_t* img = _sg_lookup_image(&_sg.pools, bind->cs_image_uavs[i].id);
-            img->used_frame = frame_idx;
+            img->cmn.used_frame = frame_idx;
         } else {
             break;
         }
@@ -3202,7 +3202,7 @@ static void rizz__cb_update_buffer(sg_buffer buf, const void* data_ptr, int data
     sx_memcpy(buff, data_ptr, data_size);
 
     _sg_buffer_t* _buff = _sg_lookup_buffer(&_sg.pools, buf.id);
-    _buff->used_frame = the__core.frame_index();
+    _buff->cmn.used_frame = the__core.frame_index();
 }
 
 static uint8_t* rizz__cb_run_update_buffer(uint8_t* buff)
@@ -3264,7 +3264,7 @@ static int rizz__cb_append_buffer(sg_buffer buf, const void* data_ptr, int data_
     sx_memcpy(buff, data_ptr, data_size);
 
     _sg_buffer_t* _buff = _sg_lookup_buffer(&_sg.pools, buf.id);
-    _buff->used_frame = the__core.frame_index();
+    _buff->cmn.used_frame = the__core.frame_index();
 
     return stream_offset;
 }
@@ -3342,7 +3342,7 @@ static void rizz__cb_update_image(sg_image img, const sg_image_content* data)
     }
 
     _sg_image_t* _img = _sg_lookup_image(&_sg.pools, img.id);
-    _img->used_frame = the__core.frame_index();
+    _img->cmn.used_frame = the__core.frame_index();
 }
 
 static uint8_t* rizz__cb_run_update_image(uint8_t* buff)

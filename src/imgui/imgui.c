@@ -920,7 +920,7 @@ static void imgui__free(void* ptr, void* user_data)
     sx_free((const sx_alloc*)user_data, ptr);
 }
 
-static bool imgui__setup()
+static bool imgui__init()
 {
     sx_assert(g_imgui.ctx == NULL);
     const sx_alloc* alloc = the_core->alloc(RIZZ_MEMID_TOOLSET);
@@ -938,6 +938,9 @@ static bool imgui__setup()
     ImGuiIO* conf = the__imgui.GetIO();
     sx_snprintf(ini_filename, sizeof(ini_filename), "%s_imgui.ini", the_app->name());
     conf->IniFilename = ini_filename;
+
+    float fb_scale = the_app->dpiscale();
+    conf->DisplayFramebufferScale = sx_vec2f(fb_scale, fb_scale);
 
     the__imgui.StyleColorsDark(NULL);
     ImFontConfig font_conf = { .FontDataOwnedByAtlas = true,
@@ -1101,7 +1104,6 @@ static void imgui__update_cursor()
 static void imgui__frame()
 {
     ImGuiIO* io = the__imgui.GetIO();
-
     io->DisplaySize = the_app->sizef();
     io->DeltaTime = (float)sx_tm_sec(the_core->delta_tick());
     if (io->DeltaTime == 0) {
@@ -1117,7 +1119,6 @@ static void imgui__frame()
             io->MouseDown[i] = false;
         }
     }
-
     io->MouseWheel = g_imgui.mouse_wheel;
     io->MouseWheelH = g_imgui.mouse_wheel_h;
     g_imgui.mouse_wheel_h = g_imgui.mouse_wheel = 0;
@@ -1192,10 +1193,13 @@ static void imgui__draw(ImDrawData* draw_data)
 
     // Draw the list
     ImGuiIO* io = the__imgui.GetIO();
-    imgui__shader_uniforms uniforms = { .disp_size.x = io->DisplaySize.x,
-                                        .disp_size.y = io->DisplaySize.y };
+    sx_vec2 fb_scale = draw_data->FramebufferScale;   // = (1, 1) unless high-dpi
+    sx_vec2 fb_pos = draw_data->DisplayPos;           // = (0, 0) unless multi-view
+    sx_vec2 display_size = sx_vec2f(io->DisplaySize.x, io->DisplaySize.y);
+
+    imgui__shader_uniforms uniforms = { .disp_size = display_size };
     int base_elem = 0;
-    sg_image last_img = { 0 };
+    sg_image last_img = { 0 }; 
     g_imgui.bind.fs_images[0] = the_gfx->texture_white();
     the_gfx->imm.apply_pipeline(g_imgui.pip);
     the_gfx->imm.apply_bindings(&g_imgui.bind);
@@ -1206,18 +1210,28 @@ static void imgui__draw(ImDrawData* draw_data)
         for (const ImDrawCmd* cmd = (const ImDrawCmd*)dl->CmdBuffer.Data;
              cmd != (const ImDrawCmd*)dl->CmdBuffer.Data + dl->CmdBuffer.Size; ++cmd) {
             if (!cmd->UserCallback) {
-                const int scissor_x = (int)(cmd->ClipRect.x);
-                const int scissor_y = (int)(cmd->ClipRect.y);
-                const int scissor_w = (int)(cmd->ClipRect.z - cmd->ClipRect.x);
-                const int scissor_h = (int)(cmd->ClipRect.w - cmd->ClipRect.y);
+                sx_vec4 clip_rect = {{
+                    (cmd->ClipRect.x - fb_pos.x) * fb_scale.x,
+                    (cmd->ClipRect.y - fb_pos.y) * fb_scale.y,
+                    (cmd->ClipRect.z - fb_pos.x) * fb_scale.x,
+                    (cmd->ClipRect.w - fb_pos.y) * fb_scale.y
+                }};
 
-                sg_image tex = { .id = (uint32_t)(uintptr_t)cmd->TextureId };
-                if (tex.id != last_img.id) {
-                    g_imgui.bind.fs_images[0] = tex;
-                    the_gfx->imm.apply_bindings(&g_imgui.bind);
+                if (clip_rect.x < display_size.x && clip_rect.y < display_size.y && 
+                    clip_rect.z >= 0.0f && clip_rect.w >= 0.0f) {
+                    const int scissor_x = (int)(clip_rect.x);
+                    const int scissor_y = (int)(clip_rect.y);
+                    const int scissor_w = (int)(clip_rect.z - clip_rect.x);
+                    const int scissor_h = (int)(clip_rect.w - clip_rect.y);
+
+                    sg_image tex = { .id = (uint32_t)(uintptr_t)cmd->TextureId };
+                    if (tex.id != last_img.id) {
+                        g_imgui.bind.fs_images[0] = tex;
+                        the_gfx->imm.apply_bindings(&g_imgui.bind);
+                    }
+                    the_gfx->imm.apply_scissor_rect(scissor_x, scissor_y, scissor_w, scissor_h, true);
+                    the_gfx->imm.draw(base_elem, cmd->ElemCount, 1);
                 }
-                the_gfx->imm.apply_scissor_rect(scissor_x, scissor_y, scissor_w, scissor_h, true);
-                the_gfx->imm.draw(base_elem, cmd->ElemCount, 1);
             } else {
                 cmd->UserCallback(dl, cmd);
             }
@@ -1804,17 +1818,23 @@ rizz_plugin_decl_event_handler(imgui, e)
 {
     ImGuiIO* io = the__imgui.GetIO();
     switch (e->type) {
-    case RIZZ_APP_EVENTTYPE_MOUSE_DOWN:
-        io->MousePos = sx_vec2f(e->mouse_x, e->mouse_y);
+    case RIZZ_APP_EVENTTYPE_MOUSE_DOWN: {
+        sx_vec2 scale = io->DisplayFramebufferScale;
+        io->MousePos = sx_vec2f(e->mouse_x / scale.x, e->mouse_y / scale.y);
         g_imgui.mouse_btn_down[e->mouse_button] = true;
         break;
-    case RIZZ_APP_EVENTTYPE_MOUSE_UP:
-        io->MousePos = sx_vec2f(e->mouse_x, e->mouse_y);
+    }
+    case RIZZ_APP_EVENTTYPE_MOUSE_UP: {
+        sx_vec2 scale = io->DisplayFramebufferScale;
+        io->MousePos = sx_vec2f(e->mouse_x / scale.x, e->mouse_y / scale.y);
         g_imgui.mouse_btn_up[e->mouse_button] = true;
         break;
-    case RIZZ_APP_EVENTTYPE_MOUSE_MOVE:
-        io->MousePos = sx_vec2f(e->mouse_x, e->mouse_y);
+    }
+    case RIZZ_APP_EVENTTYPE_MOUSE_MOVE: {
+        sx_vec2 scale = io->DisplayFramebufferScale;
+        io->MousePos = sx_vec2f(e->mouse_x / scale.x, e->mouse_y / scale.y);
         break;
+    }
     case RIZZ_APP_EVENTTYPE_MOUSE_ENTER:
     case RIZZ_APP_EVENTTYPE_MOUSE_LEAVE:
         for (int i = 0; i < 3; i++) {
@@ -1924,7 +1944,7 @@ rizz_plugin_decl_main(imgui, plugin, e)
         the_gfx = (rizz_api_gfx*)the_plugin->get_api(RIZZ_API_GFX, 0);
         the_app = (rizz_api_app*)the_plugin->get_api(RIZZ_API_APP, 0);
 
-        if (!imgui__setup()) {
+        if (!imgui__init()) {
             return -1;
         }
 
