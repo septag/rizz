@@ -338,13 +338,13 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
     SOKOL_ASSERT(shd->slot.state == SG_RESOURCESTATE_VALID);
 
     pip->shader = shd;
-    pip->shader_id = shader_id;
+    pip->cmn.shader_id = shader_id;
     sg_pipeline_desc desc_def = _sg_pipeline_desc_defaults(desc);
     desc = &desc_def;
 
     // TODO: recreate pipeline descriptor
     SOKOL_ASSERT(pip);
-    _sg_mtl_release_resource(_sg.mtl.frame_index, pip->mtl_rps);
+    _sg_mtl_release_resource(_sg.mtl.frame_index, pip->mtl.rps);
 
     /* create vertex-descriptor */
     MTLVertexDescriptor* vtx_desc = [MTLVertexDescriptor vertexDescriptor];
@@ -358,10 +358,10 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
         vtx_desc.attributes[attr_index].format = _sg_mtl_vertex_format(a_desc->format);
         vtx_desc.attributes[attr_index].offset = a_desc->offset;
         vtx_desc.attributes[attr_index].bufferIndex = a_desc->buffer_index + SG_MAX_SHADERSTAGE_UBS;
-        pip->vertex_layout_valid[a_desc->buffer_index] = true;
+        pip->cmn.vertex_layout_valid[a_desc->buffer_index] = true;
     }
     for (int layout_index = 0; layout_index < SG_MAX_SHADERSTAGE_BUFFERS; layout_index++) {
-        if (pip->vertex_layout_valid[layout_index]) {
+        if (pip->cmn.vertex_layout_valid[layout_index]) {
             const sg_buffer_layout_desc* l_desc = &desc->layout.buffers[layout_index];
             const int mtl_vb_slot = layout_index + SG_MAX_SHADERSTAGE_UBS;
             SOKOL_ASSERT(l_desc->stride > 0);
@@ -374,10 +374,10 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
     /* render-pipeline descriptor */
     MTLRenderPipelineDescriptor* rp_desc = [[MTLRenderPipelineDescriptor alloc] init];
     rp_desc.vertexDescriptor = vtx_desc;
-    SOKOL_ASSERT(shd->stage[SG_SHADERSTAGE_VS].mtl_func != _SG_MTL_INVALID_SLOT_INDEX);
-    rp_desc.vertexFunction = _sg_mtl_idpool[shd->stage[SG_SHADERSTAGE_VS].mtl_func];
-    SOKOL_ASSERT(shd->stage[SG_SHADERSTAGE_FS].mtl_func != _SG_MTL_INVALID_SLOT_INDEX);
-    rp_desc.fragmentFunction = _sg_mtl_idpool[shd->stage[SG_SHADERSTAGE_FS].mtl_func];
+    SOKOL_ASSERT(shd->mtl.stage[SG_SHADERSTAGE_VS].mtl_func != _SG_MTL_INVALID_SLOT_INDEX);
+    rp_desc.vertexFunction = _sg_mtl_idpool[shd->mtl.stage[SG_SHADERSTAGE_VS].mtl_func];
+    SOKOL_ASSERT(shd->mtl.stage[SG_SHADERSTAGE_FS].mtl_func != _SG_MTL_INVALID_SLOT_INDEX);
+    rp_desc.fragmentFunction = _sg_mtl_idpool[shd->mtl.stage[SG_SHADERSTAGE_FS].mtl_func];
     rp_desc.sampleCount = desc->rasterizer.sample_count;
     rp_desc.alphaToCoverageEnabled = desc->rasterizer.alpha_to_coverage_enabled;
     rp_desc.alphaToOneEnabled = NO;
@@ -413,7 +413,7 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
         return;
     }
 
-    pip->mtl_rps = _sg_mtl_add_resource(mtl_rps);
+    pip->mtl.rps = _sg_mtl_add_resource(mtl_rps);
 }
 #elif defined(SOKOL_GLCORE33) || defined(SOKOL_GLES2) || defined(SOKOL_GLES3)
 _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shader_id,
