@@ -786,14 +786,14 @@ typedef struct sg_pixelformat_info {
     returned by sg_query_features()
 */
 typedef struct sg_features {
-    bool instancing;
-    bool origin_top_left;
-    bool multiple_render_targets;
-    bool msaa_render_targets;
-    bool imagetype_3d;          /* creation of SG_IMAGETYPE_3D images is supported */
-    bool imagetype_array;       /* creation of SG_IMAGETYPE_ARRAY images is supported */
-    bool image_clamp_to_border; /* border color and clamp-to-border UV-wrap mode is supported */
-    bool compute_shaders;       /* compute-shader supported */
+    bool instancing;                /* hardware instancing supported */
+    bool origin_top_left;           /* framebuffer and texture origin is in top left corner */
+    bool multiple_render_targets;   /* offscreen render passes can have multiple render targets attached */
+    bool msaa_render_targets;       /* offscreen render passes support MSAA antialiasing */
+    bool imagetype_3d;              /* creation of SG_IMAGETYPE_3D images is supported */
+    bool imagetype_array;           /* creation of SG_IMAGETYPE_ARRAY images is supported */
+    bool image_clamp_to_border;     /* border color and clamp-to-border UV-wrap mode is supported */
+    bool compute_shaders;           /* compute-shader supported */
 } sg_features;
 
 /*
