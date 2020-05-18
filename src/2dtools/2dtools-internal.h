@@ -35,6 +35,11 @@ void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4*
 void sprite__draw(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat, sx_color tint);
 void sprite__draw_wireframe_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp,
                                   const sx_mat3* mats);
+void sprite__draw_srt(rizz_sprite spr, const sx_mat4* vp, sx_vec2 pos, float angle, sx_vec2 scale, 
+                      sx_color tint);
+void sprite__draw_batch_srt(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp, 
+                            const sx_vec2* poss, const float* angles, const sx_vec2* scales, 
+                            sx_color* tints);                      
 void sprite__draw_wireframe(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat);
 void sprite__show_debugger(bool* p_open);
 void sprite__animclip_restart(rizz_sprite_animclip handle);

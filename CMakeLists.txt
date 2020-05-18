@@ -267,6 +267,7 @@ set(native_projects sx
                     rizz 
                     imgui
                     2dtools
+                    3dtools 
                     sound
                     input)
 

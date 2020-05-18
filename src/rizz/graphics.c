@@ -945,6 +945,7 @@ static rizz_texture rizz__texture_create_checker(int checker_size, int size,
                                                      .mips = 1,
                                                      .bpp = 32 } };
 
+    sx_free(tmp_alloc, poss);
     sx_free(g_gfx_alloc, pixels);
     the__core.tmp_alloc_pop();
     return tex;
@@ -3700,7 +3701,7 @@ static void rizz__debug_grid_xzplane(float spacing, float spacing_bold, const sx
     sx_aabb bb = sx_aabb_empty();
 
     // extrude near plane
-    sx_vec3 near_plane_norm = sx_vec3_calc_normal(frustum[0], frustum[1], frustum[2]);
+    sx_vec3 near_plane_norm = sx_plane_normal(frustum[0], frustum[1], frustum[2]);
     for (int i = 0; i < 8; i++) {
         if (i < 4) {
             sx_vec3 offset_pt = sx_vec3_sub(frustum[i], sx_vec3_mulf(near_plane_norm, spacing));
@@ -3787,7 +3788,7 @@ void rizz__debug_grid_xyplane(float spacing, float spacing_bold, const sx_mat4* 
     sx_aabb bb = sx_aabb_empty();
 
     // extrude near plane
-    sx_vec3 near_plane_norm = sx_vec3_calc_normal(frustum[0], frustum[1], frustum[2]);
+    sx_vec3 near_plane_norm = sx_plane_normal(frustum[0], frustum[1], frustum[2]);
     for (int i = 0; i < 8; i++) {
         if (i < 4) {
             sx_vec3 offset_pt = sx_vec3_sub(frustum[i], sx_vec3_mulf(near_plane_norm, spacing));

@@ -1,9 +1,11 @@
 #include "rizz/2dtools.h"
 
+#include "sx/allocator.h"
 #include "sx/array.h"
 #include "sx/handle.h"
 #include "sx/hash.h"
 #include "sx/linear-buffer.h"
+#include "sx/math.h"
 #include "sx/os.h"
 #include "sx/pool.h"
 #include "sx/string.h"
@@ -1823,14 +1825,17 @@ void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4*
         return;
     }
     
+    sx_color* initial_tints = tints;
     if (!tints) {
         tints = sx_malloc(tmp_alloc, sizeof(sx_color)*num_sprites);
         if (!tints) {
             sx_assert(0 && "out of memory");
+            the_core->tmp_alloc_pop();
             return;
         }
-        for (int i = 0; i < num_sprites; i++) 
+        for (int i = 0; i < num_sprites; i++) {
             tints[i] = sx_colorn(0xffffffff);
+        }
     }
 
     const sprite__draw_context* dc = &g_spr.drawctx;
@@ -1882,12 +1887,71 @@ void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4*
         g_spr.draw_api->apply_bindings(&bindings);
         g_spr.draw_api->draw(batch->index_start, batch->index_count, 1);
     }    
+    
+    sx_free(tmp_alloc, tverts);
+    if (!initial_tints) {
+        sx_free(tmp_alloc, tints);
+    }
+    sx_free(tmp_alloc, dd);
 
     the_core->tmp_alloc_pop();
 }
 
 void sprite__draw(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat, sx_color tint) {
     sprite__draw_batch(&spr, 1, vp, mat, &tint);
+}
+
+void sprite__draw_batch_srt(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp, 
+                            const sx_vec2* poss, const float* angles, const sx_vec2* scales, 
+                            sx_color* tints)
+{
+    sx_assert(poss);
+
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+
+    sx_mat3* mats = (sx_mat3*)sx_malloc(tmp_alloc, sizeof(sx_mat3)*num_sprites);
+    if (!mats) {
+        the_core->tmp_alloc_pop();
+        sx_assert(0 && "out of memory");
+        return;
+    }
+
+    for (int i = 0; i < num_sprites; i++) {
+        mats[i] = sx_mat3_translatev(poss[i]);
+    }
+
+    if (angles) {
+        sx_mat3 rot;
+        for (int i = 0; i < num_sprites; i++) {
+            if (angles[i] == 0) {
+                continue;
+            }
+            sx_mat3_rotate(angles[i]);
+            mats[i] = sx_mat3_mul(&mats[i], &rot);
+        }
+    }
+
+    if (scales) {
+        sx_mat3 scale;
+        for (int i = 0; i < num_sprites; i++) {
+            if (scales[i].x == 1.0f && scales[i].y == 1.0f) {
+                continue;
+            }
+            scale = sx_mat3_scale(scales[i].x, scales[i].y);
+            mats[i] = sx_mat3_mul(&mats[i], &scale);
+        }
+    }
+
+    sprite__draw_batch(sprs, num_sprites, vp, mats, tints);
+
+    sx_free(tmp_alloc, mats);
+    the_core->tmp_alloc_pop();
+}
+
+void sprite__draw_srt(rizz_sprite spr, const sx_mat4* vp, sx_vec2 pos, float angle, sx_vec2 scale, 
+                      sx_color tint)
+{
+    sprite__draw_batch_srt(&spr, 1, vp, &pos, &angle, &scale, &tint);
 }
 
 void sprite__draw_wireframe_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp, 

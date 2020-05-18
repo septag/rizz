@@ -3,8 +3,6 @@
 #include "rizz/rizz.h"
 #include "rizz/util.h"
 
-#include "sx/math.h"
-
 typedef struct sx_alloc sx_alloc;
 
 // config
@@ -206,12 +204,24 @@ typedef struct rizz_api_sprite {
 
     // high-level draw calls, normal sprite drawing
     // internally calls `make_drawdata` and draws with internal shader and buffers
+    // `tints` is optional and if it's null, then all sprites will be drawin with white tint
     void (*draw)(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat, sx_color tint);
     void (*draw_batch)(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp,
                        const sx_mat3* mats, sx_color* tints);
     void (*draw_wireframe_batch)(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp,
                                  const sx_mat3* mats);                       
     void (*draw_wireframe)(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat);
+
+    // draw with size, position and rotation instead of transform matrix
+    // internally calls `make_drawdata` and draws with internal shader and buffers
+    // `angles` is optional and if it's null, no rotation will be applied
+    // `scales` is optional and if it's null, all scales will be 1.0
+    // `tints` is optional and if it's null, then all sprites will be drawin with white tint
+    void (*draw_srt)(rizz_sprite spr, const sx_mat4* vp, sx_vec2 pos, float angle, sx_vec2 scale, 
+                     sx_color tint);
+    void (*draw_batch_srt)(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp, 
+                           const sx_vec2* poss, const float* angles, const sx_vec2* scales, 
+                           sx_color* tints);
 
     // draw properties
     bool (*resize_draw_limits)(int max_verts, int max_indices);
