@@ -28,7 +28,6 @@
 
 RIZZ_STATE static rizz_api_core* the_core;
 RIZZ_STATE static rizz_api_asset* the_asset;
-RIZZ_STATE static rizz_api_refl* the_refl;
 RIZZ_STATE static rizz_api_gfx* the_gfx;
 RIZZ_STATE static rizz_api_imgui* the_imgui;
 
@@ -1269,12 +1268,10 @@ bool sprite__resize_draw_limits(int max_verts, int max_indices)
     return dc->vbuff[0].id && dc->vbuff[1].id && dc->ibuff.id;
 }
 
-bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* refl,
-                  rizz_api_gfx* gfx)
+bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx)
 {
     the_core = core;
     the_asset = asset;
-    the_refl = refl;
     the_gfx = gfx;
 
     g_spr.alloc = the_core->alloc(RIZZ_MEMID_GRAPHICS);

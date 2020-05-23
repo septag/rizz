@@ -91,11 +91,10 @@ rizz_plugin_decl_main(2dtools, plugin, e)
         the_plugin = plugin->api;
         rizz_api_core* core = the_plugin->get_api(RIZZ_API_CORE, 0);
         rizz_api_asset* asset = the_plugin->get_api(RIZZ_API_ASSET, 0);
-        rizz_api_refl* refl = the_plugin->get_api(RIZZ_API_REFLECT, 0);
         rizz_api_gfx* gfx = the_plugin->get_api(RIZZ_API_GFX, 0);
         rizz_api_app* app = the_plugin->get_api(RIZZ_API_APP, 0);
         rizz_api_imgui* imgui = the_plugin->get_api_byname("imgui", 0);
-        if (!sprite__init(core, asset, refl, gfx) || !font__init(core, asset, refl, gfx, app)) {
+        if (!sprite__init(core, asset, gfx) || !font__init(core, asset, gfx, app)) {
             return -1;
         }
         sprite__set_imgui(imgui);

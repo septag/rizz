@@ -1796,10 +1796,10 @@ static inline bool sx_aabb_test_point(const sx_aabb* aabb, const sx_vec3 pt)
  *  2 /   |          3 /   |
  *   /----------------/    |
  *   |    |           |    |
- *   |    |           |    |      +Y
+ *   |    |           |    |      +Z
  *   |    |           |    |
  *   |    |-----------|----|     |
- *   |   / 4          |   / 5    |  / +Z
+ *   |   / 4          |   / 5    |  / +Y
  *   |  /             |  /       | /
  *   | /              | /        |/
  *   |/               |/         --------- +X
@@ -1810,8 +1810,8 @@ static inline sx_vec3 sx_aabb_corner(const sx_aabb* aabb, int index)
 {
     sx_assert(index < 8);
     return sx_vec3f((index & 1) ? aabb->vmax.x : aabb->vmin.x,
-                    (index & 2) ? aabb->vmax.y : aabb->vmin.y,
-                    (index & 4) ? aabb->vmax.z : aabb->vmin.z);
+                    (index & 4) ? aabb->vmax.y : aabb->vmin.y,
+                    (index & 2) ? aabb->vmax.z : aabb->vmin.z);
 }
 
 static inline void sx_aabb_corners(sx_vec3 corners[8], const sx_aabb* aabb)

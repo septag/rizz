@@ -920,7 +920,7 @@ static void imgui__free(void* ptr, void* user_data)
     sx_free((const sx_alloc*)user_data, ptr);
 }
 
-static bool imgui__init()
+static bool imgui__init(void)
 {
     sx_assert(g_imgui.ctx == NULL);
     const sx_alloc* alloc = the_core->alloc(RIZZ_MEMID_TOOLSET);

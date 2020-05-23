@@ -5,8 +5,7 @@
 typedef struct rizz_api_imgui rizz_api_imgui;
 
 // sprite
-bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* refl,
-                  rizz_api_gfx* gfx);
+bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx);
 void sprite__release(void);
 
 void sprite__set_imgui(rizz_api_imgui* imgui);
@@ -71,8 +70,7 @@ rizz_sprite_animclip sprite__animctrl_clip(rizz_sprite_animctrl handle);
 void sprite__set_draw_api(rizz_api_gfx_draw* draw_api);
 
 // font
-bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* refl, rizz_api_gfx* gfx,
-                rizz_api_app* app);
+bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx, rizz_api_app* app);
 void font__set_imgui(rizz_api_imgui* imgui);
 void font__release(void);
 void font__update(void);

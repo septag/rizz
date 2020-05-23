@@ -27,7 +27,6 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 
 RIZZ_STATE static rizz_api_core* the_core;
 RIZZ_STATE static rizz_api_asset* the_asset;
-RIZZ_STATE static rizz_api_refl* the_refl;
 RIZZ_STATE static rizz_api_gfx* the_gfx;
 RIZZ_STATE static rizz_api_imgui* the_imgui;
 RIZZ_STATE static rizz_api_app* the_app;
@@ -350,12 +349,10 @@ void font__update(void)
     }
 }
 
-bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_refl* refl, rizz_api_gfx* gfx,
-                rizz_api_app* app)
+bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx, rizz_api_app* app)
 {
     the_core = core;
     the_asset = asset;
-    the_refl = refl;
     the_gfx = gfx;
     the_app = app;
     
