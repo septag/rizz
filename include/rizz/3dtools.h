@@ -4,6 +4,7 @@
 
 typedef struct rizz_prims3d_vertex {
     sx_vec3 pos;
+    sx_vec3 normal;
     sx_vec2 uv;
 } rizz_prims3d_vertex;
 

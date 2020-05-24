@@ -130,7 +130,7 @@ static void rizz__cam_update_rot(rizz_camera* cam)
 {
     sx_mat4 m = sx_quat_mat4(cam->quat);
     cam->right = sx_vec3fv(m.col1.f);
-    cam->up = sx_vec3fv(m.col2.f);
+    cam->up = sx_vec3_mulf(sx_vec3fv(m.col2.f), -1.0f);
     cam->forward = sx_vec3fv(m.col3.f);
 }
 

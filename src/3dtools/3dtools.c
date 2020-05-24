@@ -1,5 +1,6 @@
 #include "rizz/3dtools.h"
 
+#include "rizz/rizz.h"
 #include "sx/string.h"
 
 #include "3dtools-internal.h"
@@ -22,6 +23,12 @@ rizz_plugin_decl_main(3dtools, plugin, e)
 
     case RIZZ_PLUGIN_EVENT_INIT: {
         the_plugin = plugin->api;
+        rizz_api_core* core = the_plugin->get_api(RIZZ_API_CORE, 0);
+        rizz_api_gfx* gfx = the_plugin->get_api(RIZZ_API_GFX, 0);
+
+        if (!prims3d__init(core, gfx)) {
+            return -1;
+        }
         the_plugin->inject_api("prims3d", 0, &the__prims3d);
     } break;
 
@@ -33,6 +40,7 @@ rizz_plugin_decl_main(3dtools, plugin, e)
 
     case RIZZ_PLUGIN_EVENT_SHUTDOWN:
         the_plugin->remove_api("prims3d", 0);
+        prims3d__release();
         break;
     }
 

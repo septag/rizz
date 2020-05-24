@@ -1830,6 +1830,13 @@ static inline sx_tx3d sx_tx3d_set(const sx_vec3 _pos, const sx_mat3 _rot)
 #endif
 }
 
+
+static inline sx_tx3d sx_tx3d_setf(float x, float y, float z, float rx, float ry, float rz)
+{
+    sx_mat4 rot = sx_mat4_rotateXYZ(rx, ry, rz);
+    return sx_tx3d_set(sx_vec3f(x, y, z), sx_mat3fv(rot.rc1, rot.rc2, rot.rc3));
+}
+
 static inline sx_tx3d sx_tx3d_ident(void)
 {
     return sx_tx3d_set(sx_vec3splat(0), sx_mat3_ident());
@@ -1858,20 +1865,20 @@ static inline sx_tx3d sx_tx3d_inverse(sx_tx3d* tx)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-static inline sx_box sx_box_set(const sx_tx3d* tx, sx_vec3 extents)
+static inline sx_box sx_box_set(const sx_tx3d tx, sx_vec3 extents)
 {
     sx_vec3 he = sx_vec3_mulf(extents, 0.5f);
 #ifdef __cplusplus
-    return {*tx, he};
+    return {tx, he};
 #else
-    return (sx_box) {.tx = *tx, .he = he};
+    return (sx_box) {.tx = tx, .he = he};
 #endif    
 }
 
 static inline sx_box sx_box_setpne(const sx_vec3 pos, const sx_vec3 extents)
 {
     sx_tx3d tx = sx_tx3d_set(pos, sx_mat3_ident());
-    return sx_box_set(&tx, extents);
+    return sx_box_set(tx, extents);
 }
 
 static inline sx_vec3 sx_box_pos(const sx_box* box)

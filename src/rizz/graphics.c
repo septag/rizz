@@ -3767,7 +3767,10 @@ static void rizz__debug_grid_xzplane(float spacing, float spacing_bold, const sx
     }
 
     int offset = the__gfx.staged.append_buffer(g_gfx.dbg.vb, verts, data_size);
-    sg_bindings bind = { .vertex_buffers[0] = g_gfx.dbg.vb, .vertex_buffer_offsets[0] = offset };
+    sg_bindings bind = { 
+        .vertex_buffers[0] = g_gfx.dbg.vb, 
+        .vertex_buffer_offsets[0] = offset,
+        .fs_images[0] = g_gfx.tex_mgr.white_tex.img };
     rizz__debug_uniforms uniforms = { .model = sx_mat4_ident(), .vp = *vp };
 
     the__gfx.staged.apply_pipeline(g_gfx.dbg.pip_wire);
@@ -3854,7 +3857,10 @@ void rizz__debug_grid_xyplane(float spacing, float spacing_bold, const sx_mat4* 
     }
 
     int offset = the__gfx.staged.append_buffer(g_gfx.dbg.vb, verts, data_size);
-    sg_bindings bind = { .vertex_buffers[0] = g_gfx.dbg.vb, .vertex_buffer_offsets[0] = offset };
+    sg_bindings bind = { 
+        .vertex_buffers[0] = g_gfx.dbg.vb, 
+        .vertex_buffer_offsets[0] = offset,
+        .fs_images[0] = g_gfx.tex_mgr.white_tex.img };
     rizz__debug_uniforms uniforms = { .model = sx_mat4_ident(), .vp = *vp };
 
     the__gfx.staged.apply_pipeline(g_gfx.dbg.pip_wire);
