@@ -12,7 +12,10 @@ static rizz_api_prims3d the__prims3d = {
     .draw_boxes = prims3d__draw_boxes,
     .generate_box_geometry = prims3d__generate_box_geometry,
     .draw_aabb = prims3d__draw_aabb,
-    .draw_aabbs = prims3d__draw_aabbs
+    .draw_aabbs = prims3d__draw_aabbs,
+    .grid_xyplane = prims3d__grid_xyplane,
+    .grid_xzplane = prims3d__grid_xzplane,
+    .grid_xyplane_cam = prims3d__grid_xyplane_cam
 };
 
 rizz_plugin_decl_main(3dtools, plugin, e)
@@ -25,8 +28,9 @@ rizz_plugin_decl_main(3dtools, plugin, e)
         the_plugin = plugin->api;
         rizz_api_core* core = the_plugin->get_api(RIZZ_API_CORE, 0);
         rizz_api_gfx* gfx = the_plugin->get_api(RIZZ_API_GFX, 0);
+        rizz_api_camera* cam = the_plugin->get_api(RIZZ_API_CAMERA, 0);
 
-        if (!prims3d__init(core, gfx)) {
+        if (!prims3d__init(core, gfx, cam)) {
             return -1;
         }
         the_plugin->inject_api("prims3d", 0, &the__prims3d);

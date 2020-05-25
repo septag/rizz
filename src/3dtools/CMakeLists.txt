@@ -11,3 +11,4 @@ rizz_add_plugin(3dtools "${3dtools_sources}")
 set(GLSLCC_OUTPUT_DIRECTORY "shaders_h")
 
 glslcc_target_compile_shaders_h(3dtools "prims3d.vert;prims3d.frag")
+glslcc_target_compile_shaders_h(3dtools "wireframe.vert;wireframe.frag")

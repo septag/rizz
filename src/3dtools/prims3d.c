@@ -8,9 +8,12 @@
 #include "sx/math.h"
 
 #define MAX_INSTANCES 1000
+#define MAX_DYN_VERTICES 10000
+#define MAX_DYN_INDICES 10000
 
 RIZZ_STATE static rizz_api_core* the_core;
 RIZZ_STATE static rizz_api_gfx* the_gfx;
+RIZZ_STATE static rizz_api_camera* the_camera;
 
 typedef struct prims3d__shape {
     sg_buffer vb;
@@ -23,7 +26,7 @@ typedef struct prims3d__instance {
     sx_vec4 tx1;    // pos=(x, y, z) , rot(m11)
     sx_vec4 tx2;    // rot(m21, m31, m12, m22)
     sx_vec4 tx3;    // rot(m23, m13, m23, m33)
-    sx_vec3 scale;  // scale
+    sx_vec3 scale;  
     sx_color color;
 } prims3d__instance;
 
@@ -35,8 +38,12 @@ typedef struct prims3d__context {
     const sx_alloc* alloc;
     rizz_api_gfx_draw* draw_api;
     sg_shader shader;
+    sg_shader shader_wire;
     sg_pipeline pip_solid;
     sg_pipeline pip_alphablend;
+    sg_pipeline pip_wire;
+    sg_buffer dyn_vbuff;
+    sg_buffer dyn_ibuff;
     sg_buffer instance_buff;
     prims3d__shape unit_box;
     rizz_texture checker_tex;
@@ -61,7 +68,7 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 
 static prims3d__context g_prims3d;
 
-static const rizz_vertex_layout k_prims3d_vertex_layout = {
+static const rizz_vertex_layout k_prims3d_vertex_layout_inst = {
     .attrs[0] = { .semantic = "POSITION", .offset = offsetof(rizz_prims3d_vertex, pos)},
     .attrs[1] = { .semantic = "NORMAL", .offset = offsetof(rizz_prims3d_vertex, normal)},
     .attrs[2] = { .semantic = "TEXCOORD", .offset = offsetof(rizz_prims3d_vertex, uv)},
@@ -69,16 +76,25 @@ static const rizz_vertex_layout k_prims3d_vertex_layout = {
     .attrs[4] = { .semantic = "TEXCOORD", .offset = offsetof(prims3d__instance, tx2), .semantic_idx=2, .buffer_index=1},
     .attrs[5] = { .semantic = "TEXCOORD", .offset = offsetof(prims3d__instance, tx3), .semantic_idx=3, .buffer_index=1},
     .attrs[6] = { .semantic = "TEXCOORD", .offset = offsetof(prims3d__instance, scale), .semantic_idx=4, .buffer_index=1},
-    .attrs[7] = { .semantic = "TEXCOORD", .offset = offsetof(prims3d__instance, color), .format = SG_VERTEXFORMAT_BYTE4N, .semantic_idx=5, .buffer_index=1}
+    .attrs[7] = { .semantic = "TEXCOORD", .offset = offsetof(prims3d__instance, color), .format = SG_VERTEXFORMAT_UBYTE4N, .semantic_idx=5, .buffer_index=1}
+};
+
+static const rizz_vertex_layout k_prims3d_vertex_layout_wire = {
+    .attrs[0] = { .semantic = "POSITION", .offset = offsetof(rizz_prims3d_vertex, pos)},
+    .attrs[1] = { .semantic = "COLOR", .offset = offsetof(rizz_prims3d_vertex, color), .format = SG_VERTEXFORMAT_UBYTE4N}
 };
 
 #include rizz_shader_path(shaders_h, prims3d.vert.h)
 #include rizz_shader_path(shaders_h, prims3d.frag.h)
 
-bool prims3d__init(rizz_api_core* core, rizz_api_gfx* gfx)
+#include rizz_shader_path(shaders_h, wireframe.vert.h)
+#include rizz_shader_path(shaders_h, wireframe.frag.h)
+
+bool prims3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
 {
     the_core = core;
     the_gfx = gfx;
+    the_camera = cam;
     g_prims3d.draw_api = &the_gfx->staged;
     
     rizz_temp_alloc_begin(tmp_alloc);
@@ -87,6 +103,10 @@ bool prims3d__init(rizz_api_core* core, rizz_api_gfx* gfx)
     rizz_shader shader_solid = the_gfx->shader_make_with_data(tmp_alloc,
         k_prims3d_vs_size, k_prims3d_vs_data, k_prims3d_vs_refl_size, k_prims3d_vs_refl_data,
         k_prims3d_fs_size, k_prims3d_fs_data, k_prims3d_fs_refl_size, k_prims3d_fs_refl_data);
+    rizz_shader shader_wire = the_gfx->shader_make_with_data(tmp_alloc,
+        k_wireframe_vs_size, k_wireframe_vs_data, k_wireframe_vs_refl_size, k_wireframe_vs_refl_data,
+        k_wireframe_fs_size, k_wireframe_fs_data, k_wireframe_fs_refl_size, k_wireframe_fs_refl_data);
+
     sg_pipeline_desc pip_desc_solid = 
         (sg_pipeline_desc){ .layout.buffers[0].stride = sizeof(rizz_prims3d_vertex),
                             .layout.buffers[1].stride = sizeof(prims3d__instance),
@@ -111,25 +131,47 @@ bool prims3d__init(rizz_api_core* core, rizz_api_gfx* gfx)
                             .depth_stencil = {
                                 .depth_compare_func = SG_COMPAREFUNC_LESS_EQUAL,
                             } };                            
-    
+    sg_pipeline_desc pip_desc_wire = 
+        (sg_pipeline_desc) { .layout.buffers[0].stride = sizeof(rizz_prims3d_vertex),
+                             .shader = shader_wire.shd,
+                             .index_type = SG_INDEXTYPE_NONE,
+                             .primitive_type = SG_PRIMITIVETYPE_LINES,
+                             .depth_stencil = { .depth_compare_func = SG_COMPAREFUNC_LESS_EQUAL,
+                                                .depth_write_enabled = true } };    
     sg_pipeline pip_solid = the_gfx->make_pipeline(
-        the_gfx->shader_bindto_pipeline(&shader_solid, &pip_desc_solid, &k_prims3d_vertex_layout));
+        the_gfx->shader_bindto_pipeline(&shader_solid, &pip_desc_solid, &k_prims3d_vertex_layout_inst));
     sg_pipeline pip_alphablend = the_gfx->make_pipeline(
-        the_gfx->shader_bindto_pipeline(&shader_solid, &pip_desc_alphablend, &k_prims3d_vertex_layout));
-    
-    if (pip_solid.id == 0 || shader_solid.shd.id == 0 || pip_alphablend.id == 0) {
+        the_gfx->shader_bindto_pipeline(&shader_solid, &pip_desc_alphablend, &k_prims3d_vertex_layout_inst));
+    sg_pipeline pip_wire = the_gfx->make_pipeline(
+        the_gfx->shader_bindto_pipeline(&shader_wire, &pip_desc_wire, &k_prims3d_vertex_layout_wire));
+
+    if (pip_solid.id == 0 || shader_wire.shd.id == 0 || pip_wire.id == 0 || shader_solid.shd.id == 0 || 
+        pip_alphablend.id == 0) {
         return false;
     }
 
     g_prims3d.shader = shader_solid.shd;
+    g_prims3d.shader_wire = shader_wire.shd;
     g_prims3d.pip_solid = pip_solid;
     g_prims3d.pip_alphablend = pip_alphablend;
+    g_prims3d.pip_wire = pip_wire;
 
+    g_prims3d.dyn_vbuff = the_gfx->make_buffer(&(sg_buffer_desc){
+        .type = SG_BUFFERTYPE_VERTEXBUFFER,
+        .usage = SG_USAGE_STREAM,
+        .size = sizeof(rizz_prims3d_vertex) * MAX_DYN_VERTICES });
+    g_prims3d.dyn_ibuff = the_gfx->make_buffer(&(sg_buffer_desc){
+        .type = SG_BUFFERTYPE_INDEXBUFFER,
+        .usage = SG_USAGE_STREAM,
+        .size = sizeof(rizz_prims3d_vertex) * MAX_DYN_INDICES });
     g_prims3d.instance_buff = the_gfx->make_buffer(&(sg_buffer_desc) {
         .size = sizeof(prims3d__instance) * MAX_INSTANCES,
         .type = SG_BUFFERTYPE_VERTEXBUFFER,
         .usage = SG_USAGE_STREAM,
     });
+    if (g_prims3d.dyn_vbuff.id == 0 || g_prims3d.dyn_ibuff.id == 0 || g_prims3d.instance_buff.id == 0) {
+        return false;
+    }
 
     // unit shapes 
     rizz_prims3d_geometry unit_box;
@@ -181,6 +223,18 @@ void prims3d__release(void)
     }
     if (g_prims3d.pip_alphablend.id) {
         the_gfx->destroy_pipeline(g_prims3d.pip_alphablend);
+    }
+    if (g_prims3d.pip_wire.id) {
+        the_gfx->destroy_pipeline(g_prims3d.pip_wire);
+    }
+    if (g_prims3d.instance_buff.id) {
+        the_gfx->destroy_buffer(g_prims3d.instance_buff);
+    }
+    if (g_prims3d.dyn_vbuff.id) {
+        the_gfx->destroy_buffer(g_prims3d.dyn_vbuff);
+    }
+    if (g_prims3d.dyn_ibuff.id) {
+        the_gfx->destroy_buffer(g_prims3d.dyn_ibuff);
     }
     if (g_prims3d.shader.id) {
         the_gfx->destroy_shader(g_prims3d.shader);
@@ -325,50 +379,50 @@ bool prims3d__generate_box_geometry(const sx_alloc* alloc, rizz_prims3d_geometry
     sx_aabb a = sx_aabbf(-e, -e, -e, e, e, e);
 
     // X+
-    verts[0] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 1), .normal = sx_vec3f(1.0f, 0, 0), .uv = sx_vec2f(0, 1.0f) };
-    verts[1] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 3), .normal = sx_vec3f(1.0f, 0, 0), .uv = sx_vec2f(0, 0) };
-    verts[2] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 7), .normal = sx_vec3f(1.0f, 0, 0), .uv = sx_vec2f(1.0f, 0) };
-    verts[3] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 5), .normal = sx_vec3f(1.0f, 0, 0), .uv = sx_vec2f(1.0f, 1.0f) };
+    verts[0] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 1), .normal = sx_vec3f(1.0f, 0, 0), .uv = sx_vec2f(0, 1.0f), .color = sx_colorn(0xffffffff) };
+    verts[1] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 3), .normal = sx_vec3f(1.0f, 0, 0), .uv = sx_vec2f(0, 0), .color = sx_colorn(0xffffffff) };
+    verts[2] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 7), .normal = sx_vec3f(1.0f, 0, 0), .uv = sx_vec2f(1.0f, 0), .color = sx_colorn(0xffffffff) };
+    verts[3] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 5), .normal = sx_vec3f(1.0f, 0, 0), .uv = sx_vec2f(1.0f, 1.0f), .color = sx_colorn(0xffffffff) };
     indices[0] = 0;         indices[1] = 1;         indices[2] = 3;
     indices[3] = 1;         indices[4] = 2;         indices[5] = 3;
 
     // X-
-    verts[4] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 4), .normal = sx_vec3f(-1.0f, 0, 0), .uv = sx_vec2f(0, 1.0f) };
-    verts[5] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 6), .normal = sx_vec3f(-1.0f, 0, 0), .uv = sx_vec2f(0, 0) };
-    verts[6] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 2), .normal = sx_vec3f(-1.0f, 0, 0), .uv = sx_vec2f(1.0f, 0) };
-    verts[7] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 0), .normal = sx_vec3f(-1.0f, 0, 0), .uv = sx_vec2f(1.0f, 1.0f) };
+    verts[4] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 4), .normal = sx_vec3f(-1.0f, 0, 0), .uv = sx_vec2f(0, 1.0f), .color = sx_colorn(0xffffffff) };
+    verts[5] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 6), .normal = sx_vec3f(-1.0f, 0, 0), .uv = sx_vec2f(0, 0), .color = sx_colorn(0xffffffff) };
+    verts[6] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 2), .normal = sx_vec3f(-1.0f, 0, 0), .uv = sx_vec2f(1.0f, 0), .color = sx_colorn(0xffffffff) };
+    verts[7] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 0), .normal = sx_vec3f(-1.0f, 0, 0), .uv = sx_vec2f(1.0f, 1.0f), .color = sx_colorn(0xffffffff) };
     indices[6] = 4;         indices[7] = 5;         indices[8] = 7;
     indices[9] = 5;         indices[10] = 6;        indices[11] = 7;
 
     // Y-
-    verts[8] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 0), .normal = sx_vec3f(0, -1.0f, 0), .uv = sx_vec2f(0, 1.0f) };
-    verts[9] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 2), .normal = sx_vec3f(0, -1.0f, 0), .uv = sx_vec2f(0, 0) };
-    verts[10] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 3), .normal = sx_vec3f(0, -1.0f, 0), .uv = sx_vec2f(1.0f, 0) };
-    verts[11] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 1), .normal = sx_vec3f(0, -1.0f, 0), .uv = sx_vec2f(1.0f, 1.0f) };
+    verts[8] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 0), .normal = sx_vec3f(0, -1.0f, 0), .uv = sx_vec2f(0, 1.0f), .color = sx_colorn(0xffffffff) };
+    verts[9] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 2), .normal = sx_vec3f(0, -1.0f, 0), .uv = sx_vec2f(0, 0), .color = sx_colorn(0xffffffff) };
+    verts[10] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 3), .normal = sx_vec3f(0, -1.0f, 0), .uv = sx_vec2f(1.0f, 0), .color = sx_colorn(0xffffffff) };
+    verts[11] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 1), .normal = sx_vec3f(0, -1.0f, 0), .uv = sx_vec2f(1.0f, 1.0f), .color = sx_colorn(0xffffffff) };
     indices[12] = 8;       indices[13] = 9;        indices[14] = 11;
     indices[15] = 9;       indices[16] = 10;       indices[17] = 11;
 
     // Y+
-    verts[12] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 5), .normal = sx_vec3f(0, 1.0f, 0), .uv = sx_vec2f(0, 1.0f) };
-    verts[13] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 7), .normal = sx_vec3f(0, 1.0f, 0), .uv = sx_vec2f(0, 0) };
-    verts[14] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 6), .normal = sx_vec3f(0, 1.0f, 0), .uv = sx_vec2f(1.0f, 0) };
-    verts[15] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 4), .normal = sx_vec3f(0, 1.0f, 0), .uv = sx_vec2f(1.0f, 1.0f) };
+    verts[12] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 5), .normal = sx_vec3f(0, 1.0f, 0), .uv = sx_vec2f(0, 1.0f), .color = sx_colorn(0xffffffff) };
+    verts[13] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 7), .normal = sx_vec3f(0, 1.0f, 0), .uv = sx_vec2f(0, 0), .color = sx_colorn(0xffffffff) };
+    verts[14] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 6), .normal = sx_vec3f(0, 1.0f, 0), .uv = sx_vec2f(1.0f, 0), .color = sx_colorn(0xffffffff) };
+    verts[15] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 4), .normal = sx_vec3f(0, 1.0f, 0), .uv = sx_vec2f(1.0f, 1.0f), .color = sx_colorn(0xffffffff) };
     indices[18] = 12;      indices[19] = 13;      indices[20] = 15;
     indices[21] = 13;      indices[22] = 14;      indices[23] = 15;
 
     // Z-
-    verts[16] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 1), .normal = sx_vec3f(0, 0, -1.0f), .uv = sx_vec2f(0, 1.0f) };
-    verts[17] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 5), .normal = sx_vec3f(0, 0, -1.0f), .uv = sx_vec2f(0, 0) };
-    verts[18] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 4), .normal = sx_vec3f(0, 0, -1.0f), .uv = sx_vec2f(1.0f, 0) };
-    verts[19] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 0), .normal = sx_vec3f(0, 0, -1.0f), .uv = sx_vec2f(1.0f, 1.0f) };
+    verts[16] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 1), .normal = sx_vec3f(0, 0, -1.0f), .uv = sx_vec2f(0, 1.0f), .color = sx_colorn(0xffffffff) };
+    verts[17] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 5), .normal = sx_vec3f(0, 0, -1.0f), .uv = sx_vec2f(0, 0), .color = sx_colorn(0xffffffff) };
+    verts[18] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 4), .normal = sx_vec3f(0, 0, -1.0f), .uv = sx_vec2f(1.0f, 0), .color = sx_colorn(0xffffffff) };
+    verts[19] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 0), .normal = sx_vec3f(0, 0, -1.0f), .uv = sx_vec2f(1.0f, 1.0f), .color = sx_colorn(0xffffffff) };
     indices[24] = 16;      indices[25] = 17;      indices[26] = 19;
     indices[27] = 17;      indices[28] = 18;      indices[29] = 19;
 
     // Z+
-    verts[20] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 2), .normal = sx_vec3f(0, 0, 1.0f), .uv = sx_vec2f(0, 1.0f) };
-    verts[21] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 6), .normal = sx_vec3f(0, 0, 1.0f), .uv = sx_vec2f(0, 0) };
-    verts[22] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 7), .normal = sx_vec3f(0, 0, 1.0f), .uv = sx_vec2f(1.0f, 0) };
-    verts[23] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 3), .normal = sx_vec3f(0, 0, 1.0f), .uv = sx_vec2f(1.0f, 1.0f) };
+    verts[20] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 2), .normal = sx_vec3f(0, 0, 1.0f), .uv = sx_vec2f(0, 1.0f), .color = sx_colorn(0xffffffff) };
+    verts[21] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 6), .normal = sx_vec3f(0, 0, 1.0f), .uv = sx_vec2f(0, 0), .color = sx_colorn(0xffffffff) };
+    verts[22] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 7), .normal = sx_vec3f(0, 0, 1.0f), .uv = sx_vec2f(1.0f, 0), .color = sx_colorn(0xffffffff) };
+    verts[23] = (rizz_prims3d_vertex) { .pos = sx_aabb_corner(&a, 3), .normal = sx_vec3f(0, 0, 1.0f), .uv = sx_vec2f(1.0f, 1.0f), .color = sx_colorn(0xffffffff) };
     indices[30] = 20;      indices[31] = 21;      indices[32] = 23;
     indices[33] = 21;      indices[34] = 22;      indices[35] = 23;    
     // clang-format on
@@ -388,3 +442,189 @@ void prims3d__draw_aabbs(const sx_aabb* aabbs, int num_aabbs, const sx_color* ti
     sx_unused(num_aabbs);
     sx_unused(tints);
 }
+
+void prims3d__grid_xzplane(float spacing, float spacing_bold, const sx_mat4* vp, const sx_vec3 frustum[8])
+{
+    static const sx_color color = { { 170, 170, 170, 255 } };
+    static const sx_color bold_color = { { 255, 255, 255, 255 } };
+
+    rizz_api_gfx_draw* draw_api = g_prims3d.draw_api;
+
+    spacing = sx_ceil(sx_max(spacing, 0.0001f));
+    sx_aabb bb = sx_aabb_empty();
+
+    // extrude near plane
+    sx_vec3 near_plane_norm = sx_plane_normal(frustum[0], frustum[1], frustum[2]);
+    for (int i = 0; i < 8; i++) {
+        if (i < 4) {
+            sx_vec3 offset_pt = sx_vec3_sub(frustum[i], sx_vec3_mulf(near_plane_norm, spacing));
+            sx_aabb_add_point(&bb, sx_vec3f(offset_pt.x, 0, offset_pt.z));
+        } else {
+            sx_aabb_add_point(&bb, sx_vec3f(frustum[i].x, 0, frustum[i].z));
+        }
+    }
+
+    // snap grid bounds to `spacing`
+    int nspace = (int)spacing;
+    sx_aabb snapbox = sx_aabbf((float)((int)bb.xmin - (int)bb.xmin % nspace), 0,
+                               (float)((int)bb.zmin - (int)bb.zmin % nspace),
+                               (float)((int)bb.xmax - (int)bb.xmax % nspace), 0,
+                               (float)((int)bb.zmax - (int)bb.zmax % nspace));
+    float w = snapbox.xmax - snapbox.xmin;
+    float d = snapbox.zmax - snapbox.zmin;
+    if (sx_equal(w, 0, 0.00001f) || sx_equal(d, 0, 0.00001f))
+        return;
+
+    int xlines = (int)w / nspace + 1;
+    int ylines = (int)d / nspace + 1;
+    int num_verts = (xlines + ylines) * 2;
+
+    // draw
+    int data_size = num_verts * sizeof(rizz_prims3d_vertex);
+    rizz_temp_alloc_begin(tmp_alloc);
+    rizz_prims3d_vertex* verts = sx_malloc(tmp_alloc, data_size);
+    sx_assert(verts);
+
+    int i = 0;
+    for (float zoffset = snapbox.zmin; zoffset <= snapbox.zmax; zoffset += spacing, i += 2) {
+        verts[i].pos.x = snapbox.xmin;
+        verts[i].pos.y = 0;
+        verts[i].pos.z = zoffset;
+
+        int ni = i + 1;
+        verts[ni].pos.x = snapbox.xmax;
+        verts[ni].pos.y = 0;
+        verts[ni].pos.z = zoffset;
+
+        verts[i].color = verts[ni].color =
+            (zoffset != 0.0f)
+                ? (!sx_equal(sx_mod(zoffset, spacing_bold), 0.0f, 0.0001f) ? color : bold_color)
+                : SX_COLOR_RED;
+    }
+
+    for (float xoffset = snapbox.xmin; xoffset <= snapbox.xmax; xoffset += spacing, i += 2) {
+        verts[i].pos.x = xoffset;
+        verts[i].pos.y = 0;
+        verts[i].pos.z = snapbox.zmin;
+
+        int ni = i + 1;
+        sx_assert(ni < num_verts);
+        verts[ni].pos.x = xoffset;
+        verts[ni].pos.y = 0;
+        verts[ni].pos.z = snapbox.zmax;
+
+        verts[i].color = verts[ni].color =
+            (xoffset != 0.0f)
+                ? (!sx_equal(sx_mod(xoffset, spacing_bold), 0.0f, 0.0001f) ? color : bold_color)
+                : SX_COLOR_BLUE;
+    }
+
+    int offset = draw_api->append_buffer(g_prims3d.dyn_vbuff, verts, data_size);
+    sg_bindings bind = { 
+        .vertex_buffers[0] = g_prims3d.dyn_vbuff, 
+        .vertex_buffer_offsets[0] = offset };
+
+    draw_api->apply_pipeline(g_prims3d.pip_wire);
+    draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, vp, sizeof(*vp));
+    draw_api->apply_bindings(&bind);
+    draw_api->draw(0, num_verts, 1);
+
+    rizz_temp_alloc_end(tmp_alloc);
+}
+
+void prims3d__grid_xyplane(float spacing, float spacing_bold, const sx_mat4* vp, const sx_vec3 frustum[8])
+{
+    static const sx_color color = { { 170, 170, 170, 255 } };
+    static const sx_color bold_color = { { 255, 255, 255, 255 } };
+
+    rizz_api_gfx_draw* draw_api = g_prims3d.draw_api;
+
+    spacing = sx_ceil(sx_max(spacing, 0.0001f));
+    sx_aabb bb = sx_aabb_empty();
+
+    // extrude near plane
+    sx_vec3 near_plane_norm = sx_plane_normal(frustum[0], frustum[1], frustum[2]);
+    for (int i = 0; i < 8; i++) {
+        if (i < 4) {
+            sx_vec3 offset_pt = sx_vec3_sub(frustum[i], sx_vec3_mulf(near_plane_norm, spacing));
+            sx_aabb_add_point(&bb, sx_vec3f(offset_pt.x, offset_pt.y, 0));
+        } else {
+            sx_aabb_add_point(&bb, sx_vec3f(frustum[i].x, frustum[i].y, 0));
+        }
+    }
+
+    // snap grid bounds to `spacing`
+    int nspace = (int)spacing;
+    sx_aabb snapbox = sx_aabbf((float)((int)bb.xmin - (int)bb.xmin % nspace),
+                               (float)((int)bb.ymin - (int)bb.ymin % nspace), 0,
+                               (float)((int)bb.xmax - (int)bb.xmax % nspace),
+                               (float)((int)bb.ymax - (int)bb.ymax % nspace), 0);
+    float w = snapbox.xmax - snapbox.xmin;
+    float h = snapbox.ymax - snapbox.ymin;
+    if (sx_equal(w, 0, 0.00001f) || sx_equal(h, 0, 0.00001f))
+        return;
+
+    int xlines = (int)w / nspace + 1;
+    int ylines = (int)h / nspace + 1;
+    int num_verts = (xlines + ylines) * 2;
+
+    // draw
+    int data_size = num_verts * sizeof(rizz_prims3d_vertex);
+    rizz_temp_alloc_begin(tmp_alloc);
+    rizz_prims3d_vertex* verts = sx_malloc(tmp_alloc, data_size);
+    sx_assert(verts);
+
+    int i = 0;
+    for (float yoffset = snapbox.ymin; yoffset <= snapbox.ymax; yoffset += spacing, i += 2) {
+        verts[i].pos.x = snapbox.xmin;
+        verts[i].pos.y = yoffset;
+        verts[i].pos.z = 0;
+
+        int ni = i + 1;
+        verts[ni].pos.x = snapbox.xmax;
+        verts[ni].pos.y = yoffset;
+        verts[ni].pos.z = 0;
+
+        verts[i].color = verts[ni].color =
+            (yoffset != 0.0f)
+                ? (!sx_equal(sx_mod(yoffset, spacing_bold), 0.0f, 0.0001f) ? color : bold_color)
+                : SX_COLOR_RED;
+    }
+
+    for (float xoffset = snapbox.xmin; xoffset <= snapbox.xmax; xoffset += spacing, i += 2) {
+        verts[i].pos.x = xoffset;
+        verts[i].pos.y = snapbox.ymin;
+        verts[i].pos.z = 0;
+
+        int ni = i + 1;
+        sx_assert(ni < num_verts);
+        verts[ni].pos.x = xoffset;
+        verts[ni].pos.y = snapbox.ymax;
+        verts[ni].pos.z = 0;
+
+        verts[i].color = verts[ni].color =
+            (xoffset != 0.0f)
+                ? (!sx_equal(sx_mod(xoffset, spacing_bold), 0.0f, 0.0001f) ? color : bold_color)
+                : SX_COLOR_GREEN;
+    }
+
+    int offset = draw_api->append_buffer(g_prims3d.dyn_vbuff, verts, data_size);
+    sg_bindings bind = { 
+        .vertex_buffers[0] = g_prims3d.dyn_vbuff, 
+        .vertex_buffer_offsets[0] = offset };
+
+    draw_api->apply_pipeline(g_prims3d.pip_wire);
+    draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, vp, sizeof(*vp));
+    draw_api->apply_bindings(&bind);
+    draw_api->draw(0, num_verts, 1);
+    rizz_temp_alloc_end(tmp_alloc);
+}
+
+void prims3d__grid_xyplane_cam(float spacing, float spacing_bold, float dist, const rizz_camera* cam, 
+                               const sx_mat4* viewproj_mat)
+{
+    sx_vec3 frustum[8];
+    the_camera->calc_frustum_points_range(cam, frustum, -dist, dist);
+    prims3d__grid_xyplane(spacing, spacing_bold, viewproj_mat, frustum);
+}
+

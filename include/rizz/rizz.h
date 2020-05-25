@@ -1168,12 +1168,6 @@ typedef struct rizz_api_gfx {
     rizz_texture (*texture_create_checker)(int checker_size, int size, const sx_color colors[2]);
     const rizz_texture* (*texture_get)(rizz_asset texture_asset);
 
-    // debug
-    void (*debug_grid_xzplane)(float spacing, float spacing_bold, const sx_mat4* vp,
-                               const sx_vec3 frustum[8]);
-    void (*debug_grid_xyplane)(float spacing, float spacing_bold, const sx_mat4* vp,
-                               const sx_vec3 frustum[8]);
-
     // info
     const rizz_gfx_trace_info* (*trace_info)();
 } rizz_api_gfx;

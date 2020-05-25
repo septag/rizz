@@ -126,9 +126,6 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_GCC("-Wmaybe-uninitialized")
 #include "stb/stb_image.h"
 SX_PRAGMA_DIAGNOSTIC_POP()
 
-#include rizz_shader_path(shaders_h, debug.vert.h)
-#include rizz_shader_path(shaders_h, debug.frag.h)
-
 #ifdef _DEBUG
 #    define rizz__queue_destroy(_a, _id, _alloc)                        \
         for (int __i = 0, __c = sx_array_count(_a); __i < __c; __i++) { \
@@ -231,33 +228,6 @@ typedef struct rizz__gfx_stage {
     bool single_enabled;
 } rizz__gfx_stage;
 
-typedef struct rizz__debug_vertex {
-    sx_vec3 pos;
-    sx_vec2 uv;
-    sx_color color;
-} rizz__debug_vertex;
-
-static rizz_vertex_layout k__debug_vertex = {
-    .attrs[0] = { .semantic = "POSITION", .offset = offsetof(rizz__debug_vertex, pos) },
-    .attrs[1] = { .semantic = "TEXCOORD", .offset = offsetof(rizz__debug_vertex, uv) },
-    .attrs[2] = { .semantic = "COLOR",
-                  .offset = offsetof(rizz__debug_vertex, color),
-                  .format = SG_VERTEXFORMAT_UBYTE4N },
-};
-
-typedef struct rizz__debug_uniforms {
-    sx_mat4 model;
-    sx_mat4 vp;
-} rizz__debug_uniforms;
-
-typedef struct rizz__gfx_debug {
-    sg_buffer vb;
-    sg_buffer ib;
-    sg_pipeline pip_wire;
-    sg_shader shader;
-    sx_mat4 vp;
-} rizz__gfx_debug;
-
 #ifdef SOKOL_METAL
 typedef struct rizz__pip_mtl {
     sg_pipeline pip;
@@ -284,7 +254,6 @@ typedef struct rizz__gfx {
     sg_pipeline* pips;
 #endif
     rizz__gfx_stream_buffer* stream_buffs;    // sx_array: streaming buffers for append_buffers
-    rizz__gfx_debug dbg;
 
     sg_buffer* destroy_buffers;
     sg_shader* destroy_shaders;
@@ -2395,36 +2364,6 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
         } 
     }
 
-    // debug draw
-    {
-        g_gfx.dbg.vb = the__gfx.make_buffer(&(sg_buffer_desc){
-            .type = SG_BUFFERTYPE_VERTEXBUFFER,
-            .usage = SG_USAGE_STREAM,
-            .size = sizeof(rizz__debug_vertex) * RIZZ_CONFIG_MAX_DEBUG_VERTICES });
-        g_gfx.dbg.ib = the__gfx.make_buffer(&(sg_buffer_desc){
-            .type = SG_BUFFERTYPE_INDEXBUFFER,
-            .usage = SG_USAGE_STREAM,
-            .size = sizeof(rizz__debug_vertex) * RIZZ_CONFIG_MAX_DEBUG_INDICES });
-
-        const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
-        rizz_shader shader = the__gfx.shader_make_with_data(
-            tmp_alloc, k_debug_vs_size, k_debug_vs_data, k_debug_vs_refl_size, k_debug_vs_refl_data,
-            k_debug_fs_size, k_debug_fs_data, k_debug_fs_refl_size, k_debug_fs_refl_data);
-
-        g_gfx.dbg.shader = shader.shd;
-
-        sg_pipeline_desc pip_desc_wire = { .layout.buffers[0].stride = sizeof(rizz__debug_vertex),
-                                           .shader = g_gfx.dbg.shader,
-                                           .index_type = SG_INDEXTYPE_NONE,
-                                           .primitive_type = SG_PRIMITIVETYPE_LINES,
-                                           .depth_stencil = { .depth_compare_func = SG_COMPAREFUNC_LESS_EQUAL,
-                                                              .depth_write_enabled = true } };
-        the__gfx.shader_bindto_pipeline(&shader, &pip_desc_wire, &k__debug_vertex);
-
-        g_gfx.dbg.pip_wire = the__gfx.make_pipeline(&pip_desc_wire);
-        the__core.tmp_alloc_pop();
-    }
-
     return true;
 }
 
@@ -2440,16 +2379,6 @@ static void rizz__gfx_destroy_buffers(rizz__gfx_cmdbuffer* cbs)
 
 void rizz__gfx_release()
 {
-    // debug
-    if (g_gfx.dbg.pip_wire.id)
-        the__gfx.destroy_pipeline(g_gfx.dbg.pip_wire);
-    if (g_gfx.dbg.shader.id)
-        the__gfx.destroy_shader(g_gfx.dbg.shader);
-    if (g_gfx.dbg.vb.id)
-        the__gfx.destroy_buffer(g_gfx.dbg.vb);
-    if (g_gfx.dbg.ib.id)
-        the__gfx.destroy_buffer(g_gfx.dbg.ib);
-
     rizz__texture_release();
 
     // deferred destroys
@@ -3691,185 +3620,6 @@ static void rizz__end_profile_sample()
     rmt__end_gpu_sample();
 }
 
-static void rizz__debug_grid_xzplane(float spacing, float spacing_bold, const sx_mat4* vp,
-                                     const sx_vec3 frustum[8])
-{
-    static const sx_color color = { { 170, 170, 170, 255 } };
-    static const sx_color bold_color = { { 255, 255, 255, 255 } };
-
-    spacing = sx_ceil(sx_max(spacing, 0.0001f));
-    sx_aabb bb = sx_aabb_empty();
-
-    // extrude near plane
-    sx_vec3 near_plane_norm = sx_plane_normal(frustum[0], frustum[1], frustum[2]);
-    for (int i = 0; i < 8; i++) {
-        if (i < 4) {
-            sx_vec3 offset_pt = sx_vec3_sub(frustum[i], sx_vec3_mulf(near_plane_norm, spacing));
-            sx_aabb_add_point(&bb, sx_vec3f(offset_pt.x, 0, offset_pt.z));
-        } else {
-            sx_aabb_add_point(&bb, sx_vec3f(frustum[i].x, 0, frustum[i].z));
-        }
-    }
-
-    // snap grid bounds to `spacing`
-    int nspace = (int)spacing;
-    sx_aabb snapbox = sx_aabbf((float)((int)bb.xmin - (int)bb.xmin % nspace), 0,
-                               (float)((int)bb.zmin - (int)bb.zmin % nspace),
-                               (float)((int)bb.xmax - (int)bb.xmax % nspace), 0,
-                               (float)((int)bb.zmax - (int)bb.zmax % nspace));
-    float w = snapbox.xmax - snapbox.xmin;
-    float d = snapbox.zmax - snapbox.zmin;
-    if (sx_equal(w, 0, 0.00001f) || sx_equal(d, 0, 0.00001f))
-        return;
-
-    int xlines = (int)w / nspace + 1;
-    int ylines = (int)d / nspace + 1;
-    int num_verts = (xlines + ylines) * 2;
-
-    // draw
-    int data_size = num_verts * sizeof(rizz__debug_vertex);
-    const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
-    rizz__debug_vertex* verts = sx_malloc(tmp_alloc, data_size);
-    sx_assert(verts);
-
-    int i = 0;
-    for (float zoffset = snapbox.zmin; zoffset <= snapbox.zmax; zoffset += spacing, i += 2) {
-        verts[i].pos.x = snapbox.xmin;
-        verts[i].pos.y = 0;
-        verts[i].pos.z = zoffset;
-
-        int ni = i + 1;
-        verts[ni].pos.x = snapbox.xmax;
-        verts[ni].pos.y = 0;
-        verts[ni].pos.z = zoffset;
-
-        verts[i].color = verts[ni].color =
-            (zoffset != 0.0f)
-                ? (!sx_equal(sx_mod(zoffset, spacing_bold), 0.0f, 0.0001f) ? color : bold_color)
-                : SX_COLOR_RED;
-    }
-
-    for (float xoffset = snapbox.xmin; xoffset <= snapbox.xmax; xoffset += spacing, i += 2) {
-        verts[i].pos.x = xoffset;
-        verts[i].pos.y = 0;
-        verts[i].pos.z = snapbox.zmin;
-
-        int ni = i + 1;
-        sx_assert(ni < num_verts);
-        verts[ni].pos.x = xoffset;
-        verts[ni].pos.y = 0;
-        verts[ni].pos.z = snapbox.zmax;
-
-        verts[i].color = verts[ni].color =
-            (xoffset != 0.0f)
-                ? (!sx_equal(sx_mod(xoffset, spacing_bold), 0.0f, 0.0001f) ? color : bold_color)
-                : SX_COLOR_BLUE;
-    }
-
-    int offset = the__gfx.staged.append_buffer(g_gfx.dbg.vb, verts, data_size);
-    sg_bindings bind = { 
-        .vertex_buffers[0] = g_gfx.dbg.vb, 
-        .vertex_buffer_offsets[0] = offset,
-        .fs_images[0] = g_gfx.tex_mgr.white_tex.img };
-    rizz__debug_uniforms uniforms = { .model = sx_mat4_ident(), .vp = *vp };
-
-    the__gfx.staged.apply_pipeline(g_gfx.dbg.pip_wire);
-    the__gfx.staged.apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniforms));
-    the__gfx.staged.apply_bindings(&bind);
-    the__gfx.staged.draw(0, num_verts, 1);
-
-    the__core.tmp_alloc_pop();
-}
-
-void rizz__debug_grid_xyplane(float spacing, float spacing_bold, const sx_mat4* vp,
-                              const sx_vec3 frustum[8])
-{
-    static const sx_color color = { { 170, 170, 170, 255 } };
-    static const sx_color bold_color = { { 255, 255, 255, 255 } };
-
-    spacing = sx_ceil(sx_max(spacing, 0.0001f));
-    sx_aabb bb = sx_aabb_empty();
-
-    // extrude near plane
-    sx_vec3 near_plane_norm = sx_plane_normal(frustum[0], frustum[1], frustum[2]);
-    for (int i = 0; i < 8; i++) {
-        if (i < 4) {
-            sx_vec3 offset_pt = sx_vec3_sub(frustum[i], sx_vec3_mulf(near_plane_norm, spacing));
-            sx_aabb_add_point(&bb, sx_vec3f(offset_pt.x, offset_pt.y, 0));
-        } else {
-            sx_aabb_add_point(&bb, sx_vec3f(frustum[i].x, frustum[i].y, 0));
-        }
-    }
-
-    // snap grid bounds to `spacing`
-    int nspace = (int)spacing;
-    sx_aabb snapbox = sx_aabbf((float)((int)bb.xmin - (int)bb.xmin % nspace),
-                               (float)((int)bb.ymin - (int)bb.ymin % nspace), 0,
-                               (float)((int)bb.xmax - (int)bb.xmax % nspace),
-                               (float)((int)bb.ymax - (int)bb.ymax % nspace), 0);
-    float w = snapbox.xmax - snapbox.xmin;
-    float h = snapbox.ymax - snapbox.ymin;
-    if (sx_equal(w, 0, 0.00001f) || sx_equal(h, 0, 0.00001f))
-        return;
-
-    int xlines = (int)w / nspace + 1;
-    int ylines = (int)h / nspace + 1;
-    int num_verts = (xlines + ylines) * 2;
-
-    // draw
-    int data_size = num_verts * sizeof(rizz__debug_vertex);
-    const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
-    rizz__debug_vertex* verts = sx_malloc(tmp_alloc, data_size);
-    sx_assert(verts);
-
-    int i = 0;
-    for (float yoffset = snapbox.ymin; yoffset <= snapbox.ymax; yoffset += spacing, i += 2) {
-        verts[i].pos.x = snapbox.xmin;
-        verts[i].pos.y = yoffset;
-        verts[i].pos.z = 0;
-
-        int ni = i + 1;
-        verts[ni].pos.x = snapbox.xmax;
-        verts[ni].pos.y = yoffset;
-        verts[ni].pos.z = 0;
-
-        verts[i].color = verts[ni].color =
-            (yoffset != 0.0f)
-                ? (!sx_equal(sx_mod(yoffset, spacing_bold), 0.0f, 0.0001f) ? color : bold_color)
-                : SX_COLOR_RED;
-    }
-
-    for (float xoffset = snapbox.xmin; xoffset <= snapbox.xmax; xoffset += spacing, i += 2) {
-        verts[i].pos.x = xoffset;
-        verts[i].pos.y = snapbox.ymin;
-        verts[i].pos.z = 0;
-
-        int ni = i + 1;
-        sx_assert(ni < num_verts);
-        verts[ni].pos.x = xoffset;
-        verts[ni].pos.y = snapbox.ymax;
-        verts[ni].pos.z = 0;
-
-        verts[i].color = verts[ni].color =
-            (xoffset != 0.0f)
-                ? (!sx_equal(sx_mod(xoffset, spacing_bold), 0.0f, 0.0001f) ? color : bold_color)
-                : SX_COLOR_GREEN;
-    }
-
-    int offset = the__gfx.staged.append_buffer(g_gfx.dbg.vb, verts, data_size);
-    sg_bindings bind = { 
-        .vertex_buffers[0] = g_gfx.dbg.vb, 
-        .vertex_buffer_offsets[0] = offset,
-        .fs_images[0] = g_gfx.tex_mgr.white_tex.img };
-    rizz__debug_uniforms uniforms = { .model = sx_mat4_ident(), .vp = *vp };
-
-    the__gfx.staged.apply_pipeline(g_gfx.dbg.pip_wire);
-    the__gfx.staged.apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniforms));
-    the__gfx.staged.apply_bindings(&bind);
-    the__gfx.staged.draw(0, num_verts, 1);
-    the__core.tmp_alloc_pop();
-}
-
 static void rizz__internal_state(void** make_cmdbuff, int* make_cmdbuff_sz)
 {
     *make_cmdbuff = g_gfx.trace.make_cmds_writer.data;
@@ -4022,8 +3772,6 @@ rizz_api_gfx the__gfx = {
     .texture_checker            = rizz__texture_checker,
     .texture_create_checker     = rizz__texture_create_checker,
     .texture_get                = rizz__texture_get,
-    .debug_grid_xzplane         = rizz__debug_grid_xzplane,
-    .debug_grid_xyplane         = rizz__debug_grid_xyplane,
     .trace_info                 = rizz__trace_info
 };
 // clang-format on

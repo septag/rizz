@@ -101,9 +101,7 @@ static void render(void)
         init_boxes = true;
     }
     
-    sx_vec3 frustum[8];
-    the_camera->calc_frustum_points_range(&g_draw3d.cam.cam, frustum, -5.0f, 50.0f);
-    the_gfx->debug_grid_xyplane(1.0f, 5.0f, &viewproj, frustum);
+    the_prims->grid_xyplane_cam(1.0f, 5.0f, 50.0f, &g_draw3d.cam.cam, &viewproj);
     the_prims->draw_boxes(boxes, 100, &viewproj, RIZZ_PRIMS3D_MAPTYPE_CHECKER, tints);
 
     the_gfx->staged.end_pass();

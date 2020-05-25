@@ -93,9 +93,3 @@ elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 elseif (WIN32)
     target_link_libraries(rizz PRIVATE dxgi d3d11)
 endif()
-
-# shaders
-set(shaders shaders/debug.vert 
-            shaders/debug.frag)
-set_source_files_properties(${shaders} PROPERTIES GLSLCC_OUTPUT_DIRECTORY "shaders_h")
-glslcc_target_compile_shaders_h(rizz "${shaders}")
