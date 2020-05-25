@@ -1696,7 +1696,7 @@ static inline int sx_irect_height(const sx_irect rc)
 static inline sx_plane sx_planef(float _nx, float _ny, float _nz, float _d)
 {
 #ifdef __cplusplus
-    return { {{_nx, _ny, _nx, _d }} };
+    return { {{_nx, _ny, _nz, _d }} };
 #else
     return (sx_plane){ .p = {.x = _nx, .y = _ny, .z = _nz, .w = _d} };
 #endif    
