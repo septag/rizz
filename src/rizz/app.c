@@ -379,12 +379,12 @@ sapp_desc sokol_main(int argc, char* argv[])
                     .gl_force_gles2 = (conf.app_flags & RIZZ_APP_FLAG_FORCE_GLES2) ? true : false };
 }
 
-static sx_vec2 rizz__app_sizef()
+static sx_vec2 rizz__app_sizef(void)
 {
     return g_app.window_size;
 }
 
-static const char* rizz__app_name()
+static const char* rizz__app_name(void)
 {
     return g_app.conf.app_name;
 }
@@ -411,22 +411,36 @@ void rizz__app_init_gfx_desc(sg_desc* desc)
     context->d3d11.depth_stencil_view_cb = sapp_d3d11_get_depth_stencil_view;
 }
 
-const void* rizz__app_d3d11_device()
+const void* rizz__app_d3d11_device(void)
 {
     return sapp_d3d11_get_device();
 }
 
-const void* rizz__app_d3d11_device_context()
+const void* rizz__app_d3d11_device_context(void)
 {
     return sapp_d3d11_get_device_context();
 }
 
-void* sapp_android_get_native_window()
+void* sapp_android_get_native_window(void)
 {
 #if SX_PLATFORM_ANDROID
     return _sapp_android_state.current.window;
 #else
     return NULL;
+#endif
+}
+
+static void rizz__app_mouse_capture(void)
+{
+#if SX_PLATFORM_WINDOWS
+    SetCapture(_sapp_win32_hwnd);
+#endif
+}
+
+static void rizz__app_mouse_release(void)
+{
+#if SX_PLATFORM_WINDOWS
+    ReleaseCapture();
 #endif
 }
 
@@ -443,4 +457,6 @@ rizz_api_app the__app = { .width = sapp_width,
                           .request_quit = sapp_request_quit,
                           .cancel_quit = sapp_cancel_quit,
                           .show_mouse = sapp_show_mouse,
-                          .mouse_shown = sapp_mouse_shown };
+                          .mouse_shown = sapp_mouse_shown,
+                          .mouse_capture = rizz__app_mouse_capture,
+                          .mouse_release = rizz__app_mouse_release };

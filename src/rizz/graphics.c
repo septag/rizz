@@ -2417,8 +2417,8 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
                                            .shader = g_gfx.dbg.shader,
                                            .index_type = SG_INDEXTYPE_NONE,
                                            .primitive_type = SG_PRIMITIVETYPE_LINES,
-                                           .depth_stencil = { .depth_compare_func =
-                                                                  SG_COMPAREFUNC_LESS_EQUAL } };
+                                           .depth_stencil = { .depth_compare_func = SG_COMPAREFUNC_LESS_EQUAL,
+                                                              .depth_write_enabled = true } };
         the__gfx.shader_bindto_pipeline(&shader, &pip_desc_wire, &k__debug_vertex);
 
         g_gfx.dbg.pip_wire = the__gfx.make_pipeline(&pip_desc_wire);

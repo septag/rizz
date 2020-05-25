@@ -28,11 +28,11 @@ typedef struct rizz_api_prims3d {
     void (*draw_box)(const sx_box* box, const sx_mat4* viewproj_mat, rizz_prims3d_map_type map_type,
                      sx_color tint);
     void (*draw_boxes)(const sx_box* boxes, int num_boxes, const sx_mat4* viewproj_mat,
-                       rizz_prims3d_map_type map_type, sx_color* tints);
+                       rizz_prims3d_map_type map_type, const sx_color* tints);
     bool (*generate_box_geometry)(const sx_alloc* alloc, rizz_prims3d_geometry* geo);
 
     // aabbs are always wireframe. and alpha in color tint doesn't affect them
     void (*draw_aabb)(const sx_aabb* aabb, sx_color tint);
-    void (*draw_aabbs)(const sx_aabb* aabbs, int num_aabbs, sx_color* tints);
+    void (*draw_aabbs)(const sx_aabb* aabbs, int num_aabbs, const sx_color* tints);
 } rizz_api_prims3d;
 

@@ -88,6 +88,7 @@ static void render(void)
     sx_mat4 view = the_camera->view_mat(&g_draw3d.cam.cam);
     sx_mat4 viewproj = sx_mat4_mul(&proj, &view);
     static sx_box boxes[100];
+    static sx_color tints[100];
     static bool init_boxes = false;
     if (!init_boxes) {
         for (int i = 0; i < 100; i++) {
@@ -95,15 +96,15 @@ static void render(void)
                 the_core->rand_range(-50.0f, 50.0f), the_core->rand_range(-50.0f, 50.0f), 0, 
                 0, 0, sx_torad(the_core->rand_range(0, 90.0f))), 
                 sx_vec3f(the_core->rand_range(1.0f, 2.0f), the_core->rand_range(1.0f, 2.0), 1.0f)); 
+            tints[i] = sx_color4u(the_core->rand_range(0, 255), the_core->rand_range(0, 255), the_core->rand_range(0, 255), 255);
         }
         init_boxes = true;
     }
     
     sx_vec3 frustum[8];
-    the_camera->calc_frustum_points(&g_draw3d.cam.cam, frustum);
-    //the_prims->draw_box(&box, &viewproj, RIZZ_PRIMS3D_MAPTYPE_CHECKER, SX_COLOR_WHITE);
-    the_prims->draw_boxes(boxes, 100, &viewproj, RIZZ_PRIMS3D_MAPTYPE_CHECKER, NULL);
+    the_camera->calc_frustum_points_range(&g_draw3d.cam.cam, frustum, -5.0f, 50.0f);
     the_gfx->debug_grid_xyplane(1.0f, 5.0f, &viewproj, frustum);
+    the_prims->draw_boxes(boxes, 100, &viewproj, RIZZ_PRIMS3D_MAPTYPE_CHECKER, tints);
 
     the_gfx->staged.end_pass();
     the_gfx->staged.end();
@@ -158,10 +159,16 @@ rizz_plugin_decl_event_handler(nbody, e)
     case RIZZ_APP_EVENTTYPE_RESTORED:
         break;
     case RIZZ_APP_EVENTTYPE_MOUSE_DOWN:
+        if (!mouse_down) {
+            the_app->mouse_capture();
+        }
         mouse_down = true;
         last_mouse = sx_vec2f(e->mouse_x, e->mouse_y);
         break;
     case RIZZ_APP_EVENTTYPE_MOUSE_UP:
+        if (mouse_down) {
+            the_app->mouse_release();
+        }
     case RIZZ_APP_EVENTTYPE_MOUSE_LEAVE:
         mouse_down = false;
         break;
@@ -188,6 +195,7 @@ rizz_game_decl_config(conf)
     conf->app_flags |= RIZZ_APP_FLAG_HIGHDPI;
     conf->window_width = 800;
     conf->window_height = 600;
+    conf->multisample_count = 4;
     conf->swap_interval = 1;
     conf->plugins[0] = "imgui";
     conf->plugins[1] = "3dtools";

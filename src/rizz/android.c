@@ -11,8 +11,8 @@
 #    include <pthread.h>
 
 // app.c
-const void* sapp_android_get_native_activity();
-void* sapp_android_get_native_window();
+const void* sapp_android_get_native_activity(void);
+void* sapp_android_get_native_window(void);
 
 static void android__detach_cb(void* p)
 {

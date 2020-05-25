@@ -7,8 +7,10 @@ layout (location = TEXCOORD1) in vec4 a_inst_tx1;
 layout (location = TEXCOORD2) in vec4 a_inst_tx2;
 layout (location = TEXCOORD3) in vec4 a_inst_tx3;
 layout (location = TEXCOORD4) in vec3 a_inst_scale;
+layout (location = TEXCOORD5) in vec4 a_inst_color;
 
 layout (location = TEXCOORD0) out vec2 f_uv;
+layout (location = TEXCOORD1) flat out vec4 f_color;
 
 #define a_inst_pos a_inst_tx1.xyz
 #define a_inst_rot mat3(vec3(a_inst_tx1.w, a_inst_tx2.x, a_inst_tx2.y), \
@@ -17,7 +19,6 @@ layout (location = TEXCOORD0) out vec2 f_uv;
 
 layout (binding = 0, std140) uniform globals {
     mat4 vp;
-    vec4 color;
 };
 
 void main()
@@ -40,4 +41,5 @@ void main()
     }
 
     f_uv = uv;
+    f_color = a_inst_color;
 }
