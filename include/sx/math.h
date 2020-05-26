@@ -1118,14 +1118,18 @@ static inline sx_vec4 sx_mat4_row4(const sx_mat4* m)
 
 static inline sx_mat4 sx_mat4_translate(float _tx, float _ty, float _tz)
 {
-    return sx_mat4f(1.0f, 0.0f, 0.0f, _tx, 0.0f, 1.0f, 0.0f, _ty, 0.0f, 0.0f, 1.0f, _tz, 0.0f, 0.0f,
-                    0.0f, 1.0f);
+    return sx_mat4f(1.0f, 0.0f, 0.0f, _tx, 
+                    0.0f, 1.0f, 0.0f, _ty, 
+                    0.0f, 0.0f, 1.0f, _tz, 
+                    0.0f, 0.0f, 0.0f, 1.0f);
 }
 
 static inline sx_mat4 sx_mat4_scale(float _sx, float _sy, float _sz)
 {
-    return sx_mat4f(_sx, 0.0f, 0.0f, 0.0f, 0.0f, _sy, 0.0f, 0.0f, 0.0f, 0.0f, _sz, 0.0f, 0.0f, 0.0f,
-                    0.0f, 1.0f);
+    return sx_mat4f(_sx, 0.0f, 0.0f, 0.0f, 
+                    0.0f, _sy, 0.0f, 0.0f, 
+                    0.0f, 0.0f, _sz, 0.0f, 
+                    0.0f, 0.0f,0.0f, 1.0f);
 }
 
 static inline sx_mat4 sx_mat4_scalef(float _scale)
@@ -1819,6 +1823,45 @@ static inline void sx_aabb_corners(sx_vec3 corners[8], const sx_aabb* aabb)
     for (int i = 0; i < 8; i++)
         corners[i] = sx_aabb_corner(aabb, i);
 }
+
+static inline sx_vec3 sx_aabb_extents(const sx_aabb* aabb)
+{
+    return sx_vec3f(aabb->vmax.x - aabb->vmin.x, aabb->vmax.y - aabb->vmin.y, aabb->vmax.z - aabb->vmin.z);
+}
+
+static inline sx_vec3 sx_aabb_center(const sx_aabb* aabb)
+{
+    return sx_vec3_mulf(sx_vec3_add(aabb->vmin, aabb->vmax), 0.5f);
+}
+
+static inline sx_aabb sx_aabb_translate(const sx_aabb* aabb, const sx_vec3 offset)
+{
+    return sx_aabbv(sx_vec3_add(aabb->vmin, offset), sx_vec3_add(aabb->vmax, offset));
+}
+
+static inline sx_aabb sx_aabb_setpos(const sx_aabb* aabb, const sx_vec3 pos)
+{
+    sx_vec3 e = sx_vec3_mulf(sx_aabb_extents(aabb), 0.5f);
+    return sx_aabbf(pos.x - e.x, pos.y - e.y, pos.z - e.z, 
+                    pos.x + e.x, pos.y + e.y, pos.z + e.z);
+}
+
+static inline sx_aabb sx_aabb_expand(const sx_aabb* aabb, const sx_vec3 expand)
+{
+    sx_vec3 p = sx_aabb_center(aabb);
+    sx_vec3 e = sx_vec3_add(sx_vec3_mulf(sx_aabb_extents(aabb), 0.5f), expand);
+    return sx_aabbf(p.x - e.x, p.y - e.y, p.z - e.z, 
+                    p.x + e.x, p.y + e.y, p.z + e.z);
+}
+
+static inline sx_aabb sx_aabb_scale(const sx_aabb* aabb, const sx_vec3 scale)
+{
+    sx_vec3 p = sx_aabb_center(aabb);
+    sx_vec3 e = sx_vec3_mul(sx_vec3_mulf(sx_aabb_extents(aabb), 0.5f), scale);
+    return sx_aabbf(p.x - e.x, p.y - e.y, p.z - e.z, 
+                    p.x + e.x, p.y + e.y, p.z + e.z);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 static inline sx_tx3d sx_tx3d_set(const sx_vec3 _pos, const sx_mat3 _rot)

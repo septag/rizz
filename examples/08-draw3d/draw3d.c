@@ -3,6 +3,7 @@
 #include "sx/string.h"
 
 #include "rizz/imgui.h"
+#include "rizz/imgui-extra.h"
 #include "rizz/3dtools.h"
 #include "rizz/rizz.h"
 
@@ -16,6 +17,7 @@ RIZZ_STATE static rizz_api_asset* the_asset;
 RIZZ_STATE static rizz_api_camera* the_camera;
 RIZZ_STATE static rizz_api_vfs* the_vfs;
 RIZZ_STATE static rizz_api_prims3d* the_prims;
+RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
 
 typedef struct {
     rizz_gfx_stage stage;
@@ -104,8 +106,23 @@ static void render(void)
     the_prims->grid_xyplane_cam(1.0f, 5.0f, 50.0f, &g_draw3d.cam.cam, &viewproj);
     the_prims->draw_boxes(boxes, 100, &viewproj, RIZZ_PRIMS3D_MAPTYPE_CHECKER, tints);
 
+    static sx_mat4 mat;
+    static bool mat_init = false;
+    if (!mat_init) {
+        mat = sx_mat4_ident();
+        mat_init = true;
+    }
+
+    sx_aabb aabb = sx_aabbwhd(1.0f, 2.0f, 0.5f);
+    sx_vec3 pos = sx_vec3fv(mat.col4.f);
+    aabb = sx_aabb_setpos(&aabb, pos);
+    the_prims->draw_aabb(&aabb, &viewproj, SX_COLOR_WHITE);
+
     the_gfx->staged.end_pass();
     the_gfx->staged.end();
+
+
+    the_imguix->gizmo_translate(&mat, &view, &proj, GIZMO_MODE_WORLD, NULL, NULL);
 }
 
 rizz_plugin_decl_main(draw3d, plugin, e)
@@ -125,6 +142,7 @@ rizz_plugin_decl_main(draw3d, plugin, e)
         the_asset = (rizz_api_asset*)plugin->api->get_api(RIZZ_API_ASSET, 0);
         the_camera = (rizz_api_camera*)plugin->api->get_api(RIZZ_API_CAMERA, 0);
         the_imgui = (rizz_api_imgui*)plugin->api->get_api_byname("imgui", 0);
+        the_imguix = (rizz_api_imgui_extra*)plugin->api->get_api_byname("imgui_extra", 0);
         the_prims = (rizz_api_prims3d*)plugin->api->get_api_byname("prims3d", 0);
 
         init();
@@ -176,8 +194,10 @@ rizz_plugin_decl_event_handler(nbody, e)
             float dy = sx_torad(e->mouse_y - last_mouse.y) * rotate_speed * dt;
             last_mouse = sx_vec2f(e->mouse_x, e->mouse_y);
 
-            the_camera->fps_pitch(&g_draw3d.cam, dy);
-            the_camera->fps_yaw(&g_draw3d.cam, dx);
+            if (!the_imguix->gizmo_using()) {
+                the_camera->fps_pitch(&g_draw3d.cam, dy);
+                the_camera->fps_yaw(&g_draw3d.cam, dx);
+            }
         }
         break;
     default:

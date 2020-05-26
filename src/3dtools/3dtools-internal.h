@@ -19,5 +19,5 @@ void prims3d__grid_xyplane(float spacing, float spacing_bold, const sx_mat4* vp,
 void prims3d__grid_xyplane_cam(float spacing, float spacing_bold, float dist, const rizz_camera* cam, 
                                const sx_mat4* viewproj_mat);
 
-void prims3d__draw_aabb(const sx_aabb* aabb, sx_color tint);
-void prims3d__draw_aabbs(const sx_aabb* aabbs, int num_aabbs, const sx_color* tints);
+void prims3d__draw_aabb(const sx_aabb* aabb, const sx_mat4* viewproj_mat, sx_color tint);
+void prims3d__draw_aabbs(const sx_aabb* aabbs, int num_aabbs, const sx_mat4* viewproj_mat, const sx_color* tints);
