@@ -32,9 +32,9 @@ typedef struct rizz_api_imgui_extra {
     // Gizmo
     // use `gizmo_using` to determine if the user is working with gizmo, so you can freeze other stuff
     // 
-    bool (*gizmo_hover)(void);
-    bool (*gizmo_using)(void);
-    void (*gizmo_set_current_window)(void);
+    bool (*gizmo_hover)();
+    bool (*gizmo_using)();
+    void (*gizmo_set_current_window)();
     void (*gizmo_set_rect)(const sx_rect rc);
     void (*gizmo_set_ortho)(bool ortho);
     void (*gizmo_enable)(bool enable);

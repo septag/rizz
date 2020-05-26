@@ -1793,7 +1793,7 @@ static void imgui__memory_debugger(const rizz_mem_info* info, bool* p_open)
     the__imgui.End();
 }
 
-static rizz_api_imgui_extra the__imgui_debug_tools = {
+static rizz_api_imgui_extra the__imgui_extra = {
     .memory_debugger = imgui__memory_debugger,
     .graphics_debugger = imgui__graphics_debugger,
     .show_log = imgui__show_log,
@@ -1949,7 +1949,7 @@ rizz_plugin_decl_main(imgui, plugin, e)
 
         sx_assert(the_plugin);
         the_plugin->inject_api("imgui", 0, &the__imgui);
-        the_plugin->inject_api("imgui_extra", 0, &the__imgui_debug_tools);
+        the_plugin->inject_api("imgui_extra", 0, &the__imgui_extra);
 
         void* make_cmdbuff;
         int make_cmdbuff_sz;
@@ -1970,7 +1970,7 @@ rizz_plugin_decl_main(imgui, plugin, e)
         the__imgui.SetCurrentContext(g_imgui.ctx);
         the__imgui.SetAllocatorFunctions(imgui__malloc, imgui__free, (void*)g_sg_imgui_alloc);
         the_plugin->inject_api("imgui", 0, &the__imgui);
-        the_plugin->inject_api("imgui_extra", 0, &the__imgui_debug_tools);
+        the_plugin->inject_api("imgui_extra", 0, &the__imgui_extra);
         break;
     }
 
