@@ -1,3 +1,4 @@
+#include "sx/allocator.h"
 #include "sx/io.h"
 #include "sx/math.h"
 #include "sx/os.h"
@@ -113,7 +114,8 @@ typedef struct rizz_model_submesh {
 } rizz_model_submesh;
 
 typedef enum rizz_model_vertex_attribute {
-    RIZZ_MODEL_VERTEXATTRIBUTE_POSITION = 0,
+    RIZZ_MODEL_VERTEXATTRIBUTE_UNKNOWN = 0,
+    RIZZ_MODEL_VERTEXATTRIBUTE_POSITION,
     RIZZ_MODEL_VERTEXATTRIBUTE_NORMAL,
     RIZZ_MODEL_VERTEXATTRIBUTE_TANGENT,
     RIZZ_MODEL_VERTEXATTRIBUTE_JOINTS,
@@ -159,13 +161,13 @@ typedef struct rizz_model_mesh {
     rizz_model_submesh* submeshes;
 
     struct cpu_t {
-        void** vbuffs;      // arbitary struct for each vbuff (count=num_vbuffs)
-        void*  ibuff;       // data type is based on index_type
+        void* vbuffs[SG_MAX_SHADERSTAGE_BUFFERS];      // arbitary struct for each vbuff (count=num_vbuffs)
+        void* ibuff;                                   // data type is based on index_type
     } cpu;
 
     struct gpu_t {
-        sg_buffer* vbuffs;
-        sg_buffer  ibuff;
+        sg_buffer vbuffs[SG_MAX_SHADERSTAGE_BUFFERS];
+        sg_buffer ibuff;
     } gpu;
 } rizz_model_mesh;
 
@@ -192,9 +194,202 @@ typedef struct rizz_model {
 
 typedef struct { uint32_t id; } rizz_model_instance;
 
-static bool load_model(const char* filepath)
+typedef struct model__vertex_attribute 
 {
-    sx_mem_block* mem = the_vfs->read(filepath, 0, the_core->alloc(RIZZ_MEMID_GAME));
+    const char* semantic;
+    int index;
+} model__vertex_attribute;
+
+
+static model__vertex_attribute model__get_attribute(cgltf_attribute_type type, int index)
+{
+    if (type == cgltf_attribute_type_position && index == 0)  {
+        return (model__vertex_attribute) { .semantic = "POSITION", .index = 0 };
+    } else if (type == cgltf_attribute_type_normal && index == 0) {
+        return (model__vertex_attribute) { .semantic = "NORMAL", .index = 0 };
+    } else if (type == cgltf_attribute_type_tangent && index == 0) {
+        return (model__vertex_attribute) { .semantic = "TANGENT", .index = 0 };
+    } else if (type == cgltf_attribute_type_texcoord) {
+        switch (index) {
+        case 0:     return (model__vertex_attribute) { .semantic = "TEXCOORD", .index = 0 };
+        case 1:     return (model__vertex_attribute) { .semantic = "TEXCOORD", .index = 1 };
+        case 2:     return (model__vertex_attribute) { .semantic = "TEXCOORD", .index = 2 };
+        case 3:     return (model__vertex_attribute) { .semantic = "TEXCOORD", .index = 3 };
+        default:    return (model__vertex_attribute) { 0 };
+        }
+    } else if (type == cgltf_attribute_type_color) {
+        switch (index) {
+        case 0:     return (model__vertex_attribute) { .semantic = "COLOR", .index = 0 };
+        case 1:     return (model__vertex_attribute) { .semantic = "COLOR", .index = 0 };
+        case 2:     return (model__vertex_attribute) { .semantic = "COLOR", .index = 0 };
+        case 3:     return (model__vertex_attribute) { .semantic = "COLOR", .index = 0 };
+        default:    return (model__vertex_attribute) { 0 };
+        }
+    } else if (type == cgltf_attribute_type_joints && index == 0) {
+        return (model__vertex_attribute) { .semantic = "BLENDINDICES", .index = 0 };
+    } else if (type == cgltf_attribute_type_weights && index == 0) {
+        return (model__vertex_attribute) { .semantic = "BLENDWEIGHT", .index = 0 };
+    } else {
+        return (model__vertex_attribute) { 0 };
+    }
+}
+
+static int model__get_stride(sg_vertex_format fmt)
+{
+    switch (fmt) {
+    case SG_VERTEXFORMAT_FLOAT:     return sizeof(float);
+    case SG_VERTEXFORMAT_FLOAT2:    return sizeof(float)*2;
+    case SG_VERTEXFORMAT_FLOAT3:    return sizeof(float)*3;
+    case SG_VERTEXFORMAT_FLOAT4:    return sizeof(float)*4;
+    case SG_VERTEXFORMAT_BYTE4:     return sizeof(int8_t)*4;
+    case SG_VERTEXFORMAT_BYTE4N:    return sizeof(int8_t)*4;
+    case SG_VERTEXFORMAT_UBYTE4:    return sizeof(uint8_t)*4;
+    case SG_VERTEXFORMAT_UBYTE4N:   return sizeof(uint8_t)*4;
+    case SG_VERTEXFORMAT_SHORT2:    return sizeof(int16_t)*2;
+    case SG_VERTEXFORMAT_SHORT2N:   return sizeof(int16_t)*2;
+    case SG_VERTEXFORMAT_USHORT2N:  return sizeof(uint16_t)*2;
+    case SG_VERTEXFORMAT_SHORT4:    return sizeof(int16_t)*4;
+    case SG_VERTEXFORMAT_SHORT4N:   return sizeof(int16_t)*4;
+    case SG_VERTEXFORMAT_USHORT4N:  return sizeof(uint16_t)*4;
+    case SG_VERTEXFORMAT_UINT10_N2: return 2;
+    default:                        return 0;
+    }
+}
+
+static void model__map_attributes_to_buffer(rizz_model_mesh* mesh, 
+                                            const sg_layout_desc* vertex_layout, 
+                                            cgltf_attribute* srcatt)
+{
+    cgltf_accessor* access = srcatt->data;
+    const rizz_vertex_attr* attr = &vertex_layout->attrs[0];
+    model__vertex_attribute mapped_att = model__get_attribute(srcatt->type, srcatt->index);
+    while (attr->semantic) {
+        if (sx_strequal(attr->semantic, mapped_att.semantic) && attr->semantic_idx == mapped_att.index) {
+            uint8_t* src_buff = (uint8_t*)access->buffer_view->buffer->data;
+            uint8_t* dst_buff = (uint8_t*)mesh->cpu.vbuffs[attr->buffer_index];
+            int dst_stride = model__get_stride(attr->format);
+            int dst_offset = vertex_layout->buffers[attr->buffer_index].stride * mesh->num_vertices;
+            int src_stride = access->buffer_view->stride;
+            int src_offset = access->buffer_view->offset;
+            sx_assert(dst_stride != 0 && "you must explicitly declare formats for vertex_layout attributes");
+
+            int count = access->count;
+            for (int i = 0; i < count; i++) {
+                sx_memcpy(dst_buff + dst_offset + dst_stride*i, 
+                          src_buff + src_offset + src_stride*i, 
+                          dst_stride);
+            }
+
+            break;
+        }
+        ++attr;
+    }
+}
+
+static void model__setup_buffers(rizz_model_mesh* mesh, const sg_layout_desc* vertex_layout, 
+                                 cgltf_mesh* srcmesh, const sx_alloc* alloc)
+{
+    // create buffers based on input vertex_layout
+    int num_vbuffs = 0;
+    int vb_index = 0;
+    int num_vertices = 0;
+    int num_indices = 0;
+
+    // count total vertices and indices
+    for (int i = 0; i < srcmesh->primitives_count; i++) {
+        cgltf_primitive* srcprim = &srcmesh->primitives[i];
+        int count = 0;
+        for (int k = 0; k < srcprim->attributes_count; k++) {
+            cgltf_attribute* srcatt = &srcprim->attributes[k];
+            if (count == 0) {
+                count = srcatt->data->count;
+            }
+            sx_assert(count == srcatt->data->count);
+        }
+        num_vertices += count;
+        num_indices += srcprim->indices->count;
+    }
+
+    sx_assert(num_vertices > 0 && num_indices > 0);
+
+    // create vertex and index buffers
+    sg_buffer_layout_desc* buff_desc = &vertex_layout->buffers[0];
+    sg_index_type index_type = SG_INDEXTYPE_NONE;
+    while (buff_desc->stride) {
+        mesh->cpu.vbuffs[vb_index] = sx_malloc(alloc, buff_desc->stride*num_vertices);
+        if (!mesh->cpu.vbuffs[vb_index]) {
+            sx_out_of_memory();
+            return;
+        }
+        sx_memset(mesh->cpu.vbuffs[vb_index], 0x0, buff_desc->stride*num_vertices);
+
+        index_type = (num_vertices < UINT16_MAX) ? SG_INDEXTYPE_UINT16 : SG_INDEXTYPE_UINT32;
+        int index_stride = index_type == SG_INDEXTYPE_UINT16 ? sizeof(uint16_t) : sizeof(uint32_t);
+        mesh->cpu.ibuff = sx_malloc(alloc, index_stride*num_indices);
+        if (!mesh->cpu.ibuff) {
+            sx_out_of_memory();
+            return;
+        }
+        sx_memset(mesh->cpu.ibuff, 0x0, num_indices * index_stride);
+
+        ++buff_desc;
+    }
+    sx_assert(num_vbuffs && "you must at least set one buffer in the `vertex_layout`");
+
+    // map source vertex buffer to our data
+    // map source index buffer to our data
+    int start_index = 0;
+    for (int i = 0; i < srcmesh->primitives_count; i++) {
+        cgltf_primitive* srcprim = &srcmesh->primitives[i];
+
+        // vertices
+        int count = 0;
+        for (int k = 0; k < srcprim->attributes_count; k++) {
+            cgltf_attribute* srcatt = &srcprim->attributes[k];
+            model__map_attributes_to_buffer(mesh, vertex_layout, srcatt);
+            if (count == 0) {
+                count = srcatt->data->count;
+            }
+            sx_assert(count == srcatt->data->count);
+        }
+
+        // indices
+        cgltf_accessor* srcindices = srcprim->indices;
+        int start_vertex = mesh->num_vertices;
+        if (srcindices->component_type == cgltf_component_type_r_16u && index_type == SG_INDEXTYPE_UINT16) {
+            uint16_t* indices = (uint16_t*)mesh->cpu.ibuff + start_index;
+            uint16_t* _srcindices = (uint16_t*)srcindices->buffer_view->buffer->data;
+            for (int k = 0; k < srcindices->count; k++) {
+                indices[k] = _srcindices[k] + start_vertex;
+            }
+        } else if (srcindices->component_type == cgltf_component_type_r_16u && index_type == SG_INDEXTYPE_UINT32) {
+            uint32_t* indices = (uint32_t*)mesh->cpu.ibuff + start_index;
+            uint16_t* _srcindices = (uint16_t*)srcindices->buffer_view->buffer->data;
+            for (int k = 0; k < srcindices->count; k++) {
+                indices[k] = (uint32_t)(_srcindices[k] + start_vertex);
+            }
+        } else if (srcindices->component_type == cgltf_component_type_r_32u && index_type == SG_INDEXTYPE_UINT32) {
+            uint32_t* indices = (uint32_t*)mesh->cpu.ibuff + start_index;
+            uint32_t* _srcindices = (uint32_t*)srcindices->buffer_view->buffer->data;
+            for (int k = 0; k < srcindices->count; k++) {
+                indices[k] = _srcindices[k] + (uint32_t)start_vertex;
+            }
+        }
+
+        rizz_model_submesh* submesh = &mesh->submeshes[i];
+        submesh->start_index = start_index;
+        submesh->num_indices = srcprim->indices->count;
+        start_index += srcprim->indices->count;
+
+        mesh->num_vertices += count;
+        mesh->num_indices += srcprim->indices->count;
+    }
+}
+
+static bool load_model(const char* filepath, const sg_layout_desc* vertex_layout)
+{
+    const sx_alloc* alloc = the_core->alloc(RIZZ_MEMID_GAME);
+    sx_mem_block* mem = the_vfs->read(filepath, 0, alloc);
     if (!mem) {
         return false;
     }
@@ -207,8 +402,39 @@ static bool load_model(const char* filepath)
         return false;
     }
 
+    if (data->nodes_count == 0) {
+        return false;
+    }
 
-    
+    #if 0
+    rizz_model* model = sx_malloc(alloc, sizeof(rizz_model));
+    model->nodes = sx_malloc(alloc, sizeof(rizz_model_node)*data->nodes_count);
+    model->num_nodes = data->nodes_count;
+
+    model->meshes = sx_malloc(alloc, sizeof(rizz_model_mesh)*data->meshes_count);
+    model->num_meshes = data->meshes_count;
+
+    for (int i = 0; i < data->meshes_count; i++) {
+        rizz_model_mesh* mesh = &model->meshes[i];
+        cgltf_mesh* _mesh = &data->meshes[i];
+
+        mesh->submeshes = sx_malloc(alloc, sizeof(rizz_model_submesh)*_mesh->primitives_count);
+        mesh->num_submeshes = _mesh->primitives_count;
+
+        for (int k = 0; k < _mesh->primitives_count; k++) {
+            cgltf_primitive* prim = &_mesh->primitives[k];
+            rizz_model_submesh* submesh = &mesh->submeshes[k];
+
+            data->
+        }
+    }
+
+    for (int i = 0; i < data->nodes_count; i++) {
+        rizz_model_node* node = &model->nodes[i];
+        cgltf_node* _node = &data->nodes[i];
+    }
+    #endif
+
     cgltf_free(data);
     return true;
 }
@@ -237,6 +463,8 @@ static bool init()
     const float view_height = screen_size.y;
     the_camera->fps_init(&g_draw3d.cam, 50.0f, sx_rectwh(0, 0, view_width, view_height), 0.1f, 500.0f);
     the_camera->fps_lookat(&g_draw3d.cam, sx_vec3f(0, -3.0f, 3.0f), SX_VEC3_ZERO, SX_VEC3_UNITZ);
+
+    load_model("/assets/models/box.glb", NULL);
     return true;
 }
 
