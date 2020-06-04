@@ -154,10 +154,8 @@ typedef struct rizz_model_mesh {
     int num_submeshes;
     int num_vertices;
     int num_indices;
-    int num_vertex_attrs;
     int num_vbuffs;
     sg_index_type index_type;
-    rizz_model_vertex_attribute* vertex_attrs;
     rizz_model_submesh* submeshes;
 
     struct cpu_t {
@@ -181,6 +179,11 @@ typedef struct rizz_model_node {
     int* children;      // indices to rizz_model.nodes
 } rizz_model_node;
 
+typedef struct rizz_model_geometry_layout {
+    rizz_vertex_attr attrs[SG_MAX_VERTEX_ATTRIBUTES];
+    int buffer_strides[SG_MAX_SHADERSTAGE_BUFFERS];
+} rizz_model_geometry_layout;
+
 // rizz_model will be stored inside rizz_asset handle 
 typedef struct rizz_model {
     int num_meshes;
@@ -190,6 +193,7 @@ typedef struct rizz_model {
 
     rizz_model_node* nodes;
     rizz_model_mesh* meshes;
+    rizz_model_geometry_layout layout;
 } rizz_model;
 
 typedef struct { uint32_t id; } rizz_model_instance;
@@ -199,7 +203,6 @@ typedef struct model__vertex_attribute
     const char* semantic;
     int index;
 } model__vertex_attribute;
-
 
 static model__vertex_attribute model__get_attribute(cgltf_attribute_type type, int index)
 {
@@ -257,7 +260,7 @@ static int model__get_stride(sg_vertex_format fmt)
 }
 
 static void model__map_attributes_to_buffer(rizz_model_mesh* mesh, 
-                                            const sg_layout_desc* vertex_layout, 
+                                            const rizz_model_geometry_layout* vertex_layout, 
                                             cgltf_attribute* srcatt)
 {
     cgltf_accessor* access = srcatt->data;
@@ -265,19 +268,21 @@ static void model__map_attributes_to_buffer(rizz_model_mesh* mesh,
     model__vertex_attribute mapped_att = model__get_attribute(srcatt->type, srcatt->index);
     while (attr->semantic) {
         if (sx_strequal(attr->semantic, mapped_att.semantic) && attr->semantic_idx == mapped_att.index) {
+            int vertex_stride = vertex_layout->buffer_strides[attr->buffer_index];
             uint8_t* src_buff = (uint8_t*)access->buffer_view->buffer->data;
             uint8_t* dst_buff = (uint8_t*)mesh->cpu.vbuffs[attr->buffer_index];
-            int dst_stride = model__get_stride(attr->format);
-            int dst_offset = vertex_layout->buffers[attr->buffer_index].stride * mesh->num_vertices;
-            int src_stride = access->buffer_view->stride;
-            int src_offset = access->buffer_view->offset;
-            sx_assert(dst_stride != 0 && "you must explicitly declare formats for vertex_layout attributes");
+            int dst_offset = vertex_layout->buffer_strides[attr->buffer_index] * mesh->num_vertices + attr->offset;
+            int src_offset = access->offset + access->buffer_view->offset;
 
             int count = access->count;
+            int src_data_size = access->stride; 
+            int dst_data_size = model__get_stride(attr->format);
+            sx_assert(dst_data_size != 0 && "you must explicitly declare formats for vertex_layout attributes");
+            int stride = sx_min(dst_data_size, src_data_size);
             for (int i = 0; i < count; i++) {
-                sx_memcpy(dst_buff + dst_offset + dst_stride*i, 
-                          src_buff + src_offset + src_stride*i, 
-                          dst_stride);
+                sx_memcpy(dst_buff + dst_offset + vertex_stride*i, 
+                          src_buff + src_offset + src_data_size*i, 
+                          stride);
             }
 
             break;
@@ -286,12 +291,11 @@ static void model__map_attributes_to_buffer(rizz_model_mesh* mesh,
     }
 }
 
-static void model__setup_buffers(rizz_model_mesh* mesh, const sg_layout_desc* vertex_layout, 
+static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometry_layout* vertex_layout, 
                                  cgltf_mesh* srcmesh, const sx_alloc* alloc)
 {
     // create buffers based on input vertex_layout
     int num_vbuffs = 0;
-    int vb_index = 0;
     int num_vertices = 0;
     int num_indices = 0;
 
@@ -313,28 +317,28 @@ static void model__setup_buffers(rizz_model_mesh* mesh, const sg_layout_desc* ve
     sx_assert(num_vertices > 0 && num_indices > 0);
 
     // create vertex and index buffers
-    sg_buffer_layout_desc* buff_desc = &vertex_layout->buffers[0];
     sg_index_type index_type = SG_INDEXTYPE_NONE;
-    while (buff_desc->stride) {
-        mesh->cpu.vbuffs[vb_index] = sx_malloc(alloc, buff_desc->stride*num_vertices);
-        if (!mesh->cpu.vbuffs[vb_index]) {
+    while (vertex_layout->buffer_strides[num_vbuffs]) {
+        int buff_stride = vertex_layout->buffer_strides[num_vbuffs];
+        mesh->cpu.vbuffs[num_vbuffs] = sx_malloc(alloc, buff_stride*num_vertices);
+        if (!mesh->cpu.vbuffs[num_vbuffs]) {
             sx_out_of_memory();
             return;
         }
-        sx_memset(mesh->cpu.vbuffs[vb_index], 0x0, buff_desc->stride*num_vertices);
-
-        index_type = (num_vertices < UINT16_MAX) ? SG_INDEXTYPE_UINT16 : SG_INDEXTYPE_UINT32;
-        int index_stride = index_type == SG_INDEXTYPE_UINT16 ? sizeof(uint16_t) : sizeof(uint32_t);
-        mesh->cpu.ibuff = sx_malloc(alloc, index_stride*num_indices);
-        if (!mesh->cpu.ibuff) {
-            sx_out_of_memory();
-            return;
-        }
-        sx_memset(mesh->cpu.ibuff, 0x0, num_indices * index_stride);
-
-        ++buff_desc;
+        sx_memset(mesh->cpu.vbuffs[num_vbuffs], 0x0, buff_stride*num_vertices);
+        num_vbuffs++;
     }
     sx_assert(num_vbuffs && "you must at least set one buffer in the `vertex_layout`");
+    mesh->num_vbuffs = num_vbuffs;
+
+    index_type = (num_vertices < UINT16_MAX) ? SG_INDEXTYPE_UINT16 : SG_INDEXTYPE_UINT32;
+    int index_stride = index_type == SG_INDEXTYPE_UINT16 ? sizeof(uint16_t) : sizeof(uint32_t);
+    mesh->cpu.ibuff = sx_malloc(alloc, index_stride*num_indices);
+    if (!mesh->cpu.ibuff) {
+        sx_out_of_memory();
+        return;
+    }
+    sx_memset(mesh->cpu.ibuff, 0x0, num_indices * index_stride);    
 
     // map source vertex buffer to our data
     // map source index buffer to our data
@@ -386,7 +390,56 @@ static void model__setup_buffers(rizz_model_mesh* mesh, const sg_layout_desc* ve
     }
 }
 
-static bool load_model(const char* filepath, const sg_layout_desc* vertex_layout)
+typedef struct vertex_stream1 {
+    sx_vec3 pos;
+} vertex_stream1;
+
+typedef struct vertex_stream2 {
+    sx_vec3 normal;
+    sx_vec3 tangent;
+    sx_vec3 bitangent;
+} vertex_stream2;
+
+typedef struct vertex_stream3 {
+    sx_vec2 uv;
+    sx_color color;
+} vertex_stream3;
+
+static void debug_model(const rizz_model* model)
+{
+    printf("nodes: %d\n", model->num_nodes);
+    for (int i = 0; i < model->num_nodes; i++) {
+        rizz_model_node* node = &model->nodes[i];
+        printf("\t%s\n", node->name);
+    }
+
+    printf("meshes: %d\n", model->num_meshes);
+    for (int i = 0; i < model->num_meshes; i++) {
+        rizz_model_mesh* mesh = &model->meshes[i];
+        for (int sm = 0; sm < mesh->num_submeshes; sm++) {
+            rizz_model_submesh* submesh = &mesh->submeshes[sm];
+            printf("\tsubmesh: %d (start_index=%d, num_indices=%d)\n", 
+                sm+1, 
+                submesh->start_index, 
+                submesh->num_indices);
+        }
+
+        int num_verts = mesh->num_vertices;
+        vertex_stream1* vstr1 = (vertex_stream1*)mesh->cpu.vbuffs[0];
+        vertex_stream2* vstr2 = (vertex_stream2*)mesh->cpu.vbuffs[1];
+        vertex_stream3* vstr3 = (vertex_stream3*)mesh->cpu.vbuffs[2];
+        for (int v = 0; v < num_verts; v++) {
+            printf("\tVertex: %d\n", v+1);
+            printf("\t\tPos: %.3f, %.3f, %.3f\n", vstr1[v].pos.x, vstr1[v].pos.y, vstr1[v].pos.z);
+            printf("\t\tNormal: %.3f, %.3f, %.3f\n", vstr2[v].normal.x, vstr2[v].normal.y, vstr2[v].normal.z);
+            printf("\t\tTangent: %.3f, %.3f, %.3f\n", vstr2[v].tangent.x, vstr2[v].tangent.y, vstr2[v].tangent.z);
+            printf("\t\tUv: %.3f, %.3f\n", vstr3[v].uv.x, vstr3[v].uv.y);
+        }
+    }
+
+}
+
+static bool load_model(const char* filepath, const rizz_model_geometry_layout* vertex_layout)
 {
     const sx_alloc* alloc = the_core->alloc(RIZZ_MEMID_GAME);
     sx_mem_block* mem = the_vfs->read(filepath, 0, alloc);
@@ -394,10 +447,13 @@ static bool load_model(const char* filepath, const sg_layout_desc* vertex_layout
         return false;
     }
 
-    cgltf_options options = {0};
+    cgltf_options options = { .type = cgltf_file_type_glb };
     cgltf_data* data = NULL;
     cgltf_result result = cgltf_parse(&options, mem->data, mem->size, &data);
-    sx_mem_destroy_block(mem);
+    if (result != cgltf_result_success) {
+        return false;
+    }
+    result = cgltf_load_buffers(&options, data, NULL);
     if (result != cgltf_result_success) {
         return false;
     }
@@ -406,13 +462,16 @@ static bool load_model(const char* filepath, const sg_layout_desc* vertex_layout
         return false;
     }
 
-    #if 0
     rizz_model* model = sx_malloc(alloc, sizeof(rizz_model));
+    sx_memset(model, 0x0, sizeof(rizz_model));
+
     model->nodes = sx_malloc(alloc, sizeof(rizz_model_node)*data->nodes_count);
     model->num_nodes = data->nodes_count;
+    sx_memset(model->nodes, 0x0, sizeof(rizz_model_node)*data->nodes_count);
 
     model->meshes = sx_malloc(alloc, sizeof(rizz_model_mesh)*data->meshes_count);
     model->num_meshes = data->meshes_count;
+    sx_memset(model->meshes, 0x0, sizeof(rizz_model_mesh)*data->meshes_count);
 
     for (int i = 0; i < data->meshes_count; i++) {
         rizz_model_mesh* mesh = &model->meshes[i];
@@ -422,20 +481,17 @@ static bool load_model(const char* filepath, const sg_layout_desc* vertex_layout
         mesh->num_submeshes = _mesh->primitives_count;
 
         for (int k = 0; k < _mesh->primitives_count; k++) {
-            cgltf_primitive* prim = &_mesh->primitives[k];
-            rizz_model_submesh* submesh = &mesh->submeshes[k];
-
-            data->
+            model__setup_buffers(mesh, vertex_layout, _mesh, alloc);
         }
     }
 
-    for (int i = 0; i < data->nodes_count; i++) {
-        rizz_model_node* node = &model->nodes[i];
-        cgltf_node* _node = &data->nodes[i];
-    }
-    #endif
+    sx_memcpy(&model->layout, vertex_layout, sizeof(rizz_model_geometry_layout));
 
+    debug_model(model);
+
+    sx_mem_destroy_block(mem);
     cgltf_free(data);
+
     return true;
 }
 
@@ -464,7 +520,23 @@ static bool init()
     the_camera->fps_init(&g_draw3d.cam, 50.0f, sx_rectwh(0, 0, view_width, view_height), 0.1f, 500.0f);
     the_camera->fps_lookat(&g_draw3d.cam, sx_vec3f(0, -3.0f, 3.0f), SX_VEC3_ZERO, SX_VEC3_UNITZ);
 
-    load_model("/assets/models/box.glb", NULL);
+    load_model("/assets/models/box.glb", &(rizz_model_geometry_layout) {
+                .attrs[0] = { .semantic="POSITION", .offset=offsetof(vertex_stream1, pos), 
+                              .buffer_index=0, .format=SG_VERTEXFORMAT_FLOAT3 },
+                .attrs[1] = { .semantic="NORMAL", .offset=offsetof(vertex_stream2, normal), 
+                              .buffer_index=1, .format=SG_VERTEXFORMAT_FLOAT3 },
+                .attrs[2] = { .semantic="TANGENT", .offset=offsetof(vertex_stream2, tangent), 
+                              .buffer_index=1, .format=SG_VERTEXFORMAT_FLOAT3 },
+                .attrs[3] = { .semantic="BINORMAL", .offset=offsetof(vertex_stream2, bitangent), 
+                              .buffer_index=1, .format=SG_VERTEXFORMAT_FLOAT3 },
+                .attrs[4] = { .semantic="TEXCOORD", .offset=offsetof(vertex_stream3, uv), 
+                              .buffer_index=2, .format=SG_VERTEXFORMAT_FLOAT2 },
+                .attrs[5] = { .semantic="COLOR", .offset=offsetof(vertex_stream3, color), 
+                              .buffer_index=2, .format=SG_VERTEXFORMAT_UBYTE4N },
+                .buffer_strides[0] = sizeof(vertex_stream1),
+                .buffer_strides[1] = sizeof(vertex_stream2),
+                .buffer_strides[2] = sizeof(vertex_stream3)
+            });
     return true;
 }
 
@@ -626,6 +698,7 @@ rizz_game_decl_config(conf)
     conf->app_version = 1000;
     conf->app_title = "draw3d";
     conf->app_flags |= RIZZ_APP_FLAG_HIGHDPI;
+    conf->log_level = RIZZ_LOG_LEVEL_DEBUG;
     conf->window_width = 800;
     conf->window_height = 600;
     conf->multisample_count = 4;
