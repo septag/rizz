@@ -88,8 +88,7 @@ static bool init()
         NULL, 0, NULL, 0);
 
     // pipeline
-    sg_pipeline_desc pip_desc = { .layout.buffers[0].stride =
-                                      20,    // sizeof each vertex (float[3] + float[2])
+    sg_pipeline_desc pip_desc = { .layout.buffers[0].stride = 20,    // vertex size (float[3] + float[2])
                                   .shader = the_gfx->shader_get(g_quad.shader)->shd,
                                   .index_type = SG_INDEXTYPE_UINT16,
                                   .rasterizer = { .cull_mode = SG_CULLMODE_BACK } };

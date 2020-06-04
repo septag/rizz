@@ -24,9 +24,23 @@ RIZZ_STATE static rizz_api_vfs* the_vfs;
 RIZZ_STATE static rizz_api_prims3d* the_prims;
 RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
 
+typedef struct rizz_model rizz_model;
+
+typedef struct {
+    sx_mat4 viewproj_mat;
+} draw3d_vertex_shader_uniforms;
+
+typedef struct {
+    sx_vec3 light_dir;
+} draw3d_fragment_shader_uniforms;
+
 typedef struct {
     rizz_gfx_stage stage;
     rizz_camera_fps cam;
+    rizz_model* model;
+    rizz_asset shader;
+    sg_pipeline pip;
+    sx_vec3 light_dir;
 } draw3d_state;
 
 RIZZ_STATE static draw3d_state g_draw3d;
@@ -338,7 +352,8 @@ static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometr
         sx_out_of_memory();
         return;
     }
-    sx_memset(mesh->cpu.ibuff, 0x0, num_indices * index_stride);    
+    sx_memset(mesh->cpu.ibuff, 0x0, num_indices * index_stride);
+    mesh->index_type = index_type;
 
     // map source vertex buffer to our data
     // map source index buffer to our data
@@ -362,7 +377,8 @@ static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometr
         int start_vertex = mesh->num_vertices;
         if (srcindices->component_type == cgltf_component_type_r_16u && index_type == SG_INDEXTYPE_UINT16) {
             uint16_t* indices = (uint16_t*)mesh->cpu.ibuff + start_index;
-            uint16_t* _srcindices = (uint16_t*)srcindices->buffer_view->buffer->data;
+            uint16_t* _srcindices = (uint16_t*)((uint8_t*)srcindices->buffer_view->buffer->data + 
+                                    srcindices->buffer_view->offset);
             for (int k = 0; k < srcindices->count; k++) {
                 indices[k] = _srcindices[k] + start_vertex;
             }
@@ -435,11 +451,50 @@ static void debug_model(const rizz_model* model)
             printf("\t\tTangent: %.3f, %.3f, %.3f\n", vstr2[v].tangent.x, vstr2[v].tangent.y, vstr2[v].tangent.z);
             printf("\t\tUv: %.3f, %.3f\n", vstr3[v].uv.x, vstr3[v].uv.y);
         }
+
+        printf("\tIndices: %d (tris=%d)\n", mesh->num_indices, mesh->num_indices/3);
+        uint16_t* indices = (uint16_t*)mesh->cpu.ibuff;
+        for (int idx = 0; idx < mesh->num_indices; idx+=3) {
+            printf("\t\tTri(%d): %d %d %d\n", (idx/3) + 1, indices[idx], indices[idx+1], indices[idx+2]);
+        }
     }
 
 }
 
-static bool load_model(const char* filepath, const rizz_model_geometry_layout* vertex_layout)
+static bool model__setup_gpu_buffers(rizz_model* model) 
+{
+    rizz_model_geometry_layout* layout = &model->layout;
+    for (int i = 0; i < model->num_meshes; i++) {
+        rizz_model_mesh* mesh = &model->meshes[i];
+
+        int buffer_index = 0;
+        while (layout->buffer_strides[buffer_index]) {
+            mesh->gpu.vbuffs[buffer_index] = the_gfx->make_buffer(&(sg_buffer_desc) {
+                .size = layout->buffer_strides[buffer_index]*mesh->num_vertices,
+                .type = SG_BUFFERTYPE_VERTEXBUFFER,
+                .content = mesh->cpu.vbuffs[buffer_index]
+            });
+            if (!mesh->gpu.vbuffs[buffer_index].id) {
+                return false;
+            }
+            buffer_index++;
+        }
+
+        mesh->gpu.ibuff = the_gfx->make_buffer(&(sg_buffer_desc) {
+            .size = ((mesh->index_type == SG_INDEXTYPE_UINT16) ? sizeof(uint16_t) : sizeof(uint32_t)) * mesh->num_indices,
+            .type = SG_BUFFERTYPE_INDEXBUFFER,
+            .content = mesh->cpu.ibuff
+        });
+
+        if (!mesh->gpu.ibuff.id) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool load_model(const char* filepath, rizz_model** pmodel, const rizz_model_geometry_layout* vertex_layout)
 {
     const sx_alloc* alloc = the_core->alloc(RIZZ_MEMID_GAME);
     sx_mem_block* mem = the_vfs->read(filepath, 0, alloc);
@@ -480,9 +535,7 @@ static bool load_model(const char* filepath, const rizz_model_geometry_layout* v
         mesh->submeshes = sx_malloc(alloc, sizeof(rizz_model_submesh)*_mesh->primitives_count);
         mesh->num_submeshes = _mesh->primitives_count;
 
-        for (int k = 0; k < _mesh->primitives_count; k++) {
-            model__setup_buffers(mesh, vertex_layout, _mesh, alloc);
-        }
+        model__setup_buffers(mesh, vertex_layout, _mesh, alloc);
     }
 
     sx_memcpy(&model->layout, vertex_layout, sizeof(rizz_model_geometry_layout));
@@ -492,6 +545,9 @@ static bool load_model(const char* filepath, const rizz_model_geometry_layout* v
     sx_mem_destroy_block(mem);
     cgltf_free(data);
 
+    model__setup_gpu_buffers(model);
+
+    *pmodel = model;
     return true;
 }
 
@@ -520,7 +576,7 @@ static bool init()
     the_camera->fps_init(&g_draw3d.cam, 50.0f, sx_rectwh(0, 0, view_width, view_height), 0.1f, 500.0f);
     the_camera->fps_lookat(&g_draw3d.cam, sx_vec3f(0, -3.0f, 3.0f), SX_VEC3_ZERO, SX_VEC3_UNITZ);
 
-    load_model("/assets/models/box.glb", &(rizz_model_geometry_layout) {
+    load_model("/assets/models/box_2parts.glb", &g_draw3d.model, &(rizz_model_geometry_layout) {
                 .attrs[0] = { .semantic="POSITION", .offset=offsetof(vertex_stream1, pos), 
                               .buffer_index=0, .format=SG_VERTEXFORMAT_FLOAT3 },
                 .attrs[1] = { .semantic="NORMAL", .offset=offsetof(vertex_stream2, normal), 
@@ -537,6 +593,33 @@ static bool init()
                 .buffer_strides[1] = sizeof(vertex_stream2),
                 .buffer_strides[2] = sizeof(vertex_stream3)
             });
+    sx_assert(g_draw3d.model);
+
+    char shader_path[RIZZ_MAX_PATH];
+    g_draw3d.shader = the_asset->load("shader", 
+        ex_shader_path(shader_path, sizeof(shader_path), "/assets/shaders", "draw3d.sgs"), 
+        NULL, 0, NULL, 0);
+
+    sg_pipeline_desc pip_desc = { 
+        .layout.buffers[0].stride = sizeof(vertex_stream1),
+        .layout.buffers[1].stride = sizeof(vertex_stream2),
+        .layout.buffers[2].stride = sizeof(vertex_stream3),
+        .index_type = SG_INDEXTYPE_UINT16,
+        .shader = the_gfx->shader_get(g_draw3d.shader)->shd,
+        .rasterizer = { .cull_mode = SG_CULLMODE_FRONT }
+    };
+
+    static rizz_vertex_layout k_vertex_layout = {
+        .attrs[0] = { .semantic = "POSITION", .offset = offsetof(vertex_stream1, pos), .buffer_index = 0 },
+        .attrs[1] = { .semantic = "NORMAL", .offset = offsetof(vertex_stream2, normal), .buffer_index = 1},
+        .attrs[2] = { .semantic = "TEXCOORD", .offset = offsetof(vertex_stream3, uv), .buffer_index = 2 }
+    };
+
+    g_draw3d.pip = the_gfx->make_pipeline(
+        the_gfx->shader_bindto_pipeline(the_gfx->shader_get(g_draw3d.shader), &pip_desc, &k_vertex_layout));
+
+    g_draw3d.light_dir = sx_vec3f(0, 0.5f, -1.0f);
+    
     return true;
 }
 
@@ -564,6 +647,12 @@ static void update(float dt)
     if (the_app->key_pressed(RIZZ_APP_KEYCODE_S) || the_app->key_pressed(RIZZ_APP_KEYCODE_DOWN)) {
         the_camera->fps_forward(&g_draw3d.cam, -move_speed*dt);
     }
+
+    // imgui
+    if (the_imgui->Begin("draw3d", NULL, 0)) {
+        the_imgui->InputFloat3("light_dir", g_draw3d.light_dir.f, "%.1f", 0);
+    }
+    the_imgui->End();
 }
 
 static void render(void) 
@@ -591,7 +680,6 @@ static void render(void)
     }
     
     the_prims->grid_xyplane_cam(1.0f, 5.0f, 50.0f, &g_draw3d.cam.cam, &viewproj);
-    the_prims->draw_boxes(boxes, 100, &viewproj, RIZZ_PRIMS3D_MAPTYPE_CHECKER, tints);
 
     static sx_mat4 mat;
     static bool mat_init = false;
@@ -599,11 +687,40 @@ static void render(void)
         mat = sx_mat4_ident();
         mat_init = true;
     }
+    #if 0
+    the_prims->draw_boxes(boxes, 100, &viewproj, RIZZ_PRIMS3D_MAPTYPE_CHECKER, tints);
+
 
     sx_aabb aabb = sx_aabbwhd(1.0f, 2.0f, 0.5f);
     sx_vec3 pos = sx_vec3fv(mat.col4.f);
     aabb = sx_aabb_setpos(&aabb, pos);
     the_prims->draw_aabb(&aabb, &viewproj, SX_COLOR_WHITE);
+    #endif
+
+    // model
+
+    const rizz_model* model = g_draw3d.model;
+    draw3d_vertex_shader_uniforms vs_uniforms = { .viewproj_mat = viewproj };
+    draw3d_fragment_shader_uniforms fs_uniforms = { .light_dir = sx_vec3_norm(g_draw3d.light_dir) };
+    the_gfx->staged.apply_pipeline(g_draw3d.pip);
+    the_gfx->staged.apply_uniforms(SG_SHADERSTAGE_VS, 0, &vs_uniforms, sizeof(vs_uniforms));
+    the_gfx->staged.apply_uniforms(SG_SHADERSTAGE_FS, 0, &fs_uniforms, sizeof(fs_uniforms));
+    for (int i = 0; i < model->num_meshes; i++) {
+        const rizz_model_mesh* mesh = &model->meshes[i];
+        sg_bindings bind = {
+            .vertex_buffers[0] = mesh->gpu.vbuffs[0],
+            .vertex_buffers[1] = mesh->gpu.vbuffs[1],
+            .vertex_buffers[2] = mesh->gpu.vbuffs[2],
+            .index_buffer = mesh->gpu.ibuff,
+            .fs_images[0] = the_gfx->texture_white()
+        };
+        for (int mi = 0; mi < mesh->num_submeshes; mi++) {
+            const rizz_model_submesh* submesh = &mesh->submeshes[mi];
+            bind.index_buffer_offset = submesh->start_index * sizeof(uint16_t);
+            the_gfx->staged.apply_bindings(&bind);
+            the_gfx->staged.draw(0, submesh->num_indices, 1);
+        }
+    }    
 
     the_gfx->staged.end_pass();
     the_gfx->staged.end();
