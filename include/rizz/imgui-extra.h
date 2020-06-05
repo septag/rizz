@@ -29,6 +29,9 @@ typedef struct rizz_api_imgui_extra {
     // `viewport` param is optional, if you want to provide a custom vp instead of fullscreen
     sx_vec2 (*project_to_screen)(const sx_vec3 pt, const sx_mat4* mvp, const sx_rect* viewport);
 
+    bool (*is_capturing_mouse)(void);
+    bool (*is_capturing_keyboard)(void);
+
     // Gizmo
     // use `gizmo_using` to determine if the user is working with gizmo, so you can freeze other stuff
     // 

@@ -1793,6 +1793,16 @@ static void imgui__memory_debugger(const rizz_mem_info* info, bool* p_open)
     the__imgui.End();
 }
 
+static bool imgui__is_capturing_mouse(void) 
+{
+    return igGetIO()->WantCaptureMouse;
+}
+
+static bool imgui__is_capturing_keyboard(void)
+{
+    return igGetIO()->WantCaptureKeyboard;
+}
+
 static rizz_api_imgui_extra the__imgui_extra = {
     .memory_debugger = imgui__memory_debugger,
     .graphics_debugger = imgui__graphics_debugger,
@@ -1800,6 +1810,8 @@ static rizz_api_imgui_extra the__imgui_extra = {
     .begin_fullscreen_draw = imgui__begin_fullscreen_draw,
     .draw_cursor = imgui__draw_cursor,
     .project_to_screen = imgui__project_to_screen,
+    .is_capturing_mouse = imgui__is_capturing_mouse,
+    .is_capturing_keyboard = imgui__is_capturing_keyboard,
     .gizmo_hover = ImGuizmo_IsOver,
     .gizmo_using = ImGuizmo_IsUsing,
     .gizmo_set_current_window = ImGuizmo_SetDrawlist,
