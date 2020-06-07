@@ -27,6 +27,7 @@
 #pragma once
 
 #include "sx.h"
+#include "sx/math.h"
 
 // Some math constants
 #define SX_PI 3.1415926535897932384626433832795f
@@ -287,6 +288,8 @@ SX_API sx_mat4 sx_quat_mat4(const sx_quat quat);
 
 SX_API void sx_color_RGBtoHSV(float _hsv[3], const float _rgb[3]);
 SX_API void sx_color_HSVtoRGB(float _rgb[3], const float _hsv[3]);
+
+SX_API sx_aabb sx_aabb_transform(const sx_aabb* aabb, const sx_mat4* mat);
 
 
 // https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
@@ -759,7 +762,7 @@ static inline sx_quat sx_quat4f(float _x, float _y, float _z, float _w)
 #endif
 }
 
-static inline sx_quat sx_quatfv(const float* _f)
+static inline sx_quat sx_quat4fv(const float* _f)
 {
 #ifdef __cplusplus
     return { { _f[0], _f[1], _f[2], _f[3] } };
@@ -1770,14 +1773,27 @@ static inline sx_aabb sx_aabbwhd(float w, float h, float d)
 
 static inline sx_aabb sx_aabb_empty()
 {
-    return sx_aabbf(SX_FLOAT_MAX, SX_FLOAT_MAX, SX_FLOAT_MAX, -SX_FLOAT_MAX, -SX_FLOAT_MAX,
-                    -SX_FLOAT_MAX);
+    return sx_aabbf(SX_FLOAT_MAX, SX_FLOAT_MAX, SX_FLOAT_MAX, 
+                    -SX_FLOAT_MAX, -SX_FLOAT_MAX, -SX_FLOAT_MAX);
+}
+
+static inline bool sx_aabb_isempty(const sx_aabb* aabb)
+{
+    return aabb->xmin >= aabb->xmax || aabb->ymin >= aabb->ymax || aabb->zmin >= aabb->zmax;
 }
 
 static inline void sx_aabb_add_point(sx_aabb* aabb, const sx_vec3 pt)
 {
     aabb->vmin = sx_vec3_min(aabb->vmin, pt);
     aabb->vmax = sx_vec3_max(aabb->vmax, pt);
+}
+
+static inline sx_aabb sx_aabb_add(const sx_aabb* aabb1, const sx_aabb* aabb2)
+{
+    sx_aabb r = *aabb1;
+    sx_aabb_add_point(&r, aabb2->vmin);
+    sx_aabb_add_point(&r, aabb2->vmax);
+    return r;
 }
 
 static inline bool sx_aabb_test_point(const sx_aabb* aabb, const sx_vec3 pt)
@@ -1905,6 +1921,19 @@ static inline sx_tx3d sx_tx3d_inverse(sx_tx3d* tx)
 {   
     sx_mat3 rot_inv = sx_mat3_transpose(&tx->rot);
     return sx_tx3d_set(sx_mat3_mul_vec3(&rot_inv, sx_vec3_mulf(tx->pos, -1.0f)), rot_inv);
+}
+
+static inline sx_mat4 sx_tx3d_mat4(sx_tx3d* tx)
+{
+    return sx_mat4v(sx_vec4v3(tx->rot.col1, 0.0f),
+                    sx_vec4v3(tx->rot.col2, 0.0f),
+                    sx_vec4v3(tx->rot.col3, 0.0f),
+                    sx_vec4v3(tx->pos,      1.0f));
+}
+
+static inline sx_tx3d sx_mat4_tx3d(const sx_mat4* mat)
+{
+    return sx_tx3d_set(sx_vec3fv(mat->col4.f),  sx_mat3fv(mat->col1.f, mat->col2.f, mat->col3.f));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -152,7 +152,7 @@ static void imgui__log_entryfn(const rizz_log_entry* entry, void* user)
     sx_linear_buffer_addtype(&item_buff, rizz_log_entry, char, source_file, source_file_len + 1, 0);
 
     rizz_temp_alloc_begin(tmp_alloc);
-    rizz_log_entry* _entry = (rizz_log_entry*)sx_linear_buffer_alloc(&item_buff, tmp_alloc);
+    rizz_log_entry* _entry = (rizz_log_entry*)sx_linear_buffer_calloc(&item_buff, tmp_alloc);
     _entry->type = entry->type;
     _entry->channels = entry->channels;
     _entry->text_len = entry->text_len;

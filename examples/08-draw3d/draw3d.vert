@@ -9,11 +9,12 @@ layout (location = TEXCOORD1) out vec3 f_normal;
 
 layout (binding = 0, std140) uniform vs_globals {
     mat4 viewproj_mat;
+    mat4 world_mat;
 };
 
 void main()
 {
-    vec4 pos = vec4(a_pos.xyz, 1.0);
+    vec4 pos = world_mat * vec4(a_pos.xyz, 1.0);
     gl_Position = viewproj_mat * pos;
     f_uv = a_uv;
 

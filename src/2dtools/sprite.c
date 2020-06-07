@@ -1064,7 +1064,7 @@ static rizz_asset_load_data atlas__on_prepare(const rizz_asset_load_params* para
     sx_linear_buffer_addptr(&atlas_buff, &values, int, hashtbl_cap, 0);
     sx_linear_buffer_addtype(&atlas_buff, atlas__data, rizz_sprite_vertex, vertices, num_vertices, 0);
     sx_linear_buffer_addtype(&atlas_buff, atlas__data, uint16_t, indices, num_indices, 0);
-    atlas__data* atlas = sx_linear_buffer_alloc(&atlas_buff, alloc);
+    atlas__data* atlas = sx_linear_buffer_calloc(&atlas_buff, alloc);
     if (!atlas) {
         sx_free(g_spr.alloc, tokens);
         sx_out_of_memory();
