@@ -488,7 +488,7 @@ static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, 
     // check if the params are provided and valid
     if (amgr->params_size && !params) {
         rizz__log_warn("you must provide `params` of type '%s' for this asset", amgr->params_type_name);
-        sx_assert(0 && "params must not be null for this asset type")
+        sx_assert(0 && "params must not be null for this asset type");
     }
 
     // find if asset is already loaded

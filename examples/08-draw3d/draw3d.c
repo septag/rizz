@@ -11,8 +11,6 @@
 
 #include "../common.h"
 
-
-
 RIZZ_STATE static rizz_api_core* the_core;
 RIZZ_STATE static rizz_api_gfx* the_gfx;
 RIZZ_STATE static rizz_api_app* the_app;

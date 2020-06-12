@@ -4,6 +4,7 @@
 #include "sx/allocator.h"
 #include "sx/string.h"
 #include "sx/os.h"
+#include "sx/lin-alloc.h"
 
 #define SX_MAX_BUFFER_FIELDS 128
 #include "sx/linear-buffer.h"
@@ -156,55 +157,12 @@ static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometr
                                  cgltf_mesh* srcmesh, const sx_alloc* alloc)
 {
     // create buffers based on input vertex_layout
-    int num_vbuffs = 0;
-    int num_vertices = 0;
-    int num_indices = 0;
-
-    // count total vertices and indices
-    for (int i = 0; i < srcmesh->primitives_count; i++) {
-        cgltf_primitive* srcprim = &srcmesh->primitives[i];
-        int count = 0;
-        for (int k = 0; k < srcprim->attributes_count; k++) {
-            cgltf_attribute* srcatt = &srcprim->attributes[k];
-            if (count == 0) {
-                count = srcatt->data->count;
-            }
-            sx_assert(count == srcatt->data->count);
-        }
-        num_vertices += count;
-        num_indices += srcprim->indices->count;
-    }
-
-    sx_assert(num_vertices > 0 && num_indices > 0);
-
-    // create vertex and index buffers
-    sg_index_type index_type = SG_INDEXTYPE_NONE;
-    while (vertex_layout->buffer_strides[num_vbuffs]) {
-        int buff_stride = vertex_layout->buffer_strides[num_vbuffs];
-        mesh->cpu.vbuffs[num_vbuffs] = sx_malloc(alloc, buff_stride*num_vertices);
-        if (!mesh->cpu.vbuffs[num_vbuffs]) {
-            sx_out_of_memory();
-            return;
-        }
-        sx_memset(mesh->cpu.vbuffs[num_vbuffs], 0x0, buff_stride*num_vertices);
-        num_vbuffs++;
-    }
-    sx_assert(num_vbuffs && "you must at least set one buffer in the `vertex_layout`");
-    mesh->num_vbuffs = num_vbuffs;
-
-    index_type = (num_vertices < UINT16_MAX) ? SG_INDEXTYPE_UINT16 : SG_INDEXTYPE_UINT32;
-    int index_stride = index_type == SG_INDEXTYPE_UINT16 ? sizeof(uint16_t) : sizeof(uint32_t);
-    mesh->cpu.ibuff = sx_malloc(alloc, index_stride*num_indices);
-    if (!mesh->cpu.ibuff) {
-        sx_out_of_memory();
-        return;
-    }
-    sx_memset(mesh->cpu.ibuff, 0x0, num_indices * index_stride);
-    mesh->index_type = index_type;
+    sg_index_type index_type = mesh->index_type;
 
     // map source vertex buffer to our data
     // map source index buffer to our data
     int start_index = 0;
+    int start_vertex = 0;
     for (int i = 0; i < srcmesh->primitives_count; i++) {
         cgltf_primitive* srcprim = &srcmesh->primitives[i];
 
@@ -221,7 +179,6 @@ static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometr
 
         // indices
         cgltf_accessor* srcindices = srcprim->indices;
-        int start_vertex = mesh->num_vertices;
         if (srcindices->component_type == cgltf_component_type_r_16u && index_type == SG_INDEXTYPE_UINT16) {
             uint16_t* indices = (uint16_t*)mesh->cpu.ibuff + start_index;
             uint16_t* _srcindices = (uint16_t*)((uint8_t*)srcindices->buffer_view->buffer->data + 
@@ -229,11 +186,21 @@ static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometr
             for (int k = 0; k < srcindices->count; k++) {
                 indices[k] = _srcindices[k] + start_vertex;
             }
+            // flip the winding
+            for (int k = 0, num_tris = srcindices->count/3; k < num_tris; k++) {
+                int ii = k*3;
+                sx_swap(indices[ii], indices[ii+2], uint16_t);
+            }
         } else if (srcindices->component_type == cgltf_component_type_r_16u && index_type == SG_INDEXTYPE_UINT32) {
             uint32_t* indices = (uint32_t*)mesh->cpu.ibuff + start_index;
             uint16_t* _srcindices = (uint16_t*)srcindices->buffer_view->buffer->data;
             for (int k = 0; k < srcindices->count; k++) {
                 indices[k] = (uint32_t)(_srcindices[k] + start_vertex);
+            }
+            // flip the winding
+            for (int k = 0, num_tris = srcindices->count/3; k < num_tris; k++) {
+                int ii = k*3;
+                sx_swap(indices[ii], indices[ii+2], uint32_t);
             }
         } else if (srcindices->component_type == cgltf_component_type_r_32u && index_type == SG_INDEXTYPE_UINT32) {
             uint32_t* indices = (uint32_t*)mesh->cpu.ibuff + start_index;
@@ -241,15 +208,18 @@ static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometr
             for (int k = 0; k < srcindices->count; k++) {
                 indices[k] = _srcindices[k] + (uint32_t)start_vertex;
             }
+            // flip the winding
+            for (int k = 0, num_tris = srcindices->count/3; k < num_tris; k++) {
+                int ii = k*3;
+                sx_swap(indices[ii], indices[ii+2], uint32_t);
+            }
         }
 
         rizz_model_submesh* submesh = &mesh->submeshes[i];
         submesh->start_index = start_index;
         submesh->num_indices = srcprim->indices->count;
         start_index += srcprim->indices->count;
-
-        mesh->num_vertices += count;
-        mesh->num_indices += srcprim->indices->count;
+        start_vertex += count
     }
 }
 
@@ -311,133 +281,6 @@ static const rizz_vertex_attr* model__find_attribute(const rizz_model_geometry_l
     return NULL;
 }
 
-static rizz_model* load_model(const char* filepath, const rizz_model_geometry_layout* vertex_layout)
-{
-    cgltf_options options = { .type = cgltf_file_type_glb };
-    cgltf_data* data = NULL;
-    cgltf_result result = cgltf_parse(&options, mem->data, mem->size, &data);
-    if (result != cgltf_result_success) {
-        return false;
-    }
-    result = cgltf_load_buffers(&options, data, NULL);
-    if (result != cgltf_result_success) {
-        return false;
-    }
-
-    if (data->nodes_count == 0) {
-        return false;
-    }
-
-    rizz_model* model = sx_malloc(alloc, sizeof(rizz_model));
-    sx_memset(model, 0x0, sizeof(rizz_model));
-    model->bounds = sx_aabb_empty();
-
-    model->nodes = sx_malloc(alloc, sizeof(rizz_model_node)*data->nodes_count);
-    model->num_nodes = data->nodes_count;
-    sx_memset(model->nodes, 0x0, sizeof(rizz_model_node)*data->nodes_count);
-
-    model->meshes = sx_malloc(alloc, sizeof(rizz_model_mesh)*data->meshes_count);
-    model->num_meshes = data->meshes_count;
-    sx_memset(model->meshes, 0x0, sizeof(rizz_model_mesh)*data->meshes_count);
-
-    // meshes
-    for (int i = 0; i < data->meshes_count; i++) {
-        rizz_model_mesh* mesh = &model->meshes[i];
-        cgltf_mesh* _mesh = &data->meshes[i];
-
-        mesh->submeshes = sx_malloc(alloc, sizeof(rizz_model_submesh)*_mesh->primitives_count);
-        mesh->num_submeshes = _mesh->primitives_count;
-
-        model__setup_buffers(mesh, vertex_layout, _mesh, alloc);
-    }
-
-    // nodes
-    for (int i = 0; i < data->nodes_count; i++) {
-        rizz_model_node* node = &model->nodes[i];
-        cgltf_node* _node = &data->nodes[i];
-
-        node->local_tx = sx_tx3d_ident();
-
-        sx_strcpy(node->name, sizeof(node->name), _node->name);
-        if (sx_strlen(node->name) != sx_strlen(_node->name)) {
-            rizz_log_warn("model: %s, node: '%s' - name is too long (more than 31 characters), "
-                          "node setup will probably have errors", filepath, _node->name);
-        }
-
-        if (_node->has_scale) {
-            // TODO: apply scaling to the model
-            sx_assert(0 && "not supported yet. Apply scaling in DCC before exporting");
-        }
-
-        if (_node->has_rotation) {
-            sx_mat4 rot_mat = sx_quat_mat4(sx_quat4fv(_node->rotation));
-            node->local_tx.rot = sx_mat3fv(rot_mat.col1.f, rot_mat.col2.f, rot_mat.col3.f);
-        }
-
-        if (_node->has_translation) {
-            node->local_tx.pos = sx_vec3fv(_node->translation);
-        }
-
-        // assign mesh, find the index of the pointer. it is as same as 
-        node->mesh_id = -1;
-        for (int mi = 0; mi < data->meshes_count; mi++) {
-            if (&data->meshes[mi] == _node->mesh) {
-                node->mesh_id = mi;
-                break;
-            }
-        }
-
-        // bounds
-        sx_aabb bounds = sx_aabb_empty();
-        if (node->mesh_id != -1) {
-            rizz_model_mesh* mesh = &model->meshes[node->mesh_id];
-            const rizz_vertex_attr* attr = model__find_attribute(vertex_layout, "POSITION", 0);
-            int vertex_stride = vertex_layout->buffer_strides[attr->buffer_index];
-            uint8_t* vbuff = mesh->cpu.vbuffs[attr->buffer_index];
-            for (int v = 0; v < mesh->num_vertices; v++) {
-                sx_vec3 pos = *((sx_vec3*)(vbuff + v*vertex_stride + attr->offset));
-                sx_aabb_add_point(&bounds, pos);
-            }
-
-            model->bounds = sx_aabb_add(&model->bounds, &bounds);
-        }
-        node->bounds = bounds;
-    }
-
-    // build node hierarchy based on node names
-    for (int i = 0; i < data->nodes_count; i++) {
-        rizz_model_node* node = &model->nodes[i];
-        cgltf_node* _node = &data->nodes[i];
-
-        if (_node->parent) {
-            node->parent_id = model__find_node_byname(model, _node->parent->name);
-        } else {
-            node->parent_id = -1;
-        }
-
-        node->num_childs = _node->children_count;
-        if (_node->children_count > 0) {
-            node->children = sx_malloc(alloc, _node->children_count*sizeof(int));
-            for (int ci = 0; ci < _node->children_count; ci++) {
-                node->children[ci] = model__find_node_byname(model, _node->children[ci]->name);
-            }
-        } 
-    }
-
-    sx_memcpy(&model->layout, vertex_layout, sizeof(rizz_model_geometry_layout));
-
-    debug_model(model);
-
-    sx_mem_destroy_block(mem);
-    cgltf_free(data);
-
-    model__setup_gpu_buffers(model);
-
-    *pmodel = model;
-    return true;
-}
-
-
 typedef struct rizz_model_context 
 {
     const sx_alloc* alloc;
@@ -456,8 +299,9 @@ static void* model__cgltf_alloc(void* user, cgltf_size size)
 
 static void model__cgltf_free(void* user, void* ptr)
 {
-    const sx_alloc* alloc = user;
-    sx_free(alloc, ptr);
+    // we are using linear allocator, so we won't need free
+    sx_unused(user);
+    sx_unused(ptr);
 }
 
 static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* params, const sx_mem_block* mem)
@@ -470,12 +314,20 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
     char ext[32];
     sx_os_path_ext(ext, sizeof(ext), params->path);
     if (sx_strequalnocase(ext, "glb")) {
+        sx_linalloc linalloc;
+        void* parse_buffer = sx_malloc(g_model.alloc, mem->size);
+        if (!parse_buffer) {
+            sx_out_of_memory();
+            return (rizz_asset_load_data) { 0 };
+        }
+
+        sx_linalloc_init(&linalloc, parse_buffer, mem->size);
         cgltf_options options = {
             .type = cgltf_file_type_glb,
             .memory = {
                 .alloc = model__cgltf_alloc,
                 .free = model__cgltf_free,
-                .user_data = (void*)g_model.alloc
+                .user_data = &linalloc.alloc
             }
         };
         cgltf_data* data;
@@ -484,6 +336,11 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
             rizz_log_warn("cannot parse GLTF file: %s", params->path);
             return (rizz_asset_load_data) { 0 };
         }
+
+        if (data->nodes_count == 0) {
+            rizz_log_warn("model '%s' doesn't have any nodes inside", params->path);
+            return (rizz_asset_load_data) { 0 };
+        }        
 
         // allocate memory
         sx_linear_buffer buff;
@@ -554,6 +411,7 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
 
         model->num_nodes = data->nodes_count;
         model->num_meshes = data->meshes_count;
+        model->bounds = sx_aabb_empty();
 
         for (int i = 0; i < data->nodes_count; i++) {
             rizz_model_node* node = &model->nodes[i];
@@ -561,8 +419,10 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
         }
         sx_memcpy(model->meshes, tmp_meshes, sizeof(rizz_model_mesh)*data->meshes_count);
 
-        return (rizz_asset_load_data) { .obj.ptr = model, .user = data };
+        return (rizz_asset_load_data) { .obj.ptr = model, .user1 = data, .user2 = parse_buffer };
     }
+
+    return (rizz_asset_load_data) { 0 };
 }
 
 static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params, const sx_mem_block* mem)
@@ -572,12 +432,13 @@ static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
     const rizz_model_geometry_layout* layout = lparams->layout.buffer_strides[0] > 0 ? 
         &lparams->layout : &g_model.default_layout;
 
+    rizz_model* model = data->obj.ptr;
     char ext[32];
     sx_os_path_ext(ext, sizeof(ext), params->path);
     if (sx_strequalnocase(ext, "glb")) {
         rizz_temp_alloc_begin(tmp_alloc);
 
-        cgltf_data* gltf = data->user;
+        cgltf_data* gltf = data->user1;
         cgltf_options options = {
             .type = cgltf_file_type_glb,
             .memory = {
@@ -591,7 +452,92 @@ static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
             return false;
         }
 
+        // meshes
+        for (int i = 0; i < gltf->meshes_count; i++) {
+            rizz_model_mesh* mesh = &model->meshes[i];
+            cgltf_mesh* _mesh = &gltf->meshes[i];
+
+            mesh->num_submeshes = _mesh->primitives_count;
+            model__setup_buffers(mesh, layout, _mesh, alloc);
+        }
+
+        // nodes
+        for (int i = 0; i < gltf->nodes_count; i++) {
+            rizz_model_node* node = &model->nodes[i];
+            cgltf_node* _node = &gltf->nodes[i];
+
+            node->local_tx = sx_tx3d_ident();
+
+            sx_strcpy(node->name, sizeof(node->name), _node->name);
+            if (sx_strlen(node->name) != sx_strlen(_node->name)) {
+                rizz_log_warn("model: %s, node: '%s' - name is too long (more than 31 characters), "
+                              "node setup will probably have errors", params->path, _node->name);
+            }
+
+            if (_node->has_scale) {
+                // TODO: apply scaling to the model
+                sx_assert(0 && "not supported yet. Apply scaling in DCC before exporting");
+            }
+
+            if (_node->has_rotation) {
+                sx_mat4 rot_mat = sx_quat_mat4(sx_quat4fv(_node->rotation));
+                node->local_tx.rot = sx_mat3fv(rot_mat.col1.f, rot_mat.col2.f, rot_mat.col3.f);
+            }
+
+            if (_node->has_translation) {
+                node->local_tx.pos = sx_vec3fv(_node->translation);
+            }
+
+            // assign mesh, find the index of the pointer. it is as same as 
+            node->mesh_id = -1;
+            for (int mi = 0; mi < gltf->meshes_count; mi++) {
+                if (&gltf->meshes[mi] == _node->mesh) {
+                    node->mesh_id = mi;
+                    break;
+                }
+            }
+
+            // bounds
+            sx_aabb bounds = sx_aabb_empty();
+            if (node->mesh_id != -1) {
+                rizz_model_mesh* mesh = &model->meshes[node->mesh_id];
+                const rizz_vertex_attr* attr = model__find_attribute(layout, "POSITION", 0);
+                int vertex_stride = layout->buffer_strides[attr->buffer_index];
+                uint8_t* vbuff = mesh->cpu.vbuffs[attr->buffer_index];
+                for (int v = 0; v < mesh->num_vertices; v++) {
+                    sx_vec3 pos = *((sx_vec3*)(vbuff + v*vertex_stride + attr->offset));
+                    sx_aabb_add_point(&bounds, pos);
+                }
+
+                model->bounds = sx_aabb_add(&model->bounds, &bounds);
+            }
+            node->bounds = bounds;
+        }
+
+        // build node hierarchy based on node names
+        for (int i = 0; i < gltf->nodes_count; i++) {
+            rizz_model_node* node = &model->nodes[i];
+            cgltf_node* _node = &gltf->nodes[i];
+
+            if (_node->parent) {
+                node->parent_id = model__find_node_byname(model, _node->parent->name);
+            } else {
+                node->parent_id = -1;
+            }
+
+            node->num_childs = _node->children_count;
+            if (_node->children_count > 0) {
+                for (int ci = 0; ci < _node->children_count; ci++) {
+                    node->children[ci] = model__find_node_byname(model, _node->children[ci]->name);
+                }
+            } 
+        }
+
+        sx_memcpy(&model->layout, layout, sizeof(rizz_model_geometry_layout));
+
+        model__setup_gpu_buffers(model);
         rizz_temp_alloc_end(tmp_alloc);
+        sx_free(g_model.alloc, data->user2);
     }
 
     return true;
@@ -615,7 +561,7 @@ static void model__on_release(rizz_asset_obj obj, const sx_alloc* alloc)
 
 bool model_init(void)
 {
-
+    return true;
 }
 
 void model_release(void)

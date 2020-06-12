@@ -326,7 +326,8 @@ typedef struct rizz_asset_load_params {
 
 typedef struct rizz_asset_load_data {
     rizz_asset_obj obj;    // valid internal object
-    void* user;    // user-data can be allocated and filled with anything specific to asset loader
+    void* user1;    // user-data can be allocated and filled with anything specific to asset loader
+    void* user2;    // same as user1
 } rizz_asset_load_data;
 
 typedef enum rizz_asset_state {
