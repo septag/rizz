@@ -41,7 +41,7 @@ Many of the engine features are implemented in the plugins:
 - [2dtools](src/2dtools): 2D rendering tools: sprite, sprite animation, font drawing with TTF support
 - [sound](src/sound): Simple sound system. Audio mixer and 2d-sounds. 
 - [input](src/input): Input system with gamepad and touch support
-- [3dtools]](src/3dtools): 3D rendering tools: support for GLTF 3d models, basic debug primitive creation and drawing
+- [3dtools](src/3dtools): 3D rendering tools: support for GLTF 3d models, basic debug primitive creation and drawing
 
 #### Debugging and Profiling
 - *Remote Profiler*: Integrated *Remotery* for remote debugger/command console and log viewer.
