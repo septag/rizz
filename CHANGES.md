@@ -10,7 +10,14 @@
 - [ ] Add an API to render a set of sprites with a set of clips, so we won't have to duplicate data
 - [ ] use <sys/sem.h> instead of posix semaphores
 - [ ] Find a way to better streamline the sprite system and animations. AnimClips should just have frames in them and controlled by another state data
-- [ ] Initiate 3dtools
+- [x] Initiate 3dtools plugin
+  - [x] GLTF model support
+  - [ ] material library
+  - [ ] 3d Primitives
+    - [x] Debug cube
+    - [x] Grid
+    - [x] AABB
+    - [ ] Debug Sphere
 
 ## [0.4]
 - [x] ADDED `shader_get`/`texture_get` and other asset getters to all asset types

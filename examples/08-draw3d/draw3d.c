@@ -1,3 +1,4 @@
+#include "rizz/config.h"
 #include "sx/allocator.h"
 #include "sx/io.h"
 #include "sx/math.h"
@@ -8,6 +9,8 @@
 #include "rizz/imgui-extra.h"
 #include "rizz/3dtools.h"
 #include "rizz/rizz.h"
+
+#include <alloca.h>
 
 #include "../common.h"
 
@@ -20,6 +23,14 @@ RIZZ_STATE static rizz_api_camera* the_camera;
 RIZZ_STATE static rizz_api_vfs* the_vfs;
 RIZZ_STATE static rizz_api_prims3d* the_prims;
 RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
+RIZZ_STATE static rizz_api_model* the_model;
+
+#define NUM_MODELS 3
+static const char* k_models[NUM_MODELS] = {
+    "torus.glb",
+    "cube_multipart.glb",
+    "monkey_nodes.glb"
+};
 
 typedef struct rizz_model rizz_model;
 
@@ -30,6 +41,8 @@ typedef struct {
 
 typedef struct {
     sx_vec3 light_dir;
+    float _reserved;
+    sx_vec3 color;
 } draw3d_fragment_shader_uniforms;
 
 typedef enum draw3d_gizmo_type {
@@ -41,16 +54,52 @@ typedef enum draw3d_gizmo_type {
 typedef struct {
     rizz_gfx_stage stage;
     rizz_camera_fps cam;
-    rizz_model* model;
+    rizz_asset models[NUM_MODELS];
     rizz_asset shader;
     sg_pipeline pip;
     sx_vec3 light_dir;
     draw3d_gizmo_type gizmo_type;
     sx_mat4 world_mat;
     rizz_texture checker_tex;
+    int model_index;
+    bool show_grid;
+    bool show_debug_cubes;
 } draw3d_state;
 
 RIZZ_STATE static draw3d_state g_draw3d;
+
+typedef struct vertex_stream1 {
+    sx_vec3 pos;
+} vertex_stream1;
+
+typedef struct vertex_stream2 {
+    sx_vec3 normal;
+    sx_vec3 tangent;
+    sx_vec3 bitangent;
+} vertex_stream2;
+
+typedef struct vertex_stream3 {
+    sx_vec2 uv;
+    sx_color color;
+} vertex_stream3;
+
+static const rizz_model_geometry_layout k_stream_layout = {
+    .attrs[0] = { .semantic="POSITION", .offset=offsetof(vertex_stream1, pos), 
+                    .buffer_index=0, .format=SG_VERTEXFORMAT_FLOAT3 },
+    .attrs[1] = { .semantic="NORMAL", .offset=offsetof(vertex_stream2, normal), 
+                    .buffer_index=1, .format=SG_VERTEXFORMAT_FLOAT3 },
+    .attrs[2] = { .semantic="TANGENT", .offset=offsetof(vertex_stream2, tangent), 
+                    .buffer_index=1, .format=SG_VERTEXFORMAT_FLOAT3 },
+    .attrs[3] = { .semantic="BINORMAL", .offset=offsetof(vertex_stream2, bitangent), 
+                    .buffer_index=1, .format=SG_VERTEXFORMAT_FLOAT3 },
+    .attrs[4] = { .semantic="TEXCOORD", .offset=offsetof(vertex_stream3, uv), 
+                    .buffer_index=2, .format=SG_VERTEXFORMAT_FLOAT2 },
+    .attrs[5] = { .semantic="COLOR", .offset=offsetof(vertex_stream3, color), 
+                    .buffer_index=2, .format=SG_VERTEXFORMAT_UBYTE4N },
+    .buffer_strides[0] = sizeof(vertex_stream1),
+    .buffer_strides[1] = sizeof(vertex_stream2),
+    .buffer_strides[2] = sizeof(vertex_stream3)
+};
 
 static bool init()
 {
@@ -77,24 +126,17 @@ static bool init()
     the_camera->fps_init(&g_draw3d.cam, 50.0f, sx_rectwh(0, 0, view_width, view_height), 0.1f, 500.0f);
     the_camera->fps_lookat(&g_draw3d.cam, sx_vec3f(0, -3.0f, 3.0f), SX_VEC3_ZERO, SX_VEC3_UNITZ);
 
-    load_model("/assets/models/monkey.glb", &g_draw3d.model, &(rizz_model_geometry_layout) {
-                .attrs[0] = { .semantic="POSITION", .offset=offsetof(vertex_stream1, pos), 
-                              .buffer_index=0, .format=SG_VERTEXFORMAT_FLOAT3 },
-                .attrs[1] = { .semantic="NORMAL", .offset=offsetof(vertex_stream2, normal), 
-                              .buffer_index=1, .format=SG_VERTEXFORMAT_FLOAT3 },
-                .attrs[2] = { .semantic="TANGENT", .offset=offsetof(vertex_stream2, tangent), 
-                              .buffer_index=1, .format=SG_VERTEXFORMAT_FLOAT3 },
-                .attrs[3] = { .semantic="BINORMAL", .offset=offsetof(vertex_stream2, bitangent), 
-                              .buffer_index=1, .format=SG_VERTEXFORMAT_FLOAT3 },
-                .attrs[4] = { .semantic="TEXCOORD", .offset=offsetof(vertex_stream3, uv), 
-                              .buffer_index=2, .format=SG_VERTEXFORMAT_FLOAT2 },
-                .attrs[5] = { .semantic="COLOR", .offset=offsetof(vertex_stream3, color), 
-                              .buffer_index=2, .format=SG_VERTEXFORMAT_UBYTE4N },
-                .buffer_strides[0] = sizeof(vertex_stream1),
-                .buffer_strides[1] = sizeof(vertex_stream2),
-                .buffer_strides[2] = sizeof(vertex_stream3)
-            });
-    sx_assert(g_draw3d.model);
+    for (int i = 0; i < NUM_MODELS; i++) {
+        rizz_log_info("loading model: %s", k_models[i]);
+        char filepath[RIZZ_MAX_PATH];
+        sx_strcat(sx_strcpy(filepath, sizeof(filepath), "/assets/models/"), sizeof(filepath), k_models[i]);
+        g_draw3d.models[i] = the_asset->load("model", filepath, &(rizz_model_load_params) {
+            .layout = k_stream_layout, 
+            .vbuff_usage = SG_USAGE_IMMUTABLE, 
+            .ibuff_usage = SG_USAGE_IMMUTABLE
+        }, 0, NULL, 0);
+        sx_assert_rel(g_draw3d.models[i].id);
+    }
 
     char shader_path[RIZZ_MAX_PATH];
     g_draw3d.shader = the_asset->load("shader", 
@@ -107,7 +149,7 @@ static bool init()
         .layout.buffers[2].stride = sizeof(vertex_stream3),
         .index_type = SG_INDEXTYPE_UINT16,
         .shader = the_gfx->shader_get(g_draw3d.shader)->shd,
-        .rasterizer = { .cull_mode = SG_CULLMODE_FRONT },
+        .rasterizer = { .cull_mode = SG_CULLMODE_BACK },
         .depth_stencil = { .depth_compare_func = SG_COMPAREFUNC_LESS_EQUAL, .depth_write_enabled = true}
     };
 
@@ -128,12 +170,21 @@ static bool init()
         sx_color4u(255, 255, 255, 255)
     };
     g_draw3d.checker_tex = the_gfx->texture_create_checker(8, 128, checker_colors);
+    g_draw3d.show_grid = true;
     
     return true;
 }
 
 static void shutdown(void)
 {
+    if (g_draw3d.shader.id) {
+        the_asset->unload(g_draw3d.shader);
+    }
+    for (int i = 0; i < NUM_MODELS; i++) {
+        if (g_draw3d.models[i].id) {
+            the_asset->unload(g_draw3d.models[i]);
+        }
+    }
 }
 
 static void update(float dt)
@@ -159,6 +210,7 @@ static void update(float dt)
 
     // imgui
     if (the_imgui->Begin("draw3d", NULL, 0)) {
+        the_imgui->TextWrapped("Use WASD/Arrow keys to move, Hold left mouse button to look around");
         the_imgui->SliderFloat3("light_dir", g_draw3d.light_dir.f, -1.0f, 1.0f, "%.2f", 1.0f);
         if (sx_equal(sx_vec3_len(g_draw3d.light_dir), 0, 0.0001f)) {
             g_draw3d.light_dir.y = 0.1f;
@@ -176,9 +228,26 @@ static void update(float dt)
             g_draw3d.gizmo_type = GIZMO_TYPE_SCALE;
         }
 
-        if (the_imgui->Button("Reset", SX_VEC2_ZERO)) {
+        if (the_imgui->Button("Reset Transform", SX_VEC2_ZERO)) {
             g_draw3d.world_mat = sx_mat4_ident();
         }
+
+        if (the_imgui->BeginCombo("Model", k_models[g_draw3d.model_index], 0)) {
+            for (int i = 0; i < 3; i++) {
+                bool selected = g_draw3d.model_index == i;
+                if (the_imgui->SelectableBool(k_models[i], selected, 0, SX_VEC2_ZERO)) {
+                    g_draw3d.model_index = i;
+                }
+                if (selected) {
+                    the_imgui->SetItemDefaultFocus();
+                }
+            }
+            the_imgui->EndCombo();    
+        }
+
+        the_imgui->Checkbox("Show grid", &g_draw3d.show_grid);
+        the_imgui->Checkbox("Show debug cubes", &g_draw3d.show_debug_cubes);
+        
     }
     the_imgui->End();
 }
@@ -204,40 +273,40 @@ static void render(void)
     sx_mat4 proj = the_camera->perspective_mat(&g_draw3d.cam.cam);
     sx_mat4 view = the_camera->view_mat(&g_draw3d.cam.cam);
     sx_mat4 viewproj = sx_mat4_mul(&proj, &view);
+
+    // Initialize and cache 100 debug boxes
     static sx_box boxes[100];
     static sx_color tints[100];
     static bool init_boxes = false;
     if (!init_boxes) {
         for (int i = 0; i < 100; i++) {
             boxes[i] = sx_box_set(sx_tx3d_setf(
-                the_core->rand_range(-50.0f, 50.0f), the_core->rand_range(-50.0f, 50.0f), 0, 
-                0, 0, sx_torad(the_core->rand_range(0, 90.0f))), 
-                sx_vec3f(the_core->rand_range(1.0f, 2.0f), the_core->rand_range(1.0f, 2.0), 1.0f)); 
+                (float)the_core->rand_range(-50, 50), (float)the_core->rand_range(-50, 50), 0, 
+                0, 0, sx_torad((float)the_core->rand_range(0, 90))), 
+                sx_vec3f(the_core->randf() + 1.0f, the_core->randf() + 1.0f, 1.0f)); 
             tints[i] = sx_color4u(the_core->rand_range(0, 255), the_core->rand_range(0, 255), the_core->rand_range(0, 255), 255);
         }
         init_boxes = true;
     }
     
-    the_prims->grid_xyplane_cam(1.0f, 5.0f, 50.0f, &g_draw3d.cam.cam, &viewproj);
+    if (g_draw3d.show_grid) {
+        the_prims->grid_xyplane_cam(1.0f, 5.0f, 50.0f, &g_draw3d.cam.cam, &viewproj);
+    }
 
-    #if 0
-    the_prims->draw_boxes(boxes, 100, &viewproj, RIZZ_PRIMS3D_MAPTYPE_CHECKER, tints);
-
-
-    sx_aabb aabb = sx_aabbwhd(1.0f, 2.0f, 0.5f);
-    sx_vec3 pos = sx_vec3fv(mat.col4.f);
-    aabb = sx_aabb_setpos(&aabb, pos);
-    the_prims->draw_aabb(&aabb, &viewproj, SX_COLOR_WHITE);
-    #endif
+    if (g_draw3d.show_debug_cubes) {
+        the_prims->draw_boxes(boxes, 100, &viewproj, RIZZ_PRIMS3D_MAPTYPE_CHECKER, tints);
+    }
 
     // model
 
-    const rizz_model* model = g_draw3d.model;
+    const rizz_model* model = the_model->model_get(g_draw3d.models[g_draw3d.model_index]);
     draw3d_vertex_shader_uniforms vs_uniforms = { .viewproj_mat = viewproj };
     draw3d_fragment_shader_uniforms fs_uniforms = { .light_dir = sx_vec3_norm(g_draw3d.light_dir) };
     the_gfx->staged.apply_pipeline(g_draw3d.pip);
-    the_gfx->staged.apply_uniforms(SG_SHADERSTAGE_FS, 0, &fs_uniforms, sizeof(fs_uniforms));
+    
 
+    sx_aabb* bounds = alloca(sizeof(sx_aabb)*model->num_nodes);
+    int num_bounds = 0;
     for (int i = 0; i < model->num_nodes; i++) {
         const rizz_model_node* node = &model->nodes[i];
         if (node->mesh_id == -1) {
@@ -260,13 +329,24 @@ static void render(void)
         for (int mi = 0; mi < mesh->num_submeshes; mi++) {
             const rizz_model_submesh* submesh = &mesh->submeshes[mi];
             bind.index_buffer_offset = submesh->start_index * sizeof(uint16_t);
+            if (submesh->mtl.id) {
+                fs_uniforms.color = sx_vec3fv(
+                    the_model->material_get(submesh->mtl)->pbr_metallic_roughness.base_color_factor.f);
+            } else {
+                fs_uniforms.color = sx_vec3f(1.0f, 1.0f, 1.0f);
+            }
+            the_gfx->staged.apply_uniforms(SG_SHADERSTAGE_FS, 0, &fs_uniforms, sizeof(fs_uniforms));
             the_gfx->staged.apply_bindings(&bind);
             the_gfx->staged.draw(0, submesh->num_indices, 1);
         }
+
+        bounds[num_bounds++] = sx_aabb_transform(&node->bounds, &vs_uniforms.world_mat);
     }
 
-    sx_aabb aabb = sx_aabb_transform(&model->bounds, &g_draw3d.world_mat);
-    the_prims->draw_aabb(&aabb, &viewproj, SX_COLOR_WHITE);
+    if (num_bounds > 0) {
+        the_prims->draw_aabbs(bounds, num_bounds, &viewproj, NULL);
+        //the_prims->draw_aabb(&bounds[0], &viewproj, SX_COLOR_WHITE);
+    }
 
     the_gfx->staged.end_pass();
     the_gfx->staged.end();
@@ -297,6 +377,7 @@ rizz_plugin_decl_main(draw3d, plugin, e)
         the_imgui = (rizz_api_imgui*)plugin->api->get_api_byname("imgui", 0);
         the_imguix = (rizz_api_imgui_extra*)plugin->api->get_api_byname("imgui_extra", 0);
         the_prims = (rizz_api_prims3d*)plugin->api->get_api_byname("prims3d", 0);
+        the_model = (rizz_api_model*)plugin->api->get_api_byname("model", 0);
 
         init();
         break;

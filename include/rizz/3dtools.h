@@ -31,6 +31,7 @@ typedef struct rizz_api_prims3d {
     void (*draw_boxes)(const sx_box* boxes, int num_boxes, const sx_mat4* viewproj_mat,
                        rizz_prims3d_map_type map_type, const sx_color* tints);
     bool (*generate_box_geometry)(const sx_alloc* alloc, rizz_prims3d_geometry* geo);
+    void (*free_geometry)(rizz_prims3d_geometry* geo, const sx_alloc* alloc);
 
     // aabbs are always wireframe. and alpha in color tint doesn't affect them
     void (*draw_aabb)(const sx_aabb* aabb, const sx_mat4* viewproj_mat, sx_color tint);
@@ -89,7 +90,7 @@ typedef struct rizz_material_data {
     bool has_clearcoat;
     bool _reserved1;
     rizz_material_metallic_roughness pbr_metallic_roughness;
-    rizz_material_specular_glossiness pbr_speuclar_glossiness;
+    rizz_material_specular_glossiness pbr_specular_glossiness;
     rizz_material_clearcoat clearcoat;
     rizz_material_texture normal_tex;
     rizz_material_texture occlusion_tex;
@@ -151,15 +152,10 @@ typedef struct rizz_model_geometry_layout {
     int buffer_strides[SG_MAX_SHADERSTAGE_BUFFERS];
 } rizz_model_geometry_layout;
 
-typedef enum rizz_model_buffers_type {
-    RIZZ_MODEL_BUFFERSTYPE_DEFAULT = 0,     // keep on both cpu and gpu memory
-    RIZZ_MODEL_BUFFERSTYPE_CPU_ONLY,        // free cpu buffers, after this, you cannot manipulate or read vertex data on cpu
-    RIZZ_MODEL_BUFFERSTYPE_GPU_ONLY         // do not create gpu buffers, you can either create them manually from cpu or instanciation
-} rizz_model_buffers_type;
-
 // provide this for loading "model" asset
 // if layout is zero initialized, default layout will be used (same as rizz_prims3d_vertex):
 //      buffer #1: position/normal/uv/color
+//      if you, leave ibuff_usage/vbuff_usage = default (=0), no gpu buffers will be created
 typedef struct rizz_model_load_params {
     rizz_model_geometry_layout layout;
     sg_usage vbuff_usage;
@@ -211,11 +207,10 @@ typedef struct rizz_model {
     rizz_model_node* nodes;
     rizz_model_mesh* meshes;
     rizz_model_geometry_layout layout;
-
-    sx_aabb bounds;
 } rizz_model;
 
 typedef struct rizz_api_model {
     const rizz_model* (*model_get)(rizz_asset model_asset);
+    const rizz_material_data* (*material_get)(rizz_material mtl);
 } rizz_api_model;
 

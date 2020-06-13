@@ -220,7 +220,6 @@ if (MSVC)
     endif()
 else()
     add_compile_options(-Wno-deprecated-declarations -fPIC)
-
     add_compile_options("$<$<CONFIG:Debug>:-D_DEBUG>")
     add_compile_options("$<$<CONFIG:Release>:-DNDEBUG>")
 
@@ -249,6 +248,7 @@ if (CLANG_ENABLE_PROFILER)
     endif()
 endif()
 
+# clang-cl complains about returning structs from c-extern return type, which is valid, but we don't need them now
 if (CLANG_CL)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-return-type-c-linkage")
 endif()
@@ -337,6 +337,8 @@ foreach (native_project ${native_projects})
     if (BUNDLE)
         target_compile_definitions(${native_project} PRIVATE -DRIZZ_BUNDLE)
     endif()
+
+    target_compile_definitions(${native_project} PUBLIC "$<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:RIZZ_DEV_BUILD>")
 endforeach()
 
 if (BUILD_EXAMPLES AND NOT BUNDLE) 

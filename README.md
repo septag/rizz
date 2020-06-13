@@ -35,10 +35,13 @@ see [CHANGELOG](CHANGES.md) for latest changes, new features and bug fixes.
 - [basis_universal](https://github.com/BinomialLLC/basis_universal) texture format support
 
 #### Plugins
+Many of the engine features are implemented in the plugins:
+
 - [imgui](src/imgui): Dear-imgui plugin with some utility API
-- [2dtools](src/2dtools): 2D rendering tools, sprite, text with ttf support
-- [sound](src/sound): Simple sound system 
+- [2dtools](src/2dtools): 2D rendering tools: sprite, sprite animation, font drawing with TTF support
+- [sound](src/sound): Simple sound system. Audio mixer and 2d-sounds. 
 - [input](src/input): Input system with gamepad and touch support
+- [3dtools]](src/3dtools): 3D rendering tools: support for GLTF 3d models, basic debug primitive creation and drawing
 
 #### Debugging and Profiling
 - *Remote Profiler*: Integrated *Remotery* for remote debugger/command console and log viewer.
@@ -93,32 +96,39 @@ But as the engine is in it's early age, the current platforms are built and test
 - **CLANG_ENABLE_PROFILER** (default=0): Clang specific. Turns on `-ftime-trace` flag. Only supported in clang-9 and higher
 
 ## Examples
-- Basic examples are included with this repo, in [examples](examples) directory. 
-- Space invaders clone - [link](https://github.com/septag/rizz-space-invaders)
+**Examples** Basic examples are included with this repo, in [examples](examples) directory:
+
+![examples-overview](examples/screenshots/overview.png)
+
+**Space invaders clone** - [link to github project](https://github.com/septag/rizz-space-invaders)
+  
+![space-invaders](https://github.com/septag/rizz-space-invaders/raw/master/art/space-invaders.gif)
+
 
 ## Open-Source libraries used
 #### Primarily developed for rizz
 - [sx](https://github.com/septag/sx): Portable base library
-- [glslcc](https://github.com/septag/glslcc): GLSL cross-compiler
+- [glslcc](https://github.com/septag/glslcc): GLSL cross-compiler *(external binary tool)*
 - [dds-ktx](https://github.com/septag/dds-ktx): Single header KTX/DDS reader
 - [cj5](https://github.com/septag/cj5): Very minimal single header JSON5 parser in C99, derived from jsmn
-- [atlasc](https://github.com/septag/atlasc): Command-line tool that builds atlas texture from a bunch of input images.
+- [atlasc](https://github.com/septag/atlasc): Command-line tool that builds atlas texture from a bunch of input images. *(External binary tool)*
 - [dmon](https://github.com/septag/dmon): Single header C99 portable library for monitoring directory changes.
 
 #### 3rdparties
 - [sokol](https://github.com/floooh/sokol): minimal cross-platform standalone C headers
 - [cr](https://github.com/fungos/cr): Simple C Hot Reload Header-only Library
-- [cimgui](https://github.com/cimgui/cimgui): C-API for imgui
-- [imgui](https://github.com/ocornut/imgui): Dear ImGui: Bloat-free Immediate Mode Graphical User interface for C++ with minimal dependencies
+- [cimgui](https://github.com/cimgui/cimgui): C-API for imgui *(used in imgui plugin)*
+- [imgui](https://github.com/ocornut/imgui): Dear ImGui: Bloat-free Immediate Mode Graphical User interface for C++ with minimal dependencies *(used in imgui plugin)*
 - [Remotery](https://github.com/Celtoys/Remotery): Single C file, Realtime CPU/GPU Profiler with Remote Web Viewer
 - [lz4](https://github.com/lz4/lz4): Extremely Fast Compression algorithm
 - [http](https://github.com/mattiasgustavsson/libs/blob/master/http.h): Basic HTTP protocol implementation over sockets
 - [stb](https://github.com/nothings/stb): stb single-file public domain libraries for C/C++
-- [sort](https://github.com/swenson/sort): Sorting routine implementations in "template" C
-- [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo): 3D gizmo for imgui
-- [gainput](https://github.com/jkuhlmann/gainput): Input library for games
-- [basis_universal](https://github.com/BinomialLLC/basis_universal): Basis Universal GPU Texture Codec
-- [fontstash](https://github.com/memononen/fontstash): Light-weight online font texture atlas builder
+- [sort](https://github.com/swenson/sort): Sorting routine implementations in "template" C 
+- [ImGuizmo](https://github.com/CedricGuillemet/ImGuizmo): 3D gizmo for imgui *(used in imgui plugin)*
+- [gainput](https://github.com/jkuhlmann/gainput): Input library for games *(used in input plugin)*
+- [basis_universal](https://github.com/BinomialLLC/basis_universal): Basis Universal GPU Texture Codec 
+- [fontstash](https://github.com/memononen/fontstash): Light-weight online font texture atlas builder *(used in 2dtools plugin)*
+- [cgltf](https://github.com/jkuhlmann/cgltf): Single-file glTF 2.0 loader and writer written in C99 *(used in 3dtools plugin)*
 
 [License (BSD 2-clause)](https://github.com/septag/rizz/blob/master/LICENSE)
 --------------------------------------------------------------------------

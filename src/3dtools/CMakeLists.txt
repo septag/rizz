@@ -3,6 +3,7 @@ project(3dtools)
 
 set(3dtools_sources 3dtools.c 
                     prims3d.c 
+                    model.c 
                     3dtools-internal.h 
                     ../../include/rizz/3dtools.h
                     README.md)

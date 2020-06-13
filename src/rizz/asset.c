@@ -1140,10 +1140,11 @@ static rizz_asset_group rizz__asset_group_begin(rizz_asset_group group)
         sx_assert(handle);
         rizz__asset_group g = { 0 };
         int index = sx_handle_index(handle);
-        if (index < sx_array_count(g_asset.groups))
+        if (index < sx_array_count(g_asset.groups)) {
             g_asset.groups[index] = g;
-        else
+        } else {
             sx_array_push(g_asset.alloc, g_asset.groups, g);
+        }
         group = (rizz_asset_group){ handle };
     }
 

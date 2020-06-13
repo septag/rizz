@@ -389,7 +389,7 @@ static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params
         buff += sizeof(int);
     }
 
-    return (rizz_asset_load_data){ .obj = { .id = handle }, .user = data };
+    return (rizz_asset_load_data){ .obj = { .id = handle }, .user1 = data };
 }
 
 static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params,
@@ -400,7 +400,7 @@ static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_param
 
     const sx_alloc* alloc = params->alloc ? params->alloc : g_snd_alloc;
 
-    uint8_t* buff = (uint8_t*)data->user;
+    uint8_t* buff = (uint8_t*)data->user1;
     snd__source* src = (snd__source*)buff;
     buff += sizeof(snd__source);
 
@@ -505,7 +505,7 @@ static void snd__on_finalize(rizz_asset_load_data* data, const rizz_asset_load_p
     sx_unused(params);
     sx_unused(mem);
 
-    uint8_t* buff = (uint8_t*)data->user;
+    uint8_t* buff = (uint8_t*)data->user1;
     snd__source* src = (snd__source*)buff;
     sx_handle_t srchandle = (sx_handle_t)data->obj.id;
     g_snd.sources[sx_handle_index(srchandle)] = *src;
@@ -1760,6 +1760,9 @@ static void snd__execute_command_buffers()
 
 static rizz_snd_source snd__source_get(rizz_asset snd_asset)
 {
+#if RIZZ_DEV_BUILD
+    sx_assert_rel(sx_strequal(the_asset->type_name(snd_asset), "sound") && "asset handle is not a sound");
+#endif
     return (rizz_snd_source){ (uint32_t)the_asset->obj(snd_asset).id };
 }
 

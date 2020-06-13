@@ -245,7 +245,7 @@ static rizz_asset_load_data font__fons_on_prepare(const rizz_asset_load_params* 
         return (rizz_asset_load_data){ .obj = { 0 } };
     }
 
-    return (rizz_asset_load_data){ .obj = { .ptr = fons }, .user = buffer };
+    return (rizz_asset_load_data){ .obj = { .ptr = fons }, .user1 = buffer };
 }
 
 static bool font__fons_on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params,
@@ -258,9 +258,9 @@ static bool font__fons_on_load(rizz_asset_load_data* data, const rizz_asset_load
 
     sx_strcpy(fons->name, sizeof(fons->name), name);
 
-    sx_memcpy(data->user, mem->data, mem->size);
+    sx_memcpy(data->user1, mem->data, mem->size);
 
-    int fons_id = fonsAddFontMem(fons->ctx, name, data->user, (int)mem->size, 1);
+    int fons_id = fonsAddFontMem(fons->ctx, name, data->user1, (int)mem->size, 1);
     if (fons_id == FONS_INVALID) {
         rizz_log_warn("loading font '%s' failed: invalid TTF file", params->path);
         return false;
@@ -465,6 +465,9 @@ void font__release(void)
 
 const rizz_font* font__get(rizz_asset font_asset)
 {
+#if RIZZ_DEV_BUILD
+    sx_assert_rel(sx_strequal(the_asset->type_name(font_asset), "font") && "asset handle is not a font");
+#endif
     return (const rizz_font*)the_asset->obj(font_asset).ptr;
 }
 

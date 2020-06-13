@@ -673,7 +673,7 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
         user_data = sx_malloc(g_gfx_alloc, sizeof(sg_image_desc));
     }
 
-    return (rizz_asset_load_data){ .obj = { .ptr = tex }, .user = user_data };
+    return (rizz_asset_load_data){ .obj = { .ptr = tex }, .user1 = user_data };
 }
 
 static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params,
@@ -681,7 +681,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
 {
     const rizz_texture_load_params* tparams = params->params;
     rizz_texture* tex = data->obj.ptr;
-    sg_image_desc* desc = data->user;
+    sg_image_desc* desc = data->user1;
     sx_assert(desc);
 
     *desc = (sg_image_desc){
@@ -816,7 +816,7 @@ static void rizz__texture_on_finalize(rizz_asset_load_data* data,
     sx_unused(mem);
 
     rizz_texture* tex = data->obj.ptr;
-    sg_image_desc* desc = data->user;
+    sg_image_desc* desc = data->user1;
     sx_assert(desc);
 
     char ext[32];
@@ -830,7 +830,7 @@ static void rizz__texture_on_finalize(rizz_asset_load_data* data,
         stbi_image_free((void*)desc->content.subimage[0][0].ptr);
     }
 
-    sx_free(g_gfx_alloc, data->user);
+    sx_free(g_gfx_alloc, data->user1);
 }
 
 static void rizz__texture_on_reload(rizz_asset handle, rizz_asset_obj prev_obj,
@@ -1007,6 +1007,9 @@ static sg_image rizz__texture_checker()
 
 static const rizz_texture* rizz__texture_get(rizz_asset texture_asset)
 {
+#if RIZZ_DEV_BUILD
+    sx_assert_rel(sx_strequal(the__asset.type_name(texture_asset), "texture") && "asset handle is not a texture");
+#endif
     return (const rizz_texture*)the__asset.obj(texture_asset).ptr;
 }
 
@@ -1734,6 +1737,10 @@ static sg_pipeline_desc* rizz__shader_bindto_pipeline_sg(sg_shader shd,
 
 static const rizz_shader* rizz__shader_get(rizz_asset shader_asset)
 {
+#if RIZZ_DEV_BUILD
+    sx_assert_rel(sx_strequal(the__asset.type_name(shader_asset), "shader") && "asset handle is not a shader");
+#endif
+
     const rizz_shader* shd = (const rizz_shader*)the__asset.obj(shader_asset).ptr;
     sx_assert(shd && "shader is not loaded or missing");
     return shd;
@@ -1833,7 +1840,7 @@ static rizz_asset_load_data rizz__shader_on_prepare(const rizz_asset_load_params
     sx_assert(shader->shd.id);
 
     return (rizz_asset_load_data){ .obj = { .ptr = shader },
-                                   .user = sx_malloc(g_gfx_alloc, sizeof(sg_shader_desc)) };
+                                   .user1 = sx_malloc(g_gfx_alloc, sizeof(sg_shader_desc)) };
 }
 
 static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params,
@@ -1842,7 +1849,7 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
     sx_unused(params);
 
     const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
-    sg_shader_desc* shader_desc = data->user;
+    sg_shader_desc* shader_desc = data->user1;
 
     rizz_shader_refl *vs_refl = NULL, *fs_refl = NULL, *cs_refl = NULL;
     const uint8_t *vs_data = NULL, *fs_data = NULL, *cs_data = NULL;
@@ -1939,12 +1946,12 @@ static void rizz__shader_on_finalize(rizz_asset_load_data* data,
     sx_unused(params);
 
     rizz_shader* shader = data->obj.ptr;
-    sg_shader_desc* desc = data->user;
+    sg_shader_desc* desc = data->user1;
     sx_assert(desc);
 
     the__gfx.init_shader(shader->shd, desc);
 
-    sx_free(g_gfx_alloc, data->user);
+    sx_free(g_gfx_alloc, data->user1);
 }
 
 static void rizz__shader_on_reload(rizz_asset handle, rizz_asset_obj prev_obj,

@@ -49,3 +49,13 @@ Demonstrates basic application setup. Just clears the view with blue color.
 - (Currently only build under windows/Direct3D backend)
 
 ![07-nbody](screenshots/07-nbody.png)
+
+
+### [Draw3d](08-draw3d/draw3d.c)
+- Basic model rendering (GLTF)
+- Models with sub-meshes/sub-materials
+- Models with nodes and hierarchy
+- Debug Grid drawing
+- Debug Cube drawing
+
+![08-draw3d](screenshots/08-draw3d.png)

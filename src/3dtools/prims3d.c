@@ -97,9 +97,9 @@ bool prims3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
     the_gfx = gfx;
     the_camera = cam;
     g_prims3d.draw_api = &the_gfx->staged;
+    g_prims3d.alloc = the_core->alloc(RIZZ_MEMID_GRAPHICS);
     
     rizz_temp_alloc_begin(tmp_alloc);
-    g_prims3d.alloc = the_core->alloc(RIZZ_MEMID_GRAPHICS);
 
     rizz_shader shader_solid = the_gfx->shader_make_with_data(tmp_alloc,
         k_prims3d_vs_size, k_prims3d_vs_data, k_prims3d_vs_refl_size, k_prims3d_vs_refl_data,
@@ -421,6 +421,12 @@ bool prims3d__generate_box_geometry(const sx_alloc* alloc, rizz_prims3d_geometry
     return true;
 }
 
+void prims3d__free_geometry(rizz_prims3d_geometry* geo, const sx_alloc* alloc)
+{
+    sx_assert(geo);
+    sx_free(alloc, geo->verts);
+}
+
 void prims3d__draw_aabb(const sx_aabb* aabb, const sx_mat4* viewproj_mat, sx_color tint)
 {
     prims3d__draw_aabbs(aabb, 1, viewproj_mat, &tint);
@@ -428,6 +434,9 @@ void prims3d__draw_aabb(const sx_aabb* aabb, const sx_mat4* viewproj_mat, sx_col
 
 void prims3d__draw_aabbs(const sx_aabb* aabbs, int num_aabbs, const sx_mat4* viewproj_mat, const sx_color* tints)
 {
+    sx_assert(aabbs);
+    sx_assert(num_aabbs > 0);
+    
     const int num_verts = 8 * num_aabbs;
     const int num_indices = 24 * num_aabbs;
     rizz_api_gfx_draw* draw_api = g_prims3d.draw_api;
@@ -445,6 +454,7 @@ void prims3d__draw_aabbs(const sx_aabb* aabbs, int num_aabbs, const sx_mat4* vie
     rizz_prims3d_vertex* vertices = (rizz_prims3d_vertex*)buff;
     buff += sizeof(rizz_prims3d_vertex)*num_verts;
     uint16_t* indices = (uint16_t*)buff;
+
     rizz_prims3d_vertex* _verts = vertices;
     uint16_t* _indices = indices;
     for (int i = 0; i < num_aabbs; i++) {
@@ -455,18 +465,19 @@ void prims3d__draw_aabbs(const sx_aabb* aabbs, int num_aabbs, const sx_mat4* vie
         }
         _verts += 8;
         
-        _indices[0] = 0;         _indices[1] = 1;           
-        _indices[2] = 1;         _indices[3] = 3;
-        _indices[4] = 3;         _indices[5] = 2;
-        _indices[6] = 2;         _indices[7] = 0;
-        _indices[8] = 5;         _indices[9] = 4;
-        _indices[10] = 4;        _indices[11] = 6;
-        _indices[12] = 6;        _indices[13] = 7;
-        _indices[14] = 7;        _indices[15] = 5;
-        _indices[16] = 5;        _indices[17] = 1;
-        _indices[18] = 7;        _indices[19] = 3;
-        _indices[20] = 0;        _indices[21] = 4;
-        _indices[22] = 2;        _indices[23] = 6;
+        int vindex = i*8;
+        _indices[0] = vindex;             _indices[1] = vindex + 1;           
+        _indices[2] = vindex + 1;         _indices[3] = vindex + 3;
+        _indices[4] = vindex + 3;         _indices[5] = vindex + 2;
+        _indices[6] = vindex + 2;         _indices[7] = vindex + 0;
+        _indices[8] = vindex + 5;         _indices[9] = vindex + 4;
+        _indices[10] = vindex + 4;        _indices[11] = vindex + 6;
+        _indices[12] = vindex + 6;        _indices[13] = vindex + 7;
+        _indices[14] = vindex + 7;        _indices[15] = vindex + 5;
+        _indices[16] = vindex + 5;        _indices[17] = vindex + 1;
+        _indices[18] = vindex + 7;        _indices[19] = vindex + 3;
+        _indices[20] = vindex + 0;        _indices[21] = vindex + 4;
+        _indices[22] = vindex + 2;        _indices[23] = vindex + 6;
 
         _indices += 24;
     }

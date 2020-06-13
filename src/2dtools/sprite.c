@@ -1089,7 +1089,7 @@ static rizz_asset_load_data atlas__on_prepare(const rizz_asset_load_params* para
     }
     sx_memcpy(predata, &jres, sizeof(jres));
 
-    return (rizz_asset_load_data){ .obj = { .ptr = atlas }, .user = predata };
+    return (rizz_asset_load_data){ .obj = { .ptr = atlas }, .user1 = predata };
 }
 
 static bool atlas__on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params,
@@ -1099,7 +1099,7 @@ static bool atlas__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
     sx_unused(params);
 
     atlas__data* atlas = data->obj.ptr;
-    cj5_result* jres = data->user;
+    cj5_result* jres = data->user1;
 
     int sprite_idx = 0;
     atlas->a.info.img_width = cj5_seekget_int(jres, 0, "image_width", 0);
@@ -1206,7 +1206,7 @@ static void atlas__on_finalize(rizz_asset_load_data* data, const rizz_asset_load
     sx_unused(mem);
     sx_unused(params);
 
-    cj5_result* jres = data->user;
+    cj5_result* jres = data->user1;
     if (jres->tokens) {
         sx_free(g_spr.alloc, (cj5_token*)jres->tokens);
     }
@@ -2344,6 +2344,9 @@ void sprite__show_debugger(bool* p_open)
 
 const rizz_atlas* sprite__atlas_get(rizz_asset atlas_asset)
 {
+#if RIZZ_DEV_BUILD
+    sx_assert_rel(sx_strequal(the_asset->type_name(atlas_asset), "atlas") && "asset handle is not an atlas");
+#endif
     return (const rizz_atlas*)the_asset->obj(atlas_asset).ptr;
 }
 
