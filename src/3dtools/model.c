@@ -196,7 +196,7 @@ static void model__map_attributes_to_buffer(rizz_model_mesh* mesh,
 }
 
 static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometry_layout* vertex_layout, 
-                                 cgltf_mesh* srcmesh, const sx_alloc* alloc)
+                                 cgltf_mesh* srcmesh)
 {
     // create buffers based on input vertex_layout
     sg_index_type index_type = mesh->index_type;
@@ -480,7 +480,6 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
 
 static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params, const sx_mem_block* mem)
 {
-    const sx_alloc* alloc = params->alloc ? params->alloc : g_model.alloc;
     const rizz_model_load_params* lparams = params->params;
     const rizz_model_geometry_layout* layout = lparams->layout.buffer_strides[0] > 0 ? 
         &lparams->layout : &g_model.default_layout;
@@ -511,7 +510,7 @@ static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
             rizz_model_mesh* mesh = &model->meshes[i];
             cgltf_mesh* _mesh = &gltf->meshes[i];
 
-            model__setup_buffers(mesh, layout, _mesh, alloc);
+            model__setup_buffers(mesh, layout, _mesh);
         }
 
         // nodes
