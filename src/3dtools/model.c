@@ -480,6 +480,8 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
 
 static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params, const sx_mem_block* mem)
 {
+    sx_unused(mem);
+    
     const rizz_model_load_params* lparams = params->params;
     const rizz_model_geometry_layout* layout = lparams->layout.buffer_strides[0] > 0 ? 
         &lparams->layout : &g_model.default_layout;
