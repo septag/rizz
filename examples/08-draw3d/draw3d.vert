@@ -18,5 +18,5 @@ void main()
     gl_Position = viewproj_mat * pos;
     f_uv = a_uv;
 
-    f_normal = a_normal;    
+    f_normal = mat3(world_mat) * a_normal;
 }
