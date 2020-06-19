@@ -344,6 +344,8 @@ static void render()
 
     // UI
     static bool show_debugger = false;
+    show_debugmenu(the_imgui, the_core);
+
     the_imgui->SetNextWindowContentSize(sx_vec2f(140.0f, 120.0f));
     if (the_imgui->Begin("drawsprite", NULL, 0)) {
         the_imgui->LabelText("Fps", "%.3f", the_core->fps());

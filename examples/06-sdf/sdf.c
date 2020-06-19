@@ -193,6 +193,8 @@ static void update(float dt)
     }
 
     // Use imgui UI
+    show_debugmenu(the_imgui, the_core);
+    
     the_imgui->SetNextWindowContentSize(sx_vec2f(100.0f, 50.0f));
     if (the_imgui->Begin("SDF", NULL, 0)) {
         the_imgui->LabelText("Fps", "%.3f", the_core->fps());

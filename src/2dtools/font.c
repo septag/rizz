@@ -239,7 +239,7 @@ static rizz_asset_load_data font__fons_on_prepare(const rizz_asset_load_params* 
 
     fonsSetErrorCallback(fons->ctx, fons__error_fn, fons);
 
-    void* buffer = sx_malloc(alloc, mem->size);
+    void* buffer = sx_malloc(alloc, (size_t)mem->size);
     if (!buffer) {
         sx_out_of_memory();
         return (rizz_asset_load_data){ .obj = { 0 } };
@@ -258,7 +258,7 @@ static bool font__fons_on_load(rizz_asset_load_data* data, const rizz_asset_load
 
     sx_strcpy(fons->name, sizeof(fons->name), name);
 
-    sx_memcpy(data->user1, mem->data, mem->size);
+    sx_memcpy(data->user1, mem->data, (size_t)mem->size);
 
     int fons_id = fonsAddFontMem(fons->ctx, name, data->user1, (int)mem->size, 1);
     if (fons_id == FONS_INVALID) {

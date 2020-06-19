@@ -5,6 +5,8 @@
 #include "rizz/imgui-extra.h"
 #include "rizz/imgui.h"
 
+#include "../common.h"
+
 RIZZ_STATE static rizz_api_core* the_core;
 RIZZ_STATE static rizz_api_gfx* the_gfx;
 RIZZ_STATE static rizz_api_app* the_app;
@@ -37,6 +39,8 @@ static void render()
     the_gfx->staged.end();
 
     // Use imgui UI
+    show_debugmenu(the_imgui, the_core);
+
     if (the_imgui) {
         the_imgui->SetNextWindowContentSize(sx_vec2f(100.0f, 50.0f));
         if (the_imgui->Begin("Hello", NULL, 0)) {

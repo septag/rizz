@@ -209,6 +209,8 @@ static void update(float dt)
     }
 
     // imgui
+    show_debugmenu(the_imgui, the_core);
+    
     if (the_imgui->Begin("draw3d", NULL, 0)) {
         the_imgui->TextWrapped("Use WASD/Arrow keys to move, Hold left mouse button to look around");
         the_imgui->SliderFloat3("light_dir", g_draw3d.light_dir.f, -1.0f, 1.0f, "%.2f", 1.0f);

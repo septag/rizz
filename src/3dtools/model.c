@@ -356,13 +356,13 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
         // TODO: this method of allocating 4x size of the model as a temp memory is not effective (and not safe)
         //       we can modify to use temp allocator for parsing json and another actual to put real data
         sx_linalloc linalloc;
-        void* parse_buffer = sx_malloc(g_model.alloc, mem->size*4);
+        void* parse_buffer = sx_malloc(g_model.alloc, (size_t)mem->size*4);
         if (!parse_buffer) {
             sx_out_of_memory();
             return (rizz_asset_load_data) { 0 };
         }
 
-        sx_linalloc_init(&linalloc, parse_buffer, mem->size*4);
+        sx_linalloc_init(&linalloc, parse_buffer, (size_t)mem->size*4);
         cgltf_options options = {
             .type = cgltf_file_type_glb,
             .memory = {
@@ -372,7 +372,7 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
             }
         };
         cgltf_data* data;
-        cgltf_result result = cgltf_parse(&options, mem->data, mem->size, &data);
+        cgltf_result result = cgltf_parse(&options, mem->data, (size_t)mem->size, &data);
         if (result != cgltf_result_success) {
             rizz_log_warn("cannot parse GLTF file: %s", params->path);
             return (rizz_asset_load_data) { 0 };

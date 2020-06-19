@@ -228,6 +228,8 @@ static void render()
     the_gfx->staged.end();
 
     // UI
+    show_debugmenu(the_imgui, the_core);
+    
     static bool show_debugger = false;
     the_imgui->SetNextWindowContentSize(sx_vec2f(140.0f, 120.0f));
     if (the_imgui->Begin("animsprite", NULL, 0)) {
