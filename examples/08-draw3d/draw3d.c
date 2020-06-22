@@ -43,6 +43,7 @@ typedef struct {
     sx_vec3 light_dir;
     float _reserved;
     sx_vec3 color;
+    float _reserved2;
 } draw3d_fragment_shader_uniforms;
 
 typedef enum draw3d_gizmo_type {

@@ -458,7 +458,7 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
         for (int i = 0; i < model->num_meshes; i++) {
             rizz_model_mesh* mesh = &tmp_meshes[i];
             for (int k = 0; k < mesh->num_submeshes; k++) {
-                sx_assert (mesh->num_submeshes == data->meshes[i].primitives_count);
+                sx_assert (mesh->num_submeshes == (int)data->meshes[i].primitives_count);
                 cgltf_primitive* prim = &data->meshes[i].primitives[k];
                 if (prim->material) {
                     tmp_meshes[i].submeshes[k].mtl = model__create_material_from_gltf(prim->material);
