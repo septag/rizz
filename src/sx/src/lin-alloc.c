@@ -6,7 +6,6 @@
 
 typedef struct sx__linalloc_hdr_s {
     uint32_t size;       // size of buffer that requested upon allocation
-    //uint32_t padding;    // number of bytes that is padded before the pointer
 } sx__linalloc_hdr;
 
 static void* sx__linalloc_malloc(sx_linalloc* alloc, size_t size, uint32_t align)
@@ -31,7 +30,6 @@ static void* sx__linalloc_malloc(sx_linalloc* alloc, size_t size, uint32_t align
     // Fill header info
     sx__linalloc_hdr* hdr = (sx__linalloc_hdr*)aligned - 1;
     hdr->size = (uint32_t)size;
-    //hdr->padding = (uint32_t)(aligned - ptr);
 
     alloc->offset += total;
     alloc->peak = sx_max(alloc->peak, alloc->offset);

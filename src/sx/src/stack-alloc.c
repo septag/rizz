@@ -6,7 +6,6 @@
 
 typedef struct stackalloc_hdr_s {
     uint32_t size;             // size of buffer that requested upon allocation
-    //uint32_t padding;          // number of bytes that is padded before the pointer
     uint32_t internal_size;    // actual size that is allocated (with headers and alignment)
     uint32_t prev_offset;
 } sx__stackalloc_hdr;
@@ -33,7 +32,6 @@ static void* sx__stackalloc_malloc(sx_stackalloc* alloc, size_t size, uint32_t a
     // Fill header info
     sx__stackalloc_hdr* hdr = (sx__stackalloc_hdr*)aligned - 1;
     hdr->size = (uint32_t)size;
-    //hdr->padding = (uint32_t)(aligned - ptr);
     hdr->internal_size = (uint32_t)total;
     hdr->prev_offset = (uint32_t)alloc->last_ptr_offset;    // TODO: unsafe
 
