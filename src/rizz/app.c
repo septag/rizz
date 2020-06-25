@@ -13,6 +13,11 @@
 
 #include <stdio.h>
 
+#if SX_PLATFORM_WINDOWS
+#   include <io.h>      // _open_osfhandle
+#   include <fcntl.h>   // _O_TEXT
+#endif
+
 #include "Remotery.h"
 
 // Choose api based on the platform
@@ -144,6 +149,11 @@ static void rizz__app_init(void)
         rizz__log_error("initializing plugins failed");
         exit(-1);
     }
+
+    // At this point we can change the current directory if it's set
+    if (g_app.conf.cwd && g_app.conf.cwd[0]) {
+        sx_os_chdir(g_app.conf.cwd);
+    }
 }
 
 static void rizz__app_frame(void)
@@ -215,11 +225,10 @@ sapp_desc sokol_main(int argc, char* argv[])
     int version = 0, show_help = 0;
     const sx_cmdline_opt opts[] = {
         { "version", 'V', SX_CMDLINE_OPTYPE_FLAG_SET, &version, 1, "Print version", 0x0 },
-        { "run", 'r', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'r', "Game module to run", "filepath" },
-        { "profile-gpu", 'g', SX_CMDLINE_OPTYPE_FLAG_SET, &profile_gpu, 1, "Enable gpu profiler",
-          0x0 },
-        { "dump-unused-assets", 'U', SX_CMDLINE_OPTYPE_FLAG_SET, &dump_unused_assets, 1,
-          "Dump unused assets into `unused-assets.json`", 0x0 },
+        { "run", 'r', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'r', "Game/App module to run", "filepath" },
+        { "profile-gpu", 'g', SX_CMDLINE_OPTYPE_FLAG_SET, &profile_gpu, 1, "Enable gpu profiler", 0x0 },
+        { "cwd", 'c', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'c', "Change current directory after initialization", 0x0 },
+        { "dump-unused-assets", 'U', SX_CMDLINE_OPTYPE_FLAG_SET, &dump_unused_assets, 1, "Dump unused assets into `unused-assets.json`", 0x0 },
         { "help", 'h', SX_CMDLINE_OPTYPE_FLAG_SET, &show_help, 1, "Show this help message", 0x0 },
         SX_CMDLINE_OPT_END
     };
@@ -229,6 +238,7 @@ sapp_desc sokol_main(int argc, char* argv[])
     int opt;
     const char* arg;
     const char* game_filepath = NULL;
+    const char* cwd = NULL;
 
     while ((opt = sx_cmdline_next(cmdline, NULL, &arg)) != -1) {
         switch (opt) {
@@ -245,6 +255,9 @@ sapp_desc sokol_main(int argc, char* argv[])
             break;
         case 'r':
             game_filepath = arg;
+            break;
+        case 'c':
+            cwd = arg;
             break;
         default:
             break;
@@ -288,6 +301,7 @@ sapp_desc sokol_main(int argc, char* argv[])
     static char default_plugin_path[256] = { 0 };
     static char default_cache_path[256] = { 0 };
     static char default_plugins[32][RIZZ_CONFIG_MAX_PLUGINS] = {{ 0 }};
+    static char default_cwd[256] = { 0 };
 
     char ext[16];
     sx_os_path_basename(default_name, sizeof(default_name), game_filepath);
@@ -307,6 +321,7 @@ sapp_desc sokol_main(int argc, char* argv[])
     rizz_config conf = { .app_name = default_name,
                          .app_title = default_name,
                          .plugin_path = "",
+                         .cwd = cwd,
                          .app_version = 1000,
                          .app_flags = RIZZ_APP_FLAG_USER_CURSOR,
                          .core_flags = 0,
@@ -343,6 +358,7 @@ sapp_desc sokol_main(int argc, char* argv[])
     rizz__app_save_config_str(default_html5_canvas, conf.html5_canvas_name);
     rizz__app_save_config_str(default_plugin_path, conf.plugin_path);
     rizz__app_save_config_str(default_cache_path, conf.cache_path);
+    rizz__app_save_config_str(default_cwd, conf.cwd);
     for (int i = 0; i < RIZZ_CONFIG_MAX_PLUGINS; i++) {
         if (conf.plugins[i]) {
             rizz__app_save_config_str(default_plugins[i], conf.plugins[i]);
@@ -442,6 +458,46 @@ static void rizz__app_mouse_release(void)
 #if SX_PLATFORM_WINDOWS
     ReleaseCapture();
 #endif
+}
+
+// http://dslweb.nwnexus.com/~ast/dload/guicon.htm
+void rizz__app_win_redirect_stdout(void)
+{
+#if SX_PLATFORM_WINDOWS
+    int con_handle;
+    long std_handle;
+    CONSOLE_SCREEN_BUFFER_INFO coninfo;
+    FILE* fp;
+
+    // allocate a console for this app
+    AllocConsole();
+
+    // set the screen buffer to be big enough to let us scroll text
+    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &coninfo);
+    coninfo.dwSize.Y = 500; // maximum console lines
+    SetConsoleScreenBufferSize(GetStdHandle(STD_OUTPUT_HANDLE), coninfo.dwSize);
+
+    // redirect unbuffered STDOUT to the console
+    std_handle = (long)GetStdHandle(STD_OUTPUT_HANDLE);
+    con_handle = _open_osfhandle(std_handle, _O_TEXT);
+    fp = _fdopen( con_handle, "w" );
+    *stdout = *fp;
+    setvbuf( stdout, NULL, _IONBF, 0 );
+
+    // redirect unbuffered STDIN to the console
+    std_handle = (long)GetStdHandle(STD_INPUT_HANDLE);
+    con_handle = _open_osfhandle(std_handle, _O_TEXT);
+    fp = _fdopen( con_handle, "r" );
+    *stdin = *fp;
+    setvbuf( stdin, NULL, _IONBF, 0 );
+
+    // redirect unbuffered STDERR to the console
+    std_handle = (long)GetStdHandle(STD_ERROR_HANDLE);
+    con_handle = _open_osfhandle(std_handle, _O_TEXT);
+    fp = _fdopen( con_handle, "w" );
+    *stderr = *fp;
+    setvbuf( stderr, NULL, _IONBF, 0 );
+#endif // SX_PLATFORM_WINDOWS
 }
 
 rizz_api_app the__app = { .width = sapp_width,

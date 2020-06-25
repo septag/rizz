@@ -1248,8 +1248,9 @@ bool rizz__core_init(const rizz_config* conf)
 
     // initialize cache-dir and load asset database
     the__vfs.mount(conf->cache_path, "/cache");
-    if (!the__vfs.is_dir(conf->cache_path))
+    if (!the__vfs.is_dir(conf->cache_path)) {
         the__vfs.mkdir(conf->cache_path);
+    }
 
     return true;
 }

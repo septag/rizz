@@ -520,6 +520,7 @@ typedef struct rizz_config {
     const char* app_title;
     const char* plugin_path;
     const char* cache_path;
+    const char* cwd;
     uint32_t app_version;
     rizz_app_flags app_flags;
     rizz_core_flags core_flags;
