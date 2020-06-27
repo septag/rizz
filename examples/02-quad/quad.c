@@ -163,6 +163,8 @@ static void render()
     the_gfx->staged.end();
 
     // Use imgui UI
+    show_debugmenu(the_imgui, the_core);
+    
     the_imgui->SetNextWindowContentSize(sx_vec2f(100.0f, 50.0f));
     if (the_imgui->Begin("quad", NULL, 0)) {
         the_imgui->LabelText("Fps", "%.3f", the_core->fps());

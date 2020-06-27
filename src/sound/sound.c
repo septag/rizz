@@ -322,7 +322,7 @@ static rizz_asset_load_data snd__on_prepare(const rizz_asset_load_params* params
 
     sx_os_path_ext(ext, sizeof(ext), params->path);
     if (sx_strequalnocase(ext, ".wav")) {
-        if (!drwav_init_memory(&wav, mem->data, mem->size)) {
+        if (!drwav_init_memory(&wav, mem->data, (size_t)mem->size)) {
             rizz_log_warn("loading sound '%s' failed", params->path);
             return (rizz_asset_load_data){ {0} };
         }
@@ -406,7 +406,7 @@ static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_param
 
     if (src->fmt == SND_SOURCEFORMAT_WAV) {
         drwav wav;
-        if (!drwav_init_memory(&wav, mem->data, mem->size)) {
+        if (!drwav_init_memory(&wav, mem->data, (size_t)mem->size)) {
             rizz_log_warn("loading sound '%s' failed: invalid WAV format", params->path);
             snd__destroy_source(srchandle, alloc);
             return false;
@@ -419,7 +419,7 @@ static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_param
         if (wav.channels > 1) {
             const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
             wav_samples =
-                sx_malloc(tmp_alloc, sizeof(float) * wav.totalPCMFrameCount * wav.channels);
+                sx_malloc(tmp_alloc, sizeof(float) * (size_t)wav.totalPCMFrameCount * wav.channels);
             if (!wav_samples) {
                 sx_out_of_memory();
                 return false;

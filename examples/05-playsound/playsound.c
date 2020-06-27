@@ -7,6 +7,8 @@
 #include "rizz/rizz.h"
 #include "rizz/sound.h"
 
+#include "../common.h"
+
 RIZZ_STATE static rizz_api_core* the_core;
 RIZZ_STATE static rizz_api_gfx* the_gfx;
 RIZZ_STATE static rizz_api_app* the_app;
@@ -56,6 +58,8 @@ static void shutdown()
 static void update(float dt)
 {
     // Use imgui UI
+    show_debugmenu(the_imgui, the_core);
+
     the_imgui->SetNextWindowContentSize(sx_vec2f(200.0f, 150.0f));
     if (the_imgui->Begin("PlaySound", NULL, 0)) {
         the_imgui->LabelText("Fps", "%.3f", the_core->fps());
