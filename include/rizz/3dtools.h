@@ -169,6 +169,7 @@ typedef struct rizz_model_submesh {
 } rizz_model_submesh;
 
 typedef struct rizz_model_mesh {
+    char name[32];
     int num_submeshes;
     int num_vertices;
     int num_indices;

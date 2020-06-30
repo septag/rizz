@@ -512,6 +512,7 @@ static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
             rizz_model_mesh* mesh = &model->meshes[i];
             cgltf_mesh* _mesh = &gltf->meshes[i];
 
+            sx_strcpy(mesh->name, sizeof(mesh->name), _mesh->name);
             model__setup_buffers(mesh, layout, _mesh);
         }
 
