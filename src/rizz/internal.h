@@ -96,7 +96,6 @@ typedef struct sg_desc sg_desc;
 void rizz__app_init_gfx_desc(sg_desc* desc);
 const void* rizz__app_d3d11_device(void);
 const void* rizz__app_d3d11_device_context(void);
-void rizz__app_win_redirect_stdout(void);
 
 #ifdef __cplusplus
 }

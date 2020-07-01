@@ -13,11 +13,6 @@
 
 #include <stdio.h>
 
-#if SX_PLATFORM_WINDOWS
-#   include <io.h>      // _open_osfhandle
-#   include <fcntl.h>   // _O_TEXT
-#endif
-
 #include "Remotery.h"
 
 // Choose api based on the platform
@@ -458,46 +453,6 @@ static void rizz__app_mouse_release(void)
 #if SX_PLATFORM_WINDOWS
     ReleaseCapture();
 #endif
-}
-
-// http://dslweb.nwnexus.com/~ast/dload/guicon.htm
-void rizz__app_win_redirect_stdout(void)
-{
-#if SX_PLATFORM_WINDOWS
-    int con_handle;
-    long std_handle;
-    CONSOLE_SCREEN_BUFFER_INFO coninfo;
-    FILE* fp;
-
-    // allocate a console for this app
-    AllocConsole();
-
-    // set the screen buffer to be big enough to let us scroll text
-    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &coninfo);
-    coninfo.dwSize.Y = 500; // maximum console lines
-    SetConsoleScreenBufferSize(GetStdHandle(STD_OUTPUT_HANDLE), coninfo.dwSize);
-
-    // redirect unbuffered STDOUT to the console
-    std_handle = (long)GetStdHandle(STD_OUTPUT_HANDLE);
-    con_handle = _open_osfhandle(std_handle, _O_TEXT);
-    fp = _fdopen( con_handle, "w" );
-    *stdout = *fp;
-    setvbuf( stdout, NULL, _IONBF, 0 );
-
-    // redirect unbuffered STDIN to the console
-    std_handle = (long)GetStdHandle(STD_INPUT_HANDLE);
-    con_handle = _open_osfhandle(std_handle, _O_TEXT);
-    fp = _fdopen( con_handle, "r" );
-    *stdin = *fp;
-    setvbuf( stdin, NULL, _IONBF, 0 );
-
-    // redirect unbuffered STDERR to the console
-    std_handle = (long)GetStdHandle(STD_ERROR_HANDLE);
-    con_handle = _open_osfhandle(std_handle, _O_TEXT);
-    fp = _fdopen( con_handle, "w" );
-    *stderr = *fp;
-    setvbuf( stderr, NULL, _IONBF, 0 );
-#endif // SX_PLATFORM_WINDOWS
 }
 
 rizz_api_app the__app = { .width = sapp_width,
