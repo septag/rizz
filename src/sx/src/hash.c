@@ -412,7 +412,7 @@ sx_hashtbl_tval* sx_hashtbltval_create(const sx_alloc* alloc, int capacity, int 
 
     capacity = sx__nearest_pow2(capacity);
     sx_hashtbl_tval* tbl = (sx_hashtbl_tval*)sx_malloc(
-        alloc, sizeof(sx_hashtbl_tval) + capacity * (sizeof(uint32_t) + sizeof(value_stride)) +
+        alloc, sizeof(sx_hashtbl_tval) + capacity * (sizeof(uint32_t) + value_stride) +
                    SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT);
     if (!tbl) {
         sx_out_of_memory();
