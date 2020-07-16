@@ -1397,7 +1397,6 @@ _DMON_PRIVATE void dmon__fsevent_callback(ConstFSEventStreamRef stream_ref, void
         dmon__fsevent_event ev;
         memset(&ev, 0x0, sizeof(ev));
 
-
         dmon__strcpy(abs_filepath, sizeof(abs_filepath), filepath);
         dmon__normpath(abs_filepath, sizeof(abs_filepath), abs_filepath);
         // strip the root dir
