@@ -1806,6 +1806,17 @@ static inline bool sx_aabb_test_point(const sx_aabb* aabb, const sx_vec3 pt)
     return true;
 }
 
+static inline bool sx_aabb_test(const sx_aabb* aabb1, const sx_aabb* aabb2)
+{
+    if (aabb1->xmax < aabb2->xmin || aabb1->xmin > aabb2->xmax)
+        return false;
+    if (aabb1->ymax < aabb2->ymin || aabb1->ymin > aabb2->ymax)
+        return false;
+    if (aabb1->zmax < aabb2->zmin || aabb1->zmin > aabb2->zmax)
+        return false;
+    return true;    
+}
+
 /*
  *        6                 7
  *        ------------------
