@@ -1911,29 +1911,29 @@ static inline sx_tx3d sx_tx3d_ident(void)
     return sx_tx3d_set(sx_vec3splat(0), sx_mat3_ident());
 }
 
-static inline sx_tx3d sx_tx3d_mul(sx_tx3d* txa, sx_tx3d* txb)
+static inline sx_tx3d sx_tx3d_mul(const sx_tx3d* txa, const sx_tx3d* txb)
 {
     return sx_tx3d_set(sx_vec3_add(sx_mat3_mul_vec3(&txa->rot, txb->pos), txa->pos),
                        sx_mat3_mul(&txa->rot, &txb->rot));
 }
 
-static inline sx_vec3 sx_tx3d_mul_vec3(sx_tx3d* tx, sx_vec3 v)
+static inline sx_vec3 sx_tx3d_mul_vec3(const sx_tx3d* tx, sx_vec3 v)
 {
     return sx_vec3_add(sx_mat3_mul_vec3(&tx->rot, v), tx->pos);
 }   
 
-static inline sx_vec3 sx_tx3d_mul_vec3_scale(sx_tx3d* tx, sx_vec3 scale, sx_vec3 v)
+static inline sx_vec3 sx_tx3d_mul_vec3_scale(const sx_tx3d* tx, sx_vec3 scale, sx_vec3 v)
 {
     return sx_vec3_add(sx_mat3_mul_vec3(&tx->rot, sx_vec3_mul(v, scale)), tx->pos);
 }
 
-static inline sx_tx3d sx_tx3d_inverse(sx_tx3d* tx)
+static inline sx_tx3d sx_tx3d_inverse(const sx_tx3d* tx)
 {   
     sx_mat3 rot_inv = sx_mat3_transpose(&tx->rot);
     return sx_tx3d_set(sx_mat3_mul_vec3(&rot_inv, sx_vec3_mulf(tx->pos, -1.0f)), rot_inv);
 }
 
-static inline sx_mat4 sx_tx3d_mat4(sx_tx3d* tx)
+static inline sx_mat4 sx_tx3d_mat4(const sx_tx3d* tx)
 {
     return sx_mat4v(sx_vec4v3(tx->rot.col1, 0.0f),
                     sx_vec4v3(tx->rot.col2, 0.0f),
