@@ -647,7 +647,7 @@ typedef uint32_t rizz_profile_flags;
 
 typedef struct rizz_api_core {
     // heap allocator: thread-safe, allocates dynamically from heap (libc->malloc)
-    const sx_alloc* (*heap_alloc)();
+    const sx_alloc* (*heap_alloc)(void);
 
     // temp stack allocator: fast and thread-safe (per job thread only).
     //                       Temp allocators behave like stack, so they can push() and pop()
@@ -678,11 +678,12 @@ typedef struct rizz_api_core {
     float (*randf)();                         // 0..1
     int (*rand_range)(int _min, int _max);    // _min.._max
 
-    uint64_t (*delta_tick)();
-    uint64_t (*elapsed_tick)();
-    float (*fps)();
-    float (*fps_mean)();
-    int64_t (*frame_index)();
+    uint64_t (*delta_tick)(void);
+    uint64_t (*elapsed_tick)(void);
+    float (*delta_time)(void);
+    float (*fps)(void);
+    float (*fps_mean)(void);
+    int64_t (*frame_index)(void);
 
     void (*set_cache_dir)(const char* path);
     const char* (*cache_dir)();

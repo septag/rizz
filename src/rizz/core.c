@@ -657,32 +657,37 @@ static void* rmt__realloc(void* ctx, void* ptr, uint32_t size)
     return sx_realloc((const sx_alloc*)ctx, ptr, size);
 }
 
-static const sx_alloc* rizz__heap_alloc()
+static const sx_alloc* rizz__heap_alloc(void)
 {
     return &g_core.heap_proxy_alloc;
 }
 
-static uint64_t rizz__delta_tick()
+static uint64_t rizz__delta_tick(void)
 {
     return g_core.delta_tick;
 }
 
-static uint64_t rizz__elapsed_tick()
+static float rizz__delta_time(void)
+{
+    return (float)sx_tm_sec(g_core.delta_tick);
+}
+
+static uint64_t rizz__elapsed_tick(void)
 {
     return g_core.elapsed_tick;
 }
 
-static float rizz__fps()
+static float rizz__fps(void)
 {
     return g_core.fps_frame;
 }
 
-static float rizz__fps_mean()
+static float rizz__fps_mean(void)
 {
     return g_core.fps_mean;
 }
 
-int64_t rizz__frame_index()
+int64_t rizz__frame_index(void)
 {
     return g_core.frame_idx;
 }
@@ -1651,6 +1656,7 @@ rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .randf = rizz__randf,
                             .rand_range = rizz__rand_range,
                             .delta_tick = rizz__delta_tick,
+                            .delta_time = rizz__delta_time,
                             .elapsed_tick = rizz__elapsed_tick,
                             .fps = rizz__fps,
                             .fps_mean = rizz__fps_mean,
