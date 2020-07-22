@@ -850,12 +850,12 @@ static inline sx_quat sx_quat_fromeular(const sx_vec3 _vec3)
     float pitch = _vec3.y;
     float roll = _vec3.x;
 
-    float cy = sx_cos(yaw * 0.5);
-    float sy = sx_sin(yaw * 0.5);
-    float cp = sx_cos(pitch * 0.5);
-    float sp = sx_sin(pitch * 0.5);
-    float cr = sx_cos(roll * 0.5);
-    float sr = sx_sin(roll * 0.5);
+    float cy = sx_cos(yaw * 0.5f);
+    float sy = sx_sin(yaw * 0.5f);
+    float cp = sx_cos(pitch * 0.5f);
+    float sp = sx_sin(pitch * 0.5f);
+    float cr = sx_cos(roll * 0.5f);
+    float sr = sx_sin(roll * 0.5f);
 
     sx_quat q;
     q.w = cr * cp * cy + sr * sp * sy;
