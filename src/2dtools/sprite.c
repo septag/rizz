@@ -945,19 +945,6 @@ static inline sx_vec2 sprite__normalize_pos(const sx_vec2 pos_px, const sx_vec2 
     return sx_vec2f(n.x - 0.5f, 0.5f - n.y);    // flip-y and transform to (0.5f, 0.5f) space
 }
 
-#if 0
-static inline void sprite__calc_coords(sx_vec2* points, int num_points, const sx_vec2* points_px,
-                                       const sx_vec2 size, const sx_vec2 origin)
-{
-    const sx_vec2 size_rcp = sx_vec2f(1.0f / size.x, 1.0f / size.y);
-    for (int i = 0; i < num_points; i++) {
-        sx_vec2 n = sx_vec2_mul(points_px[i], size_rcp);    // normalize to 0..1
-        n = sx_vec2f(n.x - 0.5f, 0.5f - n.y);    // flip-y and transform to (0.5f, 0.5f) space
-        points[i] = sx_vec2_mul(sx_vec2_sub(n, origin), size);    // offset by origin and resize
-    }
-}
-#endif
-
 static void sprite__update_bounds(sprite__data* spr)
 {
     if (spr->clip.id)
@@ -1021,6 +1008,8 @@ static rizz_asset_load_data atlas__on_prepare(const rizz_asset_load_params* para
                 rizz_log_warn("loading atlas '%s' failed: not a valid json file", params->path);
                 return (rizz_asset_load_data){ {0} };
             }
+        } else {
+            return (rizz_asset_load_data){ {0} };
         }
     }
 
