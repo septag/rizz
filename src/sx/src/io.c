@@ -66,6 +66,7 @@ sx_mem_block* sx_mem_ref_block(const sx_alloc* alloc, int64_t size, void* data)
 void sx_mem_destroy_block(sx_mem_block* mem)
 {
     sx_assert(mem);
+    sx_assert(mem->refcount >= 1);
 
     if (sx_atomic_decr(&mem->refcount) == 0) {
         if (mem->alloc) {
@@ -73,8 +74,6 @@ void sx_mem_destroy_block(sx_mem_block* mem)
             mem->alloc = NULL;
         }
     }
-
-    sx_assert(mem->refcount >= 0);
 }
 
 void sx_mem_addref(sx_mem_block* mem)
