@@ -647,7 +647,7 @@ typedef uint32_t rizz_profile_flags;
 
 typedef struct rizz_api_core {
     // heap allocator: thread-safe, allocates dynamically from heap (libc->malloc)
-    const sx_alloc* (*heap_alloc)();
+    const sx_alloc* (*heap_alloc)(void);
 
     // temp stack allocator: fast and thread-safe (per job thread only).
     //                       Temp allocators behave like stack, so they can push() and pop()
@@ -678,11 +678,12 @@ typedef struct rizz_api_core {
     float (*randf)();                         // 0..1
     int (*rand_range)(int _min, int _max);    // _min.._max
 
-    uint64_t (*delta_tick)();
-    uint64_t (*elapsed_tick)();
-    float (*fps)();
-    float (*fps_mean)();
-    int64_t (*frame_index)();
+    uint64_t (*delta_tick)(void);
+    uint64_t (*elapsed_tick)(void);
+    float (*delta_time)(void);
+    float (*fps)(void);
+    float (*fps_mean)(void);
+    int64_t (*frame_index)(void);
 
     void (*set_cache_dir)(const char* path);
     const char* (*cache_dir)();
@@ -1447,3 +1448,22 @@ typedef struct rizz_api_refl {
 #define rizz_refl_field(_struct, _type, _name, _desc)   \
     (RIZZ_REFLECT_API_VARNAME)->_reg(RIZZ_REFL_FIELD, &(((_struct*)0)->_name), #_type, #_name, #_struct, _desc, sizeof(_type), sizeof(_struct))
 // clang-format on
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// @json
+// json files can be loaded by asset manager with the type_name="json"
+// the underlying type for rizz_asset_obj is a pointer to cj5_result. remember to include "rizz/json.h"
+// load parameters:
+// load_cb/reload_cb are optional (can be NULL) and can be given to asset loader, to automatically trigger when 
+// json data is loaded or reloaded. They will always run in the main thread.
+// NOTE: keeping callback functions in framework will likely cause trouble when the guest program reloads
+// TODO: fix this
+typedef struct cj5_result cj5_result;
+typedef void (rizz_json_reload_cb)(cj5_result* new_result, cj5_result* prev_result, void* user);
+typedef void (rizz_json_load_cb)(cj5_result* result, void* user);
+
+typedef struct rizz_json_load_params {
+    rizz_json_load_cb* load_fn;
+    rizz_json_reload_cb* reload_fn;
+    void* user;
+} rizz_json_load_params;

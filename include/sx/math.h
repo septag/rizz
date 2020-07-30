@@ -844,6 +844,28 @@ static inline sx_vec3 sx_quat_toeuler(const sx_quat _quat)
                     sx_asin(2.0f * (x * y + z * w)));
 }
 
+static inline sx_quat sx_quat_fromeular(const sx_vec3 _vec3)
+{
+    float yaw = _vec3.z;
+    float pitch = _vec3.y;
+    float roll = _vec3.x;
+
+    float cy = sx_cos(yaw * 0.5f);
+    float sy = sx_sin(yaw * 0.5f);
+    float cp = sx_cos(pitch * 0.5f);
+    float sp = sx_sin(pitch * 0.5f);
+    float cr = sx_cos(roll * 0.5f);
+    float sr = sx_sin(roll * 0.5f);
+
+    sx_quat q;
+    q.w = cr * cp * cy + sr * sp * sy;
+    q.x = sr * cp * cy - cr * sp * sy;
+    q.y = cr * sp * cy + sr * cp * sy;
+    q.z = cr * cp * sy - sr * sp * cy;
+
+    return q;
+}
+
 static inline sx_quat sx_quat_rotateaxis(const sx_vec3 _axis, float _angle)
 {
     const float ha = _angle * 0.5f;
@@ -1806,6 +1828,17 @@ static inline bool sx_aabb_test_point(const sx_aabb* aabb, const sx_vec3 pt)
     return true;
 }
 
+static inline bool sx_aabb_test(const sx_aabb* aabb1, const sx_aabb* aabb2)
+{
+    if (aabb1->xmax < aabb2->xmin || aabb1->xmin > aabb2->xmax)
+        return false;
+    if (aabb1->ymax < aabb2->ymin || aabb1->ymin > aabb2->ymax)
+        return false;
+    if (aabb1->zmax < aabb2->zmin || aabb1->zmin > aabb2->zmax)
+        return false;
+    return true;    
+}
+
 /*
  *        6                 7
  *        ------------------
@@ -1900,29 +1933,29 @@ static inline sx_tx3d sx_tx3d_ident(void)
     return sx_tx3d_set(sx_vec3splat(0), sx_mat3_ident());
 }
 
-static inline sx_tx3d sx_tx3d_mul(sx_tx3d* txa, sx_tx3d* txb)
+static inline sx_tx3d sx_tx3d_mul(const sx_tx3d* txa, const sx_tx3d* txb)
 {
     return sx_tx3d_set(sx_vec3_add(sx_mat3_mul_vec3(&txa->rot, txb->pos), txa->pos),
                        sx_mat3_mul(&txa->rot, &txb->rot));
 }
 
-static inline sx_vec3 sx_tx3d_mul_vec3(sx_tx3d* tx, sx_vec3 v)
+static inline sx_vec3 sx_tx3d_mul_vec3(const sx_tx3d* tx, sx_vec3 v)
 {
     return sx_vec3_add(sx_mat3_mul_vec3(&tx->rot, v), tx->pos);
 }   
 
-static inline sx_vec3 sx_tx3d_mul_vec3_scale(sx_tx3d* tx, sx_vec3 scale, sx_vec3 v)
+static inline sx_vec3 sx_tx3d_mul_vec3_scale(const sx_tx3d* tx, sx_vec3 scale, sx_vec3 v)
 {
     return sx_vec3_add(sx_mat3_mul_vec3(&tx->rot, sx_vec3_mul(v, scale)), tx->pos);
 }
 
-static inline sx_tx3d sx_tx3d_inverse(sx_tx3d* tx)
+static inline sx_tx3d sx_tx3d_inverse(const sx_tx3d* tx)
 {   
     sx_mat3 rot_inv = sx_mat3_transpose(&tx->rot);
     return sx_tx3d_set(sx_mat3_mul_vec3(&rot_inv, sx_vec3_mulf(tx->pos, -1.0f)), rot_inv);
 }
 
-static inline sx_mat4 sx_tx3d_mat4(sx_tx3d* tx)
+static inline sx_mat4 sx_tx3d_mat4(const sx_tx3d* tx)
 {
     return sx_mat4v(sx_vec4v3(tx->rot.col1, 0.0f),
                     sx_vec4v3(tx->rot.col2, 0.0f),

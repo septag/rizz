@@ -709,30 +709,27 @@ sx_vec3 sx_vec3_calc_linearfit3D(const sx_vec3* _points, int _num)
 
 void sx_color_RGBtoHSV(float _hsv[3], const float _rgb[3])
 {
-    const float rr = _rgb[0];
-    const float gg = _rgb[1];
-    const float bb = _rgb[2];
+    float K = 0.f;
+    float r = _rgb[0];
+    float g = _rgb[1];
+    float b = _rgb[2];
 
-    const float s0 = sx_step(bb, gg);
+    if (g < b)
+    {
+        sx_swap(g, b, float);
+        K = -1.f;
+    }
 
-    const float px = sx_lerp(bb, gg, s0);
-    const float py = sx_lerp(gg, bb, s0);
-    const float pz = sx_lerp(-1.0f, 0.0f, s0);
-    const float pw = sx_lerp(2.0f / 3.0f, -1.0f / 3.0f, s0);
+    if (r < g)
+    {
+        sx_swap(r, g, float);
+        K = -2.f / 6.f - K;
+    }
 
-    const float s1 = sx_step(px, rr);
-
-    const float qx = sx_lerp(px, rr, s1);
-    const float qy = py;
-    const float qz = sx_lerp(pw, pz, s1);
-    const float qw = sx_lerp(rr, px, s1);
-
-    const float dd = qx - sx_min(qw, qy);
-    const float ee = 1.0e-10f;
-
-    _hsv[0] = sx_abs(qz + (qw - qy) / (6.0f * dd + ee));
-    _hsv[1] = dd / (qx + ee);
-    _hsv[2] = qx;
+    float chroma = r - sx_min(g, b);
+    _hsv[0] = sx_abs(K + (g - b) / (6.f * chroma + 1e-20f));
+    _hsv[1] = chroma / (r + 1e-20f);
+    _hsv[2] = r;
 }
 
 void sx_color_HSVtoRGB(float _rgb[3], const float _hsv[3])
