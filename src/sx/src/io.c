@@ -71,7 +71,6 @@ void sx_mem_destroy_block(sx_mem_block* mem)
     if (sx_atomic_decr(&mem->refcount) == 0) {
         if (mem->alloc) {
             sx_free(mem->alloc, mem);
-            mem->alloc = NULL;
         }
     }
 }
