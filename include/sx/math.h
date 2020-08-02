@@ -1407,12 +1407,30 @@ static inline sx_mat3 sx_mat3_ident()
     return sx_mat3f(1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-/// multiply vector3 into 4x4 matrix that [x/w, y/w, z/w, 1], used for projections, etc...
+static inline sx_mat3 sx_mat3_transpose(const sx_mat3* _a)
+{
+    return sx_mat3f(_a->m11, _a->m21, _a->m31, 
+                    _a->m12, _a->m22, _a->m32, 
+                    _a->m13, _a->m23, _a->m33);
+}
+
 static inline sx_vec3 sx_mat3_mul_vec3(const sx_mat3* _mat, const sx_vec3 _vec)
 {
     return sx_vec3f(_vec.x * _mat->m11 + _vec.y * _mat->m12 + _vec.z * _mat->m13,
                     _vec.x * _mat->m21 + _vec.y * _mat->m22 + _vec.z * _mat->m23,
                     _vec.x * _mat->m31 + _vec.y * _mat->m32 + _vec.z * _mat->m33);
+}
+
+static inline sx_mat3 sx_mat3_mul_inverse(const sx_mat3* _a, const sx_mat3* _b)
+{
+    sx_mat3 _atrans = sx_mat3_transpose(_a);
+    return sx_mat3_mul(&_atrans, _b);
+}
+
+static inline sx_vec3 sx_mat3_mul_vec3_inverse(const sx_mat3* mat, sx_vec3 v)
+{
+    sx_mat3 rmat = sx_mat3_transpose(mat);
+    return sx_mat3_mul_vec3(&rmat, v);
 }
 
 static inline sx_vec2 sx_mat3_mul_vec2(const sx_mat3* _mat, const sx_vec2 _vec)
@@ -1454,13 +1472,6 @@ static inline sx_mat3 sx_mat3_SRT(float sx, float sy, float angle, float tx, flo
                     sx*s,   sy*c,  ty, 
                     0.0f,   0.0f,  1.0f);
     // clang-format on
-}
-
-static inline sx_mat3 sx_mat3_transpose(const sx_mat3* _a)
-{
-    return sx_mat3f(_a->m11, _a->m21, _a->m31, 
-                    _a->m12, _a->m22, _a->m32, 
-                    _a->m13, _a->m23, _a->m33);
 }
 
 //
@@ -1953,6 +1964,18 @@ static inline sx_tx3d sx_tx3d_inverse(const sx_tx3d* tx)
 {   
     sx_mat3 rot_inv = sx_mat3_transpose(&tx->rot);
     return sx_tx3d_set(sx_mat3_mul_vec3(&rot_inv, sx_vec3_mulf(tx->pos, -1.0f)), rot_inv);
+}
+
+static inline sx_vec3 sx_tx3d_mul_vec3_inverse(const sx_tx3d* tx, sx_vec3 v)
+{   
+    sx_mat3 rmat = sx_mat3_transpose(&tx->rot);
+    return sx_mat3_mul_vec3(&rmat, sx_vec3_sub(v, tx->pos));
+}
+
+static inline sx_tx3d sx_tx3d_mul_inverse(const sx_tx3d* txa, const sx_tx3d* txb)
+{
+    return sx_tx3d_set(sx_mat3_mul_vec3_inverse(&txa->rot, sx_vec3_sub(txb->pos, txa->pos)), 
+                                                sx_mat3_mul_inverse(&txa->rot, &txb->rot));
 }
 
 static inline sx_mat4 sx_tx3d_mat4(const sx_tx3d* tx)
