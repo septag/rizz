@@ -210,7 +210,7 @@ void dmon_unwatch(dmon_watch_id id);
 #define _DMON_UNUSED(x) (void)(x)
 
 #ifndef _DMON_PRIVATE
-#   if defined(__GNUC__)
+#   if defined(__GNUC__) || defined(__clang__)
 #       define _DMON_PRIVATE __attribute__((unused)) static
 #   else
 #       define _DMON_PRIVATE static
