@@ -294,7 +294,7 @@ void prims3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
         instance->tx1 = sx_vec4f(tx->pos.x, tx->pos.y, tx->pos.z, tx->rot.m11);
         instance->tx2 = sx_vec4f(tx->rot.m21, tx->rot.m31, tx->rot.m12, tx->rot.m22);
         instance->tx3 = sx_vec4f(tx->rot.m23, tx->rot.m13, tx->rot.m23, tx->rot.m33);
-        instance->scale = sx_box_extents(&boxes[i]);
+        instance->scale = sx_vec3_mulf(boxes[i].e, 2.0f);
         instance->color = tints ? tints[i] : SX_COLOR_WHITE;
         sx_assert(!tints || (first_alpha == tints[i].a));
     }

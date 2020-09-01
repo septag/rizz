@@ -1,6 +1,6 @@
 #include "sx/os.h"
 #include "sx/string.h"
-#include "sx/timer.h"
+#include "sx/rng.h"
 
 #include "rizz/imgui-extra.h"
 #include "rizz/imgui.h"
@@ -49,6 +49,7 @@ typedef struct {
 } nbody_vs_params;
 
 typedef struct {
+    sx_rng rng;
     rizz_gfx_stage stage;
     rizz_asset img;
     rizz_asset draw_shader;
@@ -82,9 +83,9 @@ static void load_particles(nbody_particle* particles, sx_vec3 center, sx_vec4 ve
         // generate points within 'spread' sphere
         sx_vec3 delta = sx_vec3f(spread, spread, spread);
         while (sx_vec3_dot(delta, delta) > spread * spread) {
-            delta = sx_vec3f((the_core->randf() * 2.0f - 1.0f) * spread,
-                             (the_core->randf() * 2.0f - 1.0f) * spread,
-                             (the_core->randf() * 2.0f - 1.0f) * spread);
+            delta = sx_vec3f((sx_rng_genf(&g_nbody.rng) * 2.0f - 1.0f) * spread,
+                             (sx_rng_genf(&g_nbody.rng) * 2.0f - 1.0f) * spread,
+                             (sx_rng_genf(&g_nbody.rng) * 2.0f - 1.0f) * spread);
         }
 
         particles[i].pos = sx_vec4v3(sx_vec3_add(center, delta), 10000.0f * 10000.0f);
@@ -102,6 +103,8 @@ static bool init()
     sx_os_path_join(asset_dir, sizeof(asset_dir), EXAMPLES_ROOT, "assets");    // "/examples/assets"
     the_vfs->mount(asset_dir, "/assets");
 #endif
+
+    sx_rng_seed_time(&g_nbody.rng);
 
     // register main graphics stage.
     // at least one stage should be registered if you want to draw anything

@@ -4,6 +4,7 @@
 #include "sx/math.h"
 #include "sx/os.h"
 #include "sx/string.h"
+#include "sx/rng.h"
 
 #include "rizz/imgui.h"
 #include "rizz/imgui-extra.h"
@@ -53,6 +54,7 @@ typedef enum draw3d_gizmo_type {
 } draw3d_gizmo_type;
 
 typedef struct {
+    sx_rng rng;
     rizz_gfx_stage stage;
     rizz_camera_fps cam;
     rizz_asset models[NUM_MODELS];
@@ -112,6 +114,8 @@ static bool init()
     sx_os_path_join(asset_dir, sizeof(asset_dir), EXAMPLES_ROOT, "assets");    // "/examples/assets"
     the_vfs->mount(asset_dir, "/assets");
 #endif
+
+    sx_rng_seed_time(&g_draw3d.rng);
 
     // register main graphics stage.
     // at least one stage should be registered if you want to draw anything
@@ -284,10 +288,13 @@ static void render(void)
     if (!init_boxes) {
         for (int i = 0; i < 100; i++) {
             boxes[i] = sx_box_set(sx_tx3d_setf(
-                (float)the_core->rand_range(-50, 50), (float)the_core->rand_range(-50, 50), 0, 
-                0, 0, sx_torad((float)the_core->rand_range(0, 90))), 
-                sx_vec3f(the_core->randf() + 1.0f, the_core->randf() + 1.0f, 1.0f)); 
-            tints[i] = sx_color4u(the_core->rand_range(0, 255), the_core->rand_range(0, 255), the_core->rand_range(0, 255), 255);
+                sx_rng_gen_rangef(&g_draw3d.rng, -50.0f, 50.0f), sx_rng_gen_rangef(&g_draw3d.rng, -50.0f, 50.0f), 0, 
+                0, 0, sx_torad(sx_rng_gen_rangef(&g_draw3d.rng, 0, 90.0f))), 
+                sx_vec3f(sx_rng_genf(&g_draw3d.rng) + 1.0f, sx_rng_genf(&g_draw3d.rng) + 1.0f, 1.0f));
+            tints[i] = sx_color4u(sx_rng_gen_rangei(&g_draw3d.rng, 0, 255),
+                                  sx_rng_gen_rangei(&g_draw3d.rng, 0, 255),
+                                  sx_rng_gen_rangei(&g_draw3d.rng, 0, 255), 
+                                  255);
         }
         init_boxes = true;
     }

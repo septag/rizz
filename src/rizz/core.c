@@ -15,7 +15,6 @@
 #include "sx/jobs.h"
 #include "sx/lockless.h"
 #include "sx/os.h"
-#include "sx/rng.h"
 #include "sx/stack-alloc.h"
 #include "sx/string.h"
 #include "sx/threads.h"
@@ -45,7 +44,7 @@ __declspec(dllimport) void __stdcall OutputDebugStringA(const char* lpOutputStri
 #define CJ5_IMPLEMENT
 #include "cj5/cj5.h"
 
-#define DEFAULT_TMP_SIZE    0x500000    // 5mb
+#define DEFAULT_TMP_SIZE    0xA00000    // 10mb
 
 #if SX_PLATFORM_WINDOWS || SX_PLATFORM_IOS || SX_PLATFORM_ANDROID
 #   define TERM_COLOR_RESET     ""
@@ -145,7 +144,6 @@ typedef struct rizz__core {
     sx_atomic_size heap_size;
     sx_atomic_size heap_max;
 
-    sx_rng rng;
     sx_job_context* jobs;
     sx_coro_context* coro;
 
@@ -1101,9 +1099,6 @@ bool rizz__core_init(const rizz_config* conf)
     rizz__log_info("version: %d.%d-%s", g_core.ver.major, g_core.ver.minor, g_core.ver.git);
 
     sx_tm_init();
-    sx_rng_seed(&g_core.rng, sizeof(time_t) == sizeof(uint64_t)
-                                 ? sx_hash_u64_to_u32((uint64_t)time(NULL))
-                                 : (uint32_t)time(NULL));
 
     // disk-io (virtual file system)
     if (!rizz__vfs_init(rizz__alloc(RIZZ_MEMID_VFS))) {
@@ -1230,13 +1225,12 @@ bool rizz__core_init(const rizz_config* conf)
 
     // coroutines
     g_core.coro =
-        sx_coro_create_context(alloc, conf->coro_max_fibers, conf->coro_stack_size * 1024);
+        sx_coro_create_context(alloc, conf->coro_num_init_fibers, conf->coro_stack_size * 1024);
     if (!g_core.coro) {
         rizz__log_error("initializing coroutines failed");
         return false;
     }
-    rizz__log_info("(init) coroutines: max_fibers=%d, stack_size=%dkb", conf->coro_max_fibers,
-                   conf->coro_stack_size);
+    rizz__log_info("(init) coroutines: stack_size=%dkb", conf->coro_stack_size);
 
     // http client
     if (!rizz__http_init(alloc)) {
@@ -1294,7 +1288,7 @@ void rizz__core_release()
     }
 
     if (g_core.coro) {
-        sx_coro_destroy_context(g_core.coro, alloc);
+        sx_coro_destroy_context(g_core.coro);
     }
 
     if (g_core.flags & RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS) {
@@ -1447,14 +1441,14 @@ void rizz__core_frame()
     rizz__profile_end(FRAME);
 }
 
-static const sx_alloc* rizz__core_tmp_alloc_push()
+static const sx_alloc* rizz__core_tmp_alloc_push(void)
 {
     rizz__core_tmpalloc* talloc = &g_core.tmp_allocs[sx_job_thread_index(g_core.jobs)];
     sx_array_push(rizz__alloc(RIZZ_MEMID_CORE), talloc->offset_stack, talloc->stack_alloc.offset);
     return &talloc->alloc;
 }
 
-static void rizz__core_tmp_alloc_pop()
+static void rizz__core_tmp_alloc_pop(void)
 {
     rizz__core_tmpalloc* talloc = &g_core.tmp_allocs[sx_job_thread_index(g_core.jobs)];
     if (sx_array_count(talloc->offset_stack)) {
@@ -1462,22 +1456,14 @@ static void rizz__core_tmp_alloc_pop()
         sx_array_pop_last(talloc->offset_stack);
         talloc->stack_alloc.offset = last_offset;
         talloc->stack_alloc.last_ptr_offset = 0;
+    } else {
+        sx_assert(0 && "no matching tmp_alloc_push for the call tmp_alloc_pop");
     }
 }
 
-static uint32_t rizz__rand()
+static const sx_alloc* rizz__core_tmp_alloc(void)
 {
-    return sx_rng_gen(&g_core.rng);
-}
-
-static float rizz__randf()
-{
-    return sx_rng_gen_f(&g_core.rng);
-}
-
-static int rizz__rand_range(int _min, int _max)
-{
-    return sx_rng_gen_irange(&g_core.rng, _min, _max);
+    return &g_core.tmp_allocs[sx_job_thread_index(g_core.jobs)].alloc;
 }
 
 static sx_job_t rizz__job_dispatch(int count,
@@ -1649,14 +1635,12 @@ static void rizz__show_log(bool* p_open)
 rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .tmp_alloc_push = rizz__core_tmp_alloc_push,
                             .tmp_alloc_pop = rizz__core_tmp_alloc_pop,
+                            .tmp_alloc = rizz__core_tmp_alloc,
                             .tls_register = rizz__core_tls_register,
                             .tls_var = rizz__core_tls_var,
                             .alloc = rizz__alloc,
                             .get_mem_info = rizz__get_mem_info,
                             .version = rizz__version,
-                            .rand = rizz__rand,
-                            .randf = rizz__randf,
-                            .rand_range = rizz__rand_range,
                             .delta_tick = rizz__delta_tick,
                             .delta_time = rizz__delta_time,
                             .elapsed_tick = rizz__elapsed_tick,
