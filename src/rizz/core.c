@@ -73,11 +73,27 @@ static const char* k__memid_names[_RIZZ_MEMID_COUNT] = { "Core",          //
                                                          "Game" };
 
 
-typedef struct rizz__core_tmpalloc {
+typedef struct rizz__core_tmpalloc rizz__core_tmpalloc;
+typedef struct rizz__core_tmpalloc_inst {
     sx_alloc alloc;
+    rizz__core_tmpalloc* parent;      // pointer to parent rizz__core_tmpalloc
+    size_t end_offset;
+    size_t end_lastptr_offset;
+    size_t start_offset;
+    size_t start_lastptr_offset;
+
+    size_t start_size;
+    size_t start_peak;
+    size_t end_size;
+    size_t end_peak;
+
+    int depth;
+} rizz__core_tmpalloc_inst;
+
+typedef struct rizz__core_tmpalloc {
     sx_vmem_context vmem;
-    sx_stackalloc stack_alloc;
-    size_t* offset_stack;    // sx_array - keep offsets in a stack for push()/pop()
+    rizz__core_tmpalloc_inst* alloc_stack;    // sx_array - keep offsets in a stack for push()/pop()
+    int stack_depth;
 } rizz__core_tmpalloc;
 
 typedef struct rizz__core_cmd {
@@ -829,10 +845,55 @@ static inline void rizz__atomic_max(sx_atomic_size* _max, intptr_t val)
 }
 
 static void* rizz__tmp_alloc_cb(void* ptr, size_t size, uint32_t align, const char* file,
-                                  const char* func, uint32_t line, void* user_data)
+                                const char* func, uint32_t line, void* user_data)
 {
-    rizz__core_tmpalloc* alloc = user_data;
-    size_t raw_size = sx_stackalloc_real_alloc_size(size, align);
+    rizz__core_tmpalloc_inst* inst = user_data;
+
+    // we have no free function
+    if (!size) {
+        return NULL;
+    }
+
+    align = align < SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT ? SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT : align;
+    size_t aligned_size = sx_align_mask(size, align - 1);
+
+    // decide with side to allocate:
+    bool alloc_from_start = (inst->depth < inst->parent->stack_depth);
+    size_t* offset = !alloc_from_start ? &inst->end_offset : &inst->start_offset;
+    size_t* last_offset = !alloc_from_start ? &inst->end_lastptr_offset : &inst->start_lastptr_offset;
+    uint8_t* buff = (uint8_t*)inst->parent->vmem.ptr;
+    size_t buff_size = (size_t)inst->parent->vmem.page_size * (size_t)inst->parent->vmem.max_pages;
+    
+    if (!alloc_from_start) {
+        size_t end_offset = inst->end_offset + aligned_size;
+        if (end_offset % align != 0) {
+            sx_align_mask(end_offset, align - 1);
+        }
+
+        void* new_ptr = buff + buff_size - end_offset;
+        *((size_t*)new_ptr - 1) = (end_offset - inst->end_offset);
+        inst->end_offset = end_offset + sizeof(size_t);
+
+        if (buff_size - inst->end_offset )
+
+        if (ptr) {
+            size_t old_size = *((size_t*)ptr - 1);
+        }
+        inst->end_lastptr_offset = end_offset;
+    } else {
+        size_t start_offset = inst->start_offset + sizeof(size_t);
+        if (start_offset % align != 0) {
+            sx_align_mask(start_offset, align - 1);
+        }
+
+        inst->start_lastptr_offset = start_offset;
+        void* new_ptr = buff + start_offset;
+
+        *((size_t*)new_ptr - 1) = start_offset - inst->start_offset;
+
+        inst->start_offset = start_offset + aligned_size;
+    }
+
     if ((raw_size + alloc->stack_alloc.offset) > alloc->stack_alloc.size) {
         // maximum reached, extend it by allocating new pages
         // size_t size_needed = raw_size + alloc->stack_alloc.offset - alloc->stack_alloc.size;
