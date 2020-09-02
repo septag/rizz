@@ -1461,11 +1461,6 @@ static void rizz__core_tmp_alloc_pop(void)
     }
 }
 
-static const sx_alloc* rizz__core_tmp_alloc(void)
-{
-    return &g_core.tmp_allocs[sx_job_thread_index(g_core.jobs)].alloc;
-}
-
 static sx_job_t rizz__job_dispatch(int count,
                                    void (*callback)(int start, int end, int thrd_index, void* user),
                                    void* user, sx_job_priority priority, uint32_t tags)
@@ -1635,7 +1630,6 @@ static void rizz__show_log(bool* p_open)
 rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .tmp_alloc_push = rizz__core_tmp_alloc_push,
                             .tmp_alloc_pop = rizz__core_tmp_alloc_pop,
-                            .tmp_alloc = rizz__core_tmp_alloc,
                             .tls_register = rizz__core_tls_register,
                             .tls_var = rizz__core_tls_var,
                             .alloc = rizz__alloc,

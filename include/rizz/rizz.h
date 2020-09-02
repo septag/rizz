@@ -657,8 +657,6 @@ typedef struct rizz_api_core {
     const sx_alloc* (*tmp_alloc_push)(void);
     void (*tmp_alloc_pop)(void);
 
-    const sx_alloc* (*tmp_alloc)(void);
-
     // TLS functions are used for setting TLS variables to worker threads by an external source
     // register: use name to identify the variable (Id). (not thread-safe)
     // tls_var: gets pointer to variable, (thread-safe)
