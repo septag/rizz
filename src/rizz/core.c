@@ -882,11 +882,15 @@ static void* rizz__tmp_alloc_cb(void* ptr, size_t size, uint32_t align, const ch
         if (ptr) {
             size_t old_size = *((size_t*)ptr - 1);
             sx_memmove(new_ptr, ptr, sx_min(old_size, size));
+            //sx_memset((uint8_t*)new_ptr + old_size, 0x0, size - old_size);
+        } else {
+            //sx_memset(new_ptr, 0x0, size);
         }
 
         size_t total = inst->start_offset + inst->end_offset;
         inst->parent->peak = sx_max(inst->parent->peak, total);
         inst->parent->frame_peak = sx_max(inst->parent->frame_peak, total);
+
         return new_ptr;
     } else {
         void* lastptr = buff + inst->start_lastptr_offset;

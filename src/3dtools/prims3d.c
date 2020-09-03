@@ -48,6 +48,13 @@ typedef struct prims3d__context {
     sg_buffer instance_buff;
     prims3d__shape unit_box;
     rizz_texture checker_tex;
+    int64_t updated_stats_frame;
+    int max_instances;
+    int max_verts;
+    int max_indices;
+    int num_instances;
+    int num_verts;
+    int num_indices;
 } prims3d__context;
 
 typedef struct prims3d__instance_depth {
@@ -203,6 +210,10 @@ bool prims3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
     };
     g_prims3d.checker_tex = the_gfx->texture_create_checker(64, 128, checker_colors);
 
+    g_prims3d.max_instances = MAX_INSTANCES;
+    g_prims3d.max_verts = MAX_DYN_VERTICES;
+    g_prims3d.max_indices = MAX_DYN_INDICES;
+
     rizz_temp_alloc_end(tmp_alloc);
     return true;
 }
@@ -250,6 +261,15 @@ void prims3d__release(void)
     }
 }
 
+static inline void prims3d__reset_stats(void)
+{
+    int64_t frame = the_core->frame_index();
+    if (frame != g_prims3d.updated_stats_frame) {
+        g_prims3d.updated_stats_frame = frame;
+        g_prims3d.num_indices = g_prims3d.num_verts = g_prims3d.num_instances = 0;
+    }
+}
+
 void prims3d__draw_box(const sx_box* box, const sx_mat4* viewproj_mat,
                        rizz_prims3d_map_type map_type, sx_color tint)
 {
@@ -277,6 +297,8 @@ void prims3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
 
     rizz_temp_alloc_begin(tmp_alloc);
 
+    prims3d__reset_stats();
+    sx_assert_rel((g_prims3d.num_instances + num_boxes) <= g_prims3d.max_instances);
     prims3d__instance* instances = sx_malloc(tmp_alloc, sizeof(prims3d__instance)*num_boxes);
     if (!instances) {
         sx_out_of_memory();
@@ -326,6 +348,7 @@ void prims3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
 
     int inst_offset = draw_api->append_buffer(g_prims3d.instance_buff, instances,
                                               sizeof(prims3d__instance) * num_boxes);
+    g_prims3d.num_instances += num_boxes;
 
     draw_api->apply_pipeline(first_alpha == 255 ? g_prims3d.pip_solid : g_prims3d.pip_alphablend);
     draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniforms));
@@ -442,6 +465,10 @@ void prims3d__draw_aabbs(const sx_aabb* aabbs, int num_aabbs, const sx_mat4* vie
     rizz_api_gfx_draw* draw_api = g_prims3d.draw_api;
     sx_vec3 corners[8];
 
+    prims3d__reset_stats();
+    sx_assert_rel((g_prims3d.num_verts + num_verts) <= g_prims3d.max_verts);
+    sx_assert_rel((g_prims3d.num_verts + num_indices) <= g_prims3d.max_indices);
+
     rizz_temp_alloc_begin(tmp_alloc);
 
     size_t total_sz = num_verts*sizeof(rizz_prims3d_vertex) + num_indices*sizeof(uint16_t);
@@ -484,6 +511,8 @@ void prims3d__draw_aabbs(const sx_aabb* aabbs, int num_aabbs, const sx_mat4* vie
 
     int vb_offset = draw_api->append_buffer(g_prims3d.dyn_vbuff, vertices, num_verts * sizeof(rizz_prims3d_vertex));
     int ib_offset = draw_api->append_buffer(g_prims3d.dyn_ibuff, indices, num_indices * sizeof(uint16_t));
+    g_prims3d.num_verts += num_verts;
+    g_prims3d.num_indices += num_indices;
 
     sg_bindings bind = { 
         .vertex_buffers[0] = g_prims3d.dyn_vbuff, 
@@ -535,6 +564,9 @@ void prims3d__grid_xzplane(float spacing, float spacing_bold, const sx_mat4* vp,
     int ylines = (int)d / nspace + 1;
     int num_verts = (xlines + ylines) * 2;
 
+    prims3d__reset_stats();
+    sx_assert_rel((g_prims3d.num_verts + num_verts) <= g_prims3d.max_verts);
+
     // draw
     int data_size = num_verts * sizeof(rizz_prims3d_vertex);
     rizz_temp_alloc_begin(tmp_alloc);
@@ -576,6 +608,8 @@ void prims3d__grid_xzplane(float spacing, float spacing_bold, const sx_mat4* vp,
     }
 
     int offset = draw_api->append_buffer(g_prims3d.dyn_vbuff, verts, data_size);
+    g_prims3d.num_verts += num_verts;
+
     sg_bindings bind = { 
         .vertex_buffers[0] = g_prims3d.dyn_vbuff, 
         .vertex_buffer_offsets[0] = offset };
@@ -624,6 +658,9 @@ void prims3d__grid_xyplane(float spacing, float spacing_bold, const sx_mat4* vp,
     int ylines = (int)h / nspace + 1;
     int num_verts = (xlines + ylines) * 2;
 
+    prims3d__reset_stats();
+    sx_assert_rel((g_prims3d.num_verts + num_verts) <= g_prims3d.max_verts);
+
     // draw
     int data_size = num_verts * sizeof(rizz_prims3d_vertex);
     rizz_temp_alloc_begin(tmp_alloc);
@@ -665,6 +702,8 @@ void prims3d__grid_xyplane(float spacing, float spacing_bold, const sx_mat4* vp,
     }
 
     int offset = draw_api->append_buffer(g_prims3d.dyn_vbuff, verts, data_size);
+    g_prims3d.num_verts += num_verts;
+
     sg_bindings bind = { 
         .vertex_buffers[0] = g_prims3d.dyn_vbuff, 
         .vertex_buffer_offsets[0] = offset };
@@ -684,3 +723,54 @@ void prims3d__grid_xyplane_cam(float spacing, float spacing_bold, float dist, co
     prims3d__grid_xyplane(spacing, spacing_bold, viewproj_mat, frustum);
 }
 
+void prims3d__set_max_instances(int max_instances)
+{
+    sx_assert(max_instances > 0);
+
+    if (g_prims3d.instance_buff.id) {
+        the_gfx->destroy_buffer(g_prims3d.instance_buff);
+    }
+
+    g_prims3d.instance_buff = the_gfx->make_buffer(&(sg_buffer_desc) {
+        .size = sizeof(prims3d__instance) * max_instances,
+        .type = SG_BUFFERTYPE_VERTEXBUFFER,
+        .usage = SG_USAGE_STREAM,
+    });
+
+    sx_assert_rel(g_prims3d.instance_buff.id);
+    g_prims3d.max_instances = max_instances;
+}
+
+void prims3d__set_max_vertices(int max_verts)
+{
+    sx_assert(max_verts > 0);
+
+    if (g_prims3d.dyn_vbuff.id) {
+        the_gfx->destroy_buffer(g_prims3d.dyn_vbuff);
+    }
+
+    g_prims3d.dyn_vbuff = the_gfx->make_buffer(&(sg_buffer_desc){
+        .type = SG_BUFFERTYPE_VERTEXBUFFER,
+        .usage = SG_USAGE_STREAM,
+        .size = sizeof(rizz_prims3d_vertex) * max_verts });
+
+    sx_assert_rel(g_prims3d.instance_buff.id);
+    g_prims3d.max_verts = max_verts;
+}
+
+void prims3d__set_max_indices(int max_indices)
+{
+    sx_assert(max_indices > 0);
+
+    if (g_prims3d.dyn_ibuff.id) {
+        the_gfx->destroy_buffer(g_prims3d.dyn_ibuff);
+    }
+
+    g_prims3d.dyn_ibuff = the_gfx->make_buffer(&(sg_buffer_desc){
+        .type = SG_BUFFERTYPE_INDEXBUFFER,
+        .usage = SG_USAGE_STREAM,
+        .size = sizeof(rizz_prims3d_vertex) * max_indices });
+
+    sx_assert_rel(g_prims3d.dyn_ibuff.id);
+    g_prims3d.max_indices = max_indices;
+}
