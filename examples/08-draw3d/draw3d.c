@@ -288,9 +288,11 @@ static void render(void)
     if (!init_boxes) {
         for (int i = 0; i < 100; i++) {
             boxes[i] = sx_box_set(sx_tx3d_setf(
-                sx_rng_gen_rangef(&g_draw3d.rng, -50.0f, 50.0f), sx_rng_gen_rangef(&g_draw3d.rng, -50.0f, 50.0f), 0, 
+                sx_rng_gen_rangef(&g_draw3d.rng, -50.0f, 50.0f), 
+                sx_rng_gen_rangef(&g_draw3d.rng, -50.0f, 50.0f), 
+                0, 
                 0, 0, sx_torad(sx_rng_gen_rangef(&g_draw3d.rng, 0, 90.0f))), 
-                sx_vec3f(sx_rng_genf(&g_draw3d.rng) + 1.0f, sx_rng_genf(&g_draw3d.rng) + 1.0f, 1.0f));
+                sx_vec3f(sx_rng_genf(&g_draw3d.rng) + 0.5f, sx_rng_genf(&g_draw3d.rng) + 0.5f, 0.5f));
             tints[i] = sx_color4u(sx_rng_gen_rangei(&g_draw3d.rng, 0, 255),
                                   sx_rng_gen_rangei(&g_draw3d.rng, 0, 255),
                                   sx_rng_gen_rangei(&g_draw3d.rng, 0, 255), 
@@ -355,7 +357,6 @@ static void render(void)
 
     if (num_bounds > 0) {
         the_prims->draw_aabbs(bounds, num_bounds, &viewproj, NULL);
-        //the_prims->draw_aabb(&bounds[0], &viewproj, SX_COLOR_WHITE);
     }
 
     the_gfx->staged.end_pass();
