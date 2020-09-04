@@ -42,6 +42,7 @@ typedef struct prims3d__context {
     sg_pipeline pip_solid;
     sg_pipeline pip_alphablend;
     sg_pipeline pip_wire;
+    sg_pipeline pip_wire_strip;
     sg_pipeline pip_wire_ib;
     sg_buffer dyn_vbuff;
     sg_buffer dyn_ibuff;
@@ -153,6 +154,10 @@ bool prims3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
     sg_pipeline pip_wire = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader_wire, &pip_desc_wire, &k_prims3d_vertex_layout_wire));
 
+    pip_desc_wire.primitive_type = SG_PRIMITIVETYPE_LINE_STRIP;
+    sg_pipeline pip_wire_strip = the_gfx->make_pipeline(
+        the_gfx->shader_bindto_pipeline(&shader_wire, &pip_desc_wire, &k_prims3d_vertex_layout_wire));
+
     pip_desc_wire.index_type = SG_INDEXTYPE_UINT16;
     sg_pipeline pip_wire_ib = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader_wire, &pip_desc_wire, &k_prims3d_vertex_layout_wire));
@@ -168,6 +173,7 @@ bool prims3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
     g_prims3d.pip_alphablend = pip_alphablend;
     g_prims3d.pip_wire = pip_wire;
     g_prims3d.pip_wire_ib = pip_wire_ib;
+    g_prims3d.pip_wire_strip = pip_wire_strip;
 
     g_prims3d.dyn_vbuff = the_gfx->make_buffer(&(sg_buffer_desc){
         .type = SG_BUFFERTYPE_VERTEXBUFFER,
@@ -243,6 +249,9 @@ void prims3d__release(void)
     }
     if (g_prims3d.pip_wire.id) {
         the_gfx->destroy_pipeline(g_prims3d.pip_wire);
+    }
+    if (g_prims3d.pip_wire_strip.id) {
+        the_gfx->destroy_pipeline(g_prims3d.pip_wire_strip);
     }
     if (g_prims3d.pip_wire_ib.id) {
         the_gfx->destroy_pipeline(g_prims3d.pip_wire_ib);
@@ -773,4 +782,67 @@ void prims3d__set_max_indices(int max_indices)
 
     sx_assert_rel(g_prims3d.dyn_ibuff.id);
     g_prims3d.max_indices = max_indices;
+}
+
+void prims3d__draw_path(const sx_vec3* points, int num_points, const sx_mat4* viewproj_mat, const sx_color color)
+{
+    int const num_verts = num_points;
+    int const data_size = num_verts * sizeof(rizz_prims3d_vertex);
+    rizz_api_gfx_draw* draw_api = g_prims3d.draw_api;
+
+    prims3d__reset_stats();
+    sx_assert_rel((g_prims3d.num_verts + num_verts) <= g_prims3d.max_verts);
+
+    rizz_temp_alloc_begin(tmp_alloc);
+    rizz_prims3d_vertex* verts = sx_malloc(tmp_alloc, data_size);
+
+    for (int i = 0; i < num_points; i++) {
+        verts[i].pos = points[i];
+        verts[i].color = color;
+    }
+
+    int offset = draw_api->append_buffer(g_prims3d.dyn_vbuff, verts, data_size);
+    g_prims3d.num_verts += num_verts;
+    sg_bindings bind = { 
+        .vertex_buffers[0] = g_prims3d.dyn_vbuff, 
+        .vertex_buffer_offsets[0] = offset };
+
+    draw_api->apply_pipeline(g_prims3d.pip_wire_strip);
+    draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, viewproj_mat, sizeof(*viewproj_mat));
+    draw_api->apply_bindings(&bind);
+    draw_api->draw(0, num_verts, 1);
+
+    rizz_temp_alloc_end(tmp_alloc);
+}
+
+void prims3d__draw_line(const sx_vec3 p0, const sx_vec3 p1, const sx_mat4* viewproj_mat, const sx_color color)
+{
+    int const num_verts = 2;
+    int const data_size = num_verts * sizeof(rizz_prims3d_vertex);
+    rizz_api_gfx_draw* draw_api = g_prims3d.draw_api;
+
+    prims3d__reset_stats();
+    sx_assert_rel((g_prims3d.num_verts + num_verts) <= g_prims3d.max_verts);
+
+    rizz_temp_alloc_begin(tmp_alloc);
+    rizz_prims3d_vertex* verts = sx_malloc(tmp_alloc, data_size);
+
+    verts[0].pos = p0;
+    verts[0].color = color;
+
+    verts[1].pos = p1;
+    verts[1].color = color;
+
+    int offset = draw_api->append_buffer(g_prims3d.dyn_vbuff, verts, data_size);
+    g_prims3d.num_verts += num_verts;
+    sg_bindings bind = { 
+        .vertex_buffers[0] = g_prims3d.dyn_vbuff, 
+        .vertex_buffer_offsets[0] = offset };
+
+    draw_api->apply_pipeline(g_prims3d.pip_wire);
+    draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, viewproj_mat, sizeof(*viewproj_mat));
+    draw_api->apply_bindings(&bind);
+    draw_api->draw(0, num_verts, 1);
+
+    rizz_temp_alloc_end(tmp_alloc);
 }

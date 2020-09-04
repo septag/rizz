@@ -24,6 +24,9 @@ void prims3d__grid_xyplane_cam(float spacing, float spacing_bold, float dist, co
 void prims3d__draw_aabb(const sx_aabb* aabb, const sx_mat4* viewproj_mat, sx_color tint);
 void prims3d__draw_aabbs(const sx_aabb* aabbs, int num_aabbs, const sx_mat4* viewproj_mat, const sx_color* tints);
 
+void prims3d__draw_path(const sx_vec3* points, int num_points, const sx_mat4* viewproj_mat, const sx_color color);
+void prims3d__draw_line(const sx_vec3 p0, const sx_vec3 p1, const sx_mat4* viewproj_mat, const sx_color color);
+
 void prims3d__set_max_instances(int max_instances);
 void prims3d__set_max_vertices(int max_verts);
 void prims3d__set_max_indices(int max_indices);
