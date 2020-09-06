@@ -31,7 +31,7 @@
 //                                                          if not, pushes the element into the array
 // Usage:
 //       NOTE: include "allocator.h" before array.h to prevent warnings and errors
-//       SomeStruct *arr = NULL;
+//       sx_array_declare(SomeStruct) = NULL; // SomeStruct *arr = NULL;
 //       while (something)
 //       {
 //          SomeStruct new_one;
@@ -90,11 +90,12 @@ static inline void* sx__sbgrowf(void* arr, int increment, int itemsize, const sx
     int min_needed = sx_array_count(arr) + increment;
     int m = new_count > min_needed ? new_count : min_needed;
     int* p = (int*)sx__realloc(alloc, arr ? sx__sbraw(arr) : 0,
-                               (size_t)itemsize * (size_t)m + sizeof(int) * 2, 0, file, func, line);
+                               (size_t)itemsize*(size_t)m + sizeof(int)*2, 0, file, func, line);
+
     if (p) {
+        p[0] = m;
         if (!arr)
             p[1] = 0;
-        p[0] = m;
         return p + 2;
     } else {
         sx_out_of_memory();

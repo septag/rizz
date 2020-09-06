@@ -13,7 +13,8 @@ set(SOURCE_FILES internal.h
                  vfs.c 
                  android.c
                  basisut.cpp 
-                 basisut.h)
+                 basisut.h 
+                 json.c)
 
 set(INCLUDE_FILES ../../include/rizz/config.h
                   ../../include/rizz/sg-types.h

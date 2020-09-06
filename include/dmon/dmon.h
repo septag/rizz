@@ -210,7 +210,7 @@ void dmon_unwatch(dmon_watch_id id);
 #define _DMON_UNUSED(x) (void)(x)
 
 #ifndef _DMON_PRIVATE
-#   if defined(__GNUC__)
+#   if defined(__GNUC__) || defined(__clang__)
 #       define _DMON_PRIVATE __attribute__((unused)) static
 #   else
 #       define _DMON_PRIVATE static
@@ -252,6 +252,33 @@ void dmon_unwatch(dmon_watch_id id);
 #   endif
 #endif  // dmon__make_id
 
+_DMON_PRIVATE bool dmon__isrange(char ch, char from, char to)
+{
+    return (uint8_t)(ch - from) <= (uint8_t)(to - from);
+}
+
+_DMON_PRIVATE bool dmon__isupperchar(char ch)
+{
+    return dmon__isrange(ch, 'A', 'Z');
+}
+
+_DMON_PRIVATE char dmon__tolowerchar(char ch)
+{
+    return ch + (dmon__isupperchar(ch) ? 0x20 : 0);
+}
+
+_DMON_PRIVATE char* dmon__tolower(char* dst, int dst_sz, const char* str)
+{
+    int offset = 0;
+    int dst_max = dst_sz - 1;
+    while (*str && offset < dst_max) {
+        dst[offset++] = dmon__tolowerchar(*str);
+        ++str;
+    }
+    dst[offset] = '\0';
+    return dst;
+}
+
 _DMON_PRIVATE char* dmon__strcpy(char* dst, int dst_sz, const char* src)
 {
     DMON_ASSERT(dst);
@@ -279,6 +306,34 @@ _DMON_PRIVATE char* dmon__unixpath(char* dst, int size, const char* path)
     }
     dst[len] = '\0';
     return dst;
+}
+
+#if DMON_OS_WINDOWS
+_DMON_PRIVATE char* dmon__winpath(char* dst, int size, const char* path)
+{
+    int len = sx_strlen(path);
+    len = sx_min(len, size - 1);
+
+    for (int i = 0; i < len; i++) {
+        if (path[i] != '/')
+            dst[i] = path[i];
+        else
+            dst[i] = '\\';
+    }
+    dst[len] = '\0';
+    return dst;
+}
+#endif // DMON_OS_WINDOWS
+
+_DMON_PRIVATE char* dmon__normpath(char* dst, int size, const char* path)
+{
+#if SX_PLATFORM_WINDOWS
+    return dmon__tolower(dst, size, dmon__winpath(dst, size, path));
+#elif SX_PLATFORM_APPLE
+    return dmon__tolower(dst, size, dmon__unixpath(dst, size, path));
+#else
+    return dmon__unixpath(dst, size, path);
+#endif
 }
 
 #if DMON_OS_LINUX || DMON_OS_MACOS
@@ -1270,7 +1325,10 @@ static void* dmon__thread(void* arg)
 _DMON_PRIVATE void dmon__unwatch(dmon__watch_state* watch)
 {
     if (watch->fsev_stream_ref) {
+        FSEventStreamStop(watch->fsev_stream_ref);
+        FSEventStreamInvalidate(watch->fsev_stream_ref);
         FSEventStreamRelease(watch->fsev_stream_ref);
+        watch->fsev_stream_ref = NULL;
     }
 
     memset(watch, 0x0, sizeof(dmon__watch_state));
@@ -1343,6 +1401,7 @@ _DMON_PRIVATE void dmon__fsevent_callback(ConstFSEventStreamRef stream_ref, void
         memset(&ev, 0x0, sizeof(ev));
 
         dmon__strcpy(abs_filepath, sizeof(abs_filepath), filepath);
+        dmon__normpath(abs_filepath, sizeof(abs_filepath), abs_filepath);
         // strip the root dir
         DMON_ASSERT(strstr(abs_filepath, watch->rootdir) == abs_filepath);
         dmon__strcpy(ev.filepath, sizeof(ev.filepath), abs_filepath + strlen(watch->rootdir));

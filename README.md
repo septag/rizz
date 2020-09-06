@@ -3,7 +3,7 @@
 ## Rizz
 [@septag](https://twitter.com/septagh)  
 
-Rizz (ریز) is a tiny, multi-platform, and minimal game/app development framework, Written in C language.  
+Rizz (ریز) is a tiny, multi-platform, and minimal game/app development framework, Written in C language. Inspired by [The Machinery](https://ourmachinery.com/) and [sokol libs](https://github.com/floooh/sokol).
 It's currently a work in progress, features and improvements will be added constantly to different platforms.
 
 ## Design and Basic usage

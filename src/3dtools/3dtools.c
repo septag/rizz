@@ -14,9 +14,14 @@ static rizz_api_prims3d the__prims3d = {
     .free_geometry = prims3d__free_geometry,
     .draw_aabb = prims3d__draw_aabb,
     .draw_aabbs = prims3d__draw_aabbs,
+    .draw_path = prims3d__draw_path,
+    .draw_line = prims3d__draw_line,
     .grid_xyplane = prims3d__grid_xyplane,
     .grid_xzplane = prims3d__grid_xzplane,
-    .grid_xyplane_cam = prims3d__grid_xyplane_cam
+    .grid_xyplane_cam = prims3d__grid_xyplane_cam,
+    .set_max_instances = prims3d__set_max_instances,
+    .set_max_vertices = prims3d__set_max_vertices,
+    .set_max_indices = prims3d__set_max_indices
 };
 
 static rizz_api_model the__model = {

@@ -540,10 +540,10 @@ typedef struct rizz_config {
     int job_max_fibers;     // maximum active jobs at a time (default = 64)
     int job_stack_size;     // jobs stack size, in kbytes (default = 1mb)
 
-    int coro_max_fibers;    // maximum running (active) coroutines at a time. (default = 64)
-    int coro_stack_size;    // coroutine stack size (default = 2mb). in kbytes
+    int coro_num_init_fibers;  // number of fibers initialized for coroutines. (default = 64)
+    int coro_stack_size;       // coroutine stack size (default = 2mb). in kbytes
 
-    int tmp_mem_max;        // per-frame temp memory size. in kbytes (defaut: 5mb per-thread)
+    int tmp_mem_max;        // per-frame temp memory size. in kbytes (default: 10mb per-thread)
 
     int profiler_listen_port;           // default: 17815
     int profiler_update_interval_ms;    // default: 10ms
@@ -650,11 +650,12 @@ typedef struct rizz_api_core {
     const sx_alloc* (*heap_alloc)(void);
 
     // temp stack allocator: fast and thread-safe (per job thread only).
-    //                       Temp allocators behave like stack, so they can push() and pop()
-    // NOTE: do not keep tmp_alloc memory between multiple frames,
-    //       At the end of each frame, the tmp_allocs are reset
-    const sx_alloc* (*tmp_alloc_push)();
-    void (*tmp_alloc_pop)();
+    // NOTE: do not keep tmp_alloc memory between multiple frames, cuz at the end of each frame, the tmp_allocs are reset
+    // stack-mode API: Temp allocators behave like stack, so they can push() and pop() memory offsets
+    //                 useful for allocating big chunks and also save memory between frames
+    //          Note:  Not recommended to use another allocator with arbitary source within push/pop block
+    const sx_alloc* (*tmp_alloc_push)(void);
+    void (*tmp_alloc_pop)(void);
 
     // TLS functions are used for setting TLS variables to worker threads by an external source
     // register: use name to identify the variable (Id). (not thread-safe)
@@ -672,11 +673,6 @@ typedef struct rizz_api_core {
     void (*get_mem_info)(rizz_mem_info* info);
 
     rizz_version (*version)(void);
-
-    // random
-    uint32_t (*rand)();                       // 0..UNT32_MAX
-    float (*randf)();                         // 0..1
-    int (*rand_range)(int _min, int _max);    // _min.._max
 
     uint64_t (*delta_tick)(void);
     uint64_t (*elapsed_tick)(void);
@@ -1448,3 +1444,22 @@ typedef struct rizz_api_refl {
 #define rizz_refl_field(_struct, _type, _name, _desc)   \
     (RIZZ_REFLECT_API_VARNAME)->_reg(RIZZ_REFL_FIELD, &(((_struct*)0)->_name), #_type, #_name, #_struct, _desc, sizeof(_type), sizeof(_struct))
 // clang-format on
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// @json
+// json files can be loaded by asset manager with the type_name="json"
+// the underlying type for rizz_asset_obj is a pointer to cj5_result. remember to include "rizz/json.h"
+// load parameters:
+// load_cb/reload_cb are optional (can be NULL) and can be given to asset loader, to automatically trigger when 
+// json data is loaded or reloaded. They will always run in the main thread.
+// NOTE: keeping callback functions in framework will likely cause trouble when the guest program reloads
+// TODO: fix this
+typedef struct cj5_result cj5_result;
+typedef void (rizz_json_reload_cb)(cj5_result* new_result, cj5_result* prev_result, void* user);
+typedef void (rizz_json_load_cb)(cj5_result* result, void* user);
+
+typedef struct rizz_json_load_params {
+    rizz_json_load_cb* load_fn;
+    rizz_json_reload_cb* reload_fn;
+    void* user;
+} rizz_json_load_params;

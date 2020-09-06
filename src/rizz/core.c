@@ -14,9 +14,8 @@
 #include "sx/hash.h"
 #include "sx/jobs.h"
 #include "sx/lockless.h"
+#include "sx/macros.h"
 #include "sx/os.h"
-#include "sx/rng.h"
-#include "sx/stack-alloc.h"
 #include "sx/string.h"
 #include "sx/threads.h"
 #include "sx/timer.h"
@@ -45,7 +44,7 @@ __declspec(dllimport) void __stdcall OutputDebugStringA(const char* lpOutputStri
 #define CJ5_IMPLEMENT
 #include "cj5/cj5.h"
 
-#define DEFAULT_TMP_SIZE    0x500000    // 5mb
+#define DEFAULT_TMP_SIZE    0xA00000    // 10mb
 
 #if SX_PLATFORM_WINDOWS || SX_PLATFORM_IOS || SX_PLATFORM_ANDROID
 #   define TERM_COLOR_RESET     ""
@@ -74,11 +73,22 @@ static const char* k__memid_names[_RIZZ_MEMID_COUNT] = { "Core",          //
                                                          "Game" };
 
 
-typedef struct rizz__core_tmpalloc {
+typedef struct rizz__core_tmpalloc rizz__core_tmpalloc;
+typedef struct rizz__core_tmpalloc_inst {
     sx_alloc alloc;
+    rizz__core_tmpalloc* parent;      // pointer to parent rizz__core_tmpalloc
+    size_t end_offset;
+    size_t start_offset;
+    size_t start_lastptr_offset;
+    int depth;
+} rizz__core_tmpalloc_inst;
+
+typedef struct rizz__core_tmpalloc {
     sx_vmem_context vmem;
-    sx_stackalloc stack_alloc;
-    size_t* offset_stack;    // sx_array - keep offsets in a stack for push()/pop()
+    rizz__core_tmpalloc_inst* alloc_stack;    // sx_array - keep offsets in a stack for push()/pop()
+    int stack_depth;
+    size_t peak;
+    size_t frame_peak;
 } rizz__core_tmpalloc;
 
 typedef struct rizz__core_cmd {
@@ -145,7 +155,6 @@ typedef struct rizz__core {
     sx_atomic_size heap_size;
     sx_atomic_size heap_max;
 
-    sx_rng rng;
     sx_job_context* jobs;
     sx_coro_context* coro;
 
@@ -831,28 +840,100 @@ static inline void rizz__atomic_max(sx_atomic_size* _max, intptr_t val)
 }
 
 static void* rizz__tmp_alloc_cb(void* ptr, size_t size, uint32_t align, const char* file,
-                                  const char* func, uint32_t line, void* user_data)
+                                const char* func, uint32_t line, void* user_data)
 {
-    rizz__core_tmpalloc* alloc = user_data;
-    size_t raw_size = sx_stackalloc_real_alloc_size(size, align);
-    if ((raw_size + alloc->stack_alloc.offset) > alloc->stack_alloc.size) {
-        // maximum reached, extend it by allocating new pages
-        // size_t size_needed = raw_size + alloc->stack_alloc.offset - alloc->stack_alloc.size;
-        // int num_pages = (int)(size_needed + alloc->vmem.page_size - 1) / alloc->vmem.page_size;
-        int num_pages = (int)(raw_size + alloc->vmem.page_size - 1) / alloc->vmem.page_size;
-        void* page_ptr = sx_vmem_commit_pages(&alloc->vmem, alloc->vmem.num_pages, num_pages);
-        if (page_ptr == NULL) {
+    sx_unused(file);
+    sx_unused(line);
+    sx_unused(func);
+
+    rizz__core_tmpalloc_inst* inst = user_data;
+
+    // we have no free function
+    if (!size) {
+        return NULL;
+    }
+
+    align = align < SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT ? SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT : align;
+    size_t aligned_size = sx_align_mask(size, align - 1);
+
+    // decide with side to allocate:
+    //  - correct stack-mode allocations start from the end of the buffer
+    //  - in case there is collapsing allocators (tmpalloc from lower stack level needs to allocate)
+    //    then start from the begining of the buffer
+    bool alloc_from_start = (inst->depth < inst->parent->stack_depth);
+    uint8_t* buff = (uint8_t*)inst->parent->vmem.ptr;
+    size_t buff_size = (size_t)inst->parent->vmem.page_size * (size_t)inst->parent->vmem.max_pages;
+    
+    if (!alloc_from_start) {
+        size_t end_offset = inst->end_offset + aligned_size;
+        if (end_offset % align != 0) {
+            sx_align_mask(end_offset, align - 1);
+        }
+
+        void* new_ptr = buff + buff_size - end_offset;
+        *((size_t*)new_ptr - 1) = size;
+        inst->end_offset = end_offset + sizeof(size_t);
+
+        if (inst->end_offset > buff_size || (buff_size - inst->end_offset) < inst->start_offset) {
             sx_out_of_memory();
             return NULL;
         }
-        alloc->stack_alloc.size = sx_vmem_commit_size(&alloc->vmem);
-        // align offset to nearest page
-        size_t new_offset = (uintptr_t)page_ptr - (uintptr_t)alloc->vmem.ptr;
-        sx_assert(new_offset % alloc->vmem.page_size == 0);
-        alloc->stack_alloc.offset = new_offset;
-    }
 
-    return sx__realloc(&alloc->stack_alloc.alloc, ptr, size, align, file, func, line);
+        if (ptr) {
+            size_t old_size = *((size_t*)ptr - 1);
+            sx_memmove(new_ptr, ptr, sx_min(old_size, size));
+            //sx_memset((uint8_t*)new_ptr + old_size, 0x0, size - old_size);
+        } else {
+            //sx_memset(new_ptr, 0x0, size);
+        }
+
+        size_t total = inst->start_offset + inst->end_offset;
+        inst->parent->peak = sx_max(inst->parent->peak, total);
+        inst->parent->frame_peak = sx_max(inst->parent->frame_peak, total);
+
+        return new_ptr;
+    } else {
+        void* lastptr = buff + inst->start_lastptr_offset;
+        // get the end_offset from the current depth allocator instead of self
+        size_t end_offset = inst->parent->alloc_stack[inst->parent->stack_depth-1].end_offset;
+
+        // if we are realloc on the same pointer, just re-adjust the offset
+        if (ptr == lastptr) {
+            size_t lastsize = *((size_t*)ptr - 1);
+            lastsize = sx_align_mask(lastsize, align - 1);
+            inst->start_offset += (aligned_size > lastsize) ? (aligned_size - lastsize) : 0;
+            if (inst->start_offset > (buff_size - end_offset)) {
+                sx_out_of_memory();
+                return NULL;
+            }
+            *((size_t*)ptr - 1) = size;
+
+            size_t total = inst->start_offset + end_offset;
+            inst->parent->peak = sx_max(inst->parent->peak, total);
+            inst->parent->frame_peak = sx_max(inst->parent->frame_peak, total);
+            return ptr;
+        } else {
+            size_t start_offset = inst->start_offset + sizeof(size_t);
+            if (start_offset % align != 0) {
+                sx_align_mask(start_offset, align - 1);
+            }
+
+            if ((start_offset + aligned_size) > (buff_size - end_offset)) {
+                sx_out_of_memory();
+                return NULL;
+            }
+
+            void* new_ptr = buff + start_offset;
+            *((size_t*)new_ptr - 1) = size;
+            inst->start_offset = start_offset + aligned_size;
+            inst->start_lastptr_offset = start_offset;
+
+            size_t total = inst->start_offset + end_offset;
+            inst->parent->peak = sx_max(inst->parent->peak, total);
+            inst->parent->frame_peak = sx_max(inst->parent->frame_peak, total);
+            return new_ptr;
+        }
+    }
 }
 
 static void* rizz__proxy_alloc_cb(void* ptr, size_t size, uint32_t align, const char* file,
@@ -1101,9 +1182,6 @@ bool rizz__core_init(const rizz_config* conf)
     rizz__log_info("version: %d.%d-%s", g_core.ver.major, g_core.ver.minor, g_core.ver.git);
 
     sx_tm_init();
-    sx_rng_seed(&g_core.rng, sizeof(time_t) == sizeof(uint64_t)
-                                 ? sx_hash_u64_to_u32((uint64_t)time(NULL))
-                                 : (uint32_t)time(NULL));
 
     // disk-io (virtual file system)
     if (!rizz__vfs_init(rizz__alloc(RIZZ_MEMID_VFS))) {
@@ -1126,17 +1204,15 @@ bool rizz__core_init(const rizz_config* conf)
 
         for (int i = 0; i < g_core.num_threads; i++) {
             rizz__core_tmpalloc* t = &g_core.tmp_allocs[i];
-            t->alloc = (sx_alloc) {
-                .alloc_cb = rizz__tmp_alloc_cb,
-                .user_data = t
-            };
             if (!sx_vmem_init(&t->vmem, 0, num_tmp_pages)) {
                 sx_out_of_memory();
                 return false;
             }
-            sx_vmem_commit_page(&t->vmem, 0);
-            sx_stackalloc_init(&t->stack_alloc, t->vmem.ptr, page_sz);
-            t->offset_stack = NULL;
+            sx_vmem_commit_pages(&t->vmem, 0, num_tmp_pages);
+            t->alloc_stack = NULL;
+            t->stack_depth = 0;
+            t->peak = 0;
+            t->frame_peak = 0;
         }
         rizz__log_info("(init) temp memory: %dx%d kb", g_core.num_threads, tmp_size / 1024);
     }
@@ -1230,13 +1306,12 @@ bool rizz__core_init(const rizz_config* conf)
 
     // coroutines
     g_core.coro =
-        sx_coro_create_context(alloc, conf->coro_max_fibers, conf->coro_stack_size * 1024);
+        sx_coro_create_context(alloc, conf->coro_num_init_fibers, conf->coro_stack_size * 1024);
     if (!g_core.coro) {
         rizz__log_error("initializing coroutines failed");
         return false;
     }
-    rizz__log_info("(init) coroutines: max_fibers=%d, stack_size=%dkb", conf->coro_max_fibers,
-                   conf->coro_stack_size);
+    rizz__log_info("(init) coroutines: stack_size=%dkb", conf->coro_stack_size);
 
     // http client
     if (!rizz__http_init(alloc)) {
@@ -1256,6 +1331,8 @@ bool rizz__core_init(const rizz_config* conf)
     if (!the__vfs.is_dir(conf->cache_path)) {
         the__vfs.mkdir(conf->cache_path);
     }
+
+    rizz__json_init();
 
     return true;
 }
@@ -1292,7 +1369,7 @@ void rizz__core_release()
     }
 
     if (g_core.coro) {
-        sx_coro_destroy_context(g_core.coro, alloc);
+        sx_coro_destroy_context(g_core.coro);
     }
 
     if (g_core.flags & RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS) {
@@ -1314,7 +1391,7 @@ void rizz__core_release()
     if (g_core.tmp_allocs) {
         for (int i = 0; i < g_core.num_threads; i++) {
             sx_vmem_release(&g_core.tmp_allocs[i].vmem);
-            sx_array_free(alloc, g_core.tmp_allocs[i].offset_stack);
+            sx_array_free(alloc, g_core.tmp_allocs[i].alloc_stack);
         }
         sx_free(alloc, g_core.tmp_allocs);
     }
@@ -1380,12 +1457,12 @@ void rizz__core_frame()
     }
 
     // reset temp allocators
-    size_t page_sz = sx_os_pagesz();
     for (int i = 0, c = g_core.num_threads; i < c; i++) {
         rizz__core_tmpalloc* t = &g_core.tmp_allocs[i];
-        sx_vmem_free_pages(&t->vmem, 1, t->vmem.num_pages - 1);
-        sx_stackalloc_reset(&t->stack_alloc);
-        t->stack_alloc.size = page_sz;
+        sx_assert(t->stack_depth == 0 && "not all tmp_allocs are popped");
+        sx_array_clear(t->alloc_stack);
+        t->stack_depth = 0;
+        t->frame_peak = 0;
     }
 
     rizz__gfx_trace_reset_frame_stats(RIZZ_GFX_TRACE_COMMON);
@@ -1445,37 +1522,43 @@ void rizz__core_frame()
     rizz__profile_end(FRAME);
 }
 
-static const sx_alloc* rizz__core_tmp_alloc_push()
+static const sx_alloc* rizz__core_tmp_alloc_push(void)
 {
     rizz__core_tmpalloc* talloc = &g_core.tmp_allocs[sx_job_thread_index(g_core.jobs)];
-    sx_array_push(rizz__alloc(RIZZ_MEMID_CORE), talloc->offset_stack, talloc->stack_alloc.offset);
-    return &talloc->alloc;
-}
 
-static void rizz__core_tmp_alloc_pop()
-{
-    rizz__core_tmpalloc* talloc = &g_core.tmp_allocs[sx_job_thread_index(g_core.jobs)];
-    if (sx_array_count(talloc->offset_stack)) {
-        size_t last_offset = sx_array_last(talloc->offset_stack);
-        sx_array_pop_last(talloc->offset_stack);
-        talloc->stack_alloc.offset = last_offset;
-        talloc->stack_alloc.last_ptr_offset = 0;
+    int count = sx_array_count(talloc->alloc_stack);
+    if (count == 0) {
+        rizz__core_tmpalloc_inst inst = {
+            .alloc = {
+                .alloc_cb = rizz__tmp_alloc_cb,
+            },
+            .depth = count + 1,
+            .parent = talloc
+        };
+
+        sx_array_push(rizz__alloc(RIZZ_MEMID_CORE), talloc->alloc_stack, inst);
+    } else {
+        rizz__core_tmpalloc_inst inst = sx_array_last(talloc->alloc_stack);
+        ++inst.depth;
+        sx_array_push(rizz__alloc(RIZZ_MEMID_CORE), talloc->alloc_stack, inst);
     }
+
+    talloc->stack_depth = count + 1;
+    rizz__core_tmpalloc_inst* _inst = &talloc->alloc_stack[count];
+    _inst->alloc.user_data = _inst;
+    return &_inst->alloc;
 }
 
-static uint32_t rizz__rand()
+static void rizz__core_tmp_alloc_pop(void)
 {
-    return sx_rng_gen(&g_core.rng);
-}
-
-static float rizz__randf()
-{
-    return sx_rng_gen_f(&g_core.rng);
-}
-
-static int rizz__rand_range(int _min, int _max)
-{
-    return sx_rng_gen_irange(&g_core.rng, _min, _max);
+    rizz__core_tmpalloc* talloc = &g_core.tmp_allocs[sx_job_thread_index(g_core.jobs)];
+    if (sx_array_count(talloc->alloc_stack)) {
+        sx_array_pop_last(talloc->alloc_stack);
+        sx_assert(talloc->stack_depth > 0);
+        --talloc->stack_depth;
+    } else {
+        sx_assert(0 && "no matching tmp_alloc_push for the call tmp_alloc_pop");
+    }
 }
 
 static sx_job_t rizz__job_dispatch(int count,
@@ -1536,10 +1619,12 @@ static void rizz__get_mem_info(rizz_mem_info* info)
 
     int num_temp_allocs = sx_min(g_core.num_threads, RIZZ_MAX_TEMP_ALLOCS);
     for (int i = 0; i < g_core.num_threads && i < num_temp_allocs; i++) {
+        rizz__core_tmpalloc* talloc = &g_core.tmp_allocs[i];
+        size_t size = (size_t)talloc->vmem.num_pages * (size_t)sx_os_pagesz();
         info->temp_allocs[i] =
-            (rizz_linalloc_info){ .offset = g_core.tmp_allocs[i].stack_alloc.offset,
-                                  .size = g_core.tmp_allocs[i].stack_alloc.size,
-                                  .peak = g_core.tmp_allocs[i].stack_alloc.peak };
+            (rizz_linalloc_info){ .offset = talloc->frame_peak,
+                                  .size = size,
+                                  .peak = talloc->peak };
     }
 
     info->num_trackers = RIZZ_CONFIG_DEBUG_MEMORY ? _RIZZ_MEMID_COUNT : 0;
@@ -1652,9 +1737,6 @@ rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .alloc = rizz__alloc,
                             .get_mem_info = rizz__get_mem_info,
                             .version = rizz__version,
-                            .rand = rizz__rand,
-                            .randf = rizz__randf,
-                            .rand_range = rizz__rand_range,
                             .delta_tick = rizz__delta_tick,
                             .delta_time = rizz__delta_time,
                             .elapsed_tick = rizz__elapsed_tick,

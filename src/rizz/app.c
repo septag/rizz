@@ -328,8 +328,9 @@ sapp_desc sokol_main(int argc, char* argv[])
                          .job_num_threads = -1,    // defaults to num_cores-1
                          .job_max_fibers = 64,
                          .job_stack_size = 1024,
-                         .coro_max_fibers = 64,
+                         .coro_num_init_fibers = 64,
                          .coro_stack_size = 2048,
+                         .tmp_mem_max = 10*1024,
                          .profiler_listen_port = 17815,    // default remotery port
                          .profiler_update_interval_ms = 10 };
 

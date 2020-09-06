@@ -66,6 +66,11 @@
 //                                   on key returns the parameter 'not_found_val' if key is not
 //                                   found in table
 //      sx_hashtbl_clear             clears the table
+// 
+// sx_hashtbl_tval: hash-table based on fibonacci mult hashing, but with arbitary value types
+//                  the difference between this and norml sx_hashtbl is that the 'value' type is not
+//                  integer anymore. It can be any POD type. you just define the size of your type
+//      The function are pretty much the same as sx_hashtbl, but with `sx_hashtbltval_` prefix.
 //
 #pragma once
 

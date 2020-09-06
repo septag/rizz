@@ -1,5 +1,6 @@
 #include "sx/string.h"
 #include "sx/timer.h"
+#include "sx/rng.h"
 
 #include "rizz/imgui-extra.h"
 #include "rizz/imgui.h"
@@ -45,6 +46,7 @@ typedef struct sdf_fs_vars {
 } sdf_fs_vars;
 
 typedef struct {
+    sx_rng rng;
     rizz_gfx_stage stage;
     rizz_camera_fps cam;
     sg_buffer vbuff;
@@ -98,6 +100,8 @@ static bool init()
     the_vfs->mount(asset_dir, "/assets");
 #endif
 
+    sx_rng_seed_time(&g_sdf.rng);
+    
     g_sdf.stage = the_gfx->stage_register("main", (rizz_gfx_stage){ .id = 0 });
     sx_assert(g_sdf.stage.id);
 
@@ -188,8 +192,8 @@ static void update(float dt)
     // loop
     if (t >= 1.0f) {
         g_sdf.tween.tm = 0;
-        g_sdf.shape_f1 = (float)the_core->rand_range(5, 10);
-        g_sdf.shape_f2 = g_sdf.shape_f1 + 1.0f + the_core->randf() * (g_sdf.shape_f1 - 1.0f);
+        g_sdf.shape_f1 = sx_rng_gen_rangei(&g_sdf.rng, 5, 10);
+        g_sdf.shape_f2 = g_sdf.shape_f1 + 1.0f + sx_rng_genf(&g_sdf.rng) * (g_sdf.shape_f1 - 1.0f);
     }
 
     // Use imgui UI

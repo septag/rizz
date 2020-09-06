@@ -359,7 +359,7 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
         void* parse_buffer = sx_malloc(g_model.alloc, (size_t)mem->size*4);
         if (!parse_buffer) {
             sx_out_of_memory();
-            return (rizz_asset_load_data) { 0 };
+            return (rizz_asset_load_data) { {0} };
         }
 
         sx_linalloc_init(&linalloc, parse_buffer, (size_t)mem->size*4);
@@ -375,12 +375,12 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
         cgltf_result result = cgltf_parse(&options, mem->data, (size_t)mem->size, &data);
         if (result != cgltf_result_success) {
             rizz_log_warn("cannot parse GLTF file: %s", params->path);
-            return (rizz_asset_load_data) { 0 };
+            return (rizz_asset_load_data) { {0} };
         }
 
         if (data->nodes_count == 0) {
             rizz_log_warn("model '%s' doesn't have any nodes inside", params->path);
-            return (rizz_asset_load_data) { 0 };
+            return (rizz_asset_load_data) { {0} };
         }        
 
         // allocate memory
@@ -448,7 +448,7 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
         rizz_model* model = sx_linear_buffer_calloc(&buff, alloc);
         if (!model) {
             sx_out_of_memory();
-            return (rizz_asset_load_data) { 0 };
+            return (rizz_asset_load_data) { {0} };
         }
 
         model->num_nodes = (int)data->nodes_count;
@@ -475,7 +475,7 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
         return (rizz_asset_load_data) { .obj.ptr = model, .user1 = data, .user2 = parse_buffer };
     }
 
-    return (rizz_asset_load_data) { 0 };
+    return (rizz_asset_load_data) { {0} };
 }
 
 static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params, const sx_mem_block* mem)

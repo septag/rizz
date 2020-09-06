@@ -40,7 +40,14 @@ typedef struct rizz_api_prims3d {
     void (*grid_xzplane)(float spacing, float spacing_bold, const sx_mat4* viewproj_mat, const sx_vec3 frustum[8]);
     void (*grid_xyplane)(float spacing, float spacing_bold, const sx_mat4* viewproj_mat, const sx_vec3 frustum[8]);
     void (*grid_xyplane_cam)(float spacing, float spacing_bold, float dist, const rizz_camera* cam, 
-                             const sx_mat4* viewproj_mat);    
+                             const sx_mat4* viewproj_mat);
+
+    void (*draw_path)(const sx_vec3* points, int num_points, const sx_mat4* viewproj_mat, const sx_color color);
+    void (*draw_line)(const sx_vec3 p0, const sx_vec3 p1, const sx_mat4* viewproj_mat, const sx_color color);
+
+    void (*set_max_instances)(int max_instances);
+    void (*set_max_vertices)(int max_verts);
+    void (*set_max_indices)(int max_indices);
 } rizz_api_prims3d;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

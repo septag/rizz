@@ -42,12 +42,20 @@ typedef struct prims3d__context {
     sg_pipeline pip_solid;
     sg_pipeline pip_alphablend;
     sg_pipeline pip_wire;
+    sg_pipeline pip_wire_strip;
     sg_pipeline pip_wire_ib;
     sg_buffer dyn_vbuff;
     sg_buffer dyn_ibuff;
     sg_buffer instance_buff;
     prims3d__shape unit_box;
     rizz_texture checker_tex;
+    int64_t updated_stats_frame;
+    int max_instances;
+    int max_verts;
+    int max_indices;
+    int num_instances;
+    int num_verts;
+    int num_indices;
 } prims3d__context;
 
 typedef struct prims3d__instance_depth {
@@ -146,6 +154,10 @@ bool prims3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
     sg_pipeline pip_wire = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader_wire, &pip_desc_wire, &k_prims3d_vertex_layout_wire));
 
+    pip_desc_wire.primitive_type = SG_PRIMITIVETYPE_LINE_STRIP;
+    sg_pipeline pip_wire_strip = the_gfx->make_pipeline(
+        the_gfx->shader_bindto_pipeline(&shader_wire, &pip_desc_wire, &k_prims3d_vertex_layout_wire));
+
     pip_desc_wire.index_type = SG_INDEXTYPE_UINT16;
     sg_pipeline pip_wire_ib = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader_wire, &pip_desc_wire, &k_prims3d_vertex_layout_wire));
@@ -161,6 +173,7 @@ bool prims3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
     g_prims3d.pip_alphablend = pip_alphablend;
     g_prims3d.pip_wire = pip_wire;
     g_prims3d.pip_wire_ib = pip_wire_ib;
+    g_prims3d.pip_wire_strip = pip_wire_strip;
 
     g_prims3d.dyn_vbuff = the_gfx->make_buffer(&(sg_buffer_desc){
         .type = SG_BUFFERTYPE_VERTEXBUFFER,
@@ -203,6 +216,10 @@ bool prims3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
     };
     g_prims3d.checker_tex = the_gfx->texture_create_checker(64, 128, checker_colors);
 
+    g_prims3d.max_instances = MAX_INSTANCES;
+    g_prims3d.max_verts = MAX_DYN_VERTICES;
+    g_prims3d.max_indices = MAX_DYN_INDICES;
+
     rizz_temp_alloc_end(tmp_alloc);
     return true;
 }
@@ -233,6 +250,9 @@ void prims3d__release(void)
     if (g_prims3d.pip_wire.id) {
         the_gfx->destroy_pipeline(g_prims3d.pip_wire);
     }
+    if (g_prims3d.pip_wire_strip.id) {
+        the_gfx->destroy_pipeline(g_prims3d.pip_wire_strip);
+    }
     if (g_prims3d.pip_wire_ib.id) {
         the_gfx->destroy_pipeline(g_prims3d.pip_wire_ib);
     }
@@ -247,6 +267,15 @@ void prims3d__release(void)
     }
     if (g_prims3d.shader.id) {
         the_gfx->destroy_shader(g_prims3d.shader);
+    }
+}
+
+static inline void prims3d__reset_stats(void)
+{
+    int64_t frame = the_core->frame_index();
+    if (frame != g_prims3d.updated_stats_frame) {
+        g_prims3d.updated_stats_frame = frame;
+        g_prims3d.num_indices = g_prims3d.num_verts = g_prims3d.num_instances = 0;
     }
 }
 
@@ -277,6 +306,8 @@ void prims3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
 
     rizz_temp_alloc_begin(tmp_alloc);
 
+    prims3d__reset_stats();
+    sx_assert_rel((g_prims3d.num_instances + num_boxes) <= g_prims3d.max_instances);
     prims3d__instance* instances = sx_malloc(tmp_alloc, sizeof(prims3d__instance)*num_boxes);
     if (!instances) {
         sx_out_of_memory();
@@ -294,7 +325,7 @@ void prims3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
         instance->tx1 = sx_vec4f(tx->pos.x, tx->pos.y, tx->pos.z, tx->rot.m11);
         instance->tx2 = sx_vec4f(tx->rot.m21, tx->rot.m31, tx->rot.m12, tx->rot.m22);
         instance->tx3 = sx_vec4f(tx->rot.m23, tx->rot.m13, tx->rot.m23, tx->rot.m33);
-        instance->scale = sx_box_extents(&boxes[i]);
+        instance->scale = sx_vec3_mulf(boxes[i].e, 2.0f);
         instance->color = tints ? tints[i] : SX_COLOR_WHITE;
         sx_assert(!tints || (first_alpha == tints[i].a));
     }
@@ -326,6 +357,7 @@ void prims3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
 
     int inst_offset = draw_api->append_buffer(g_prims3d.instance_buff, instances,
                                               sizeof(prims3d__instance) * num_boxes);
+    g_prims3d.num_instances += num_boxes;
 
     draw_api->apply_pipeline(first_alpha == 255 ? g_prims3d.pip_solid : g_prims3d.pip_alphablend);
     draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniforms));
@@ -442,6 +474,10 @@ void prims3d__draw_aabbs(const sx_aabb* aabbs, int num_aabbs, const sx_mat4* vie
     rizz_api_gfx_draw* draw_api = g_prims3d.draw_api;
     sx_vec3 corners[8];
 
+    prims3d__reset_stats();
+    sx_assert_rel((g_prims3d.num_verts + num_verts) <= g_prims3d.max_verts);
+    sx_assert_rel((g_prims3d.num_verts + num_indices) <= g_prims3d.max_indices);
+
     rizz_temp_alloc_begin(tmp_alloc);
 
     size_t total_sz = num_verts*sizeof(rizz_prims3d_vertex) + num_indices*sizeof(uint16_t);
@@ -484,6 +520,8 @@ void prims3d__draw_aabbs(const sx_aabb* aabbs, int num_aabbs, const sx_mat4* vie
 
     int vb_offset = draw_api->append_buffer(g_prims3d.dyn_vbuff, vertices, num_verts * sizeof(rizz_prims3d_vertex));
     int ib_offset = draw_api->append_buffer(g_prims3d.dyn_ibuff, indices, num_indices * sizeof(uint16_t));
+    g_prims3d.num_verts += num_verts;
+    g_prims3d.num_indices += num_indices;
 
     sg_bindings bind = { 
         .vertex_buffers[0] = g_prims3d.dyn_vbuff, 
@@ -535,6 +573,9 @@ void prims3d__grid_xzplane(float spacing, float spacing_bold, const sx_mat4* vp,
     int ylines = (int)d / nspace + 1;
     int num_verts = (xlines + ylines) * 2;
 
+    prims3d__reset_stats();
+    sx_assert_rel((g_prims3d.num_verts + num_verts) <= g_prims3d.max_verts);
+
     // draw
     int data_size = num_verts * sizeof(rizz_prims3d_vertex);
     rizz_temp_alloc_begin(tmp_alloc);
@@ -576,6 +617,8 @@ void prims3d__grid_xzplane(float spacing, float spacing_bold, const sx_mat4* vp,
     }
 
     int offset = draw_api->append_buffer(g_prims3d.dyn_vbuff, verts, data_size);
+    g_prims3d.num_verts += num_verts;
+
     sg_bindings bind = { 
         .vertex_buffers[0] = g_prims3d.dyn_vbuff, 
         .vertex_buffer_offsets[0] = offset };
@@ -624,6 +667,9 @@ void prims3d__grid_xyplane(float spacing, float spacing_bold, const sx_mat4* vp,
     int ylines = (int)h / nspace + 1;
     int num_verts = (xlines + ylines) * 2;
 
+    prims3d__reset_stats();
+    sx_assert_rel((g_prims3d.num_verts + num_verts) <= g_prims3d.max_verts);
+
     // draw
     int data_size = num_verts * sizeof(rizz_prims3d_vertex);
     rizz_temp_alloc_begin(tmp_alloc);
@@ -665,6 +711,8 @@ void prims3d__grid_xyplane(float spacing, float spacing_bold, const sx_mat4* vp,
     }
 
     int offset = draw_api->append_buffer(g_prims3d.dyn_vbuff, verts, data_size);
+    g_prims3d.num_verts += num_verts;
+
     sg_bindings bind = { 
         .vertex_buffers[0] = g_prims3d.dyn_vbuff, 
         .vertex_buffer_offsets[0] = offset };
@@ -684,3 +732,117 @@ void prims3d__grid_xyplane_cam(float spacing, float spacing_bold, float dist, co
     prims3d__grid_xyplane(spacing, spacing_bold, viewproj_mat, frustum);
 }
 
+void prims3d__set_max_instances(int max_instances)
+{
+    sx_assert(max_instances > 0);
+
+    if (g_prims3d.instance_buff.id) {
+        the_gfx->destroy_buffer(g_prims3d.instance_buff);
+    }
+
+    g_prims3d.instance_buff = the_gfx->make_buffer(&(sg_buffer_desc) {
+        .size = sizeof(prims3d__instance) * max_instances,
+        .type = SG_BUFFERTYPE_VERTEXBUFFER,
+        .usage = SG_USAGE_STREAM,
+    });
+
+    sx_assert_rel(g_prims3d.instance_buff.id);
+    g_prims3d.max_instances = max_instances;
+}
+
+void prims3d__set_max_vertices(int max_verts)
+{
+    sx_assert(max_verts > 0);
+
+    if (g_prims3d.dyn_vbuff.id) {
+        the_gfx->destroy_buffer(g_prims3d.dyn_vbuff);
+    }
+
+    g_prims3d.dyn_vbuff = the_gfx->make_buffer(&(sg_buffer_desc){
+        .type = SG_BUFFERTYPE_VERTEXBUFFER,
+        .usage = SG_USAGE_STREAM,
+        .size = sizeof(rizz_prims3d_vertex) * max_verts });
+
+    sx_assert_rel(g_prims3d.instance_buff.id);
+    g_prims3d.max_verts = max_verts;
+}
+
+void prims3d__set_max_indices(int max_indices)
+{
+    sx_assert(max_indices > 0);
+
+    if (g_prims3d.dyn_ibuff.id) {
+        the_gfx->destroy_buffer(g_prims3d.dyn_ibuff);
+    }
+
+    g_prims3d.dyn_ibuff = the_gfx->make_buffer(&(sg_buffer_desc){
+        .type = SG_BUFFERTYPE_INDEXBUFFER,
+        .usage = SG_USAGE_STREAM,
+        .size = sizeof(rizz_prims3d_vertex) * max_indices });
+
+    sx_assert_rel(g_prims3d.dyn_ibuff.id);
+    g_prims3d.max_indices = max_indices;
+}
+
+void prims3d__draw_path(const sx_vec3* points, int num_points, const sx_mat4* viewproj_mat, const sx_color color)
+{
+    int const num_verts = num_points;
+    int const data_size = num_verts * sizeof(rizz_prims3d_vertex);
+    rizz_api_gfx_draw* draw_api = g_prims3d.draw_api;
+
+    prims3d__reset_stats();
+    sx_assert_rel((g_prims3d.num_verts + num_verts) <= g_prims3d.max_verts);
+
+    rizz_temp_alloc_begin(tmp_alloc);
+    rizz_prims3d_vertex* verts = sx_malloc(tmp_alloc, data_size);
+
+    for (int i = 0; i < num_points; i++) {
+        verts[i].pos = points[i];
+        verts[i].color = color;
+    }
+
+    int offset = draw_api->append_buffer(g_prims3d.dyn_vbuff, verts, data_size);
+    g_prims3d.num_verts += num_verts;
+    sg_bindings bind = { 
+        .vertex_buffers[0] = g_prims3d.dyn_vbuff, 
+        .vertex_buffer_offsets[0] = offset };
+
+    draw_api->apply_pipeline(g_prims3d.pip_wire_strip);
+    draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, viewproj_mat, sizeof(*viewproj_mat));
+    draw_api->apply_bindings(&bind);
+    draw_api->draw(0, num_verts, 1);
+
+    rizz_temp_alloc_end(tmp_alloc);
+}
+
+void prims3d__draw_line(const sx_vec3 p0, const sx_vec3 p1, const sx_mat4* viewproj_mat, const sx_color color)
+{
+    int const num_verts = 2;
+    int const data_size = num_verts * sizeof(rizz_prims3d_vertex);
+    rizz_api_gfx_draw* draw_api = g_prims3d.draw_api;
+
+    prims3d__reset_stats();
+    sx_assert_rel((g_prims3d.num_verts + num_verts) <= g_prims3d.max_verts);
+
+    rizz_temp_alloc_begin(tmp_alloc);
+    rizz_prims3d_vertex* verts = sx_malloc(tmp_alloc, data_size);
+
+    verts[0].pos = p0;
+    verts[0].color = color;
+
+    verts[1].pos = p1;
+    verts[1].color = color;
+
+    int offset = draw_api->append_buffer(g_prims3d.dyn_vbuff, verts, data_size);
+    g_prims3d.num_verts += num_verts;
+    sg_bindings bind = { 
+        .vertex_buffers[0] = g_prims3d.dyn_vbuff, 
+        .vertex_buffer_offsets[0] = offset };
+
+    draw_api->apply_pipeline(g_prims3d.pip_wire);
+    draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, viewproj_mat, sizeof(*viewproj_mat));
+    draw_api->apply_bindings(&bind);
+    draw_api->draw(0, num_verts, 1);
+
+    rizz_temp_alloc_end(tmp_alloc);
+}
