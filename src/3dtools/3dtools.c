@@ -72,7 +72,7 @@ rizz_plugin_decl_main(3dtools, plugin, e)
     return 0;
 }
 
-rizz_plugin_decl_event_handler(2dtools, e) 
+rizz_plugin_decl_event_handler(3dtools, e) 
 {
     if (e->type == RIZZ_APP_EVENTTYPE_UPDATE_APIS) {
         rizz_api_imgui* imgui = the_plugin->get_api_byname("imgui", 0);

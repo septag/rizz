@@ -216,7 +216,6 @@ sapp_desc sokol_main(int argc, char* argv[])
 
     int profile_gpu = 0, dump_unused_assets = 0;
 
-#ifndef RIZZ_BUNDLE
     int version = 0, show_help = 0;
     const sx_cmdline_opt opts[] = {
         { "version", 'V', SX_CMDLINE_OPTYPE_FLAG_SET, &version, 1, "Print version", 0x0 },
@@ -264,6 +263,7 @@ sapp_desc sokol_main(int argc, char* argv[])
         exit(0);
     }
 
+#ifndef RIZZ_BUNDLE
     if (game_filepath == NULL) {
         puts("provide a game module to run (--run)");
         exit(-1);
@@ -286,7 +286,7 @@ sapp_desc sokol_main(int argc, char* argv[])
         exit(-1);
     }
 #else
-    const char* game_filepath = argc > 0 ? argv[0] : "";
+    game_filepath = argc > 0 ? argv[0] : "";
     rizz_game_config_cb* game_config_fn = rizz_game_config;
 #endif    // RIZZ_BUNDLE
 
