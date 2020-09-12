@@ -2116,47 +2116,55 @@ static void rizz__trace_destroy_buffer(sg_buffer buf_id, void* user_data)
 {
     sx_unused(user_data);
     _sg_buffer_t* buf = _sg_lookup_buffer(&_sg.pools, buf_id.id);
-    g_gfx.trace.t.buffer_size -= buf->cmn.size;
-    --g_gfx.trace.t.num_buffers;
+    if (buf) {
+        g_gfx.trace.t.buffer_size -= buf->cmn.size;
+        --g_gfx.trace.t.num_buffers;
+    }
 }
 
 static void rizz__trace_destroy_image(sg_image img_id, void* user_data)
 {
     sx_unused(user_data);
     _sg_image_t* img = _sg_lookup_image(&_sg.pools, img_id.id);
-    if (img->cmn.render_target && _sg_is_valid_rendertarget_color_format(img->cmn.pixel_format) &&
-        _sg_is_valid_rendertarget_depth_format(img->cmn.pixel_format)) {
-        sx_assert(img->cmn.num_mipmaps == 1);
+    if (img) {
+        if (img->cmn.render_target && _sg_is_valid_rendertarget_color_format(img->cmn.pixel_format) &&
+            _sg_is_valid_rendertarget_depth_format(img->cmn.pixel_format)) {
+            sx_assert(img->cmn.num_mipmaps == 1);
 
-        int bytesize = _sg_is_valid_rendertarget_depth_format(img->cmn.pixel_format)
-                           ? 4
-                           : _sg_pixelformat_bytesize(img->cmn.pixel_format);
-        int pixels = img->cmn.width * img->cmn.height * img->cmn.depth;
-        int64_t size = (int64_t)pixels * bytesize;
-        g_gfx.trace.t.render_target_size -= size;
+            int bytesize = _sg_is_valid_rendertarget_depth_format(img->cmn.pixel_format)
+                            ? 4
+                            : _sg_pixelformat_bytesize(img->cmn.pixel_format);
+            int pixels = img->cmn.width * img->cmn.height * img->cmn.depth;
+            int64_t size = (int64_t)pixels * bytesize;
+            g_gfx.trace.t.render_target_size -= size;
+        }
+        --g_gfx.trace.t.num_images;
     }
-    --g_gfx.trace.t.num_images;
 }
 
 static void rizz__trace_destroy_shader(sg_shader shd, void* user_data)
 {
-    sx_unused(shd);
     sx_unused(user_data);
-    --g_gfx.trace.t.num_shaders;
+    if (shd.id) {
+        --g_gfx.trace.t.num_shaders;
+    }
 }
 
 static void rizz__trace_destroy_pipeline(sg_pipeline pip, void* user_data)
 {
-    sx_unused(pip);
     sx_unused(user_data);
-    --g_gfx.trace.t.num_pipelines;
+
+    if (pip.id) {
+        --g_gfx.trace.t.num_pipelines;
+    }
 }
 
 static void rizz__trace_destroy_pass(sg_pass pass, void* user_data)
 {
-    sx_unused(pass);
     sx_unused(user_data);
-    --g_gfx.trace.t.num_passes;
+    if (pass.id) {
+        --g_gfx.trace.t.num_passes;
+    }
 }
 
 static void rizz__trace_begin_pass(sg_pass pass, const sg_pass_action* pass_action, void* user_data)
@@ -3572,22 +3580,30 @@ static sg_pipeline rizz__make_pipeline(const sg_pipeline_desc* desc)
 
 static void rizz__destroy_pipeline(sg_pipeline pip_id)
 {
-    rizz__queue_destroy(g_gfx.destroy_pips, pip_id, g_gfx_alloc);
+    if (pip_id.id) {
+        rizz__queue_destroy(g_gfx.destroy_pips, pip_id, g_gfx_alloc);
+    }
 }
 
 static void rizz__destroy_shader(sg_shader shd_id)
 {
-    rizz__queue_destroy(g_gfx.destroy_shaders, shd_id, g_gfx_alloc);
+    if (shd_id.id) {
+        rizz__queue_destroy(g_gfx.destroy_shaders, shd_id, g_gfx_alloc);
+    }
 }
 
 static void rizz__destroy_pass(sg_pass pass_id)
 {
-    rizz__queue_destroy(g_gfx.destroy_passes, pass_id, g_gfx_alloc);
+    if (pass_id.id) {
+        rizz__queue_destroy(g_gfx.destroy_passes, pass_id, g_gfx_alloc);
+    }
 }
 
 static void rizz__destroy_image(sg_image img_id)
 {
-    rizz__queue_destroy(g_gfx.destroy_images, img_id, g_gfx_alloc);
+    if (img_id.id) {
+        rizz__queue_destroy(g_gfx.destroy_images, img_id, g_gfx_alloc);
+    }
 }
 
 static void rizz__init_buffer(sg_buffer buf_id, const sg_buffer_desc* desc)
@@ -3611,7 +3627,9 @@ static sg_buffer rizz__make_buffer(const sg_buffer_desc* desc)
 
 static void rizz__destroy_buffer(sg_buffer buf_id)
 {
-    rizz__queue_destroy(g_gfx.destroy_buffers, buf_id, g_gfx_alloc);
+    if (buf_id.id) {
+        rizz__queue_destroy(g_gfx.destroy_buffers, buf_id, g_gfx_alloc);
+    }
 }
 
 static void rizz__begin_profile_sample(const char* name, uint32_t* hash_cache)

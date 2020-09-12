@@ -879,6 +879,8 @@ SX_PRAGMA_DIAGNOSTIC_POP();
 
 typedef struct imgui__context {
     ImGuiContext* ctx;
+    int max_verts;
+    int max_indices;
     ImDrawVert* verts;
     uint16_t* indices;
     sg_shader shader;
@@ -918,6 +920,36 @@ static void* imgui__malloc(size_t sz, void* user_data)
 static void imgui__free(void* ptr, void* user_data)
 {
     sx_free((const sx_alloc*)user_data, ptr);
+}
+
+static bool imgui__resize_buffers(int max_verts, int max_indices)
+{
+    const sx_alloc* alloc = the_core->alloc(RIZZ_MEMID_TOOLSET);
+
+    g_imgui.verts = (ImDrawVert*)sx_realloc(alloc, g_imgui.verts, sizeof(ImDrawVert) * max_verts);
+    g_imgui.indices = (uint16_t*)sx_realloc(alloc, g_imgui.indices, sizeof(uint16_t) * max_indices);
+    if (!g_imgui.verts || !g_imgui.indices) {
+        sx_out_of_memory();
+        return false;
+    }
+
+    the_gfx->destroy_buffer(g_imgui.bind.vertex_buffers[0]);
+    the_gfx->destroy_buffer(g_imgui.bind.index_buffer);
+    g_imgui.bind.vertex_buffers[0] =
+        the_gfx->make_buffer(&(sg_buffer_desc){ .type = SG_BUFFERTYPE_VERTEXBUFFER,
+                                                .usage = SG_USAGE_STREAM,
+                                                .size = sizeof(ImDrawVert) * max_verts });
+    g_imgui.bind.index_buffer =
+        the_gfx->make_buffer(&(sg_buffer_desc){ .type = SG_BUFFERTYPE_INDEXBUFFER,
+                                                .usage = SG_USAGE_STREAM,
+                                                .size = sizeof(uint16_t) * max_indices });
+    if (!g_imgui.bind.vertex_buffers[0].id || !g_imgui.bind.index_buffer.id) {
+        return false;
+    }
+
+    g_imgui.max_verts = max_verts;
+    g_imgui.max_indices = max_indices;
+    return true;
 }
 
 static bool imgui__init(void)
@@ -976,21 +1008,10 @@ static bool imgui__init(void)
     conf->KeyMap[ImGuiKey_Z] = RIZZ_APP_KEYCODE_Z;
 
     // Setup graphic objects
-    g_imgui.verts = (ImDrawVert*)sx_malloc(alloc, sizeof(ImDrawVert) * MAX_VERTS);
-    g_imgui.indices = (uint16_t*)sx_malloc(alloc, sizeof(uint16_t) * MAX_INDICES);
-    if (!g_imgui.verts || !g_imgui.indices) {
-        sx_out_of_memory();
+    if (!imgui__resize_buffers(MAX_VERTS, MAX_INDICES)) {
+        rizz_log_error("imgui: could not create vertex/index buffers");
         return false;
     }
-
-    g_imgui.bind.vertex_buffers[0] =
-        the_gfx->make_buffer(&(sg_buffer_desc){ .type = SG_BUFFERTYPE_VERTEXBUFFER,
-                                                .usage = SG_USAGE_STREAM,
-                                                .size = sizeof(ImDrawVert) * MAX_VERTS });
-    g_imgui.bind.index_buffer =
-        the_gfx->make_buffer(&(sg_buffer_desc){ .type = SG_BUFFERTYPE_INDEXBUFFER,
-                                                .usage = SG_USAGE_STREAM,
-                                                .size = sizeof(uint16_t) * MAX_INDICES });
 
     uint8_t* font_pixels;
     int font_width, font_height, bpp;
@@ -1039,20 +1060,13 @@ static void imgui__release()
     if (g_imgui.ctx)
         the__imgui.DestroyContext(g_imgui.ctx);
 
-    if (g_imgui.pip.id)
-        the_gfx->destroy_pipeline(g_imgui.pip);
-    if (g_imgui.bind.vertex_buffers[0].id)
-        the_gfx->destroy_buffer(g_imgui.bind.vertex_buffers[0]);
-    if (g_imgui.bind.index_buffer.id)
-        the_gfx->destroy_buffer(g_imgui.bind.index_buffer);
-    if (g_imgui.shader.id)
-        the_gfx->destroy_shader(g_imgui.shader);
-    if (g_imgui.font_tex.id)
-        the_gfx->destroy_image(g_imgui.font_tex);
-    if (g_imgui.verts)
-        sx_free(alloc, g_imgui.verts);
-    if (g_imgui.indices)
-        sx_free(alloc, g_imgui.indices);
+    the_gfx->destroy_pipeline(g_imgui.pip);
+    the_gfx->destroy_buffer(g_imgui.bind.vertex_buffers[0]);
+    the_gfx->destroy_buffer(g_imgui.bind.index_buffer);
+    the_gfx->destroy_shader(g_imgui.shader);
+    the_gfx->destroy_image(g_imgui.font_tex);
+    sx_free(alloc, g_imgui.verts);
+    sx_free(alloc, g_imgui.indices);
     sx_array_free(the_core->alloc(RIZZ_MEMID_TOOLSET), g_imgui.char_input);
 }
 
@@ -1167,14 +1181,24 @@ static void imgui__draw(ImDrawData* draw_data)
         const int dl_num_verts = dl->VtxBuffer.Size;
         const int dl_num_indices = dl->IdxBuffer.Size;
 
-        if ((num_verts + dl_num_verts) > MAX_VERTS) {
-            sx_assert(0 && "imgui: vertex buffer overflowed");
-            break;
+        int max_verts = g_imgui.max_verts;
+        int max_indices = g_imgui.max_indices;
+        if ((num_verts + dl_num_verts) > max_verts) {
+            rizz_log_warn("imgui:maximum vertex count %d exceeded, growing buffers", g_imgui.max_verts);
+            max_verts <<= 1;
         }
 
-        if ((num_indices + dl_num_indices) > MAX_INDICES) {
-            sx_assert(0 && "imgui: index buffer overflowed");
-            break;
+        if ((num_indices + dl_num_indices) > max_indices) {
+            rizz_log_warn("imgui:maximum index count %d exceeded, growing buffers", g_imgui.max_indices);
+            max_indices <<= 1;
+        }
+
+        if (max_verts > g_imgui.max_verts || max_indices > g_imgui.max_indices) {
+            bool _r = imgui__resize_buffers(max_verts, max_indices);
+            sx_unused(_r);
+            sx_assert_rel(_r && "imgui: vertex/index buffer creation failed");
+            verts = g_imgui.verts;
+            indices = g_imgui.indices;
         }
 
         sx_memcpy(&verts[num_verts], dl->VtxBuffer.Data, dl_num_verts * sizeof(ImDrawVert));
@@ -1186,9 +1210,8 @@ static void imgui__draw(ImDrawData* draw_data)
         num_verts += dl_num_verts;
     }
 
-    the_gfx->imm.update_buffer(g_imgui.bind.vertex_buffers[0], verts,
-                               MAX_VERTS * sizeof(ImDrawVert));
-    the_gfx->imm.update_buffer(g_imgui.bind.index_buffer, indices, MAX_INDICES * sizeof(uint16_t));
+    the_gfx->imm.update_buffer(g_imgui.bind.vertex_buffers[0], verts, num_verts * sizeof(ImDrawVert));
+    the_gfx->imm.update_buffer(g_imgui.bind.index_buffer, indices, num_indices * sizeof(uint16_t));
 
     // Draw the list
     ImGuiIO* io = the__imgui.GetIO();

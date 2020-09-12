@@ -456,11 +456,17 @@ static void rizz__app_mouse_release(void)
 #endif
 }
 
+static const rizz_config* rizz__app_config(void)
+{
+    return &g_app.conf;
+}
+
 rizz_api_app the__app = { .width = sapp_width,
                           .height = sapp_height,
                           .sizef = rizz__app_sizef,
                           .highdpi = sapp_high_dpi,
                           .dpiscale = sapp_dpi_scale,
+                          .config = rizz__app_config,
                           .show_keyboard = sapp_show_keyboard,
                           .keyboard_shown = sapp_keyboard_shown,
                           .name = rizz__app_name,

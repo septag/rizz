@@ -249,12 +249,15 @@ typedef struct rizz_app_event {
 
 typedef void(rizz_app_event_cb)(const rizz_app_event*);
 
+typedef struct rizz_config rizz_config;
+
 typedef struct rizz_api_app {
     int (*width)(void);
     int (*height)(void);
     sx_vec2 (*sizef)(void);
     bool (*highdpi)(void);
     float (*dpiscale)(void);
+    const rizz_config* (*config)(void);
     void (*show_keyboard)(bool show);
     bool (*keyboard_shown)(void);
     bool (*key_pressed)(rizz_keycode key);
