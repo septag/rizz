@@ -268,6 +268,7 @@ set(native_projects sx
                     imgui
                     2dtools
                     3dtools 
+                    astar 
                     sound
                     input)
 
