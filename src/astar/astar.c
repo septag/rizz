@@ -50,19 +50,18 @@ static inline sx_vec2 worldcoord(const rizz_astar_world* world, loc _loc)
     return sx_vec2f(xx, yy);
 }
 
+static inline int abs__(int v) { return v >= 0 ? v : -v; }
+
 static inline int heuristic(loc a, loc b)
 {
-    int dx = sx_abs(a.x - b.x);
-    int dy = sx_abs(a.y - b.y);
-    int ortho = sx_abs(dx - dy);
-    int diag = sx_abs(((dx + dy) - ortho) / 2);
+    int dx = abs__(a.x - b.x);
+    int dy = abs__(a.y - b.y);
+    int ortho = abs__(dx - dy);
+    int diag = abs__(((dx + dy) - ortho) / 2);
     return diag + ortho + dx + dy;
 }
 
-static void astar__set_maxsearch(uint32_t value)
-{
-    g_maxsearch = value;
-}
+static void astar__set_maxsearch(uint32_t value) { g_maxsearch = value; }
 
 static bool astar__findpath(const rizz_astar_world* world, const rizz_astar_agent* agent,
                             sx_vec2 start, sx_vec2 end, rizz_astar_path* path)
