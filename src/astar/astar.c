@@ -33,18 +33,14 @@ static inline void gridcoord(const rizz_astar_world* world, sx_vec2 wpos, loc* _
     wpos = sx_vec2_mulf(wpos, 1.0f / world->scale);
     wpos.x = sx_round(wpos.x);
     wpos.y = sx_round(wpos.y);
-    _loc->x = (uint16_t)wpos.x;
-    _loc->y = (uint16_t)wpos.y;
-
-    if (_loc->x < 0)
-        _loc->x = 0;
-    else if (_loc->x >= world->width)
-        _loc->x = world->width - 1;
-
-    if (_loc->y < 0)
-        _loc->y = 0;
-    else if (_loc->y >= world->height)
-        _loc->y = world->height - 1;
+    int xmax = world->width - 1;
+    int ymax = world->height - 1;
+    int x = (int)wpos.x;
+    int y = (int)wpos.y;
+    *_loc = (loc){
+        .x = sx_clamp(x, 0, xmax),
+        .y = sx_clamp(y, 0, ymax),
+    };
 }
 
 static inline sx_vec2 worldcoord(const rizz_astar_world* world, loc _loc)
