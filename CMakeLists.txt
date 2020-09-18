@@ -303,9 +303,10 @@ set(example_projects 01-hello
                      03-drawsprite 
                      04-animsprite
                      05-playsound
-					 06-sdf
+                     06-sdf
                      07-nbody
-                     08-draw3d)
+                     08-draw3d
+                     09-pathfind)
                      
 # exceptions
 # currently compute-shaders are only supported on windows, so we ignore examples that use them
