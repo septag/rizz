@@ -282,7 +282,7 @@ SX_API sx_mat4 sx_mat4_project_plane(const sx_vec3 plane_normal);
 SX_API sx_mat3 sx_mat3_inv(const sx_mat3* _a);
 SX_API sx_mat3 sx_mat3_mul(const sx_mat3* _a, const sx_mat3* _b);
 
-SX_API sx_mat3 sx_quad_mat3(const sx_quat quat);
+SX_API sx_mat3 sx_quat_mat3(const sx_quat quat);
 SX_API sx_mat4 sx_quat_mat4(const sx_quat quat);
 
 SX_API void sx_color_RGBtoHSV(float _hsv[3], const float _rgb[3]);

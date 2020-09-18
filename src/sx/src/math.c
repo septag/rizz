@@ -867,7 +867,7 @@ sx_mat4 sx_mat4_project_plane(const sx_vec3 plane_normal)
     // clang-format on
 }
 
-sx_mat3 sx_quad_mat3(const sx_quat quat)
+sx_mat3 sx_quat_mat3(const sx_quat quat)
 {
     float norm = sx_sqrt(sx_quat_dot(quat, quat));
     float s = norm > 0.0f ? (2.0f / norm) : 0.0f;
