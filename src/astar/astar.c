@@ -87,8 +87,8 @@ static bool astar__findpath(const rizz_astar_world* world, const rizz_astar_agen
     while (!sx_bheap_empty(openlist)) {
         cell* ccell = (cell*)sx_bheap_pop_min(openlist).user;
         loc cloc = (loc){
-            .x = (ccell - calcgrid) % world->width,
-            .y = (ccell - calcgrid) / world->width,
+            .x = (uint16_t)((uint64_t)(ccell - calcgrid) % world->width),
+            .y = (uint16_t)((uint64_t)(ccell - calcgrid) / world->width),
         };
         ccell->stat = closev;
 
