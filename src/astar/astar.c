@@ -151,6 +151,17 @@ static bool astar__findpath(const rizz_astar_world* world, const rizz_astar_agen
             sx_array_push(path->alloc, path->array, worldcoord(world, sloc));
         }
 
+        { // reverse array
+            int count = sx_array_count(path->array);
+            int half = count / 2;
+            for (int i = 0; i < half; i++) {
+                int ri = count - i - 1;
+                sx_vec2 tmp = path->array[i];
+                path->array[i] = path->array[ri];
+                path->array[ri] = tmp;
+            }
+        }
+
         goto succeed;
     } else {
         goto fail;
