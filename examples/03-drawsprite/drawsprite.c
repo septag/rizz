@@ -364,7 +364,7 @@ rizz_plugin_decl_main(drawsprite, plugin, e)
 {
     switch (e) {
     case RIZZ_PLUGIN_EVENT_STEP:
-        update((float)sx_tm_sec(the_core->delta_tick()));
+        update(the_core->delta_time());
         render();
         break;
 

@@ -1,6 +1,6 @@
 ## astar plugin
 
-provides grid based astar pathfinding.
+Provides grid based astar pathfinding. For demo, see **09-pathfind** example.
 
 ### Usage
 

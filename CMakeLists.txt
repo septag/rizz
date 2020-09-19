@@ -270,7 +270,8 @@ set(native_projects sx
                     3dtools 
                     astar 
                     sound
-                    input)
+                    input
+                    collision)
 
 if (installed_plugins)
     message(STATUS "The following plugins are found:")
@@ -306,7 +307,8 @@ set(example_projects 01-hello
                      06-sdf
                      07-nbody
                      08-draw3d
-                     09-pathfind)
+                     09-pathfind
+                     10-collideboxes)
                      
 # exceptions
 # currently compute-shaders are only supported on windows, so we ignore examples that use them
