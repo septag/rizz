@@ -42,6 +42,7 @@ Many of the engine features are implemented in the plugins:
 - [sound](src/sound): Simple sound system. Audio mixer and 2d-sounds. 
 - [input](src/input): Input system with gamepad and touch support
 - [3dtools](src/3dtools): 3D rendering tools: support for GLTF 3d models, basic debug primitive creation and drawing
+- [collision](src/collision): 2.5D/Isometric Collision detection plugin
 
 #### Debugging and Profiling
 - *Remote Profiler*: Integrated *Remotery* for remote debugger/command console and log viewer.
@@ -129,6 +130,7 @@ But as the engine is in it's early age, the current platforms are built and test
 - [basis_universal](https://github.com/BinomialLLC/basis_universal): Basis Universal GPU Texture Codec 
 - [fontstash](https://github.com/memononen/fontstash): Light-weight online font texture atlas builder *(used in 2dtools plugin)*
 - [cgltf](https://github.com/jkuhlmann/cgltf): Single-file glTF 2.0 loader and writer written in C99 *(used in 3dtools plugin)*
+- [cute_headers](https://github.com/RandyGaul/cute_headers): Randy Gaul's header libs (cute_c2.h used in collision plugin)
 
 [License (BSD 2-clause)](https://github.com/septag/rizz/blob/master/LICENSE)
 --------------------------------------------------------------------------

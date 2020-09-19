@@ -305,7 +305,8 @@ set(example_projects 01-hello
                      05-playsound
 					 06-sdf
                      07-nbody
-                     08-draw3d)
+                     08-draw3d
+                     10-collideboxes)
                      
 # exceptions
 # currently compute-shaders are only supported on windows, so we ignore examples that use them

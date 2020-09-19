@@ -6,7 +6,7 @@
 #include "sx/hash.h"
 #include "sx/handle.h"
 #include "sx/math.h"
-#include "sx/sx.h"
+#include "sx/string.h"
 
 #ifndef STRIKE_DEBUG_COLLISION
 #   define STRIKE_DEBUG_COLLISION 1
@@ -41,6 +41,8 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG("-Wswitch")
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG("-Wunused-function")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_GCC("-Wmaybe-uninitialized")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_GCC("-Wshadow")
 #include "cute_headers/cute_c2.h"
 SX_PRAGMA_DIAGNOSTIC_POP()
 #undef CUTE_C2_IMPLEMENTATION
@@ -234,7 +236,7 @@ static void coll_add_boxes(rizz_coll_context* ctx, const sx_box* boxes, const ui
     int const num_cells_x = ctx->num_cells_x;
 
     for (int i = 0; i < count; i++) {
-        int count = ctx->handles->count;
+        int handles_count = ctx->handles->count;
         sx_handle_t handle = sx_handle_new_and_grow(ctx->handles, alloc);
         sx_assert_rel(handle);
 
@@ -251,7 +253,7 @@ static void coll_add_boxes(rizz_coll_context* ctx, const sx_box* boxes, const ui
         sx_aabb transformed_aabb = sx_aabb_transform(&aabb, &transform_mat);
         sx_box transformed_box = sx_box_set(sx_tx3d_mul(&transforms[i], &boxes[i].tx), boxes[i].e);
 
-        if (index >= count) {
+        if (index >= handles_count) {
             sx_array_push(alloc, ctx->ent_mask_pairs, em_pair);
             sx_array_push(alloc, ctx->polys, poly);
             sx_array_push(alloc, ctx->boxes, boxes[i]);
@@ -299,22 +301,22 @@ static void coll_add_static_polys(rizz_coll_context* ctx, const rizz_coll_shape_
     sx_box empty_box = sx_box_set(sx_tx3d_ident(), SX_VEC3_ZERO);
 
     for (int i = 0; i < count; i++) {
-        int count = ctx->handles->count;
+        int handles_count = ctx->handles->count;
         sx_handle_t handle = sx_handle_new_and_grow(ctx->handles, alloc);
         sx_assert_rel(handle);
         int index = sx_handle_index(handle);
 
         const rizz_coll_shape_poly* poly = &polys[i];
         sx_aabb aabb = sx_aabb_empty();
-        for (int i = 0; i < poly->count; i++) {
-            sx_aabb_add_point(&aabb, sx_vec3fv(poly->verts[i].f));
+        for (int ii = 0; ii < poly->count; ii++) {
+            sx_aabb_add_point(&aabb, sx_vec3fv(poly->verts[ii].f));
         }
         coll_entity_mask_pair em_pair = {
             .entity = ents[i],
             .mask = masks[i]
         };
 
-        if (index >= count) {
+        if (index >= handles_count) {
             sx_array_push(alloc, ctx->ent_mask_pairs, em_pair);
             sx_array_push(alloc, ctx->polys, *poly);
             sx_array_push(alloc, ctx->boxes, empty_box);
@@ -776,7 +778,7 @@ static bool coll_ray_cast_box(sx_box* box, rizz_coll_ray ray, rizz_coll_rayhit* 
     
     float t0;
     float t1;
-    sx_vec3 n0;
+    sx_vec3 n0 = SX_VEC3_ZERO;
     sx_vec3 e = box->e;
 
     for (int i = 0; i < 3; i++) {
@@ -1275,6 +1277,7 @@ rizz_plugin_decl_main(collision, plugin, e)
     case RIZZ_PLUGIN_EVENT_INIT:
         the_plugin = plugin->api;
         the_core = the_plugin->get_api(RIZZ_API_CORE, 0);
+        the_app = the_plugin->get_api(RIZZ_API_APP, 0);
         the_imgui = the_plugin->get_api_byname("imgui", 0);
         the_imguix = the_plugin->get_api_byname("imgui_extra", 0);
         the_gfx = the_plugin->get_api(RIZZ_API_GFX, 0);
