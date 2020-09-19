@@ -269,7 +269,8 @@ set(native_projects sx
                     2dtools
                     3dtools 
                     sound
-                    input)
+                    input
+                    collision)
 
 if (installed_plugins)
     message(STATUS "The following plugins are found:")
