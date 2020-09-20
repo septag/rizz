@@ -5,6 +5,7 @@
 
 #define ASTAR_DEFAULT_COST 10
 #define ASTAR_DIAGONAL_COST 14
+#define ASTAR_CHANGE_DIR_COST 10
 
 RIZZ_STATE static uint32_t g_maxsearch = 10000;
 static int k_dirs[8][2] = { { 0, -1 }, { 1, 0 }, { 0, 1 },  { -1, 0 },
@@ -97,6 +98,11 @@ static bool astar__findpath(const rizz_astar_world* world, const rizz_astar_agen
             break;
         }
 
+        loc cdir = (loc){
+            .x = (uint16_t)(ccell->p.x - cloc.x),
+            .y = (uint16_t)(ccell->p.y - cloc.y),
+        };
+
         for (int32_t i = 0; i < 8; i++) {
             loc nloc = (loc){
                 .x = (uint16_t)(cloc.x + k_dirs[i][0]),
@@ -115,6 +121,14 @@ static bool astar__findpath(const rizz_astar_world* world, const rizz_astar_agen
                 continue;
 
             int32_t ng = ccell->g + cost * (i > 3 ? ASTAR_DIAGONAL_COST : ASTAR_DEFAULT_COST);
+
+            loc ndir = (loc){
+                .x = (uint16_t)(cloc.x - nloc.x),
+                .y = (uint16_t)(cloc.y - nloc.y),
+            };
+
+            if (cdir.id != ndir.id)
+                ng += ASTAR_CHANGE_DIR_COST;
 
             if (ncell->stat == 0 || ncell->g > ng) {
                 ncell->g = ng;
