@@ -7,7 +7,7 @@ RIZZ_STATE static rizz_api_plugin* the_plugin;
 // ------- spline api --------
 void spline__eval2d(const rizz_spline2d_desc* desc, sx_vec2* result);
 void spline__eval3d(const rizz_spline3d_desc* desc, sx_vec3* result);
-static rizz_api_spline the__spline = (rizz_api_spline){
+static rizz_api_spline the__spline = {
     .eval2d = spline__eval2d,
     .eval3d = spline__eval3d,
 };
@@ -17,7 +17,7 @@ float noise__perlin1d(float x);
 float noise__perlin2d(float x, float y);
 float noise__perlin1d_fbm(float x, int octave);
 float noise__perlin2d_fbm(float x, float y, int octave);
-static rizz_api_noise the__noise = (rizz_api_noise){
+static rizz_api_noise the__noise = {
     .perlin1d = noise__perlin1d,
     .perlin2d = noise__perlin2d,
     .perlin1d_fbm = noise__perlin1d_fbm,
