@@ -269,6 +269,7 @@ set(native_projects sx
                     2dtools
                     3dtools 
                     astar 
+                    utility 
                     sound
                     input
                     collision)
@@ -308,7 +309,8 @@ set(example_projects 01-hello
                      07-nbody
                      08-draw3d
                      09-pathfind
-                     10-collideboxes)
+                     10-collideboxes
+                     11-spline)
                      
 # exceptions
 # currently compute-shaders are only supported on windows, so we ignore examples that use them
