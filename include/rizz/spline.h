@@ -8,9 +8,9 @@
     sx_vec3 rwing;
 
 #define RIZZ_SPLINE2D_NODE_FIELDS \
-    sx_vec3 pos;                  \
-    sx_vec3 lwing;                \
-    sx_vec3 rwing;
+    sx_vec2 pos;                  \
+    sx_vec2 lwing;                \
+    sx_vec2 rwing;
 
 typedef struct rizz_spline3d_node {
     RIZZ_SPLINE3D_NODE_FIELDS
