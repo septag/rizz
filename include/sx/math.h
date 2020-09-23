@@ -7,9 +7,9 @@
 // License: https://github.com/bkaradzic/bx#license-bsd-2-clause
 //
 //
-// math.h - 1.3    Scalar and Vector math functions
+// math.h - 1.4    Scalar and Vector math functions
 //                 Contains vector primitives and vector/fpu math functions, event functions implemented in libm
-//                 Many functions are taken from bx library (https://github.com/bkaradzic/bx)
+//                 Some essential functions are taken from bx library (https://github.com/bkaradzic/bx)
 // Easings:
 //      Reference: https://easings.net/
 //                 https://github.com/r-lyeh-archived/tween
@@ -284,6 +284,8 @@ SX_API sx_mat3 sx_mat3_mul(const sx_mat3* _a, const sx_mat3* _b);
 
 SX_API sx_mat3 sx_quat_mat3(const sx_quat quat);
 SX_API sx_mat4 sx_quat_mat4(const sx_quat quat);
+SX_API sx_quat sx_quat_lerp(const sx_quat _a, const sx_quat _b, float t);
+SX_API sx_quat sx_quat_slerp(const sx_quat _a, sx_quat _b, float t);
 
 SX_API void sx_color_RGBtoHSV(float _hsv[3], const float _rgb[3]);
 SX_API void sx_color_HSVtoRGB(float _rgb[3], const float _hsv[3]);
@@ -827,48 +829,6 @@ static inline sx_quat sx_quat_norm(const sx_quat _quat)
         sx_assert(0 && "divide by zero");
         return sx_quat_ident();
     }
-}
-
-static inline sx_quat sx_quat_lerp(const sx_quat _a, const sx_quat _b, float t)
-{
-    float tinv = 1.0f - t;
-    float dot = sx_quat_dot(_a, _b);
-    sx_quat r;
-    if (dot >= 0.0f) {
-        r = sx_quat4f(tinv * _a.x + t * _b.x, tinv * _a.y + t * _b.y, tinv * _a.z + t * _b.z, tinv * _a.w + t * _b.w);
-    } else {
-        r = sx_quat4f(tinv * _a.x - t * _b.x, tinv * _a.y - t * _b.y, tinv * _a.z - t * _b.z, tinv * _a.w - t * _b.w);
-    }
-    return sx_quat_norm(r);
-}
-
-static inline sx_quat sx_quat_slerp(const sx_quat _a, sx_quat _b, float t)
-{
-    const float epsilon = 1e-6f;
-
-    float dot = sx_quat_dot(_a, _b);
-    bool flip = false;
-    if (dot < 0.0f) {
-        flip = true;
-        dot *= -1.0f;
-    }
-
-    float s1, s2;
-    if (dot > (1.0f - epsilon)) {
-        s1 = 1.0f - t;
-        s2 = t;
-        if (flip)
-            s2 *= -1.0f;
-    } else {
-        float omega = sx_acos(dot);
-        float inv_omega_sin = 1.0f / sx_sin(omega);
-        s1 = sx_sin((1.0f - t) * omega) * inv_omega_sin;
-        s2 = sx_sin(t * omega) * inv_omega_sin;
-        if (flip)
-            s2 *= -1.0f;
-    }
-    return sx_quat4f(s1 * _a.x + s2 * _b.x, s1 * _a.y + s2 * _b.y, s1 * _a.z + s2 * _b.z,
-                     s1 * _a.w + s2 * _b.w);
 }
 
 static inline sx_vec3 sx_quat_toeuler(const sx_quat _quat)
@@ -2406,3 +2366,4 @@ SX_API sx_color SX_COLOR_PURPLE;
 //      v1.2.0      Added new primitives like color and rect
 //      v1.2.1      Moved std-math.h to C unit
 //      v1.3        Added tx3d (transform), box and plane primitives
+//      v1.4        Added more primitives, and quaternion lerping
