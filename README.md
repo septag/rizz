@@ -44,6 +44,7 @@ Many of the engine features are implemented in the plugins:
 - [3dtools](src/3dtools): 3D rendering tools: support for GLTF 3d models, basic debug primitive creation and drawing
 - [astar](src/astar): A* path-finding implementation plugin (see the readme in the directory for more info)
 - [collision](src/collision): 2.5D/Isometric Collision detection plugin
+- [utility](src/utility): misc utility functionality. Currently, _spline_ and _noise_ generator
 
 #### Debugging and Profiling
 - *Remote Profiler*: Integrated *Remotery* for remote debugger/command console and log viewer.
