@@ -310,7 +310,7 @@ set(example_projects 01-hello
                      08-draw3d
                      09-pathfind
                      10-collideboxes
-                     11-spline)
+                     11-pathspline)
                      
 # exceptions
 # currently compute-shaders are only supported on windows, so we ignore examples that use them

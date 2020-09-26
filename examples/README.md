@@ -72,3 +72,9 @@ Demonstrates basic application setup. Just clears the view with blue color.
 - Debug visualizations for collision and raycast
 
 ![10-collideboxes](screenshots/10-collideboxes.png)
+
+### [PathSpline](11-pathspline/pathspline.c)
+- Demonstrate the _spline_ API presented by _utility_ plugin
+- Camera movement along path
+
+![11-pathspline](screenshots/11-pathspline.png)

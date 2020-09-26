@@ -8,6 +8,8 @@
 #include "sx/rng.h"
 #include "sx/array.h"
 
+#include "../common.h"
+
 #define MAP_SIZE_X 200.0f
 #define MAP_SIZE_Y 200.0f
 #define NUM_SHAPES 2000
@@ -211,6 +213,8 @@ static void update(float dt)
             g_coll.ents[hit.ent].raycast_frame = frame;
         }
     }
+	
+	show_debugmenu(the_imgui, the_core);	
 
     if (the_imgui->Begin("collision", NULL, 0)) {
         if (the_imgui->Checkbox("Visualize Collision (F3)", &g_coll.show_collision_debugger)) {
