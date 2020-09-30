@@ -13,6 +13,10 @@
 
 #include <stdio.h>
 
+#if SX_COMPILER_CLANG  
+#include <assert.h>  // static_assert ?! 
+#endif
+
 #include "Remotery.h"
 
 // Choose api based on the platform
