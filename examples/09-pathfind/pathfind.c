@@ -229,7 +229,7 @@ static bool init()
                                                    .vbuff_usage = SG_USAGE_IMMUTABLE,
                                                    .ibuff_usage = SG_USAGE_IMMUTABLE },
                         RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD, NULL, 0);
-    sx_assert_rel(g_draw3d.agent_model.id);
+    sx_assert_always(g_draw3d.agent_model.id);
 
 
     char shader_path[RIZZ_MAX_PATH];

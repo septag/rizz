@@ -2485,7 +2485,7 @@ drwav_bool32 drwav_seek_to_sample(drwav* pWav, drwav_uint64 sample)
                 } else if (pWav->translatedFormatTag == DR_WAVE_FORMAT_DVI_ADPCM) {
                     samplesRead = drwav_read_s16__ima(pWav, samplesToRead, devnull);
                 } else {
-                    assert(DRWAV_FALSE);    /* If this assertion is triggered it means I've implemented a new compressed format but forgot to add a branch for it here. */
+                    DRWAV_ASSERT(DRWAV_FALSE);    /* If this assertion is triggered it means I've implemented a new compressed format but forgot to add a branch for it here. */
                 }
 
                 if (samplesRead != samplesToRead) {

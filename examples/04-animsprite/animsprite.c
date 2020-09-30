@@ -263,7 +263,7 @@ rizz_plugin_decl_main(animsprite, plugin, e)
         the_imgui = the_plugin->get_api_byname("imgui", 0);
         the_imguix = the_plugin->get_api_byname("imgui_extra", 0);
         the_sprite = the_plugin->get_api_byname("sprite", 0);
-        sx_assert(the_sprite && "sprite plugin is not loaded!");
+        sx_assertf(the_sprite, "sprite plugin is not loaded!");
 
         init();
         break;

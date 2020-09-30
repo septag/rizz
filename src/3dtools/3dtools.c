@@ -10,6 +10,8 @@ RIZZ_STATE static rizz_api_plugin* the_plugin;
 static rizz_api_prims3d the__prims3d = {
     .draw_box = prims3d__draw_box,
     .draw_boxes = prims3d__draw_boxes,
+    .draw_sphere = prims3d__draw_sphere,
+    .draw_spheres = prims3d__draw_spheres,
     .generate_box_geometry = prims3d__generate_box_geometry,
     .free_geometry = prims3d__free_geometry,
     .draw_aabb = prims3d__draw_aabb,

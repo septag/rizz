@@ -380,7 +380,7 @@ rizz_plugin_decl_main(drawsprite, plugin, e)
         the_imgui = plugin->api->get_api_byname("imgui", 0);
         the_sprite = plugin->api->get_api_byname("sprite", 0);
         the_font = plugin->api->get_api_byname("font", 0);
-        sx_assert(the_sprite && "sprite plugin is not loaded!");
+        sx_assertf(the_sprite, "sprite plugin is not loaded!");
 
         if (!init())
             return -1;

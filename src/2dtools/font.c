@@ -466,7 +466,7 @@ void font__release(void)
 const rizz_font* font__get(rizz_asset font_asset)
 {
 #if RIZZ_DEV_BUILD
-    sx_assert_rel(sx_strequal(the_asset->type_name(font_asset), "font") && "asset handle is not a font");
+    sx_assert_always(sx_strequal(the_asset->type_name(font_asset), "font") && "asset handle is not a font");
 #endif
     return (const rizz_font*)the_asset->obj(font_asset).ptr;
 }

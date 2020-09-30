@@ -246,7 +246,7 @@ static void rizz__refl_reg(rizz_refl_type internal_type, void* any, const char* 
     // determine size of array elements (built-in types)
     int stride = rizz__refl_type_size(r.type);
     if ((r.r.flags & RIZZ_REFL_FLAG_IS_ARRAY) && !(r.r.flags & RIZZ_REFL_FLAG_IS_STRUCT)) {
-        sx_assert(stride > 0 && "invalid built-in type for array");
+        sx_assertf(stride > 0, "invalid built-in type for array");
         r.r.array_size = size / stride;
         r.r.stride = stride;
     }

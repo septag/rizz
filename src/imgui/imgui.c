@@ -1196,7 +1196,7 @@ static void imgui__draw(ImDrawData* draw_data)
         if (max_verts > g_imgui.max_verts || max_indices > g_imgui.max_indices) {
             bool _r = imgui__resize_buffers(max_verts, max_indices);
             sx_unused(_r);
-            sx_assert_rel(_r && "imgui: vertex/index buffer creation failed");
+            sx_assert_always(_r && "imgui: vertex/index buffer creation failed");
             verts = g_imgui.verts;
             indices = g_imgui.indices;
         }
@@ -1959,7 +1959,7 @@ static void imgui__submit_make_commands(const void* cmdbuff, int cmdbuff_sz)
             _sg_imgui_make_pass(&desc, pass, &g_imgui.sg_imgui);
         } break;
         default:
-            assert(0);
+            sx_assert(0);
         }
     }
 }

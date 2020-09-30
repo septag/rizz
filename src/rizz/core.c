@@ -263,7 +263,7 @@ static void rizz__log_register_backend(const char* name,
 {    // backend name must be unique
     for (int i = 0, c = sx_array_count(g_core.log_backends); i < c; i++) {
         if (sx_strequal(g_core.log_backends[i].name, name)) {
-            sx_assert_rel(0 && "duplicate backend name/already registered?");
+            sx_assert_always(0 && "duplicate backend name/already registered?");
             return;
         }
     }
@@ -321,7 +321,7 @@ static void rizz__log_backend_debugger(const rizz_log_entry* entry, void* user)
                     entry->text);
         OutputDebugStringA(text);
     } else {
-        sx_assert_rel(0 && "out of stack memory");
+        sx_assert_always(0 && "out of stack memory");
     }
 #else
     sx_unused(entry);
@@ -355,7 +355,7 @@ static void rizz__log_backend_terminal(const rizz_log_entry* entry, void* user)
                     entry->text, close_fmt);
         puts(text);
     } else {
-        sx_assert_rel(0 && "out of stack memory");
+        sx_assert_always(0 && "out of stack memory");
     }
 }
 
@@ -401,7 +401,7 @@ static void rizz__log_backend_android(const rizz_log_entry* entry, void* user)
         sx_snprintf(text, new_size, "%s: %s", source, entry->text);
         __android_log_write(apriority, g_core.app_name, text);
     } else {
-        sx_assert_rel(0 && "out of stack memory");
+        sx_assert_always(0 && "out of stack memory");
     }
 }
 #endif // SX_PLATFORM_ANDROID
@@ -420,7 +420,7 @@ static void rizz__log_backend_remotery(const rizz_log_entry* entry, void* user)
         sx_snprintf(text, new_size, "%s%s%s", source, k_log_entry_types[entry->type], entry->text);
         rmt_LogText(text);
     } else {
-        sx_assert_rel(0 && "out of stack memory");
+        sx_assert_always(0 && "out of stack memory");
     }
 }
 
@@ -466,7 +466,7 @@ static void rizz__print_info(uint32_t channels, const char* source_file, int lin
     int fmt_len = sx_strlen(fmt);
     char* text = alloca(fmt_len + 1024);    // reserve only 1k for format replace strings
     if (!text) {
-        sx_assert_rel(0 && "out of stack memory");
+        sx_assert_always(0 && "out of stack memory");
         return;
     }
 
@@ -495,7 +495,7 @@ static void rizz__print_debug(uint32_t channels, const char* source_file, int li
     int fmt_len = sx_strlen(fmt);
     char* text = alloca(fmt_len + 1024);    // reserve only 1k for format replace strings
     if (!text) {
-        sx_assert_rel(0 && "out of stack memory");
+        sx_assert_always(0 && "out of stack memory");
         return;
     }
 
@@ -529,7 +529,7 @@ static void rizz__print_verbose(uint32_t channels, const char* source_file, int 
     int fmt_len = sx_strlen(fmt);
     char* text = alloca(fmt_len + 1024);    // reserve only 1k for format replace strings
     if (!text) {
-        sx_assert_rel(0 && "out of stack memory");
+        sx_assert_always(0 && "out of stack memory");
         return;
     }
 
@@ -557,7 +557,7 @@ static void rizz__print_error(uint32_t channels, const char* source_file, int li
     int fmt_len = sx_strlen(fmt);
     char* text = alloca(fmt_len + 1024);    // reserve only 1k for format replace strings
     if (!text) {
-        sx_assert_rel(0 && "out of stack memory");
+        sx_assert_always(0 && "out of stack memory");
         return;
     }
 
@@ -585,7 +585,7 @@ static void rizz__print_warning(uint32_t channels, const char* source_file, int 
     int fmt_len = sx_strlen(fmt);
     char* text = alloca(fmt_len + 1024);    // reserve only 1k for format replace strings
     if (!text) {
-        sx_assert_rel(0 && "out of stack memory");
+        sx_assert_always(0 && "out of stack memory");
         return;
     }
 
@@ -734,7 +734,7 @@ static void rizz__log_init_file(const char* logfile)
         fprintf(f, "%s", asctime(localtime(&t)));
         fclose(f);
     } else {
-        sx_assert(0 && "could not write to log file");
+        sx_assertf(0, "could not write to log file");
         g_core.flags &= ~RIZZ_CORE_FLAG_LOG_TO_FILE;
     }
 }
@@ -1037,7 +1037,7 @@ static void* rizz__track_alloc_cb(void* ptr, size_t size, uint32_t align, const 
                       header->track_item_idx < sx_array_count(talloc->items));
             talloc->size -= header->size;
             rizz_track_alloc_item* mem_item = &talloc->items[header->track_item_idx];
-            sx_assert(mem_item->ptr == ptr && "memory corruption");
+            sx_assertf(mem_item->ptr == ptr, "memory corruption");
             mem_item->ptr = NULL;    // invalidate memory item pointer
 
             if (header->track_item_idx != sx_array_count(talloc->items) - 1) {
@@ -1459,7 +1459,7 @@ void rizz__core_frame()
     // reset temp allocators
     for (int i = 0, c = g_core.num_threads; i < c; i++) {
         rizz__core_tmpalloc* t = &g_core.tmp_allocs[i];
-        sx_assert(t->stack_depth == 0 && "not all tmp_allocs are popped");
+        sx_assertf(t->stack_depth == 0, "not all tmp_allocs are popped");
         sx_array_clear(t->alloc_stack);
         t->stack_depth = 0;
         t->frame_peak = 0;
@@ -1557,7 +1557,7 @@ static void rizz__core_tmp_alloc_pop(void)
         sx_assert(talloc->stack_depth > 0);
         --talloc->stack_depth;
     } else {
-        sx_assert(0 && "no matching tmp_alloc_push for the call tmp_alloc_pop");
+        sx_assertf(0, "no matching tmp_alloc_push for the call tmp_alloc_pop");
     }
 }
 
@@ -1701,7 +1701,7 @@ static void* rizz__core_tls_var(const char* name)
         }
     }
 
-    sx_assert(0 && "tls_var not registered");
+    sx_assertf(0, "tls_var not registered");
     return NULL;
 }
 

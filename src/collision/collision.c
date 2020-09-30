@@ -238,7 +238,7 @@ static void coll_add_boxes(rizz_coll_context* ctx, const sx_box* boxes, const ui
     for (int i = 0; i < count; i++) {
         int handles_count = ctx->handles->count;
         sx_handle_t handle = sx_handle_new_and_grow(ctx->handles, alloc);
-        sx_assert_rel(handle);
+        sx_assert_always(handle);
 
         int index = sx_handle_index(handle);
         rizz_coll_shape_poly poly = { 0 };
@@ -303,7 +303,7 @@ static void coll_add_static_polys(rizz_coll_context* ctx, const rizz_coll_shape_
     for (int i = 0; i < count; i++) {
         int handles_count = ctx->handles->count;
         sx_handle_t handle = sx_handle_new_and_grow(ctx->handles, alloc);
-        sx_assert_rel(handle);
+        sx_assert_always(handle);
         int index = sx_handle_index(handle);
 
         const rizz_coll_shape_poly* poly = &polys[i];

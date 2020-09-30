@@ -99,7 +99,7 @@ const char* rizz_android_cache_dir()
     rizz_android_method getCacheDir;
     if (!rizz_android_get_method(&getCacheDir, "getCacheDir", "()Ljava/io/File;",
                                  "android/app/NativeActivity")) {
-        sx_assert(0 && "invalid method: android.app.NativeActivity.getCacheDir");
+        sx_assertf(0, "invalid method: android.app.NativeActivity.getCacheDir");
         return NULL;
     }
 
@@ -109,7 +109,7 @@ const char* rizz_android_cache_dir()
 
     rizz_android_method getPath;
     if (!rizz_android_get_method(&getPath, "getPath", "()Ljava/lang/String;", "java/io/File")) {
-        sx_assert(0 && "invalid method: java.io.file.getPath");
+        sx_assertf(0, "invalid method: java.io.file.getPath");
         return NULL;
     }
 
@@ -139,7 +139,7 @@ bool rizz_android_window_size(int* x, int* y)
 
         return true;
     } else {
-        sx_assert(0 && "window is not created");
+        sx_assertf(0, "window is not created");
         return false;
     }
 }

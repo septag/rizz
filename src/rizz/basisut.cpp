@@ -63,7 +63,7 @@ bool basisut_image_info(const void* data, uint32_t data_size, rizz_texture_info*
     case basist::cBASISTexTypeCubemapArray: info->type = SG_IMAGETYPE_CUBE;     break;
     case basist::cBASISTexTypeVolume:       info->type = SG_IMAGETYPE_3D;       break;
     default:
-        sx_assert(0 && "this type of basis file is not supported");
+        sx_assert_alwaysf(0, "this type of basis file is not supported");
         return false;
     }
     // clang-format on

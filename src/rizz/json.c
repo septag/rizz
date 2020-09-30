@@ -61,14 +61,14 @@ static bool rizz__json_on_load(rizz_asset_load_data* data, const rizz_asset_load
     const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
     
     cj5_token* tmp_tokens = sx_malloc(tmp_alloc, sizeof(cj5_token)*num_tmp_tokens);
-    sx_assert_rel(tmp_tokens);
+    sx_assert_always(tmp_tokens);
 
     cj5_result jres = cj5_parse((const char*)mem->data, (int)mem->size, tmp_tokens, num_tmp_tokens);
     if (jres.error) {
         if (jres.error == CJ5_ERROR_OVERFLOW) {
             sx_assert(jres.num_tokens > num_tmp_tokens);
             tmp_tokens = (cj5_token*)sx_realloc(tmp_alloc, tmp_tokens, sizeof(cj5_token)*jres.num_tokens);
-            sx_assert_rel(tmp_tokens);
+            sx_assert_always(tmp_tokens);
             jres = cj5_parse((const char*)mem->data, (int)mem->size, tmp_tokens, jres.num_tokens);
             if (jres.error) {
                 return false;

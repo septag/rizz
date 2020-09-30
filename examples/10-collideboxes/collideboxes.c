@@ -190,7 +190,7 @@ static void update(float dt)
         update_time = (float)sx_tm_ms(sx_tm_diff(t1, t0));
 
         rizz_coll_pair* pairs = the_coll->detect(g_coll.ctx, tmp_alloc);
-        sx_assert_rel(pairs);
+        sx_assert_always(pairs);
         for (int i = 0, ic = sx_array_count(pairs); i < ic; i++) {
             rizz_coll_pair pair = pairs[i];
             g_coll.ents[pair.ent1].col_frame = frame;
@@ -207,7 +207,7 @@ static void update(float dt)
 
         rizz_coll_ray ray = rizz_coll_ray_set(ray_pos, ray_dir, g_coll.raycast_len);
         rizz_coll_rayhit* hits = the_coll->query_ray(g_coll.ctx, ray, 0xffffffff, tmp_alloc);
-        sx_assert_rel(hits);
+        sx_assert_always(hits);
         for (int i = 0, ic = sx_array_count(hits); i < ic; i++) {
             rizz_coll_rayhit hit = hits[i];
             g_coll.ents[hit.ent].raycast_frame = frame;

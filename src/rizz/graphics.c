@@ -456,7 +456,7 @@ static void sg_map_buffer(sg_buffer buf_id, int offset, const void* data, int nu
             }
         }
     } else {
-        sx_assert(0 && "invalid buf_id");
+        sx_assertf(0, "invalid buf_id");
     }
 }
 
@@ -464,9 +464,9 @@ static void sg_map_buffer(sg_buffer buf_id, int offset, const void* data, int nu
 // @texture
 static inline sg_image_type rizz__texture_get_type(const ddsktx_texture_info* tc)
 {
-    sx_assert(!((tc->flags & DDSKTX_TEXTURE_FLAG_CUBEMAP) && (tc->num_layers > 1)) &&
+    sx_assertf(!((tc->flags & DDSKTX_TEXTURE_FLAG_CUBEMAP) && (tc->num_layers > 1)),
               "cube-array textures are not supported");
-    sx_assert(!(tc->num_layers > 1 && tc->depth > 1) && "3d-array textures are not supported");
+    sx_assertf(!(tc->num_layers > 1 && tc->depth > 1), "3d-array textures are not supported");
 
     if (tc->flags & DDSKTX_TEXTURE_FLAG_CUBEMAP)
         return SG_IMAGETYPE_CUBE;
@@ -562,7 +562,7 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
         // try to use stbi to load the image
         int comp;
         if (stbi_info_from_memory(mem->data, (int)mem->size, &info->width, &info->height, &comp)) {
-            sx_assert(!stbi_is_16_bit_from_memory(mem->data, (int)mem->size) &&
+            sx_assertf(!stbi_is_16_bit_from_memory(mem->data, (int)mem->size),
                       "images with 16bit color channel are not supported");
             info->type = SG_IMAGETYPE_2D;
             info->format = SG_PIXELFORMAT_RGBA8;    // always convert to RGBA
@@ -584,7 +584,7 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
     // create extra buffer for basis transcoding
     if (is_basis) {
         const rizz_texture_load_params* tparams = params->params;
-        sx_assert(tparams->fmt != _SG_PIXELFORMAT_DEFAULT && "fmt must be defined for basis files");
+        sx_assertf(tparams->fmt != _SG_PIXELFORMAT_DEFAULT, "fmt must be defined for basis files");
 
         // clang-format off
         basisut_transcoder_texture_format basis_fmt;
@@ -728,7 +728,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
                         trans, mem->data, (uint32_t)mem->size, 0, mip, transcode_buff,
                         mip_size / bytes_per_block, transcode_data->fmt, 0);
                     sx_unused(r);
-                    sx_assert(r && "basis transcode failed");
+                    sx_assertf(r, "basis transcode failed");
                     desc->content.subimage[i][dst_mip].ptr = transcode_buff;
                     desc->content.subimage[i][dst_mip].size = mip_size;
                     transcode_buff += mip_size;
@@ -857,8 +857,8 @@ static void rizz__texture_on_release(rizz_asset_obj obj, const sx_alloc* alloc)
 static rizz_texture rizz__texture_create_checker(int checker_size, int size,
                                                  const sx_color colors[2])
 {
-    sx_assert(size % 4 == 0 && "size must be multiple of four");
-    sx_assert(size % checker_size == 0 && "checker_size must be dividable by size");
+    sx_assertf(size % 4 == 0, "size must be multiple of four");
+    sx_assertf(size % checker_size == 0, "checker_size must be dividable by size");
 
     int size_bytes = size * size * sizeof(uint32_t);
     uint32_t* pixels = sx_malloc(g_gfx_alloc, size_bytes);
@@ -1008,7 +1008,7 @@ static sg_image rizz__texture_checker()
 static const rizz_texture* rizz__texture_get(rizz_asset texture_asset)
 {
 #if RIZZ_DEV_BUILD
-    sx_assert_rel(sx_strequal(the__asset.type_name(texture_asset), "texture") && "asset handle is not a texture");
+    sx_assert_always(sx_strequal(the__asset.type_name(texture_asset), "texture") && "asset handle is not a texture");
 #endif
     return (const rizz_texture*)the__asset.obj(texture_asset).ptr;
 }
@@ -1452,7 +1452,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
             ubo->binding = cj5_seekget_int(&jres, jubo, "binding", 0);
             ubo->array_size = cj5_seekget_int(&jres, jubo, "array", 1);
             if (ubo->array_size > 1)
-                sx_assert(refl->flatten_ubos &&
+                sx_assertf(refl->flatten_ubos,
                           "arrayed uniform buffers should only be generated with --flatten-ubos");
             ++ubo;
         }
@@ -1548,7 +1548,7 @@ static sg_shader_desc* rizz__shader_setup_desc(sg_shader_desc* desc,
         switch (stage->refl->stage) {
         case RIZZ_SHADER_STAGE_VS:   stage_desc = &desc->vs;             break;
         case RIZZ_SHADER_STAGE_FS:   stage_desc = &desc->fs;             break;
-        default:                     sx_assert(0 && "not implemented");  break;
+        default:                     sx_assertf(0, "not implemented");   break;
         }
         // clang-format on
 
@@ -1613,7 +1613,7 @@ static sg_shader_desc* rizz__shader_setup_desc_cs(sg_shader_desc* desc,
         // clang-format off
         switch (stage->refl->stage) {
         case RIZZ_SHADER_STAGE_CS:   stage_desc = &desc->cs;             break;
-        default:                     sx_assert(0 && "not implemented");  break;
+        default:                     sx_assertf(0, "not implemented");   break;
         }
         // clang-format on
 
@@ -1738,11 +1738,11 @@ static sg_pipeline_desc* rizz__shader_bindto_pipeline_sg(sg_shader shd,
 static const rizz_shader* rizz__shader_get(rizz_asset shader_asset)
 {
 #if RIZZ_DEV_BUILD
-    sx_assert_rel(sx_strequal(the__asset.type_name(shader_asset), "shader") && "asset handle is not a shader");
+    sx_assert_always(sx_strequal(the__asset.type_name(shader_asset), "shader") && "asset handle is not a shader");
 #endif
 
     const rizz_shader* shd = (const rizz_shader*)the__asset.obj(shader_asset).ptr;
-    sx_assert(shd && "shader is not loaded or missing");
+    sx_assertf(shd, "shader is not loaded or missing");
     return shd;
 }
 
@@ -1803,7 +1803,7 @@ static rizz_asset_load_data rizz__shader_on_prepare(const rizz_asset_load_params
     uint32_t _sgs;
     sx_mem_read_var(&reader, _sgs);
     if (_sgs != SGS_CHUNK) {
-        sx_assert(0 && "invalid sgs file format");
+        sx_assertf(0, "invalid sgs file format");
         return (rizz_asset_load_data){ .obj = { 0 } };
     }
     sx_mem_seekr(&reader, sizeof(uint32_t), SX_WHENCE_CURRENT);
@@ -1897,7 +1897,7 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
             cs_size = code_chunk.size;
             stage = RIZZ_SHADER_STAGE_CS;
         } else {
-            sx_assert(0 && "not implemented");
+            sx_assertf(0, "not implemented");
             stage = _RIZZ_SHADER_STAGE_COUNT;
         }
 
@@ -2470,8 +2470,8 @@ static void rizz__cb_begin_profile_sample(const char* name, uint32_t* hash_cache
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
-              "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id,
+               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     int offset = 0;
@@ -2508,8 +2508,8 @@ static void rizz__cb_end_profile_sample()
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
-              "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id,
+               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     rizz__gfx_cmdbuffer_ref ref = { .key =
@@ -2534,7 +2534,7 @@ static void rizz__cb_record_begin_stage(const char* name, int name_sz)
 
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
+    sx_assertf(cb->running_stage.id,
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
@@ -2566,7 +2566,7 @@ static void rizz__cb_record_end_stage()
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
+    sx_assertf(cb->running_stage.id,
               "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
@@ -2592,7 +2592,7 @@ static bool rizz__cb_begin_stage(rizz_gfx_stage stage)
 
     sx_lock(&g_gfx.stage_lk);
     rizz__gfx_stage* _stage = &g_gfx.stages[rizz_to_index(stage.id)];
-    sx_assert(_stage->state == STAGE_STATE_NONE && "already called begin on this stage");
+    sx_assertf(_stage->state == STAGE_STATE_NONE, "already called begin on this stage");
     bool enabled = _stage->enabled;
     if (!enabled) {
         sx_unlock(&g_gfx.stage_lk);
@@ -2616,13 +2616,13 @@ static bool rizz__cb_begin_stage(rizz_gfx_stage stage)
 static void rizz__cb_end_stage()
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
-    sx_assert(cb->running_stage.id && "must call begin_stage before this call");
+    sx_assertf(cb->running_stage.id, "must call begin_stage before this call");
 
     rizz__cb_end_profile_sample();
 
     sx_lock(&g_gfx.stage_lk);
     rizz__gfx_stage* _stage = &g_gfx.stages[rizz_to_index(cb->running_stage.id)];
-    sx_assert(_stage->state == STAGE_STATE_SUBMITTING && "should call begin on this stage first");
+    sx_assertf(_stage->state == STAGE_STATE_SUBMITTING, "should call begin on this stage first");
     _stage->state = STAGE_STATE_DONE;
     sx_unlock(&g_gfx.stage_lk);
 
@@ -2635,8 +2635,7 @@ static void rizz__cb_begin_default_pass(const sg_pass_action* pass_action, int w
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
-              "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     int offset = 0;
@@ -2676,8 +2675,7 @@ static void rizz__cb_begin_pass(sg_pass pass, const sg_pass_action* pass_action)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
-              "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     int offset = 0;
@@ -2716,8 +2714,7 @@ static void rizz__cb_apply_viewport(int x, int y, int width, int height, bool or
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
-              "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     int offset = 0;
@@ -2765,8 +2762,7 @@ static void rizz__cb_apply_scissor_rect(int x, int y, int width, int height, boo
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
-              "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     int offset = 0;
@@ -2814,8 +2810,7 @@ static void rizz__cb_apply_pipeline(sg_pipeline pip)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
-              "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     int offset = 0;
@@ -2850,8 +2845,7 @@ static void rizz__cb_apply_bindings(const sg_bindings* bind)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
-              "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     int offset = 0;
@@ -2972,8 +2966,7 @@ static void rizz__cb_apply_uniforms(sg_shader_stage stage, int ub_index, const v
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
-              "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     int offset = 0;
@@ -3016,8 +3009,7 @@ static void rizz__cb_draw(int base_element, int num_elements, int num_instances)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
-              "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     int offset = 0;
@@ -3056,8 +3048,7 @@ static void rizz__cb_dispatch(int thread_group_x, int thread_group_y, int thread
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
-              "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     int offset = 0;
@@ -3097,8 +3088,7 @@ static void rizz__cb_end_pass()
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
-              "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     rizz__gfx_cmdbuffer_ref ref = { .key =
@@ -3121,8 +3111,7 @@ static void rizz__cb_update_buffer(sg_buffer buf, const void* data_ptr, int data
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
-              "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     int offset = 0;
@@ -3172,15 +3161,14 @@ static int rizz__cb_append_buffer(sg_buffer buf, const void* data_ptr, int data_
         }
     }
 
-    sx_assert(index != -1 && "buffer must be stream and not destroyed during render");
+    sx_assertf(index != -1, "buffer must be stream and not destroyed during render");
     rizz__gfx_stream_buffer* sbuff = &g_gfx.stream_buffs[index];
     sx_assert(sbuff->offset + data_size <= sbuff->size);
     int stream_offset = sx_atomic_fetch_add(&sbuff->offset, data_size);
 
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
-              "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     int offset = 0;
@@ -3228,8 +3216,7 @@ static uint8_t* rizz__cb_run_append_buffer(uint8_t* buff)
     sx_assert(g_gfx.stream_buffs);
     rizz__gfx_stream_buffer* sbuff = &g_gfx.stream_buffs[stream_index];
     sx_unused(sbuff);
-    sx_assert(sbuff->buf.id == buf.id &&
-              "streaming buffers probably destroyed during render/update");
+    sx_assertf(sbuff->buf.id == buf.id, "streaming buffers probably destroyed during render/update");
     sg_map_buffer(buf, stream_offset, buff, data_size);
     buff += data_size;
 
@@ -3240,8 +3227,7 @@ static void rizz__cb_update_image(sg_image img, const sg_image_content* data)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assert(cb->running_stage.id &&
-              "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     int image_size = 0;
@@ -3354,7 +3340,7 @@ static void rizz__gfx_validate_stage_deps()
 
 static int rizz__gfx_execute_command_buffer(rizz__gfx_cmdbuffer* cmds)
 {
-    sx_assert(the__core.job_thread_index() == 0 && "must only be called from main thread");
+    sx_assertf(the__core.job_thread_index() == 0, "must only be called from main thread");
     static_assert((sizeof(k_run_cbs) / sizeof(rizz__run_command_cb)) == _GFX_COMMAND_COUNT,
                   "k_run_cbs must match rizz__gfx_command");
 
@@ -3365,7 +3351,7 @@ static int rizz__gfx_execute_command_buffer(rizz__gfx_cmdbuffer* cmds)
 
     for (int i = 0, c = cmd_buffer_count; i < c; i++) {
         rizz__gfx_cmdbuffer* cb = &cmds[i];
-        sx_assert(cb->running_stage.id == 0 &&
+        sx_assertf(cb->running_stage.id == 0,
                   "all command buffers must first fully submit their calls and call end_stage");
         cmd_count += sx_array_count(cb->refs);
     }
@@ -3435,14 +3421,14 @@ void rizz__gfx_execute_command_buffers_final()
 //       user should be aware to call this when no other threaded rendering is being done
 static void rizz__gfx_swap_command_buffers(void)
 {
-    sx_assert(the__core.job_thread_index() == 0 && "must be called only from the main thread");
+    sx_assertf(the__core.job_thread_index() == 0, "must be called only from the main thread");
 
     sx_swap(g_gfx.cmd_buffers_feed, g_gfx.cmd_buffers_render, rizz__gfx_cmdbuffer*);
 }
 
 static void rizz__gfx_commit(void)
 {
-    sx_assert(the__core.job_thread_index() == 0 && "must be called only from the main thread");
+    sx_assertf(the__core.job_thread_index() == 0, "must be called only from the main thread");
 
     rizz__gfx_validate_stage_deps();
 
@@ -3456,7 +3442,7 @@ static rizz_gfx_stage rizz__stage_register(const char* name, rizz_gfx_stage pare
 {
     sx_assert(name);
     sx_assert(parent_stage.id == 0 || parent_stage.id <= (uint32_t)sx_array_count(g_gfx.stages));
-    sx_assert(sx_array_count(g_gfx.stages) < MAX_STAGES && "maximum stages exceeded");
+    sx_assertf(sx_array_count(g_gfx.stages) < MAX_STAGES, "maximum stages exceeded");
 
     rizz__gfx_stage _stage = { .name_hash = sx_hash_fnv32_str(name),
                                .parent = parent_stage,
@@ -3481,7 +3467,7 @@ static rizz_gfx_stage rizz__stage_register(const char* name, rizz_gfx_stage pare
             STAGE_ORDER_DEPTH_MASK;
         depth = parent_depth + 1;
     }
-    sx_assert(depth < MAX_DEPTH && "maximum stage dependency depth exceeded");
+    sx_assertf(depth < MAX_DEPTH, "maximum stage dependency depth exceeded");
 
     _stage.order = ((depth << STAGE_ORDER_DEPTH_BITS) & STAGE_ORDER_DEPTH_MASK) |
                    (uint16_t)(rizz_to_index(stage.id) & STAGE_ORDER_ID_MASK);
@@ -3661,7 +3647,7 @@ static bool rizz__imm_begin_stage(rizz_gfx_stage stage)
 {
     sx_lock(&g_gfx.stage_lk);
     rizz__gfx_stage* _stage = &g_gfx.stages[rizz_to_index(stage.id)];
-    sx_assert(_stage->state == STAGE_STATE_NONE && "already called begin on this stage");
+    sx_assertf(_stage->state == STAGE_STATE_NONE, "already called begin on this stage");
     bool enabled = _stage->enabled;
     if (!enabled) {
         sx_unlock(&g_gfx.stage_lk);

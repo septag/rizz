@@ -254,7 +254,7 @@ static void rizz__plugin_register(const rizz_plugin_info* info)
 
 static bool rizz__plugin_load(const char* name)
 {
-    sx_assert(!g_plugin.loaded && "cannot load anymore plugins after `init_plugins` is called");
+    sx_assertf(!g_plugin.loaded, "cannot load anymore plugins after `init_plugins` is called");
 
     return rizz__plugin_load_abs(name, false, NULL, 0);
 }
@@ -370,7 +370,7 @@ static void rizz__plugin_reload_handler(cr_plugin* plugin, const char* filename,
 
 static bool rizz__plugin_load(const char* name)
 {
-    sx_assert(!g_plugin.loaded && "cannot load anymore plugins after `init_plugins` is called");
+    sx_assertf(!g_plugin.loaded, "cannot load anymore plugins after `init_plugins` is called");
 
     // construct full filepath, by joining to root plugin path and adding extension
     char filepath[256];

@@ -181,7 +181,7 @@ static void model__map_attributes_to_buffer(rizz_model_mesh* mesh,
             int count = (int)access->count;
             int src_data_size = (int)access->stride; 
             int dst_data_size = model__get_stride(attr->format);
-            sx_assert(dst_data_size != 0 && "you must explicitly declare formats for vertex_layout attributes");
+            sx_assertf(dst_data_size != 0, "you must explicitly declare formats for vertex_layout attributes");
             int stride = sx_min(dst_data_size, src_data_size);
             for (int i = 0; i < count; i++) {
                 sx_memcpy(dst_buff + dst_offset + vertex_stride*i, 
@@ -390,7 +390,7 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
         sx_linear_buffer_addtype(&buff, rizz_model, rizz_model_mesh, meshes, data->meshes_count, 0);
         rizz_model_mesh* tmp_meshes = alloca(sizeof(rizz_model_mesh)*data->meshes_count);
         int** tmp_children = alloca(sizeof(int*)*data->nodes_count);
-        sx_assert_rel(tmp_meshes && tmp_children);
+        sx_assert_always(tmp_meshes && tmp_children);
         sx_memset(tmp_children, 0x0, sizeof(int*)*data->nodes_count);
         sx_memset(tmp_meshes, 0x0, sizeof(rizz_model_mesh)*data->meshes_count);
         
@@ -424,7 +424,7 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
                 num_vertices += count;
                 num_indices += (int)mesh->primitives[k].indices->count;
             }
-            sx_assert_rel(num_vertices > 0 && num_indices > 0);
+            sx_assert_always(num_vertices > 0 && num_indices > 0);
             tmp_meshes[i].num_vertices = num_vertices;
             tmp_meshes[i].num_indices = num_indices;
 
@@ -529,10 +529,8 @@ static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
                               "node setup will probably have errors", params->path, _node->name);
             }
 
-            if (_node->has_scale) {
-                // TODO: apply scaling to the model
-                //sx_assert(0 && "not supported yet. Apply scaling in DCC before exporting");
-            }
+            // TODO: apply scaling to the model
+            sx_assert_alwaysf(!_node->has_scale, "not supported yet. Apply scaling in DCC before exporting");
 
             if (_node->has_rotation) {
                 sx_mat4 rot_mat = sx_quat_mat4(sx_quat4fv(_node->rotation));
@@ -663,7 +661,7 @@ bool model__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx, 
         rizz_model* blank_model = &g_model.blank_model;
         blank_model->num_nodes = 1;
         blank_model->nodes = sx_malloc(alloc, sizeof(rizz_model_node));
-        sx_assert_rel(blank_model->nodes);
+        sx_assert_always(blank_model->nodes);
         sx_memset(blank_model->nodes, 0x0, sizeof(rizz_model_node));
         blank_model->nodes[0].bounds = sx_aabbwhd(1.0f, 1.0f, 1.0f);
         blank_model->nodes[0].local_tx = sx_tx3d_ident();
@@ -677,20 +675,20 @@ bool model__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx, 
         rizz_model* failed_model = &g_model.failed_model;
         failed_model->num_nodes = 1;
         failed_model->nodes = sx_malloc(alloc, sizeof(rizz_model_node));
-        sx_assert_rel(failed_model->nodes);
+        sx_assert_always(failed_model->nodes);
         sx_memset(failed_model->nodes, 0x0, sizeof(rizz_model_node));
         failed_model->nodes[0].parent_id = -1;
         failed_model->nodes[0].bounds = sx_aabbwhd(1.0f, 1.0f, 1.0f);
         failed_model->nodes[0].local_tx = sx_tx3d_ident();
 
         failed_model->meshes = sx_malloc(alloc, sizeof(rizz_model_mesh));
-        sx_assert_rel(failed_model->meshes);
+        sx_assert_always(failed_model->meshes);
         failed_model->num_meshes = 1;
         sx_memset(failed_model->meshes, 0x0, sizeof(rizz_model_mesh));
         rizz_model_mesh* mesh = failed_model->meshes;
 
         rizz_prims3d_geometry geo;
-        if (prims3d__generate_box_geometry(alloc, &geo)) {
+        if (prims3d__generate_box_geometry(alloc, &geo, sx_vec3splat(0.5f))) {
             mesh->num_vbuffs = 1;
             mesh->cpu.vbuffs[0] = geo.verts;
             mesh->cpu.ibuff = geo.indices;
@@ -710,7 +708,7 @@ bool model__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx, 
             mesh->num_indices = geo.num_indices;
             mesh->index_type = SG_INDEXTYPE_UINT16;
             mesh->submeshes = sx_malloc(alloc, sizeof(rizz_model_submesh));
-            sx_assert_rel(mesh->submeshes);
+            sx_assert_always(mesh->submeshes);
             mesh->submeshes[0].start_index = 0;
             mesh->submeshes[0].num_indices = geo.num_indices;
             mesh->submeshes[0].mtl.id = 0;
@@ -770,7 +768,7 @@ void model__release(void)
 const rizz_model* model__get(rizz_asset model_asset)
 {
 #if RIZZ_DEV_BUILD
-    sx_assert_rel(sx_strequal(the_asset->type_name(model_asset), "model") && "asset handle is not a model");
+    sx_assert_always(sx_strequal(the_asset->type_name(model_asset), "model") && "asset handle is not a model");
 #endif
     return (const rizz_model*)the_asset->obj(model_asset).ptr;
 }

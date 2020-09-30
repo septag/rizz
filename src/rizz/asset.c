@@ -337,7 +337,7 @@ static rizz_asset rizz__asset_create_new(const char* path, const void* params, r
 {
     // find asset manager
     int amgr_id = rizz__asset_find_asset_mgr(name_hash);
-    sx_assert(amgr_id != -1 && "asset type is not registered");
+    sx_assertf(amgr_id != -1, "asset type is not registered");
     rizz__asset_mgr* amgr = &g_asset.asset_mgrs[amgr_id];
 
     // check resources, if doesn't exist, add new resource
@@ -454,7 +454,7 @@ static rizz_asset rizz__asset_add(const char* path, const void* params, rizz_ass
         if (a->state == RIZZ_ASSET_STATE_OK)
             a->dead_obj = a->obj;
         a->obj = obj;
-        sx_assert(a->alloc == obj_alloc && "allocator must not change in reload");
+        sx_assertf(a->alloc == obj_alloc, "allocator must not change in reload");
         if (amgr->params_size > 0) {
             sx_assert(a->params_id);
             sx_memcpy(&amgr->params_buff[rizz_to_index(a->params_id)], params, amgr->params_size);
@@ -475,20 +475,20 @@ static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, 
         return (rizz_asset){ 0 };
     }
 
-    sx_assert(the__core.job_thread_index() == 0 && "must call this function in the main thread");
+    sx_assertf(the__core.job_thread_index() == 0, "must call this function in the main thread");
 
     if (flags & RIZZ_ASSET_LOAD_FLAG_RELOAD)
         flags |= RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD;
 
     int amgr_id = rizz__asset_find_asset_mgr(name_hash);
-    sx_assert(amgr_id != -1 && "asset type is not registered");
+    sx_assertf(amgr_id != -1, "asset type is not registered");
     rizz__asset_mgr* amgr = &g_asset.asset_mgrs[amgr_id];
     flags |= amgr->forced_flags;
 
     // check if the params are provided and valid
     if (amgr->params_size && !params) {
         rizz__log_warn("you must provide `params` of type '%s' for this asset", amgr->params_type_name);
-        sx_assert(0 && "params must not be null for this asset type");
+        sx_assertf(0, "params must not be null for this asset type");
     }
 
     // find if asset is already loaded
@@ -711,7 +711,7 @@ void rizz__asset_update()
                 break;
 
             default:
-                sx_assert(0 && "finished job should not be any other state");
+                sx_assertf(0, "finished job should not be any other state");
                 break;
             }
 
@@ -754,7 +754,7 @@ static rizz_asset rizz__asset_load_from_mem(const char* name, const char* path_a
     uint32_t name_hash = sx_hash_fnv32_str(name);
 
     int amgr_id = rizz__asset_find_asset_mgr(name_hash);
-    sx_assert(amgr_id != -1 && "asset type is not registered");
+    sx_assertf(amgr_id != -1, "asset type is not registered");
     rizz__asset_mgr* amgr = &g_asset.asset_mgrs[amgr_id];
     flags |= amgr->forced_flags;
 
@@ -845,8 +845,8 @@ static rizz_asset rizz__asset_load_from_mem(const char* name, const char* path_a
 static void rizz__asset_unload(rizz_asset asset)
 {
     sx_assert(asset.id);
-    sx_assert_rel(sx_handle_valid(g_asset.asset_handles, asset.id));
-    sx_assert(the__core.job_thread_index() == 0 && "must call this function in the main thread");
+    sx_assert_always(sx_handle_valid(g_asset.asset_handles, asset.id));
+    sx_assertf(the__core.job_thread_index() == 0, "must call this function in the main thread");
 
     rizz__asset* a = &g_asset.assets[sx_handle_index(asset.id)];
     sx_assert(a->ref_count > 0);
@@ -885,7 +885,7 @@ static void rizz__register_asset_type(const char* name, rizz_asset_callbacks cal
     uint32_t name_hash = sx_hash_fnv32_str(name);
     for (int i = 0; i < sx_array_count(g_asset.asset_name_hashes); i++) {
         if (name_hash == g_asset.asset_name_hashes[i]) {
-            sx_assert(0 && "asset-mgr already registered");
+            sx_assertf(0, "asset-mgr already registered");
             return;
         }
     }
@@ -907,7 +907,7 @@ static void rizz__register_asset_type(const char* name, rizz_asset_callbacks cal
 static void rizz__unregister_asset_type(const char* name)
 {
     int amgr_id = rizz__asset_find_asset_mgr(sx_hash_fnv32_str(name));
-    sx_assert(amgr_id != -1 && "asset type is not registered");
+    sx_assertf(amgr_id != -1, "asset type is not registered");
     rizz__asset_mgr* amgr = &g_asset.asset_mgrs[amgr_id];
     amgr->unreg = true;
 }
@@ -925,7 +925,7 @@ static void rizz__update_asset_callbacks(const char* name, rizz_asset_callbacks 
 
 static rizz_asset_state rizz__asset_state(rizz_asset asset)
 {
-    sx_assert_rel(sx_handle_valid(g_asset.asset_handles, asset.id));
+    sx_assert_always(sx_handle_valid(g_asset.asset_handles, asset.id));
 
     rizz__asset* a = &g_asset.assets[sx_handle_index(asset.id)];
     return a->state;
@@ -933,7 +933,7 @@ static rizz_asset_state rizz__asset_state(rizz_asset asset)
 
 static const char* rizz__asset_path(rizz_asset asset)
 {
-    sx_assert_rel(sx_handle_valid(g_asset.asset_handles, asset.id));
+    sx_assert_always(sx_handle_valid(g_asset.asset_handles, asset.id));
 
     rizz__asset* a = &g_asset.assets[sx_handle_index(asset.id)];
     sx_assert(a->resource_id);
@@ -942,7 +942,7 @@ static const char* rizz__asset_path(rizz_asset asset)
 
 static const char* rizz__asset_typename(rizz_asset asset)
 {
-    sx_assert_rel(sx_handle_valid(g_asset.asset_handles, asset.id));
+    sx_assert_always(sx_handle_valid(g_asset.asset_handles, asset.id));
 
     rizz__asset* a = &g_asset.assets[sx_handle_index(asset.id)];
     return g_asset.asset_mgrs[a->asset_mgr_id].name;
@@ -950,7 +950,7 @@ static const char* rizz__asset_typename(rizz_asset asset)
 
 static const void* rizz__asset_params(rizz_asset asset)
 {
-    sx_assert_rel(sx_handle_valid(g_asset.asset_handles, asset.id));
+    sx_assert_always(sx_handle_valid(g_asset.asset_handles, asset.id));
 
     rizz__asset* a = &g_asset.assets[sx_handle_index(asset.id)];
     rizz__asset_mgr* amgr = &g_asset.asset_mgrs[a->asset_mgr_id];
@@ -960,7 +960,7 @@ static const void* rizz__asset_params(rizz_asset asset)
 
 static uint32_t rizz__asset_tags(rizz_asset asset)
 {
-    sx_assert_rel(sx_handle_valid(g_asset.asset_handles, asset.id));
+    sx_assert_always(sx_handle_valid(g_asset.asset_handles, asset.id));
 
     rizz__asset* a = &g_asset.assets[sx_handle_index(asset.id)];
     return a->tags;
@@ -968,7 +968,7 @@ static uint32_t rizz__asset_tags(rizz_asset asset)
 
 static rizz_asset_obj rizz__asset_obj_unsafe(rizz_asset asset)
 {
-    sx_assert_rel(sx_handle_valid(g_asset.asset_handles, asset.id));
+    sx_assert_always(sx_handle_valid(g_asset.asset_handles, asset.id));
 
     rizz__asset* a = &g_asset.assets[sx_handle_index(asset.id)];
     return a->obj;
@@ -976,7 +976,7 @@ static rizz_asset_obj rizz__asset_obj_unsafe(rizz_asset asset)
 
 static rizz_asset_obj rizz__asset_obj(rizz_asset asset)
 {
-    sx_assert_rel(sx_handle_valid(g_asset.asset_handles, asset.id));
+    sx_assert_always(sx_handle_valid(g_asset.asset_handles, asset.id));
 
     sx_lock(&g_asset.assets_lk);
     rizz_asset_obj obj = g_asset.assets[sx_handle_index(asset.id)].obj;
@@ -986,7 +986,7 @@ static rizz_asset_obj rizz__asset_obj(rizz_asset asset)
 
 static int rizz__asset_ref_add(rizz_asset asset)
 {
-    sx_assert_rel(sx_handle_valid(g_asset.asset_handles, asset.id));
+    sx_assert_always(sx_handle_valid(g_asset.asset_handles, asset.id));
 
     rizz__asset* a = &g_asset.assets[sx_handle_index(asset.id)];
     return ++a->ref_count;
@@ -994,7 +994,7 @@ static int rizz__asset_ref_add(rizz_asset asset)
 
 static int rizz__asset_ref_count(rizz_asset asset)
 {
-    sx_assert_rel(sx_handle_valid(g_asset.asset_handles, asset.id));
+    sx_assert_always(sx_handle_valid(g_asset.asset_handles, asset.id));
 
     rizz__asset* a = &g_asset.assets[sx_handle_index(asset.id)];
     return a->ref_count;
@@ -1133,7 +1133,7 @@ static void rizz__asset_unload_by_tags(uint32_t tags)
 
 static rizz_asset_group rizz__asset_group_begin(rizz_asset_group group)
 {
-    sx_assert(!g_asset.cur_group.id && "another group is already set, call (group_end)");
+    sx_assertf(!g_asset.cur_group.id, "another group is already set, call (group_end)");
 
     if (!group.id) {
         sx_handle_t handle = sx_handle_new_and_grow(g_asset.group_handles, g_asset.alloc);
@@ -1154,8 +1154,8 @@ static rizz_asset_group rizz__asset_group_begin(rizz_asset_group group)
 
 static void rizz__asset_group_end(rizz_asset_group group)
 {
-    sx_assert(g_asset.cur_group.id == group.id && "group must be set (group_begin)");
-    sx_assert_rel(sx_handle_valid(g_asset.group_handles, group.id));
+    sx_assertf(g_asset.cur_group.id == group.id, "group must be set (group_begin)");
+    sx_assert_always(sx_handle_valid(g_asset.group_handles, group.id));
     sx_unused(group);
 
     g_asset.cur_group = (rizz_asset_group){ 0 };
@@ -1163,7 +1163,7 @@ static void rizz__asset_group_end(rizz_asset_group group)
 
 static void rizz__asset_group_wait(rizz_asset_group group)
 {
-    sx_assert_rel(sx_handle_valid(g_asset.group_handles, group.id));
+    sx_assert_always(sx_handle_valid(g_asset.group_handles, group.id));
 
     rizz__asset_group* g = &g_asset.groups[sx_handle_index(group.id)];
     bool loaded = false;
@@ -1187,7 +1187,7 @@ static void rizz__asset_group_wait(rizz_asset_group group)
 
 static bool rizz__asset_group_loaded(rizz_asset_group group)
 {
-    sx_assert_rel(sx_handle_valid(g_asset.group_handles, group.id));
+    sx_assert_always(sx_handle_valid(g_asset.group_handles, group.id));
 
     rizz__asset_group* g = &g_asset.groups[sx_handle_index(group.id)];
 
@@ -1202,7 +1202,7 @@ static bool rizz__asset_group_loaded(rizz_asset_group group)
 
 static void rizz__asset_group_delete(rizz_asset_group group)
 {
-    sx_assert_rel(sx_handle_valid(g_asset.group_handles, group.id));
+    sx_assert_always(sx_handle_valid(g_asset.group_handles, group.id));
 
     int index = sx_handle_index(group.id);
     rizz__asset_group* g = &g_asset.groups[index];
@@ -1213,7 +1213,7 @@ static void rizz__asset_group_delete(rizz_asset_group group)
 
 static void rizz__asset_group_unload(rizz_asset_group group)
 {
-    sx_assert_rel(sx_handle_valid(g_asset.group_handles, group.id));
+    sx_assert_always(sx_handle_valid(g_asset.group_handles, group.id));
 
     rizz__asset_group* g = &g_asset.groups[sx_handle_index(group.id)];
     for (int i = 0, c = sx_array_count(g->assets); i < c; i++) {
@@ -1227,7 +1227,7 @@ static void rizz__asset_group_unload(rizz_asset_group group)
 static int rizz__asset_group_gather(rizz_asset_group group, rizz_asset* out_handles,
                                     int max_handles)
 {
-    sx_assert_rel(sx_handle_valid(g_asset.group_handles, group.id));
+    sx_assert_always(sx_handle_valid(g_asset.group_handles, group.id));
 
     rizz__asset_group* g = &g_asset.groups[sx_handle_index(group.id)];
     int count = 0;
