@@ -192,7 +192,7 @@ static void update(float dt)
     // loop
     if (t >= 1.0f) {
         g_sdf.tween.tm = 0;
-        g_sdf.shape_f1 = sx_rng_gen_rangei(&g_sdf.rng, 5, 10);
+        g_sdf.shape_f1 = (float)sx_rng_gen_rangei(&g_sdf.rng, 5, 10);
         g_sdf.shape_f2 = g_sdf.shape_f1 + 1.0f + sx_rng_genf(&g_sdf.rng) * (g_sdf.shape_f1 - 1.0f);
     }
 

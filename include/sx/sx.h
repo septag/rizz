@@ -50,23 +50,23 @@ SX_API void sx__debug_message(const char* sourcefile, uint32_t line, const char*
 
 #if SX_CONFIG_ENABLE_ASSERT
 #   define sx_assert(_e) if (!(_e)) { sx__debug_message(__FILE__, __LINE__, #_e); sx_hwbreak(); }
-#   define sx_assertf(_e, _fmt, ...) \
-        if (!(_e)) { sx__debug_message(__FILE__, __LINE__, _fmt, __VA_ARGS__); sx_hwbreak(); }
+#   define sx_assertf(_e, ...) \
+        if (!(_e)) { sx__debug_message(__FILE__, __LINE__, __VA_ARGS__); sx_hwbreak(); }
 #else
 #   define sx_assert(_e)
-#   define sx_assertf(_e, _fmt, ...)
+#   define sx_assertf(_e, ...)
 #endif
 
 // going to deprecate sx_assert_rel in favor of sx_assert_always
 #if SX_CONFIG_DISABLE_ASSERT_ALWAYS
 #    define sx_assert_rel(_e)
 #    define sx_assert_always sx_assert_rel
-#    define sx_assert_alwaysf(_e, _fmt, ...)
+#    define sx_assert_alwaysf(_e, ...)
 #else
 #    define sx_assert_rel(_e) if (!(_e)) { sx__debug_message(__FILE__, __LINE__, #_e); sx_hwbreak(); }
 #    define sx_assert_always sx_assert_rel
-#    define sx_assert_alwaysf(_e, _fmt, ...) \
-        if (!(_e)) { sx__debug_message(__FILE__, __LINE__, #_e, __VA_ARGS__); sx_hwbreak(); }
+#    define sx_assert_alwaysf(_e, ...) \
+        if (!(_e)) { sx__debug_message(__FILE__, __LINE__, __VA_ARGS__); sx_hwbreak(); }
 #endif
 
 #ifndef sx_memset

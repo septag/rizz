@@ -424,7 +424,7 @@ static void render(void)
         for (int i = 0; i < GRID_WIDTH * GRID_HEIGHT; i++) {
             int x = (int)(i % GRID_WIDTH);
             int y = (int)(i / GRID_WIDTH);
-            boxes[i] = sx_box_set(sx_tx3d_setf(x, y, 0, 0, 0, 0), vec3half);
+            boxes[i] = sx_box_set(sx_tx3d_setf((float)x, (float)y, 0, 0, 0, 0), vec3half);
             colors[i] = k_celltype_colors[g_draw3d.astar_world.cells[i]];
         }
 
