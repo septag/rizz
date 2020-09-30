@@ -15,6 +15,9 @@
 #include "beep.h"
 
 #include <float.h>
+#if SX_COMPILER_CLANG  
+#include <assert.h>  // static_assert ?! 
+#endif
 
 #include "stb/stb_vorbis.h"
 

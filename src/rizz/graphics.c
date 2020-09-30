@@ -28,6 +28,9 @@
 
 #include "Remotery.h"
 
+#if SX_COMPILER_CLANG  
+#include <assert.h>  // static_assert ?! 
+#endif
 
 // clang-format off
 #define MAX_STAGES                  1024
