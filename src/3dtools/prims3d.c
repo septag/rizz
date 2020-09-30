@@ -312,6 +312,10 @@ void prims3d__draw_box(const sx_box* box, const sx_mat4* viewproj_mat,
 void prims3d__draw_sphere(sx_vec3 center, float radius, const sx_mat4* viewproj_mat,
                           rizz_prims3d_map_type map_type, sx_color tint)
 {
+    sx_unused(center);
+    sx_unused(radius);
+    sx_unused(tint);
+    
     rizz_api_gfx_draw* draw_api = g_prims3d.draw_api;
 
     prims3d__uniforms uniforms = {
