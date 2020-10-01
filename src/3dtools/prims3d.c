@@ -38,13 +38,15 @@ typedef struct prims3d__context {
     const sx_alloc* alloc;
     rizz_api_gfx_draw* draw_api;
     sg_shader shader;
+    sg_shader shader_box;
     sg_shader shader_wire;
     sg_pipeline pip_solid;
+    sg_pipeline pip_solid_box;
     sg_pipeline pip_alphablend;
+    sg_pipeline pip_alphablend_box;
     sg_pipeline pip_wire;
     sg_pipeline pip_wire_strip;
     sg_pipeline pip_wire_ib;
-    sg_pipeline pip_wire_tri;
     sg_buffer dyn_vbuff;
     sg_buffer dyn_ibuff;
     sg_buffer instance_buff;
@@ -98,6 +100,9 @@ static const rizz_vertex_layout k_prims3d_vertex_layout_wire = {
 #include rizz_shader_path(shaders_h, prims3d.vert.h)
 #include rizz_shader_path(shaders_h, prims3d.frag.h)
 
+#include rizz_shader_path(shaders_h, prims3d_box.vert.h)
+#include rizz_shader_path(shaders_h, prims3d_box.frag.h)
+
 #include rizz_shader_path(shaders_h, wireframe.vert.h)
 #include rizz_shader_path(shaders_h, wireframe.frag.h)
 
@@ -114,6 +119,9 @@ bool prims3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
     rizz_shader shader_solid = the_gfx->shader_make_with_data(tmp_alloc,
         k_prims3d_vs_size, k_prims3d_vs_data, k_prims3d_vs_refl_size, k_prims3d_vs_refl_data,
         k_prims3d_fs_size, k_prims3d_fs_data, k_prims3d_fs_refl_size, k_prims3d_fs_refl_data);
+    rizz_shader shader_solid_box = the_gfx->shader_make_with_data(tmp_alloc,
+        k_prims3d_box_vs_size, k_prims3d_box_vs_data, k_prims3d_box_vs_refl_size, k_prims3d_box_vs_refl_data,
+        k_prims3d_box_fs_size, k_prims3d_box_fs_data, k_prims3d_box_fs_refl_size, k_prims3d_box_fs_refl_data);        
     rizz_shader shader_wire = the_gfx->shader_make_with_data(tmp_alloc,
         k_wireframe_vs_size, k_wireframe_vs_data, k_wireframe_vs_refl_size, k_wireframe_vs_refl_data,
         k_wireframe_fs_size, k_wireframe_fs_data, k_wireframe_fs_refl_size, k_wireframe_fs_refl_data);
@@ -151,8 +159,12 @@ bool prims3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
                                                 .depth_write_enabled = true } };    
     sg_pipeline pip_solid = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader_solid, &pip_desc_solid, &k_prims3d_vertex_layout_inst));
+    sg_pipeline pip_solid_box = the_gfx->make_pipeline(
+        the_gfx->shader_bindto_pipeline(&shader_solid_box, &pip_desc_solid, &k_prims3d_vertex_layout_inst));
     sg_pipeline pip_alphablend = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader_solid, &pip_desc_alphablend, &k_prims3d_vertex_layout_inst));
+    sg_pipeline pip_alphablend_box = the_gfx->make_pipeline(
+        the_gfx->shader_bindto_pipeline(&shader_solid_box, &pip_desc_alphablend, &k_prims3d_vertex_layout_inst));
     sg_pipeline pip_wire = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader_wire, &pip_desc_wire, &k_prims3d_vertex_layout_wire));
 
@@ -169,19 +181,16 @@ bool prims3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
         return false;
     }
 
-    pip_desc_wire.primitive_type = SG_PRIMITIVETYPE_TRIANGLES;
-    pip_desc_wire.rasterizer.cull_mode = SG_CULLMODE_BACK;
-    sg_pipeline pip_wire_solid = the_gfx->make_pipeline(
-        the_gfx->shader_bindto_pipeline(&shader_wire, &pip_desc_wire, &k_prims3d_vertex_layout_wire));
-
     g_prims3d.shader = shader_solid.shd;
+    g_prims3d.shader_box = shader_solid_box.shd;
     g_prims3d.shader_wire = shader_wire.shd;
     g_prims3d.pip_solid = pip_solid;
+    g_prims3d.pip_solid_box = pip_solid_box;
     g_prims3d.pip_alphablend = pip_alphablend;
+    g_prims3d.pip_alphablend_box = pip_alphablend_box;
     g_prims3d.pip_wire = pip_wire;
     g_prims3d.pip_wire_ib = pip_wire_ib;
     g_prims3d.pip_wire_strip = pip_wire_strip;
-    g_prims3d.pip_wire_tri = pip_wire_solid;
 
     g_prims3d.dyn_vbuff = the_gfx->make_buffer(&(sg_buffer_desc){
         .type = SG_BUFFERTYPE_VERTEXBUFFER,
@@ -262,36 +271,20 @@ void prims3d__release(void)
 {
     prims3d__destroy_shape(&g_prims3d.unit_box);
 
-    if (g_prims3d.checker_tex.img.id) {
-        the_gfx->destroy_image(g_prims3d.checker_tex.img);
-    }
-    if (g_prims3d.pip_solid.id) {
-        the_gfx->destroy_pipeline(g_prims3d.pip_solid);
-    }
-    if (g_prims3d.pip_alphablend.id) {
-        the_gfx->destroy_pipeline(g_prims3d.pip_alphablend);
-    }
-    if (g_prims3d.pip_wire.id) {
-        the_gfx->destroy_pipeline(g_prims3d.pip_wire);
-    }
-    if (g_prims3d.pip_wire_strip.id) {
-        the_gfx->destroy_pipeline(g_prims3d.pip_wire_strip);
-    }
-    if (g_prims3d.pip_wire_ib.id) {
-        the_gfx->destroy_pipeline(g_prims3d.pip_wire_ib);
-    }
-    if (g_prims3d.instance_buff.id) {
-        the_gfx->destroy_buffer(g_prims3d.instance_buff);
-    }
-    if (g_prims3d.dyn_vbuff.id) {
-        the_gfx->destroy_buffer(g_prims3d.dyn_vbuff);
-    }
-    if (g_prims3d.dyn_ibuff.id) {
-        the_gfx->destroy_buffer(g_prims3d.dyn_ibuff);
-    }
-    if (g_prims3d.shader.id) {
-        the_gfx->destroy_shader(g_prims3d.shader);
-    }
+    the_gfx->destroy_image(g_prims3d.checker_tex.img);
+    the_gfx->destroy_pipeline(g_prims3d.pip_solid);
+    the_gfx->destroy_pipeline(g_prims3d.pip_alphablend);
+    the_gfx->destroy_pipeline(g_prims3d.pip_alphablend_box);
+    the_gfx->destroy_pipeline(g_prims3d.pip_wire);
+    the_gfx->destroy_pipeline(g_prims3d.pip_wire_strip);
+    the_gfx->destroy_pipeline(g_prims3d.pip_wire_ib);
+    the_gfx->destroy_pipeline(g_prims3d.pip_solid_box);
+    the_gfx->destroy_buffer(g_prims3d.instance_buff);
+    the_gfx->destroy_buffer(g_prims3d.dyn_vbuff);
+    the_gfx->destroy_buffer(g_prims3d.dyn_ibuff);
+    the_gfx->destroy_shader(g_prims3d.shader);
+    the_gfx->destroy_shader(g_prims3d.shader_box);
+    the_gfx->destroy_shader(g_prims3d.shader_wire);
 }
 
 static inline void prims3d__reset_stats(void)
@@ -312,23 +305,7 @@ void prims3d__draw_box(const sx_box* box, const sx_mat4* viewproj_mat,
 void prims3d__draw_sphere(sx_vec3 center, float radius, const sx_mat4* viewproj_mat,
                           rizz_prims3d_map_type map_type, sx_color tint)
 {
-    sx_unused(center);
-    sx_unused(radius);
-    sx_unused(tint);
-    
-    rizz_api_gfx_draw* draw_api = g_prims3d.draw_api;
-
-    prims3d__uniforms uniforms = {
-        .viewproj_mat = *viewproj_mat
-    };
-
-    draw_api->apply_pipeline(g_prims3d.pip_wire_tri);
-    draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniforms));
-    draw_api->apply_bindings(&(sg_bindings) {
-        .vertex_buffers[0] = g_prims3d.unit_sphere.vb,
-        .index_buffer = g_prims3d.unit_sphere.ib
-    });
-    draw_api->draw(0, g_prims3d.unit_sphere.num_indices, 1);
+    prims3d__draw_spheres(&center, &radius, 1, viewproj_mat, map_type, &tint);
 }
 
 void prims3d__draw_spheres(const sx_vec3* centers, const float* radiuss, int count, 
@@ -493,7 +470,7 @@ void prims3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
                                               sizeof(prims3d__instance) * num_boxes);
     g_prims3d.num_instances += num_boxes;
 
-    draw_api->apply_pipeline(first_alpha == 255 ? g_prims3d.pip_solid : g_prims3d.pip_alphablend);
+    draw_api->apply_pipeline(first_alpha == 255 ? g_prims3d.pip_solid_box : g_prims3d.pip_alphablend_box);
     draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniforms));
     draw_api->apply_bindings(&(sg_bindings) {
         .vertex_buffers[0] = g_prims3d.unit_box.vb,
@@ -507,11 +484,7 @@ void prims3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
     rizz_temp_alloc_end(tmp_alloc);
 }
 
-    typedef struct adjucent_vertex {
-        int count;
-        int faces[6];
-    } adjucent_vertex;
-    
+// TODO: normals are not correct, fix them
 bool prims3d__generate_sphere_geometry(const sx_alloc* alloc, rizz_prims3d_geometry* geo,
                                        float radius, int num_segments, int num_rings)
 {
@@ -620,6 +593,11 @@ bool prims3d__generate_sphere_geometry(const sx_alloc* alloc, rizz_prims3d_geome
     sx_vec3* face_normals = sx_malloc(tmp_alloc, sizeof(sx_vec3)*(num_indices/3));
     sx_assert_always(face_normals);
 
+    typedef struct adjucent_vertex {
+        int count;
+        int faces[6];
+    } adjucent_vertex;   
+
     adjucent_vertex* adjucency = sx_malloc(tmp_alloc, sizeof(adjucent_vertex)*num_verts);
     sx_assert_always(adjucency);
     sx_memset(adjucency, 0x0, sizeof(adjucent_vertex)*num_verts);
@@ -627,8 +605,12 @@ bool prims3d__generate_sphere_geometry(const sx_alloc* alloc, rizz_prims3d_geome
     for (int i = 0; i < num_indices; i+=3) {
         sx_vec3 face_normal = sx_plane_normal(verts[indices[i]].pos, verts[indices[i + 1]].pos,
                                               verts[indices[i + 2]].pos);
+
+        sx_vec3 v = verts[indices[i]].pos;
+        sx_assert(sx_vec3_dot(face_normal, v) >= 0);
+
         int face_id = i/3;
-        face_normals[face_id] = sx_vec3_mulf(face_normal, -1.0f);
+        face_normals[face_id] = face_normal;
 
         if (indices[i] != 0 && indices[i] != num_verts - 1) {
             adjucent_vertex* a1 = &adjucency[indices[i]];
@@ -655,16 +637,9 @@ bool prims3d__generate_sphere_geometry(const sx_alloc* alloc, rizz_prims3d_geome
         for (int k = 0; k < a->count; k++) {
             normal = sx_vec3_add(normal, face_normals[a->faces[k]]);
         }
-        normal = sx_vec3_mulf(normal, 1.0f/(float)a->count);
+        normal = sx_vec3_norm(sx_vec3_mulf(normal, 1.0f/(float)a->count));
         verts[i].normal = normal;
     }
-#if 0
-    int max_count = 0;
-    for (int i = 0; i < num_verts; i++) {
-        max_count = sx_max(adjucency[i].count, max_count);
-    }
-#endif
-
 
     the_core->tmp_alloc_pop();
 

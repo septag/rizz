@@ -9,4 +9,5 @@
 - 3D Debug primitives
     - Debug Grid (xy-plane/xz-plane)
     - Cube shape with alpha-blend support
+    - Sphere shape with alpha-blend support
   

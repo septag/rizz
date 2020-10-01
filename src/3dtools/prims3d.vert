@@ -32,16 +32,20 @@ void main()
     vec3 normal = abs(a_normal);
     const float e = 0.00001;
     
-    vec2 uv = a_uv;
-    if (normal.x > e) {
-        uv *= a_inst_scale.yz;
-    } else if (normal.y > e) {
-        uv *= a_inst_scale.xz;
-    } else if (normal.z > e) {
-        uv *= a_inst_scale.xy;
-    }
+    #ifdef BOX_UV_WORKAROUND
+        vec2 uv = a_uv;
+        if (normal.x > e) {
+            uv *= a_inst_scale.yz;
+        } else if (normal.y > e) {
+            uv *= a_inst_scale.xz;
+        } else if (normal.z > e) {
+            uv *= a_inst_scale.xy;
+        }
+        f_uv = uv;
+    #else
+        f_uv = a_uv;
+    #endif
 
-    f_uv = uv;
     f_color = a_inst_color;
     f_normal = a_normal;
 }

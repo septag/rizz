@@ -11,9 +11,10 @@ layout (binding = 0) uniform sampler2D tex_map;
 void main() {
     vec4 color = texture(tex_map, f_uv);
 
+    #if 0  // debug light
     vec3 light = normalize(vec3(0, 0.5f, -0.5f));
     float n_dot_l = max(0, dot(f_normal, -light));
+    #endif
 
-    // frag_color = color * f_color;
-    frag_color = vec4(f_normal*0.5f + 0.5f, 1.0);
+    frag_color = color * f_color;
 }
