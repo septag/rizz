@@ -687,7 +687,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
     sg_image_desc* desc = data->user1;
     sx_assert(desc);
 
-    *desc = (sg_image_desc){
+    *desc = (sg_image_desc) {
         .type = tex->info.type,
         .width = tex->info.width,
         .height = tex->info.height,
@@ -699,6 +699,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
         .wrap_u = tparams->wrap_u,
         .wrap_v = tparams->wrap_v,
         .wrap_w = tparams->wrap_w,
+        .max_anisotropy = tparams->aniso;
     };
 
     char ext[32];
