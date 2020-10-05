@@ -1572,6 +1572,9 @@ static void imgui__graphics_debugger(const rizz_gfx_trace_info* info, bool* p_op
         if (the__imgui.BeginTabBar("#gfx_debugger_tabs", 0)) {
             if (the__imgui.BeginTabItem("General", NULL, 0)) {
                 const rizz_gfx_perframe_trace_info* pf = &info->pf[RIZZ_GFX_TRACE_COMMON];
+                the__imgui.LabelText("Fps", "%.1f", the_core->fps());
+                the__imgui.LabelText("Fps (mean)", "%.1f", the_core->fps_mean());
+                the__imgui.LabelText("FrameTime (ms)", "%.1f", the_core->delta_time() * 1000.0f);
                 the__imgui.LabelText("Draws", "%d", pf->num_draws);
                 the__imgui.LabelText("Instances", "%d", pf->num_instances);
                 the__imgui.LabelText("Elements", "%d", pf->num_elements);
