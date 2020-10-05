@@ -13,6 +13,9 @@
 #include "sx/pool.h"
 #include "sx/string.h"
 
+// fourcc code for embedded asset meta data
+static uint32_t k_rizz_asset_flag = sx_makefourcc('R', 'I', 'Z', 'Z');
+
 // Asset managers are managers for each type of asset
 // For example, 'texture' has it's own manager, 'model' has it's manager, ...
 // They handle loading, unloading, reloading asset objects
@@ -178,8 +181,6 @@ static void rizz__asset_load_job_cb(int start, int end, int thrd_index, void* us
                       : ASSET_JOB_STATE_LOAD_FAILED;
 }
 
-static uint32_t k_rizz_asset_flag = sx_makefourcc('R', 'I', 'Z', 'Z');
-
 static bool rizz__asset_checkandfix_asset_type(sx_mem_block* mem, const char* filepath, 
                                                rizz_asset asset_id, void** pparams,
                                                char* outpath, size_t outpath_sz)
@@ -216,7 +217,7 @@ static bool rizz__asset_checkandfix_asset_type(sx_mem_block* mem, const char* fi
         if (amgr->params_size > 0) {
             // fix params, fill params with the overriden values from the file and assign the pointer
             sx_assert(a->params_id);
-            sx_assert_alwaysf(amgr->params_size == header_size, 
+            sx_assert_alwaysf(header_size == (uint32_t)amgr->params_size, 
                               "meta-header for asset '%s' does not match internal structs", filepath);
             sx_mem_read(&r, &amgr->params_buff[rizz_to_index(a->params_id)], amgr->params_size);
             *pparams = &amgr->params_buff[rizz_to_index(a->params_id)];
