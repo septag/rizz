@@ -58,9 +58,11 @@ static bool rizz__json_on_load(rizz_asset_load_data* data, const rizz_asset_load
     rizz__json* json = (rizz__json*)data->obj.ptr;
 
     int num_tmp_tokens = 10000;
+    bool validate_tokens = false;
     for (uint32_t i = 0; i < params->num_meta; i++) {
         if (sx_strequal(params->metas[i].key, "num_tokens")) {
             num_tmp_tokens = sx_toint(params->metas[i].value);
+            validate_tokens = true;
         }
     }
 
@@ -72,6 +74,7 @@ static bool rizz__json_on_load(rizz_asset_load_data* data, const rizz_asset_load
     cj5_result jres = cj5_parse((const char*)mem->data, (int)mem->size, tmp_tokens, num_tmp_tokens);
     if (jres.error) {
         if (jres.error == CJ5_ERROR_OVERFLOW) {
+            sx_assertf(!validate_tokens, "num_tokens embeded: %d, number of actual tokens: %d", num_tmp_tokens, jres.num_tokens);
             sx_assert(jres.num_tokens > num_tmp_tokens);
             tmp_tokens = (cj5_token*)sx_realloc(tmp_alloc, tmp_tokens, sizeof(cj5_token)*jres.num_tokens);
             sx_assert_always(tmp_tokens);
