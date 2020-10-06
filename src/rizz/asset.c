@@ -13,6 +13,8 @@
 #include "sx/pool.h"
 #include "sx/string.h"
 
+#include <alloca.h>
+
 // fourcc code for embedded asset meta data
 static uint32_t k_rizz_asset_flag = sx_makefourcc('R', 'I', 'Z', 'Z');
 
@@ -20,7 +22,7 @@ static uint32_t k_rizz_asset_flag = sx_makefourcc('R', 'I', 'Z', 'Z');
 // For example, 'texture' has it's own manager, 'model' has it's manager, ...
 // They handle loading, unloading, reloading asset objects
 // They also have metdata and parameters memory containers
-typedef struct {
+typedef struct rizz__asset_mgr {
     char name[32];
     rizz_asset_callbacks callbacks;
     uint32_t name_hash;
@@ -36,7 +38,7 @@ typedef struct {
 // Assets consist of files (resource) on disk and load params combination
 // One file may be loaded with different parameters (different allocator, mip-map, LOD, etc.)
 // Each asset is binded to a resource and params data
-typedef struct {
+typedef struct rizz__asset {
     const sx_alloc* alloc;
     sx_handle_t handle;
     uint32_t params_id;      // id-to: rizz__asset_mgr.params_buff
@@ -77,8 +79,7 @@ typedef enum {
     _ASSET_JOB_STATE_ = INT32_MAX
 } rizz__asset_job_state;
 
-typedef sx_align_decl(8, struct) rizz__asset_async_job
-{
+typedef struct rizz__asset_async_job {
     rizz_asset_load_data load_data;
     sx_mem_block* mem;
     rizz__asset_mgr* amgr;
@@ -88,20 +89,19 @@ typedef sx_align_decl(8, struct) rizz__asset_async_job
     rizz_asset asset;
     struct rizz__asset_async_job* next;
     struct rizz__asset_async_job* prev;
-}
-rizz__asset_async_job;
+} rizz__asset_async_job;
 
-typedef struct {
+typedef struct rizz__asset_group {
     rizz_asset* assets;    // sx_array
 } rizz__asset_group;
 
-typedef struct {
+typedef struct rizz__asset_lib {
     const sx_alloc* alloc;    // allocator passed on init
     char asset_db_file[RIZZ_MAX_PATH];
     char variation[32];
-    rizz__asset_mgr* asset_mgrs;               // sx_array
-    uint32_t* asset_name_hashes;               // sx_array (count = count(asset_mgrs))
-    rizz__asset* assets;                       // loaded assets
+    rizz__asset_mgr* asset_mgrs;        // sx_array
+    uint32_t* asset_name_hashes;        // sx_array (count = count(asset_mgrs))
+    rizz__asset* assets;                // loaded assets
     sx_handle_pool* asset_handles;
     sx_hashtbl* asset_tbl;              // key: hash(path+params), value: handle (asset_handles)
     sx_hashtbl* resource_tbl;           // key  hash(path), value: index-to resources
@@ -181,9 +181,8 @@ static void rizz__asset_load_job_cb(int start, int end, int thrd_index, void* us
                       : ASSET_JOB_STATE_LOAD_FAILED;
 }
 
-static bool rizz__asset_checkandfix_asset_type(sx_mem_block* mem, const char* filepath, 
-                                               rizz_asset asset_id, void** pparams,
-                                               char* outpath, size_t outpath_sz)
+static bool rizz__asset_checkandfix_asset_type(sx_mem_block* mem, const char* filepath, char* outpath, 
+                                               size_t outpath_sz, uint32_t* num_meta)
 {
     if (mem->size < 4) {
         return false;
@@ -199,32 +198,20 @@ static bool rizz__asset_checkandfix_asset_type(sx_mem_block* mem, const char* fi
         return false;
     }
 
-    char ext[4];
-    bytes = sx_mem_read(&r, ext, sizeof(ext));
-    sx_assert_alwaysf(bytes == sizeof(ext), "invalid _rizz_ header for asset: %s", filepath);
+    char ext[5] = {0};
+    bytes = sx_mem_read(&r, ext, 4);
+    sx_assert_alwaysf(bytes == 4, "invalid _rizz_ header for asset: %s", filepath);
 
-    // fix path: append real extension to the end of the path string
-    sx_strcat(sx_strcpy(outpath, (int)outpath_sz, filepath), (int)outpath_sz, ext);
-
-    uint32_t header_size;
-    bytes = sx_mem_read_var(&r, header_size);
-    sx_assert_alwaysf(bytes == sizeof(header_size), "invalid _rizz_ header for asset: %s", filepath);
-    if (header_size > 0) {
-        rizz__asset* a = &g_asset.assets[sx_handle_index(asset_id.id)];
-        rizz__asset_mgr* amgr = &g_asset.asset_mgrs[a->asset_mgr_id];
-
-        sx_assert(a->handle == asset_id.id);
-        if (amgr->params_size > 0) {
-            // fix params, fill params with the overriden values from the file and assign the pointer
-            sx_assert(a->params_id);
-            sx_assert_alwaysf(header_size == (uint32_t)amgr->params_size, 
-                              "meta-header for asset '%s' does not match internal structs", filepath);
-            sx_mem_read(&r, &amgr->params_buff[rizz_to_index(a->params_id)], amgr->params_size);
-            *pparams = &amgr->params_buff[rizz_to_index(a->params_id)];
-        } else {
-            sx_assert_alwaysf(0, "this type of file, doesn't have params but it exist in file-header");
-        }
+    // fix path: remove the extension and append real extension to the end of the path string
+    char path_ext[32];
+    sx_os_path_splitext(path_ext, sizeof(path_ext), outpath, (int)outpath_sz, filepath);
+    if (ext[0] != '.') {
+        sx_strcat(outpath, (int)outpath_sz, ".");
     }
+    sx_strcat(outpath, (int)outpath_sz, ext);
+
+    bytes = sx_mem_read(&r, num_meta, sizeof(uint32_t));
+    sx_assert_alwaysf(bytes == sizeof(uint32_t), "invalid _rizz_ header for asset: %s", filepath);
 
     // increment the offset on the memory pointer
     sx_mem_addoffset(mem, r.pos);
@@ -280,9 +267,19 @@ static void rizz__asset_on_read(const char* path, sx_mem_block* mem, void* user)
 
     char fixed_path[RIZZ_MAX_PATH];
     bool path_is_fixed = false;
-    if (rizz__asset_checkandfix_asset_type(mem, path, asset, (void**)&aparams.params, fixed_path, sizeof(fixed_path))) {
-        aparams.path = path;
-        path_is_fixed = true;
+    rizz_asset_meta_keyval* metas;
+    if ((path_is_fixed = rizz__asset_checkandfix_asset_type(mem, path, fixed_path, sizeof(fixed_path), 
+                                                            &aparams.num_meta))) 
+    {
+        aparams.path = fixed_path;
+        if (aparams.num_meta > 0) {
+            sx_assert(aparams.num_meta < 64);
+            metas = alloca(sizeof(rizz_asset_meta_keyval)*aparams.num_meta);
+            sx_assert_always(metas);
+            sx_memcpy(metas, mem->data, sizeof(rizz_asset_meta_keyval)*aparams.num_meta);
+            sx_mem_addoffset(mem, sizeof(rizz_asset_meta_keyval)*aparams.num_meta);
+            aparams.metas = metas;
+        } 
     }
 
     rizz_asset_load_data load_data = amgr->callbacks.on_prepare(&aparams, mem);
@@ -295,14 +292,27 @@ static void rizz__asset_on_read(const char* path, sx_mem_block* mem, void* user)
     }
 
     // dispatch job request for on_load
-    // save a copy of path and params
+    // allocate the whole buffer and save a copy of path and params
     uint8_t* buff =
-        sx_malloc(g_asset.alloc, sizeof(rizz__asset_async_job) + amgr->params_size + RIZZ_MAX_PATH);
+        sx_malloc(g_asset.alloc, sizeof(rizz__asset_async_job) + amgr->params_size + RIZZ_MAX_PATH + 
+                  sizeof(rizz_asset_meta_keyval)*aparams.num_meta);
+    if (!buff) {
+        sx_memory_fail();
+        return;
+    }
+
     rizz__asset_async_job* ajob = (rizz__asset_async_job*)buff;
     buff += sizeof(rizz__asset_async_job);
     aparams.path = (const char*)buff;
     sx_memcpy(buff, path_is_fixed ? fixed_path : res->path, RIZZ_MAX_PATH);
     buff += RIZZ_MAX_PATH;
+    if (aparams.num_meta) {
+        sx_assert((uintptr_t)buff % 8 == 0);
+        aparams.metas = (rizz_asset_meta_keyval*)buff;
+        sx_memcpy(buff, metas, sizeof(rizz_asset_meta_keyval)*aparams.num_meta);
+        buff += sizeof(rizz_asset_meta_keyval)*aparams.num_meta;
+    }
+
     if (params_ptr) {
         sx_assert((uintptr_t)buff % 8 == 0);
         aparams.params = buff;
@@ -615,9 +625,19 @@ static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, 
 
             bool success = false;
             char fixed_path[RIZZ_MAX_PATH];
-            if (rizz__asset_checkandfix_asset_type(mem, path, asset, (void**)&aparams.params, fixed_path, sizeof(fixed_path))) {
+            rizz_asset_meta_keyval* metas;
+            if ((rizz__asset_checkandfix_asset_type(mem, path, fixed_path, sizeof(fixed_path), &aparams.num_meta))) {
                 aparams.path = fixed_path;
+                if (aparams.num_meta > 0) {
+                    sx_assert(aparams.num_meta < 64);
+                    metas = alloca(sizeof(rizz_asset_meta_keyval)*aparams.num_meta);
+                    sx_assert_always(metas);
+                    sx_memcpy(metas, mem->data, sizeof(rizz_asset_meta_keyval)*aparams.num_meta);
+                    sx_mem_addoffset(mem, sizeof(rizz_asset_meta_keyval)*aparams.num_meta);
+                    aparams.metas = metas;
+                }
             }
+
             rizz_asset_load_data load_data = amgr->callbacks.on_prepare(&aparams, mem);
 
             // revive pointer to asset, because during `on_prepare` some resource dependencies
@@ -873,9 +893,19 @@ static rizz_asset rizz__asset_load_from_mem(const char* name, const char* path_a
             };
 
             char fixed_path[RIZZ_MAX_PATH];
-            if (rizz__asset_checkandfix_asset_type(mem, path_alias, asset, (void**)&aparams.params, 
-                                                   fixed_path, sizeof(fixed_path))) {
+            rizz_asset_meta_keyval* metas;
+            if (rizz__asset_checkandfix_asset_type(mem, path_alias, fixed_path, sizeof(fixed_path),
+                                                   &aparams.num_meta)) 
+            {
                 aparams.path = fixed_path;
+                if (aparams.num_meta > 0) {
+                    sx_assert(aparams.num_meta < 64);
+                    metas = alloca(sizeof(rizz_asset_meta_keyval)*aparams.num_meta);
+                    sx_assert_always(metas);
+                    sx_memcpy(metas, mem->data, sizeof(rizz_asset_meta_keyval)*aparams.num_meta);
+                    sx_mem_addoffset(mem, sizeof(rizz_asset_meta_keyval)*aparams.num_meta);
+                    aparams.metas = metas;
+                }
             }
 
             bool success = false;

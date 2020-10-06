@@ -7,6 +7,7 @@
 #include "sx/allocator.h"
 #include "sx/io.h"
 #include "sx/threads.h"
+#include "sx/string.h"
 
 #define rizz__json_lock()                                  \
     if (params->flags & RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD) \
@@ -55,8 +56,13 @@ static bool rizz__json_on_load(rizz_asset_load_data* data, const rizz_asset_load
     const sx_alloc* alloc = params->alloc ? params->alloc : g_json.alloc;
     const rizz_json_load_params* jparams = (const rizz_json_load_params*)params->params;
     rizz__json* json = (rizz__json*)data->obj.ptr;
-    
-    const int num_tmp_tokens = 10000;
+
+    int num_tmp_tokens = 10000;
+    for (uint32_t i = 0; i < params->num_meta; i++) {
+        if (sx_strequal(params->metas[i].key, "num_tokens")) {
+            num_tmp_tokens = sx_toint(params->metas[i].value);
+        }
+    }
 
     const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
     

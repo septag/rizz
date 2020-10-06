@@ -685,8 +685,8 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
     const rizz_texture_load_params* tparams = params->params;
     rizz_texture* tex = data->obj.ptr;
     sg_image_desc* desc = data->user1;
-    sx_assert(desc);
 
+    sx_assert(desc);
     *desc = (sg_image_desc) {
         .type = tex->info.type,
         .width = tex->info.width,
@@ -701,6 +701,37 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
         .wrap_w = tparams->wrap_w,
         .max_anisotropy = (uint32_t)tparams->aniso
     };
+
+    // see if we have metadata, and parse it and override the texture desc
+    for (uint32_t i = 0; i < params->num_meta; i++) {
+        if (sx_strequal(params->metas[i].key, "wrap")) {
+            if (sx_strequal(params->metas[i].value, "repeat"))
+                desc->wrap_u = desc->wrap_v = desc->wrap_w = SG_WRAP_REPEAT;
+            else if (sx_strequal(params->metas[i].value, "clamp_to_edge"))
+                desc->wrap_u = desc->wrap_v = desc->wrap_w = SG_WRAP_CLAMP_TO_EDGE;
+            else if (sx_strequal(params->metas[i].value, "clamp_to_border"))
+                desc->wrap_u = desc->wrap_v = desc->wrap_w = SG_WRAP_CLAMP_TO_BORDER;
+            else if (sx_strequal(params->metas[i].value, "mirrored_repeat"))
+                desc->wrap_u = desc->wrap_v = desc->wrap_w = SG_WRAP_MIRRORED_REPEAT;
+        }
+        else if (sx_strequal(params->metas[i].key, "filter")) {
+            if (sx_strequal(params->metas[i].value, "nearest"))
+                desc->min_filter = desc->mag_filter = SG_FILTER_NEAREST;
+            else if (sx_strequal(params->metas[i].value, "linear"))
+                desc->min_filter = desc->mag_filter = SG_FILTER_LINEAR;
+            else if (sx_strequal(params->metas[i].value, "nearest_mipmap_nearest"))
+                desc->min_filter = desc->mag_filter = SG_FILTER_NEAREST_MIPMAP_NEAREST;
+            else if (sx_strequal(params->metas[i].value, "nearest_mipmap_linear"))
+                desc->min_filter = desc->mag_filter = SG_FILTER_NEAREST_MIPMAP_LINEAR;
+            else if (sx_strequal(params->metas[i].value, "linear_mipmap_nearest"))
+                desc->min_filter = desc->mag_filter = SG_FILTER_LINEAR_MIPMAP_NEAREST;
+            else if (sx_strequal(params->metas[i].value, "linear_mipmap_linear"))
+                desc->min_filter = desc->mag_filter = SG_FILTER_LINEAR_MIPMAP_LINEAR;
+        }
+        else if (sx_strequal(params->metas[i].key, "aniso")) {
+            desc->max_anisotropy = sx_toint(params->metas[i].value);
+        }
+    }
 
     char ext[32];
     sx_os_path_ext(ext, sizeof(ext), params->path);

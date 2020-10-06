@@ -85,6 +85,7 @@ void sx_mem_addref(sx_mem_block* mem)
 void sx_mem_addoffset(sx_mem_block* mem, int64_t offset)
 {
     mem->data = (uint8_t*)mem->data + offset;
+    mem->size -= offset;
     mem->start_offset += offset;
 }
 
@@ -107,7 +108,8 @@ bool sx_mem_grow(sx_mem_block** pmem, int64_t size)
 
     int align = mem->align;
     const sx_alloc* alloc = mem->alloc;
-    mem = (sx_mem_block*)sx_realloc(alloc, mem, (size_t)size + sizeof(sx_mem_block) + align);
+    mem = (sx_mem_block*)sx_realloc(alloc, mem, (size_t)(size + mem->start_offset) + 
+                                    sizeof(sx_mem_block) + align);
     if (mem) {
         mem->data = (uint8_t*)sx_align_ptr(mem + 1, 0, align) + mem->start_offset;
         mem->size = size;

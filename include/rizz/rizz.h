@@ -319,12 +319,19 @@ enum rizz_asset_load_flags_ {
 };
 typedef uint32_t rizz_asset_load_flags;
 
+typedef struct rizz_asset_meta_keyval {
+    char key[32];
+    char value[32];
+} rizz_asset_meta_keyval;
+
 typedef struct rizz_asset_load_params {
     const char* path;               // path to asset file
     const void* params;             // must cast to asset-specific implementation type
     const sx_alloc* alloc;          // allocator that is user sends for loading asset data
     uint32_t tags;                  // user-defined tag bits
     rizz_asset_load_flags flags;    // flags that are used for loading
+    uint32_t num_meta;              // meta key-value pairs, embedded in custom _rizz_ assets
+    const rizz_asset_meta_keyval* metas;
 } rizz_asset_load_params;
 
 typedef struct rizz_asset_load_data {
