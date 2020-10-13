@@ -23,7 +23,7 @@ typedef struct rizz_tween {
     float tm;
 } rizz_tween;
 
-static inline float rizz_tween_update(rizz_tween* tween, float dt, float max_tm)
+SX_INLINE float rizz_tween_update(rizz_tween* tween, float dt, float max_tm)
 {
     sx_assert(max_tm > 0.0);
     float t = sx_min(1.0f, tween->tm / max_tm);
@@ -57,7 +57,7 @@ typedef struct rizz_event_queue {
     int count;
 } rizz_event_queue;
 
-static inline void rizz_event_push(rizz_event_queue* eq, int event, void* user)
+SX_INLINE void rizz_event_push(rizz_event_queue* eq, int event, void* user)
 {
     if (eq->count < RIZZ_EVENTQUEUE_MAX_EVENTS) {
         int index = (eq->first + eq->count) % RIZZ_EVENTQUEUE_MAX_EVENTS;
@@ -75,7 +75,7 @@ static inline void rizz_event_push(rizz_event_queue* eq, int event, void* user)
     }
 }
 
-static inline bool rizz_event_poll(rizz_event_queue* eq, rizz_event* e)
+SX_INLINE bool rizz_event_poll(rizz_event_queue* eq, rizz_event* e)
 {
     if (eq->count > 0) {
         int first = eq->first;
@@ -88,13 +88,13 @@ static inline bool rizz_event_poll(rizz_event_queue* eq, rizz_event* e)
     }
 }
 
-static inline rizz_event rizz_event_peek(const rizz_event_queue* eq)
+SX_INLINE rizz_event rizz_event_peek(const rizz_event_queue* eq)
 {
     sx_assert(eq->count > 0);
     return eq->events[eq->first];
 }
 
-static inline bool rizz_event_empty(const rizz_event_queue* eq)
+SX_INLINE bool rizz_event_empty(const rizz_event_queue* eq)
 {
     return eq->count == 0;
 }
