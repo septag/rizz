@@ -248,7 +248,7 @@ static void render()
         sx_mat4 rot = sx_mat4_rotateX(SX_PIHALF);
         sx_mat4 translate = sx_mat4_translate(0, 0.0f, 2.0f);
         sx_mat4 mat = sx_mat4_mul(&translate, &rot);
-        fs_vars.shape_mat = sx_mat4x_inv(&mat);
+        fs_vars.shape_mat = sx_mat4_inv_transform(&mat);
     }
 
     // draw quad
