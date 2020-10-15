@@ -336,10 +336,7 @@ void prims3d__draw_spheres(const sx_vec3* centers, const float* radiuss, int cou
         return;
     }
 
-    uint8_t first_alpha = 255;
-    if (tints) {
-        first_alpha = tints[0].a;
-    }
+    bool alpha_blend = false;
 
     for (int i = 0; i < count; i++) {
         sx_vec3 pos = centers[i];
@@ -349,12 +346,17 @@ void prims3d__draw_spheres(const sx_vec3* centers, const float* radiuss, int cou
         instance->tx2 = sx_vec4f(0, 0, 0,             1.0f);
         instance->tx3 = sx_vec4f(0, 0, 0,             1.0f);
         instance->scale = sx_vec3splat(radius);
-        instance->color = tints ? tints[i] : SX_COLOR_WHITE;
-        sx_assert(!tints || (first_alpha == tints[i].a));
+        if (tints) {
+            instance->color = tints[i];
+            alpha_blend = tints[i].a < 255;
+        }
+        else {
+            instance->color = SX_COLOR_WHITE;
+        }
     }
 
     // in alpha-blend mode (transparent boxes), sort the boxes from back-to-front
-    if (first_alpha != 255) {
+    if (alpha_blend) {
         prims3d__instance_depth* sort_items = sx_malloc(tmp_alloc, sizeof(prims3d__instance_depth)*count);
         if (!sort_items) {
             sx_out_of_memory();
@@ -382,7 +384,7 @@ void prims3d__draw_spheres(const sx_vec3* centers, const float* radiuss, int cou
                                               sizeof(prims3d__instance) * count);
     g_prims3d.num_instances += count;
 
-    draw_api->apply_pipeline(first_alpha == 255 ? g_prims3d.pip_solid : g_prims3d.pip_alphablend);
+    draw_api->apply_pipeline(!alpha_blend ? g_prims3d.pip_solid : g_prims3d.pip_alphablend);
     draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniforms));
     draw_api->apply_bindings(&(sg_bindings) {
         .vertex_buffers[0] = g_prims3d.unit_sphere.vb,
@@ -425,10 +427,7 @@ void prims3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
         return;
     }
 
-    uint8_t first_alpha = 255;
-    if (tints) {
-        first_alpha = tints[0].a;
-    }
+    bool alpha_blend = false;
 
     for (int i = 0; i < num_boxes; i++) {
         const sx_tx3d* tx = &boxes[i].tx;
@@ -438,11 +437,16 @@ void prims3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
         instance->tx3 = sx_vec4f(tx->rot.m23, tx->rot.m13, tx->rot.m23, tx->rot.m33);
         instance->scale = sx_vec3_mulf(boxes[i].e, 2.0f);
         instance->color = tints ? tints[i] : SX_COLOR_WHITE;
-        sx_assert(!tints || (first_alpha == tints[i].a));
+        if (tints) {
+            instance->color = tints[i];
+            alpha_blend = tints[i].a < 255;
+        } else {
+            instance->color = SX_COLOR_WHITE;
+        }
     }
 
     // in alpha-blend mode (transparent boxes), sort the boxes from back-to-front
-    if (first_alpha != 255) {
+    if (alpha_blend) {
         prims3d__instance_depth* sort_items = sx_malloc(tmp_alloc, sizeof(prims3d__instance_depth)*num_boxes);
         if (!sort_items) {
             sx_out_of_memory();
@@ -470,7 +474,7 @@ void prims3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
                                               sizeof(prims3d__instance) * num_boxes);
     g_prims3d.num_instances += num_boxes;
 
-    draw_api->apply_pipeline(first_alpha == 255 ? g_prims3d.pip_solid_box : g_prims3d.pip_alphablend_box);
+    draw_api->apply_pipeline(!alpha_blend ? g_prims3d.pip_solid_box : g_prims3d.pip_alphablend_box);
     draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniforms));
     draw_api->apply_bindings(&(sg_bindings) {
         .vertex_buffers[0] = g_prims3d.unit_box.vb,
