@@ -1,6 +1,5 @@
-#include "rizz/spline.h"
 #include "rizz/config.h"
-#include "rizz/noise.h"
+#include "rizz/utility.h"
 #include "sx/allocator.h"
 #include "sx/io.h"
 #include "sx/math.h"
@@ -27,8 +26,7 @@ RIZZ_STATE static rizz_api_vfs* the_vfs;
 RIZZ_STATE static rizz_api_prims3d* the_prims;
 RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
 RIZZ_STATE static rizz_api_model* the_model;
-RIZZ_STATE static rizz_api_spline* the_spline;
-RIZZ_STATE static rizz_api_noise* the_noise;
+RIZZ_STATE static rizz_api_utility* the_utility;
 
 #ifndef EXAMPLES_ROOT
 #    define EXAMPLES_ROOT ""
@@ -299,7 +297,7 @@ static void update(float dt)
 {
     float t = (float)sx_tm_sec(the_core->elapsed_tick());
 
-    the_spline->eval3d(
+    the_utility->spline.eval3d(
         &(rizz_spline3d_desc){
             .nodes = g_draw3d.cube_path,
             .num_nodes = 4,
@@ -309,7 +307,7 @@ static void update(float dt)
         },
         &g_draw3d.cube_pos);
 
-    the_spline->eval3d(
+    the_utility->spline.eval3d(
         &(rizz_spline3d_desc){
             .nodes = (rizz_spline3d_node*)g_draw3d.cam_path,
             .num_nodes = 4,
@@ -329,10 +327,9 @@ static void update(float dt)
         static float gain = 2.0f;
         // static float freq2 = 10.0f;
         // static float gain2 = 0.25f;
-        sx_quat shake = sx_quat_fromeular((sx_vec3){
-            .x = (the_noise->perlin1d(freq * (t + 000)) * sx_torad(gain)),
-            .z = (the_noise->perlin1d(freq * (t + 100)) * sx_torad(gain))
-        });
+        sx_quat shake = sx_quat_fromeular(
+            (sx_vec3){ .x = (the_utility->noise.perlin1d(freq * (t + 000)) * sx_torad(gain)),
+                       .z = (the_utility->noise.perlin1d(freq * (t + 100)) * sx_torad(gain)) });
         g_draw3d.cam.quat = sx_quat_mul(g_draw3d.cam.quat, shake);
         sx_mat3 m = sx_quat_mat3(g_draw3d.cam.quat);
         g_draw3d.cam.right = m.col1;
@@ -363,7 +360,7 @@ static void render(void)
     // draw cube spline
     sx_vec3 points[100];
     for (int i = 0; i < 100; i++) {
-        the_spline->eval3d(
+        the_utility->spline.eval3d(
             &(rizz_spline3d_desc){
                 .nodes = g_draw3d.cube_path,
                 .num_nodes = 4,
@@ -427,8 +424,7 @@ rizz_plugin_decl_main(draw3d, plugin, e)
         the_imguix = (rizz_api_imgui_extra*)plugin->api->get_api_byname("imgui_extra", 0);
         the_prims = (rizz_api_prims3d*)plugin->api->get_api_byname("prims3d", 0);
         the_model = (rizz_api_model*)plugin->api->get_api_byname("model", 0);
-        the_spline = (rizz_api_spline*)plugin->api->get_api_byname("spline", 0);
-        the_noise = (rizz_api_noise*)plugin->api->get_api_byname("noise", 0);
+        the_utility = (rizz_api_utility*)plugin->api->get_api_byname("utility", 0);
 
         init();
         break;

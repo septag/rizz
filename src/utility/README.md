@@ -53,5 +53,5 @@ rizz_spline3d_desc desc = (rizz_spline3d_desc) {
 };
 
 my_node result;
-the_spline->eval3d(&desc, (sx_vec3*)(&result));
+the_utility->spline.eval3d(&desc, (sx_vec3*)(&result));
 ```

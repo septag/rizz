@@ -1,4 +1,4 @@
-#include "rizz/spline.h"
+#include "rizz/utility.h"
 
 static sx_vec3 bezier3d(sx_vec3 a, sx_vec3 b, sx_vec3 c, sx_vec3 d, float t)
 {

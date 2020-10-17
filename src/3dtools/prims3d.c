@@ -348,7 +348,7 @@ void prims3d__draw_spheres(const sx_vec3* centers, const float* radiuss, int cou
         instance->scale = sx_vec3splat(radius);
         if (tints) {
             instance->color = tints[i];
-            alpha_blend = tints[i].a < 255;
+            alpha_blend = alpha_blend || tints[i].a < 255;
         }
         else {
             instance->color = SX_COLOR_WHITE;
@@ -439,7 +439,7 @@ void prims3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
         instance->color = tints ? tints[i] : SX_COLOR_WHITE;
         if (tints) {
             instance->color = tints[i];
-            alpha_blend = tints[i].a < 255;
+            alpha_blend = alpha_blend || tints[i].a < 255;
         } else {
             instance->color = SX_COLOR_WHITE;
         }
