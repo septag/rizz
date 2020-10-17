@@ -18,7 +18,6 @@ set(SOURCE_FILES internal.h
 
 set(INCLUDE_FILES ../../include/rizz/config.h
                   ../../include/rizz/sg-types.h
-                  ../../include/rizz/util.h
                   ../../include/rizz/json.h 
                   ../../include/rizz/android.h
                   ../../include/rizz/ios.h 

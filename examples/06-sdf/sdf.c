@@ -5,7 +5,6 @@
 #include "rizz/imgui-extra.h"
 #include "rizz/imgui.h"
 #include "rizz/rizz.h"
-#include "rizz/util.h"
 
 #include "../common.h"
 

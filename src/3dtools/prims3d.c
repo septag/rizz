@@ -483,6 +483,7 @@ void prims3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
         .index_buffer = g_prims3d.unit_box.ib,
         .fs_images[0] = map
     });
+
     draw_api->draw(0, g_prims3d.unit_box.num_indices, num_boxes);
 
     rizz_temp_alloc_end(tmp_alloc);

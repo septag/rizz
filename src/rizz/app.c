@@ -243,10 +243,6 @@ sapp_desc sokol_main(int argc, char* argv[])
         case '+':
             printf("Got argument without flag: %s\n", arg);
             break;
-        case '?':
-            printf("Unknown argument: %s\n", arg);
-            exit(-1);
-            break;
         case '!':
             printf("Invalid use of argument: %s\n", arg);
             exit(-1);

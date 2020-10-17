@@ -1,7 +1,6 @@
 #pragma once
 
 #include "rizz/rizz.h"
-#include "rizz/util.h"
 
 typedef struct sx_alloc sx_alloc;
 

@@ -578,9 +578,8 @@ RIZZ_API void ANativeActivity_onCreate_(ANativeActivity*, void*, size_t);
 #    define rizz__app_android_decl()
 #endif
 
-#define rizz_game_decl_config(_conf_param_name)                        \
-    rizz__app_android_decl() RIZZ_PLUGIN_EXPORT void rizz_game_config( \
-        rizz_config* _conf_param_name, int argc, char* argv[])
+#define rizz_game_decl_config(_conf_param_name) \
+    rizz__app_android_decl() RIZZ_PLUGIN_EXPORT void rizz_game_config(rizz_config* _conf_param_name, int argc, char* argv[])
 
 // custom console commands that can be registered (sent via profiler)
 // return >= 0 for success and -1 for failure
@@ -1475,3 +1474,97 @@ typedef struct rizz_json_load_params {
     rizz_json_reload_cb* reload_fn;
     void* user;
 } rizz_json_load_params;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// @misc
+
+// rizz_event_queue: small _circular_ stack-based event queue.
+// useful for pushing and polling gameplay events to components/objects
+// NOTE: This is a small on-stack event queue implementation, and it's not thread-safe
+//       If you want to use a more general thread-safe queue, use sx/thread.h: sx_queue_spsc
+// NOTE: This is a circular queue, so it only holds RIZZ_EVENTQUEUE_MAX_EVENTS events and overwrites
+//       previous ones if it's overflowed. So use it with this limitation in mind
+//       most gameplay events for a component shouldn't require many events per-frame. If this
+//       happens to not be the case, then make your own queue or increase the
+//       `RIZZ_EVENTQUEUE_MAX_EVENTS` value
+//
+#ifndef RIZZ_EVENTQUEUE_MAX_EVENTS
+#    define RIZZ_EVENTQUEUE_MAX_EVENTS 4
+#endif
+
+typedef struct rizz_event {
+    int e;
+    void* user;
+} rizz_event;
+
+typedef struct rizz_event_queue {
+    rizz_event events[RIZZ_EVENTQUEUE_MAX_EVENTS];
+    int first;
+    int count;
+} rizz_event_queue;
+
+SX_INLINE void rizz_event_push(rizz_event_queue* eq, int event, void* user)
+{
+    if (eq->count < RIZZ_EVENTQUEUE_MAX_EVENTS) {
+        int index = (eq->first + eq->count) % RIZZ_EVENTQUEUE_MAX_EVENTS;
+        eq->events[index].e = event;
+        eq->events[index].user = user;
+        ++eq->count;
+    } else {
+        // overwrite previous events !!!
+        int first = eq->first;
+        first = ((first + 1) < RIZZ_EVENTQUEUE_MAX_EVENTS) ? (first + 1) : 0;
+        int index = (first + eq->count) % RIZZ_EVENTQUEUE_MAX_EVENTS;
+        eq->events[index].e = event;
+        eq->events[index].user = user;
+        eq->first = first;
+    }
+}
+
+SX_INLINE bool rizz_event_poll(rizz_event_queue* eq, rizz_event* e)
+{
+    if (eq->count > 0) {
+        int first = eq->first;
+        *e = eq->events[first];
+        eq->first = ((first + 1) < RIZZ_EVENTQUEUE_MAX_EVENTS) ? (first + 1) : 0;
+        --eq->count;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+SX_INLINE rizz_event rizz_event_peek(const rizz_event_queue* eq)
+{
+    sx_assert(eq->count > 0);
+    return eq->events[eq->first];
+}
+
+SX_INLINE bool rizz_event_empty(const rizz_event_queue* eq)
+{
+    return eq->count == 0;
+}
+
+// tween helper: useful for small animations and transitions
+//
+// usage:
+//      frame_update() {
+//          static rizz_tween t;
+//          float val = rizz_tween_update(&t, delta_time, )
+//          // val: [0, 1]. you can ease it or do whatever you like
+//          if (rizz_tween_done(&t)) {
+//              // tweening is finished. trigger something
+//          }
+//      }
+//
+typedef struct rizz_tween {
+    float tm;
+} rizz_tween;
+
+SX_INLINE float rizz_tween_update(rizz_tween* tween, float dt, float max_tm)
+{
+    sx_assert(max_tm > 0.0);
+    float t = sx_min(1.0f, tween->tm / max_tm);
+    tween->tm += dt;
+    return t;
+}
