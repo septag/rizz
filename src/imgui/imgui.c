@@ -1040,7 +1040,8 @@ static bool imgui__init(void)
     sg_pipeline_desc pip_desc = { .layout.buffers[0].stride = sizeof(ImDrawVert),
                                   .shader = g_imgui.shader,
                                   .index_type = SG_INDEXTYPE_UINT16,
-                                  .rasterizer = { .cull_mode = SG_CULLMODE_BACK },
+                                  
+                                  .rasterizer = { .cull_mode = SG_CULLMODE_NONE },
                                   .blend = { .enabled = true,
                                              .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
                                              .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
