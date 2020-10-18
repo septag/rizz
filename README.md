@@ -7,7 +7,7 @@ Rizz (ریز) is a tiny, multi-platform, and minimal game/app development framew
 It's currently a work in progress, features and improvements will be added constantly to different platforms.
 
 ## Design and Basic usage
-For more detailed information about design principles, architecture and basic usage of the framework, please read the document [rizz Architecture and Basic usage](doc/guide)
+For more detailed information about design principles, architecture and basic usage of the framework, please read the document [rizz Architecture and Basic usage](docs/guide)
 
 #### Note
 This is not a game engine, it's a relatively low-level framework for programmers to build their own engine/renderer/physics on top of it. The core of _rizz_ does not and will not implement any rendering techniques/physics or impose any specific entity system to the user. It just provides the basic building blocks for game developers. Other features will be implemented as plugins.
