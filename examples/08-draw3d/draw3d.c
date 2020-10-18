@@ -407,7 +407,7 @@ rizz_plugin_decl_main(draw3d, plugin, e)
     return 0;
 }
 
-rizz_plugin_decl_event_handler(nbody, e)
+rizz_plugin_decl_event_handler(draw3d, e)
 {
     static bool mouse_down = false;
     float dt = (float)sx_tm_sec(the_core->delta_tick());

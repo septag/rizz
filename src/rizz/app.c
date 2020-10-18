@@ -497,13 +497,14 @@ sapp_desc sokol_main(int argc, char* argv[])
         puts("rizz (engine) arguments:");
         rizz__app_show_help(cmdline);
         
-        if (cmdline_app) {
+        if (cmdline_app && sx_array_count(g_app.cmdline_args) > 1) {
             puts("app arguments:");
             rizz__app_show_help(cmdline_app);
         }
 
         // write to file
-        rizz__app_write_help_tofile("rizz_args.txt", cmdline, cmdline_app);
+        rizz__app_write_help_tofile("rizz_args.txt", cmdline, 
+                                    sx_array_count(g_app.cmdline_args) > 1 ? cmdline_app : NULL);
     }
 
     if (cmdline_app) {
