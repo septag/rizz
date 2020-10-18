@@ -64,7 +64,6 @@ void rizz__vfs_release();
 void rizz__vfs_async_update();
 
 bool rizz__asset_init(const sx_alloc* alloc, const char* dbfile, const char* variation);
-bool rizz__asset_save_meta_cache();
 bool rizz__asset_dump_unused(const char* filepath);
 void rizz__asset_release();
 void rizz__asset_update();

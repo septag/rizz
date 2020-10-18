@@ -176,7 +176,7 @@ static bool init()
     };
     g_draw3d.checker_tex = the_gfx->texture_create_checker(8, 128, checker_colors);
     g_draw3d.show_grid = true;
-    
+
     return true;
 }
 

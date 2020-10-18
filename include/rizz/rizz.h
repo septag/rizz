@@ -251,6 +251,12 @@ typedef void(rizz_app_event_cb)(const rizz_app_event*);
 
 typedef struct rizz_config rizz_config;
 
+typedef enum rizz_cmdline_argtype {
+    RIZZ_CMDLINE_ARGTYPE_NONE,
+    RIZZ_CMDLINE_ARGTYPE_REQUIRED,
+    RIZZ_CMDLINE_ARGTYPE_OPTIONAL
+} rizz_cmdline_argtype;
+
 typedef struct rizz_api_app {
     int (*width)(void);
     int (*height)(void);
@@ -269,6 +275,8 @@ typedef struct rizz_api_app {
     bool (*mouse_shown)(void);
     void (*mouse_capture)(void);
     void (*mouse_release)(void);
+    const char* (*cmdline_arg_value)(const char* name);
+    bool (*cmdline_arg_exists)(const char* name);
 } rizz_api_app;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -559,10 +567,15 @@ typedef struct rizz_config {
     int profiler_update_interval_ms;    // default: 10ms
 } rizz_config;
 
+typedef void(rizz_register_cmdline_arg_cb)(const char* name, char short_name,
+                                           rizz_cmdline_argtype type, const char* desc,
+                                           const char* value_desc);
+
 // Game plugins should implement this function (name should be "rizz_game_config")
 // It is called by engine to fetch configuration before initializing the app
 // The contents of conf is also set to defaults before submitting to this callback
-typedef void(rizz_game_config_cb)(rizz_config* conf, int argc, char* argv[]);
+// Note: use register_cmdline_arg (see above decleration) to add command line arguements to your app
+typedef void(rizz_game_config_cb)(rizz_config* conf, rizz_register_cmdline_arg_cb* register_cmdline_arg);
 
 #if SX_PLATFORM_ANDROID
 typedef struct ANativeActivity ANativeActivity;
@@ -578,8 +591,10 @@ RIZZ_API void ANativeActivity_onCreate_(ANativeActivity*, void*, size_t);
 #    define rizz__app_android_decl()
 #endif
 
-#define rizz_game_decl_config(_conf_param_name) \
-    rizz__app_android_decl() RIZZ_PLUGIN_EXPORT void rizz_game_config(rizz_config* _conf_param_name, int argc, char* argv[])
+#define rizz_game_decl_config(_conf_param_name)                        \
+    rizz__app_android_decl() RIZZ_PLUGIN_EXPORT void rizz_game_config( \
+        rizz_config* _conf_param_name, rizz_register_cmdline_arg_cb* register_cmdline_arg)
+
 
 // custom console commands that can be registered (sent via profiler)
 // return >= 0 for success and -1 for failure
@@ -1391,8 +1406,7 @@ typedef struct rizz_api_http {
     // callback requests: triggers the callback when get/post is complete
     // NOTE: do not call `free` in the callback functions, the request will be freed automatically
     void (*get_cb)(const char* url, rizz_http_cb* callback, void* user);
-    void (*post_cb)(const char* url, const void* data, size_t size, rizz_http_cb* callback,
-                    void* user);
+    void (*post_cb)(const char* url, const void* data, size_t size, rizz_http_cb* callback, void* user);
 } rizz_api_http;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
