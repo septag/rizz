@@ -45,7 +45,7 @@ bool gradient__add_key(rizz_gradient* gradient, sx_color color, float t)
 
 bool gradient__move_key(rizz_gradient* gradient, int index, float t)
 {
-    if (index <= 0 || index >= gradient->num_keys - 1)
+    if (index <= 0 || index >= (int)gradient->num_keys - 1)
         return false;    // dont move first or last key
 
     t = sx_clamp(t, 0.02f, 0.98f);    // avoid overlap on first or last key
@@ -56,7 +56,7 @@ bool gradient__move_key(rizz_gradient* gradient, int index, float t)
 
 bool gradient__remove_key(rizz_gradient* gradient, int index)
 {
-    if (index <= 0 || index >= gradient->num_keys - 1)
+    if (index <= 0 || index >= (int)gradient->num_keys - 1)
         return false;    // dont remove first or last key
 
     gradient->num_keys--;
@@ -77,7 +77,7 @@ sx_color gradient__eval(const rizz_gradient* gradient, float t)
     int a = 0;
     int b = 1;
 
-    for (int i = 0; i < gradient->num_keys; i++) {
+    for (int i = 0; i < (int)gradient->num_keys; i++) {
         if (gradient->keys[i].t >= t) {
             b = i;
             break;

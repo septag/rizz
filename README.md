@@ -7,7 +7,7 @@ Rizz (ریز) is a tiny, multi-platform, and minimal game/app development framew
 It's currently a work in progress, features and improvements will be added constantly to different platforms.
 
 ## Design and Basic usage
-For more detailed information about design principles, architecture and basic usage of the framework, please read the document [rizz Architecture and Basic usage](docs/guide)
+For more detailed information about design principles, architecture and basic usage of the framework, please read the document [rizz Architecture and Basic usage](www.glitterbombg.com/blog/posts/rizz-basics), which is also available in [docs/guide](docs/guide)
 
 #### Note
 This is not a game engine, it's a relatively low-level framework for programmers to build their own engine/renderer/physics on top of it. The core of _rizz_ does not and will not implement any rendering techniques/physics or impose any specific entity system to the user. It just provides the basic building blocks for game developers. Other features will be implemented as plugins.
@@ -69,6 +69,7 @@ But as the engine is in it's early age, the current platforms are built and test
   - libxrandr-dev
   - libxi-dev
   - libasound2-dev (if you are planning to build `sound` plugin)
+  - libglew-dev
 - __MacOS__: Tested on MacOS High Sierra - AppleClang 9.1.0
 - __Android__: For android, there is a python script [android.py](scripts/build-tools/android.py) which takes care of preparing android project structure, building the code and packaging the final APK. please read the begining of ```android.py```.
 - __RaspberryPI__: Tested on RPi1 ModelB Ubuntu-jessie (gcc Raspbian 4.9.2). Package requirements:

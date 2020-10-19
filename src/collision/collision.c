@@ -1078,7 +1078,7 @@ static void coll_debug_collisions(rizz_coll_context* ctx, float opacity,
                 the_imguix->project_to_screen(verts[1], &viewproj, NULL),
                 the_imguix->project_to_screen(verts[2], &viewproj, NULL),
                 the_imguix->project_to_screen(verts[3], &viewproj, NULL),
-                ctx->collision_frames[index] == frame ? SX_COLOR_RED.n : SX_COLOR_WHITE.n, 2.0f);
+                ctx->collision_frames[index] == frame ? SX_COLOR_RED.n : SX_COLOR_WHITE.n, 1.0f);
         }
     } break;
     case RIZZ_COLL_DEBUGCOLLISION_MODE_COLLISION_HEATMAP:
@@ -1164,7 +1164,7 @@ static void coll_debug_raycast(rizz_coll_context* ctx, float opacity,
                 the_imguix->project_to_screen(verts[1], &viewproj, NULL),
                 the_imguix->project_to_screen(verts[2], &viewproj, NULL),
                 the_imguix->project_to_screen(verts[3], &viewproj, NULL),
-                color.n, 2.0f);
+                color.n, 1.0f);
         }
     } break;
     case RIZZ_COLL_DEBUGRAYCAST_MODE_RAYHIT_HEATMAP:
@@ -1191,7 +1191,7 @@ static void coll_debug_raycast(rizz_coll_context* ctx, float opacity,
             float color[3];
             sx_color_HSVtoRGB(color, hsv);
 
-            the_imgui->ImDrawList_AddRect(draw_list, v1, v2, SX_COLOR_GREEN.n, 0, ImDrawCornerFlags_All, 2.0f);
+            the_imgui->ImDrawList_AddRect(draw_list, v1, v2, SX_COLOR_GREEN.n, 0, ImDrawCornerFlags_All, 1.0f);
             the_imgui->ImDrawList_AddRectFilled(
                 draw_list, v1, v2, sx_color4f(color[0], color[1], color[2], 0.3f).n, 0, 0);
         }
@@ -1227,8 +1227,8 @@ static void coll_debug_raycast(rizz_coll_context* ctx, float opacity,
         
         sx_vec2 ray_end = the_imguix->project_to_screen(
             sx_vec3_add(ray.origin, sx_vec3_mulf(ray.dir, len)), &viewproj, NULL);
-        the_imgui->ImDrawList_AddCircle(draw_list, ray_pos, 5.0f, SX_COLOR_PURPLE.n, 12, 4.0f);
-        the_imgui->ImDrawList_AddLine(draw_list, ray_pos, ray_end, SX_COLOR_PURPLE.n, 4.0f);    
+        the_imgui->ImDrawList_AddCircle(draw_list, ray_pos, 5.0f, SX_COLOR_PURPLE.n, 12, 2.0f);
+        the_imgui->ImDrawList_AddLine(draw_list, ray_pos, ray_end, SX_COLOR_PURPLE.n, 2.0f);    
     }
 
     for (int i = 0; i < ctx->num_cells; i++) {
@@ -1242,12 +1242,19 @@ void coll_debug_collisions(rizz_coll_context* ctx, float opacity,
                            rizz_coll_debug_collision_mode mode, float heatmap_limit)
 {
     sx_unused(mode);
+    sx_unused(ctx);
+    sx_unused(opacity);
+    sx_unused(heatmap_limit);
 }
 
 void coll_debug_raycast(rizz_coll_context* ctx, float opacity, rizz_coll_debug_collision_mode mode,
                         float heatmap_limit)
 {
     sx_unused(opacity);
+    sx_unused(mode);
+    sx_unused(ctx);
+    sx_unused(heatmap_limit);
+
 }
 #endif // STRIKE_DEBUG_COLLISION
 
