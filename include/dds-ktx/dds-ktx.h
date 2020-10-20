@@ -75,10 +75,8 @@
 //      Write KTX/DDS
 //      Read KTX metadata. currently it just stores the offset/size to the metadata block
 //
-// NOTES
-//      Some portions of this code are taken from 'bimg' library: https://github.com/bkaradzic/bimg
-//
-#pragma once
+
+ #pragma once
 
 #include <stddef.h>
 #include <stdint.h>
@@ -907,8 +905,8 @@ static bool ddsktx__parse_ktx(ddsktx_texture_info* tc, const void* file_data, in
     if (ddsktx__read(&r, &header, sizeof(header)) != DDSKTX__KTX_HEADER_SIZE) {
         ddsktx__err(err, "ktx; header size does not match");
     }
-    
-    if (ddsktx_memcmp(header.id, ktx__id, sizeof(header.id)) == 0) {
+
+    if (ddsktx_memcmp(header.id, ktx__id, sizeof(header.id)) != 0) {
         ddsktx__err(err, "ktx: invalid file header");
     }
 
@@ -977,7 +975,7 @@ static bool ddsktx__parse_dds(ddsktx_texture_info* tc, const void* file_data, in
         ddsktx__err(err, "dds: header size does not match");
     }
 
-    uint32_t required_flags = (DDSKTX__DDSD_CAPS|DDSKTX__DDSD_HEIGHT|DDSKTX__DDSD_WIDTH|DDSKTX__DDSD_PIXELFORMAT);
+    uint32_t required_flags = (DDSKTX__DDSD_HEIGHT|DDSKTX__DDSD_WIDTH);
     if ((header.flags & required_flags) != required_flags) {
         ddsktx__err(err, "dds: have invalid flags");
     }
