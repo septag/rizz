@@ -1472,19 +1472,23 @@ typedef struct rizz_api_refl {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @json
 // json files can be loaded by asset manager with the type_name="json"
-// the underlying type for rizz_asset_obj is a pointer to cj5_result. remember to include "rizz/json.h"
+// the underlying type for rizz_asset_obj is a pointer to rizz_json. remember to include "rizz/json.h"
 // load parameters:
 // load_cb/reload_cb are optional (can be NULL) and can be given to asset loader, to automatically trigger when 
 // json data is loaded or reloaded. They will always run in the main thread.
 // NOTE: keeping callback functions in framework will likely cause trouble when the guest program reloads
 // TODO: fix this
-typedef struct cj5_result cj5_result;
-typedef void (rizz_json_reload_cb)(cj5_result* new_result, cj5_result* prev_result, void* user);
-typedef void (rizz_json_load_cb)(cj5_result* result, void* user);
+
+typedef struct rizz_json rizz_json; // rizz/json.h
+
+typedef void (rizz_json_reload_cb)(rizz_json* new_json, rizz_json* prev_json);
+typedef void (rizz_json_load_cb)(rizz_json* json);
+typedef void (rizz_json_unload_cb)(rizz_json* json);
 
 typedef struct rizz_json_load_params {
     rizz_json_load_cb* load_fn;
     rizz_json_reload_cb* reload_fn;
+    rizz_json_unload_cb* unload_fn;
     void* user;
 } rizz_json_load_params;
 
