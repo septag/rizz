@@ -46,13 +46,30 @@ typedef struct rizz_spline3d_desc {
 } rizz_spline3d_desc;
 
 #define RIZZ_GRADIENT_MAX_KEYS 8
+
+typedef struct rizz_gradient_key {
+    float t;
+    sx_color color;
+} rizz_gradient_key;
+
 typedef struct rizz_gradient {
-    struct {
-        float t;
-        sx_color color;
-    } keys[RIZZ_GRADIENT_MAX_KEYS];
+    rizz_gradient_key keys[RIZZ_GRADIENT_MAX_KEYS];
     uint32_t num_keys;
 } rizz_gradient;
+
+#define RIZZ_GRAPH_MAX_KEYS 8
+
+typedef struct rizz_graph_key {
+    float t;
+    float value;
+    float lwing;
+    float rwing;
+} rizz_graph_key;
+
+typedef struct rizz_graph {
+    rizz_graph_key keys[RIZZ_GRAPH_MAX_KEYS];
+    uint32_t num_keys;
+} rizz_graph;
 
 typedef struct rizz_api_utility {
     struct {
@@ -67,10 +84,23 @@ typedef struct rizz_api_utility {
     } noise;
     struct {
         void (*init)(rizz_gradient* gradient, sx_color start, sx_color end);
-        bool (*add_key)(rizz_gradient* gradient, sx_color color, float t);
+        bool (*add_key)(rizz_gradient* gradient, rizz_gradient_key key);
         bool (*remove_key)(rizz_gradient* gradient, int index);
         bool (*move_key)(rizz_gradient* gradient, int index, float t);
         sx_color (*eval)(const rizz_gradient* gradient, float t);
         void (*edit)(const rizz_api_imgui* api, const char* label, rizz_gradient* gradient);
     } gradient;
+    struct {
+        void (*init)(rizz_graph* graph, float start, float end);
+        bool (*add_key)(rizz_graph* graph, rizz_graph_key key);
+        bool (*remove_key)(rizz_graph* graph, int index);
+        bool (*move_key)(rizz_graph* graph, int index, float t, float value);
+        float (*eval)(const rizz_graph* graph, float t);
+        float (*eval_remap)(const rizz_graph* graph, float t, float t_min, float t_max, float v_min,
+                            float v_max);
+        void (*edit)(const rizz_api_imgui* api, const char* label, rizz_graph* graph,
+                     sx_color color);
+        void (*edit_multiple)(const rizz_api_imgui* api, const char* label, rizz_graph** graphs,
+                              int num_graphs, int active_graph, sx_color* colors);
+    } graph;
 } rizz_api_utility;

@@ -8,11 +8,9 @@ static inline void sortkeys(rizz_gradient* gradient)
         uint32_t i, newn = 0;
         for (i = 1; i < n; ++i) {
             if ((gradient->keys[i - 1].t - gradient->keys[i].t) > 0) {
-                sx_color tmp_color = gradient->keys[i - 1].color;
-                float tmp_t = gradient->keys[i - 1].t;
+                rizz_gradient_key tmp = gradient->keys[i - 1];
                 gradient->keys[i - 1] = gradient->keys[i];
-                gradient->keys[i].color = tmp_color;
-                gradient->keys[i].t = tmp_t;
+                gradient->keys[i] = tmp;
                 newn = i;
             }
         }
@@ -23,21 +21,20 @@ static inline void sortkeys(rizz_gradient* gradient)
 void gradient__init(rizz_gradient* gradient, sx_color start, sx_color end)
 {
     *gradient = (rizz_gradient){
-        .keys[0] = { .t = 0.0f, .color = start },
-        .keys[1] = { .t = 1.0f, .color = end },
+        .keys[0] = { 0, start },
+        .keys[1] = { 1, end },
         .num_keys = 2,
     };
 }
 
-bool gradient__add_key(rizz_gradient* gradient, sx_color color, float t)
+bool gradient__add_key(rizz_gradient* gradient, rizz_gradient_key key)
 {
     if (gradient->num_keys == RIZZ_GRADIENT_MAX_KEYS)
         return false;    // no room for new keys
 
-    t = sx_clamp(t, 0.02f, 0.98f);    // avoid overlap on first or last key
+    key.t = sx_clamp(key.t, 0.02f, 0.98f);    // avoid overlap on first or last key
     uint32_t index = gradient->num_keys;
-    gradient->keys[index].color = color;
-    gradient->keys[index].t = t;
+    gradient->keys[index] = key;
     gradient->num_keys++;
     sortkeys(gradient);
     return true;
@@ -48,7 +45,9 @@ bool gradient__move_key(rizz_gradient* gradient, int index, float t)
     if (index <= 0 || index >= (int)gradient->num_keys - 1)
         return false;    // dont move first or last key
 
-    t = sx_clamp(t, 0.02f, 0.98f);    // avoid overlap on first or last key
+    float min = gradient->keys[index - 1].t + 0.02f;
+    float max = gradient->keys[index + 1].t - 0.02f;
+    t = sx_clamp(t, min, max);
     gradient->keys[index].t = t;
     sortkeys(gradient);
     return true;
@@ -60,10 +59,8 @@ bool gradient__remove_key(rizz_gradient* gradient, int index)
         return false;    // dont remove first or last key
 
     gradient->num_keys--;
-    const int key_size = sizeof(gradient->keys[0]);
     sx_memmove(&gradient->keys[index], &gradient->keys[index + 1],
-               (gradient->num_keys - index) * key_size);
-
+               (gradient->num_keys - index) * sizeof(rizz_gradient_key));
     return true;
 }
 
@@ -141,6 +138,10 @@ void gradient__edit(const rizz_api_imgui* gui, const char* label, rizz_gradient*
         gui->ImDrawList_AddLine(dlst, p1, p2, SX_COLOR_WHITE.n, 1.0f);
     }
 
+    bool mpos_out = !sx_rect_test_point(
+        sx_rectwh(rpos.x - 10, rpos.y - 10, rsize.x + 20, rsize.y + 20),    // rect
+        mpos);
+
     // draw keys
     int del_i = -1;
     for (int i = 0; i < count; i++) {
@@ -148,7 +149,6 @@ void gradient__edit(const rizz_api_imgui* gui, const char* label, rizz_gradient*
         sx_color ic = gradient->keys[i].color;
         float it = gradient->keys[i].t;
         sx_vec2 kpos = sx_vec2f(rpos.x + it * rsize.x, rpos.y + rsize.y * 0.5f);
-
 
         gui->ImDrawList_AddCircleFilled(dlst, kpos, 4, SX_COLOR_BLACK.n, 16);
         gui->ImDrawList_AddCircleFilled(dlst, kpos, 3, SX_COLOR_WHITE.n, 16);
@@ -160,11 +160,11 @@ void gradient__edit(const rizz_api_imgui* gui, const char* label, rizz_gradient*
             float t = (mpos.x - rpos.x) / rsize.x;
             gradient__move_key(gradient, i, t);
 
-            if (mpos.y > rpos.y + rsize.y)    // warn user this key will be removed
-                gui->ImDrawList_AddCircleFilled(dlst, kpos, 8, sx_color4u(255, 0, 0, 220).n, 16);
+            if (mpos_out)    // warn user this key will be removed
+                gui->ImDrawList_AddCircleFilled(dlst, kpos, 8, sx_color4u(255, 0, 0, 200).n, 16);
         }
 
-        if (gui->IsItemDeactivated() && mpos.y > rpos.y + rsize.y) {
+        if (gui->IsItemDeactivated() && mpos_out) {
             del_i = i;    // mark i for remove later
         }
 
@@ -180,15 +180,6 @@ void gradient__edit(const rizz_api_imgui* gui, const char* label, rizz_gradient*
                 .b = (uint8_t)(sx_clamp(c.z, 0, 1) * 255),
                 .a = (uint8_t)(sx_clamp(c.w, 0, 1) * 255),
             };
-            gui->PushStyleColorU32(ImGuiCol_Button, SX_COLOR_RED.n);
-            gui->PushStyleColorU32(ImGuiCol_ButtonHovered, sx_color4u(255, 80, 80, 255).n);
-            gui->PushStyleColorU32(ImGuiCol_ButtonActive, sx_color4u(255, 80, 80, 255).n);
-            gui->Dummy(sx_vec2f(0, 10));
-            if (gui->Button("Remove", sx_vec2f(-1, 20))) {
-                del_i = i;    // mark i for remove later
-                gui->CloseCurrentPopup();
-            }
-            gui->PopStyleColor(3);
             gui->EndPopup();
         }
         gui->PopID();
@@ -202,17 +193,13 @@ void gradient__edit(const rizz_api_imgui* gui, const char* label, rizz_gradient*
     if (gui->InvisibleButton("grad-add-key", rsize)) {
         float t = (mpos.x - rpos.x) / rsize.x;
         sx_color c = gradient__eval(gradient, t);
-        gradient__add_key(gradient, c, t);
+        gradient__add_key(gradient, (rizz_gradient_key){ t, c });
     }
 
     // label
     {
-        // sx_vec2 cpos;
-        // gui->GetCursorScreenPos(&cpos);
-        // gui->SetCursorScreenPos(sx_vec2f(rpos.x + rsize.x, rpos.y + 100));
         gui->SameLine(0, 4);
         gui->Text(label);
-        // gui->SetCursorScreenPos(cpos);
     }
     gui->PopID();
 }
