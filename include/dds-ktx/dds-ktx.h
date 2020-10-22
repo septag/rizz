@@ -149,21 +149,21 @@ typedef enum ddsktx_format
     _DDSKTX_FORMAT_COUNT
 } ddsktx_format;
 
-typedef enum stc_texture_flags
+typedef enum ddsktx_texture_flags
 {
     DDSKTX_TEXTURE_FLAG_CUBEMAP = 0x01,       
     DDSKTX_TEXTURE_FLAG_SRGB    = 0x02,        
     DDSKTX_TEXTURE_FLAG_ALPHA   = 0x04,       // Has alpha channel
     DDSKTX_TEXTURE_FLAG_DDS     = 0x08,       // container was DDS file
     DDSKTX_TEXTURE_FLAG_KTX     = 0x10        // container was KTX file
-} stc_texture_flags;
+} ddsktx_texture_flags;
 
 typedef struct ddsktx_texture_info
 {
     int                 data_offset;   // start offset of pixel data
     int                 size_bytes;
     ddsktx_format       format;
-    unsigned int        flags;         // stc_texture_flags
+    unsigned int        flags;         // ddsktx_texture_flags
     int                 width;
     int                 height;
     int                 depth;
@@ -1058,7 +1058,7 @@ static bool ddsktx__parse_dds(ddsktx_texture_info* tc, const void* file_data, in
     tc->num_layers = ddsktx__max(1, (int)array_size);
     tc->num_mips = (header.caps1 & DDSKTX__DDSCAPS_MIPMAP) ? (int)header.mip_count : 1;
     tc->bpp = k__block_info[format].bpp;
-    if (has_alpha)
+    if (has_alpha || k__formats_info[format].has_alpha)
         tc->flags |= DDSKTX_TEXTURE_FLAG_ALPHA;
     if (cubemap)
         tc->flags |= DDSKTX_TEXTURE_FLAG_CUBEMAP;
