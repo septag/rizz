@@ -27,7 +27,6 @@ typedef struct rizz__json {
     sx_mem_block* source_mem;
     rizz_json_reload_cb* reload_fn;
     rizz_json_unload_cb* unload_fn;
-    void* user;
 } rizz__json;
 
 static rizz__json_context g_json;
