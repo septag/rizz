@@ -110,18 +110,23 @@ float graph__eval(const rizz_graph* graph, float t)
 }
 
 float graph__eval_remap(const rizz_graph* graph, float t, float t_min, float t_max, float v_min,
-                  float v_max)
+                        float v_max)
 {
     t = (t - t_min) / (t_max - t_min);    // inv_lerp
     return sx_lerp(graph__eval(graph, t), v_min, v_max);
 }
 
-void graph__edit_multiple(const rizz_api_imgui* gui, const char* label, rizz_graph** graphs,
-                          int num_graphs, int active_graph, sx_color* colors)
+void graph__edit_multiple(const rizz_api_imgui* gui, rizz_graph** graphs, const char** names,
+                          sx_color* colors, int* selected, int num_graphs)
 {
-    rizz_graph* graph = graphs[active_graph];
+    *selected = sx_clamp(*selected, 0, num_graphs - 1);
+    rizz_graph* graph = graphs[*selected];
 
-    gui->PushIDStr(label);
+    if (names && names[0])
+        gui->PushIDStr(names[0]);
+    else
+        gui->PushIDStr("graph");
+
     sx_vec2 rpos, rsize, mpos;
     gui->GetMousePos(&mpos);
     gui->GetCursorScreenPos(&rpos);
@@ -158,25 +163,27 @@ void graph__edit_multiple(const rizz_api_imgui* gui, const char* label, rizz_gra
 
     gui->ImDrawList_PushClipRect(dlst, clip_rect.vmin, clip_rect.vmax, true);
     // draw curve
+    const int segments = 64;
+
     for (int g = 0; g < num_graphs; g++) {
-        if (g == active_graph)
+        if (g == *selected)
             continue;    // draw active graph later
 
         rizz_graph* cur_graph = graphs[g];
         sx_color c = colors[g];
-        for (int i = 0; i < count - 1; i++) {
-            rizz_graph_key a = cur_graph->keys[i];
-            rizz_graph_key b = cur_graph->keys[i + 1];
-            sx_vec2 p1 = sx_vec2f(rpos.x + a.t * rsize.x, rpos.y + (1 - a.value) * rsize.y);
-            sx_vec2 p2 = sx_vec2f(rpos.x + b.t * rsize.x, rpos.y + (1 - b.value) * rsize.y);
-            gui->ImDrawList_AddLine(dlst, p1, p2, SX_COLOR_BLACK.n, 4);
+        for (int i = 0; i < segments; i++) {
+            float t1 = (i + 0) / (float)segments;
+            float t2 = (i + 1) / (float)segments;
+            float v1 = graph__eval(cur_graph, t1);
+            float v2 = graph__eval(cur_graph, t2);
+            sx_vec2 p1 = sx_vec2f(rpos.x + t1 * rsize.x, rpos.y + (1 - v1) * rsize.y);
+            sx_vec2 p2 = sx_vec2f(rpos.x + t2 * rsize.x, rpos.y + (1 - v2) * rsize.y);
             gui->ImDrawList_AddLine(dlst, p1, p2, c.n, 2);
         }
     }
     // now draw active graph curve
     {
-        sx_color c = colors[active_graph];
-        const int segments = 64;
+        sx_color c = colors[*selected];
         for (int i = 0; i < segments; i++) {
             float t1 = (i + 0) / (float)segments;
             float t2 = (i + 1) / (float)segments;
@@ -184,7 +191,6 @@ void graph__edit_multiple(const rizz_api_imgui* gui, const char* label, rizz_gra
             float v2 = graph__eval(graph, t2);
             sx_vec2 p1 = sx_vec2f(rpos.x + t1 * rsize.x, rpos.y + (1 - v1) * rsize.y);
             sx_vec2 p2 = sx_vec2f(rpos.x + t2 * rsize.x, rpos.y + (1 - v2) * rsize.y);
-            gui->ImDrawList_AddLine(dlst, p1, p2, SX_COLOR_BLACK.n, 4);
             gui->ImDrawList_AddLine(dlst, p1, p2, c.n, 2);
         }
     }
@@ -199,7 +205,7 @@ void graph__edit_multiple(const rizz_api_imgui* gui, const char* label, rizz_gra
         sx_vec2 kpos = sx_vec2f(rpos.x + graph->keys[i].t * rsize.x,
                                 rpos.y + rsize.y * (1 - graph->keys[i].value));
 
-        sx_color c = colors[active_graph];
+        sx_color c = colors[*selected];
         gui->ImDrawList_AddCircleFilled(dlst, kpos, 6, SX_COLOR_BLACK.n, 16);
         gui->ImDrawList_AddCircleFilled(dlst, kpos, 4, c.n, 16);
 
@@ -265,10 +271,13 @@ void graph__edit_multiple(const rizz_api_imgui* gui, const char* label, rizz_gra
     if (del_i != -1)
         graph__remove_key(graph, del_i);
 
-    // label
-    {
+    if (names) {
         gui->SameLine(0, 4);
-        gui->Text(label);
+        if (num_graphs > 1) {
+            gui->ListBoxStr_arr("", selected, names, num_graphs, 4 /* TODO: calc listbox height*/);
+        } else {
+            gui->Text(names[0]);
+        }
     }
 
     gui->PopID();
@@ -276,5 +285,7 @@ void graph__edit_multiple(const rizz_api_imgui* gui, const char* label, rizz_gra
 
 void graph__edit(const rizz_api_imgui* gui, const char* label, rizz_graph* graph, sx_color color)
 {
-    graph__edit_multiple(gui, label, &graph, 1, 0, &color);
+    const char* _names[1] = { label };
+    int _selected = 0;
+    graph__edit_multiple(gui, &graph, _names, &color, &_selected, 1);
 }
