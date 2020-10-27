@@ -1133,6 +1133,19 @@ static void imgui__frame()
             io->MouseDown[i] = false;
         }
     }
+
+    io->KeyShift = the_app->key_pressed(RIZZ_APP_KEYCODE_LEFT_SHIFT) ||
+                   the_app->key_pressed(RIZZ_APP_KEYCODE_RIGHT_SHIFT);
+
+    io->KeyAlt = the_app->key_pressed(RIZZ_APP_KEYCODE_LEFT_ALT) ||
+                   the_app->key_pressed(RIZZ_APP_KEYCODE_RIGHT_ALT);
+
+    io->KeyCtrl = the_app->key_pressed(RIZZ_APP_KEYCODE_LEFT_CONTROL) ||
+                   the_app->key_pressed(RIZZ_APP_KEYCODE_RIGHT_CONTROL);
+
+    io->KeySuper = the_app->key_pressed(RIZZ_APP_KEYCODE_LEFT_SUPER) ||
+                   the_app->key_pressed(RIZZ_APP_KEYCODE_RIGHT_SUPER);
+
     io->MouseWheel = g_imgui.mouse_wheel;
     io->MouseWheelH = g_imgui.mouse_wheel_h;
     g_imgui.mouse_wheel_h = g_imgui.mouse_wheel = 0;
