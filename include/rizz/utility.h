@@ -100,7 +100,7 @@ typedef struct rizz_api_utility {
                             float v_max);
         void (*edit)(const rizz_api_imgui* api, const char* label, rizz_graph* graph,
                      sx_color color);
-        void (*edit_multiple)(const rizz_api_imgui* api, const char* label, rizz_graph** graphs,
-                              int num_graphs, int active_graph, sx_color* colors);
+        void (*edit_multiple)(const rizz_api_imgui* api, rizz_graph** graphs, const char** names,
+                              sx_color* colors, int* selected, int num_graphs);
     } graph;
 } rizz_api_utility;

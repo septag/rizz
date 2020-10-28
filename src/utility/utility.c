@@ -26,8 +26,8 @@ float graph__eval(const rizz_graph* graph, float t);
 float graph__eval_remap(const rizz_graph* graph, float t, float t_min, float t_max, float v_min,
                         float v_max);
 void graph__edit(const rizz_api_imgui* gui, const char* label, rizz_graph* graph, sx_color color);
-void graph__edit_multiple(const rizz_api_imgui* gui, const char* label, rizz_graph** graphs,
-                          int num_graphs, int active_graph, sx_color* colors);
+void graph__edit_multiple(const rizz_api_imgui* api, rizz_graph** graphs, const char** names,
+                          sx_color* colors, int* selected, int num_graphs);
 
 static rizz_api_utility the__utility = {
     .spline.eval2d = spline__eval2d,
