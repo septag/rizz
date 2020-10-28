@@ -49,7 +49,7 @@ documented just below this comment.
 
 // Help performance of the server sending data to the client by marking this machine as little-endian 
 #ifndef RMT_ASSUME_LITTLE_ENDIAN
-#define RMT_ASSUME_LITTLE_ENDIAN 0
+#define RMT_ASSUME_LITTLE_ENDIAN 1
 #endif
 
 // Used by the Celtoys TinyCRT library (not released yet)
@@ -348,6 +348,7 @@ typedef void* (*rmtMallocPtr)(void* mm_context, rmtU32 size);
 typedef void* (*rmtReallocPtr)(void* mm_context, void* ptr, rmtU32 size);
 typedef void (*rmtFreePtr)(void* mm_context, void* ptr);
 typedef void (*rmtInputHandlerPtr)(const char* text, void* context);
+typedef void (*rmtCustomViewHandler)(const void* buff, rmtU32 size, void* context);
 
 
 // Struture to fill in to modify Remotery default settings
@@ -392,6 +393,10 @@ typedef struct rmtSettings
 
     // Context pointer that gets sent to Remotery console callback function
     void* input_handler_context;
+
+    // Callback pointer for view handler
+    void* view_handler_context;
+    rmtCustomViewHandler view_handler;
 
     rmtPStr logFilename;
 } rmtSettings;

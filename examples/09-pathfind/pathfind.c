@@ -552,7 +552,7 @@ rizz_plugin_decl_event_handler(pathfind, e)
             float dy = sx_torad(e->mouse_y - last_mouse.y) * rotate_speed * dt;
             last_mouse = sx_vec2f(e->mouse_x, e->mouse_y);
 
-            if (!the_imguix->gizmo_using() && !the_imguix->is_capturing_mouse()) {
+            if (!the_imguix->gizmo.is_using() && !the_imguix->is_capturing_mouse()) {
                 the_camera->fps_pitch(&g_draw3d.cam, dy);
                 the_camera->fps_yaw(&g_draw3d.cam, dx);
             }

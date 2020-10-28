@@ -174,7 +174,7 @@ typedef struct ddsktx_texture_info
     int                 metadata_size;   // ktx only
 } ddsktx_texture_info;
 
-typedef enum stc_cube_face
+typedef enum ddsktx_cube_face
 {
     DDSKTX_CUBE_FACE_X_POSITIVE = 0,
     DDSKTX_CUBE_FACE_X_NEGATIVE,
@@ -183,7 +183,7 @@ typedef enum stc_cube_face
     DDSKTX_CUBE_FACE_Z_POSITIVE,
     DDSKTX_CUBE_FACE_Z_NEGATIVE,
     DDSKTX_CUBE_FACE_COUNT
-} stc_cube_face;
+} ddsktx_cube_face;
 
 typedef struct ddsktx_error
 {

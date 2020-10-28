@@ -8,6 +8,8 @@
 
 #include "sx/platform.h"
 
+#define RIZZ_FINAL 0
+
 // choose sokol api based on platform
 #define RIZZ_GRAPHICS_API_D3D 0
 #define RIZZ_GRAPHICS_API_METAL 0
@@ -115,4 +117,10 @@
 
 #ifndef RIZZ_MAX_PATH
 #    define RIZZ_MAX_PATH 256
+#endif
+
+
+#if defined(RIZZ_BUNDLE) && !defined(_DEBUG) && defined(NDEBUG)
+#   undef RIZZ_FINAL
+#   define RIZZ_FINAL 1
 #endif

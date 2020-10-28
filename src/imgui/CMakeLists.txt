@@ -3,6 +3,8 @@ project(imgui)
 
 set(imgui_sources imgui.c 
                   log-window.c 
+				  imgui-internal.h
+				  imguizmo-wrapper.c 
                   ../../include/rizz/imgui.h
                   ../../include/rizz/imgui-extra.h
                   README.md)

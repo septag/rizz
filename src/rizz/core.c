@@ -819,6 +819,84 @@ static void rizz__rmt_input_handler(const char* text, void* context)
     }
 }
 
+static void rizz__rmt_read_string(sx_mem_reader* r, char* str, uint32_t size)
+{
+    uint32_t len;
+    uint32_t max_len = size - 1;
+    sx_mem_read(r, &len, sizeof(len));
+    sx_mem_read(r, str, sx_min(max_len, len));
+    str[len] = '\0';
+}
+
+static void rizz__rmt_read_sample(sx_mem_reader* r)
+{
+    uint32_t name_hash;
+    uint32_t unique_id;
+    uint8_t unique_id_html_color[7];
+    double us_start;
+    double us_length;
+    double us_self;
+    uint32_t num_calls;
+    uint32_t max_recurse_depth;
+    sx_mem_read(r, &name_hash, sizeof(name_hash));
+    sx_mem_read(r, &unique_id, sizeof(unique_id));
+    sx_mem_read(r, &unique_id_html_color, sizeof(unique_id_html_color));
+    sx_mem_read(r, &us_start, sizeof(us_start));
+    sx_mem_read(r, &us_length, sizeof(us_length));
+    sx_mem_read(r, &us_self, sizeof(us_self));
+    sx_mem_read(r, &num_calls, sizeof(num_calls));
+    sx_mem_read(r, &max_recurse_depth, sizeof(max_recurse_depth));
+
+    float length_ms = (float)us_length / 1000.0f;
+    float self_ms = (float)us_self / 1000.0f;
+
+    char msg[256];
+    sx_snprintf(msg, sizeof(msg), "\tname: 0x%x, Time: %.3f, Self: %.3f\n", name_hash, length_ms, self_ms);
+    //OutputDebugStringA(msg);
+
+    uint32_t num_childs;
+    sx_mem_read(r, &num_childs, sizeof(num_childs));
+    for (uint32_t i = 0; i < num_childs; i++) {
+        rizz__rmt_read_sample(r);
+    }
+}
+
+static void rizz__rmt_view_handler(const void* data, uint32_t size, void* context)
+{
+    sx_mem_reader r;
+    sx_mem_init_reader(&r, data, size);
+
+    const uint32_t smpl_fourcc = sx_makefourcc('S', 'M', 'P', 'L');
+
+    #define WEBSOCKET_MAX_FRAME_HEADER_SIZE 10
+    char empty_frame_header[WEBSOCKET_MAX_FRAME_HEADER_SIZE];
+    sx_mem_read(&r, empty_frame_header, sizeof(empty_frame_header));
+
+    uint32_t buff_size = *((uint32_t*)(empty_frame_header + 4));
+
+    char flag[8];
+    sx_mem_read(&r, flag, 8);
+    if (*((uint32_t*)flag) != smpl_fourcc) {
+        return;
+    }
+
+    char thread_name[256];
+    uint32_t num_samples;
+    uint32_t digest_hash;
+    rizz__rmt_read_string(&r, thread_name, sizeof(thread_name));
+    sx_mem_read(&r, &num_samples, sizeof(num_samples));
+    sx_mem_read(&r, &digest_hash, sizeof(digest_hash));
+
+    char msg[256];
+    sx_snprintf(msg, sizeof(msg), "%s:\n", thread_name);
+    // OutputDebugStringA(msg);
+
+    // read sample tree
+    rizz__rmt_read_sample(&r);
+
+    return;
+}
+
 static void rizz__core_register_console_command(const char* cmd, rizz_core_cmd_cb* callback)
 {
     sx_assert(cmd);
@@ -1258,6 +1336,7 @@ bool rizz__core_init(const rizz_config* conf)
         rmt_config->msSleepBetweenServerUpdates = conf->profiler_update_interval_ms;
         rmt_config->reuse_open_port = true;
         rmt_config->input_handler = rizz__rmt_input_handler;
+        rmt_config->view_handler = rizz__rmt_view_handler;
     }
     rmtError rmt_err;
     if ((rmt_err = rmt_CreateGlobalInstance(&g_core.rmt)) != RMT_ERROR_NONE) {
@@ -1431,7 +1510,7 @@ void rizz__core_release()
 
 void rizz__core_frame()
 {
-    rizz__profile_begin(FRAME, 0);
+    rizz__profile_begin(Frame, 0);
     {
         static uint32_t gpu_frame_hash = 0;
         the__gfx.imm.begin_profile_sample("FRAME", &gpu_frame_hash);
@@ -1516,7 +1595,7 @@ void rizz__core_frame()
     ++g_core.frame_idx;
 
     the__gfx.imm.end_profile_sample();
-    rizz__profile_end(FRAME);
+    rizz__profile_end(Frame);
 }
 
 static const sx_alloc* rizz__core_tmp_alloc_push(void)

@@ -7,7 +7,7 @@
 #include "rizz/imgui-extra.h"
 #include "rizz/rizz.h"
 
-#include "imguizmo/ImGuizmo.h"
+#include "imgui-internal.h"
 
 #include "sx/allocator.h"
 #include "sx/array.h"
@@ -44,11 +44,6 @@ RIZZ_STATE static rizz_api_core* the_core;
 RIZZ_STATE static rizz_api_plugin* the_plugin;
 RIZZ_STATE static rizz_api_gfx* the_gfx;
 RIZZ_STATE static rizz_api_app* the_app;
-
-// fwd: log-window.c
-void imgui__show_log(bool* p_open);
-bool imgui__log_init(rizz_api_core* core, const sx_alloc* alloc, uint32_t buffer_size);
-void imgui__log_release(void);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // API
@@ -1153,8 +1148,8 @@ static void imgui__frame()
     }
 
     the__imgui.NewFrame();
-    ImGuizmo_BeginFrame();
-    ImGuizmo_SetRect(0, 0, io->DisplaySize.x, io->DisplaySize.y);
+    imgui__imguizmo_begin();
+    imgui__imguizmo_setrect(0, 0, io->DisplaySize.x, io->DisplaySize.y);
 
     // Update OS mouse cursor with the cursor requested by imgui
     ImGuiMouseCursor mouse_cursor =
@@ -1360,107 +1355,6 @@ static sx_vec2 imgui__project_to_screen(const sx_vec3 pt, const sx_mat4* mvp, co
         trans.y += vp->ymin;
     }
     return sx_vec2f(trans.x, trans.y);
-}
-
-// gizmo
-static void imgui__gizmo_set_rect(const sx_rect rc)
-{
-    ImGuizmo_SetRect(rc.xmin, rc.ymin, rc.xmax - rc.xmin, rc.ymax - rc.ymin);
-}
-
-static void imgui__gizmo_decompose_mat4(const sx_mat4* mat, sx_vec3* translation, sx_vec3* rotation,
-                                        sx_vec3* scale)
-{
-    sx_mat4 transpose = sx_mat4_transpose(mat);
-    ImGuizmo_DecomposeMatrixToComponents(transpose.f, translation->f, rotation->f, scale->f);
-}
-
-static void imgui__gizmo_compose_mat4(sx_mat4* mat, const sx_vec3 translation,
-                                      const sx_vec3 rotation, const sx_vec3 scale)
-{
-    ImGuizmo_RecomposeMatrixFromComponents(translation.f, rotation.f, scale.f, mat->f);
-    sx_mat4_transpose(mat);
-}
-
-static inline void imgui__mat4_to_gizmo(float dest[16], const sx_mat4* src)
-{
-    dest[0] = src->m11;
-    dest[1] = src->m21;
-    dest[2] = src->m31;
-    dest[3] = src->m41;
-    dest[4] = src->m12;
-    dest[5] = src->m22;
-    dest[6] = src->m32;
-    dest[7] = src->m42;
-    dest[8] = src->m13;
-    dest[9] = src->m23;
-    dest[10] = src->m33;
-    dest[11] = src->m43;
-    dest[12] = src->m14;
-    dest[13] = src->m24;
-    dest[14] = src->m34;
-    dest[15] = src->m44;
-}
-
-static inline sx_mat4 imgui__mat4_from_gizmo(const float src[16])
-{
-    //    return sx_mat4f(src[0], src[1], src[2], src[3], src[4], src[5], src[6], src[7], src[8],
-    //    src[9],
-    //                    src[10], src[11], src[12], src[13], src[14], src[15]);
-    return sx_mat4v(
-        sx_vec4f(src[0], src[1], src[2], src[3]), sx_vec4f(src[4], src[5], src[6], src[7]),
-        sx_vec4f(src[8], src[9], src[10], src[11]), sx_vec4f(src[12], src[13], src[14], src[15]));
-}
-
-static void imgui__gizmo_translate(sx_mat4* mat, const sx_mat4* view, const sx_mat4* proj,
-                                   gizmo_mode mode, sx_mat4* delta_mat, sx_vec3* snap)
-{
-    float _mat[16];
-    float tview[16];
-    float tproj[16];
-    float _delta[16];
-    imgui__mat4_to_gizmo(_mat, mat);
-    imgui__mat4_to_gizmo(tview, view);
-    imgui__mat4_to_gizmo(tproj, proj);
-    ImGuizmo_Manipulate(tview, tproj, TRANSLATE, (enum MODE)mode, _mat, delta_mat ? _delta : NULL,
-                        snap ? snap->f : NULL, NULL, NULL);
-    if (delta_mat)
-        *delta_mat = imgui__mat4_from_gizmo(_delta);
-    *mat = imgui__mat4_from_gizmo(_mat);
-}
-
-static void imgui__gizmo_rotation(sx_mat4* mat, const sx_mat4* view, const sx_mat4* proj,
-                                  gizmo_mode mode, sx_mat4* delta_mat, float* snap)
-{
-    float _mat[16];
-    float tview[16];
-    float tproj[16];
-    float _delta[16];
-    imgui__mat4_to_gizmo(_mat, mat);
-    imgui__mat4_to_gizmo(tview, view);
-    imgui__mat4_to_gizmo(tproj, proj);
-    ImGuizmo_Manipulate(tview, tproj, ROTATE, (enum MODE)mode, _mat, delta_mat ? _delta : NULL,
-                        snap, NULL, NULL);
-    if (delta_mat)
-        *delta_mat = imgui__mat4_from_gizmo(_delta);
-    *mat = imgui__mat4_from_gizmo(_mat);
-}
-
-static void imgui__gizmo_scale(sx_mat4* mat, const sx_mat4* view, const sx_mat4* proj,
-                               gizmo_mode mode, sx_mat4* delta_mat, float* snap)
-{
-    float _mat[16];
-    float tview[16];
-    float tproj[16];
-    float _delta[16];
-    imgui__mat4_to_gizmo(_mat, mat);
-    imgui__mat4_to_gizmo(tview, view);
-    imgui__mat4_to_gizmo(tproj, proj);
-    ImGuizmo_Manipulate(tview, tproj, SCALE, (enum MODE)mode, _mat, delta_mat ? _delta : NULL, snap,
-                        NULL, NULL);
-    if (delta_mat)
-        *delta_mat = imgui__mat4_from_gizmo(_delta);
-    *mat = imgui__mat4_from_gizmo(_mat);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1838,18 +1732,7 @@ static rizz_api_imgui_extra the__imgui_extra = {
     .draw_cursor = imgui__draw_cursor,
     .project_to_screen = imgui__project_to_screen,
     .is_capturing_mouse = imgui__is_capturing_mouse,
-    .is_capturing_keyboard = imgui__is_capturing_keyboard,
-    .gizmo_hover = ImGuizmo_IsOver,
-    .gizmo_using = ImGuizmo_IsUsing,
-    .gizmo_set_current_window = ImGuizmo_SetDrawlist,
-    .gizmo_set_ortho = ImGuizmo_SetOrthographic,
-    .gizmo_enable = ImGuizmo_Enable,
-    .gizmo_set_rect = imgui__gizmo_set_rect,
-    .gizmo_decompose_mat4 = imgui__gizmo_decompose_mat4,
-    .gizmo_compose_mat4 = imgui__gizmo_compose_mat4,
-    .gizmo_translate = imgui__gizmo_translate,
-    .gizmo_rotation = imgui__gizmo_rotation,
-    .gizmo_scale = imgui__gizmo_scale
+    .is_capturing_keyboard = imgui__is_capturing_keyboard
 };
 
 rizz_plugin_decl_event_handler(imgui, e)
@@ -1900,7 +1783,7 @@ rizz_plugin_decl_event_handler(imgui, e)
         break;
     case RIZZ_APP_EVENTTYPE_RESIZED:
         io->DisplaySize = the_app->sizef();
-        ImGuizmo_SetRect(0, 0, io->DisplaySize.x, io->DisplaySize.y);
+        imgui__imguizmo_setrect(0, 0, io->DisplaySize.x, io->DisplaySize.y);
         break;
     default:
         break;
@@ -1987,6 +1870,7 @@ rizz_plugin_decl_main(imgui, plugin, e)
         }
 
         sx_assert(the_plugin);
+        imgui__get_imguizmo_api(&the__imgui_extra.gizmo);
         the_plugin->inject_api("imgui", 0, &the__imgui);
         the_plugin->inject_api("imgui_extra", 0, &the__imgui_extra);
 
@@ -2001,13 +1885,14 @@ rizz_plugin_decl_main(imgui, plugin, e)
             imgui__submit_make_commands(make_cmdbuff, make_cmdbuff_sz);
         }
 
-        imgui__log_init(the_core, g_sg_imgui_alloc, 64*1024);
+        imgui__log_init(the_core, the_app, g_sg_imgui_alloc, 64*1024);
         break;
     }
 
     case RIZZ_PLUGIN_EVENT_LOAD: {
         the__imgui.SetCurrentContext(g_imgui.ctx);
         the__imgui.SetAllocatorFunctions(imgui__malloc, imgui__free, (void*)g_sg_imgui_alloc);
+        imgui__get_imguizmo_api(&the__imgui_extra.gizmo);
         the_plugin->inject_api("imgui", 0, &the__imgui);
         the_plugin->inject_api("imgui_extra", 0, &the__imgui_extra);
         break;

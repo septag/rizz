@@ -62,7 +62,6 @@
 static rmtSettings g_Settings;
 static rmtBool g_SettingsInitialized = RMT_FALSE;
 
-
 /*
 ------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------
@@ -4708,6 +4707,10 @@ static rmtError Remotery_SendSampleTreeMessage(Remotery* rmt, Message* message)
         rmt_BeginCPUSample(Server_Send, RMTSF_Aggregate);
         error = Server_Send(rmt->server, bin_buf->data, bin_buf->bytes_used, 50000);
         rmt_EndCPUSample();
+
+        if (g_Settings.view_handler) {
+            g_Settings.view_handler(bin_buf->data, bin_buf->bytes_used, g_Settings.view_handler_context);
+        }
     }
 
     // Release the sample tree back to its allocator
@@ -5169,6 +5172,8 @@ RMT_API rmtSettings* _rmt_Settings(void)
         g_Settings.input_handler = NULL;
         g_Settings.input_handler_context = NULL;
         g_Settings.logFilename = "rmtLog.txt";
+        g_Settings.view_handler = NULL;
+        g_Settings.view_handler_context = NULL;
 
         g_SettingsInitialized = RMT_TRUE;
     }

@@ -212,6 +212,8 @@ if (MSVC)
     if (MSVC_MULTITHREADED_COMPILE AND NOT CMAKE_MAKE_PROGRAM MATCHES "ninja.exe")
         add_compile_options(/MP)    # multiprocessor compilation
     endif()
+    add_compile_options("$<$<CONFIG:Debug>:/Ob1>")   # make FORCE_INLINE always inline in debug builds
+
     if (MSVC_STATIC_RUNTIME) 
         rizz__remove_compile_options(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}" "/MD")
         rizz__remove_compile_options(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}" "/MD")

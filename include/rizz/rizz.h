@@ -277,6 +277,8 @@ typedef struct rizz_api_app {
     void (*mouse_release)(void);
     const char* (*cmdline_arg_value)(const char* name);
     bool (*cmdline_arg_exists)(const char* name);
+    void (*set_clipboard_string)(const char* str);
+    const char* (*clipboard_string)(void);
 } rizz_api_app;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

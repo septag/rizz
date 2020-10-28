@@ -556,7 +556,9 @@ sapp_desc sokol_main(int argc, char* argv[])
         .html5_canvas_name = conf.html5_canvas_name,
         .ios_keyboard_resizes_canvas = (conf.app_flags & RIZZ_APP_FLAG_IOS_KEYBOARD_RESIZES_CANVAS) ? true : false,
         .user_cursor = (conf.app_flags & RIZZ_APP_FLAG_USER_CURSOR) ? true : false,
-        .gl_force_gles2 = (conf.app_flags & RIZZ_APP_FLAG_FORCE_GLES2) ? true : false };
+        .gl_force_gles2 = (conf.app_flags & RIZZ_APP_FLAG_FORCE_GLES2) ? true : false,
+        .enable_clipboard = (!RIZZ_FINAL && SX_PLATFORM_PC) ? true : false
+    };
 }
 
 static sx_vec2 rizz__app_sizef(void)
@@ -669,4 +671,7 @@ rizz_api_app the__app = { .width = sapp_width,
                           .mouse_capture = rizz__app_mouse_capture,
                           .mouse_release = rizz__app_mouse_release,
                           .cmdline_arg_value = rizz__app_cmdline_arg_value,
-                          .cmdline_arg_exists = rizz__app_cmdline_arg_exists };
+                          .cmdline_arg_exists = rizz__app_cmdline_arg_exists,
+                          .set_clipboard_string = sapp_set_clipboard_string,
+                          .clipboard_string = sapp_get_clipboard_string 
+};

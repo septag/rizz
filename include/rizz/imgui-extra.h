@@ -8,9 +8,29 @@ typedef struct rizz_mem_info rizz_mem_info;
 typedef struct rizz_gfx_trace_info rizz_gfx_trace_info;
 typedef struct ImDrawList ImDrawList;
 
-typedef enum { GIZMO_MODE_LOCAL, GIZMO_MODE_WORLD } gizmo_mode;
+typedef enum { GIZMO_MODE_LOCAL, GIZMO_MODE_WORLD } imgui_gizmo_mode;
+
+// Gizmo
+typedef struct rizz_api_imguizmo {
+    bool (*hover)();
+    bool (*is_using)();
+    void (*set_current_window)();
+    void (*set_rect)(const sx_rect rc);
+    void (*set_ortho)(bool ortho);
+    void (*enable)(bool enable);
+    void (*decompose_mat4)(const sx_mat4* mat, sx_vec3* translation, sx_vec3* rotation, sx_vec3* scale);
+    void (*compose_mat4)(sx_mat4* mat, sx_vec3 translation, sx_vec3 rotation, sx_vec3 scale);
+    void (*translate)(sx_mat4* mat, const sx_mat4* view, const sx_mat4* proj, imgui_gizmo_mode mode,
+                      sx_mat4* delta_mat, sx_vec3* snap);
+    void (*rotation)(sx_mat4* mat, const sx_mat4* view, const sx_mat4* proj, imgui_gizmo_mode mode,
+                     sx_mat4* delta_mat, float* snap);
+    void (*scale)(sx_mat4* mat, const sx_mat4* view, const sx_mat4* proj, imgui_gizmo_mode mode,
+                  sx_mat4* delta_mat, float* snap);
+} rizz_api_imguizmo;
 
 typedef struct rizz_api_imgui_extra {
+    rizz_api_imguizmo gizmo;
+
     // these ebuggers are used to monitor inner workings of the engine
     // recommended usage is to use `the_core` API equivalants instead
     void (*memory_debugger)(const rizz_mem_info* info, bool* p_open);
@@ -31,25 +51,4 @@ typedef struct rizz_api_imgui_extra {
 
     bool (*is_capturing_mouse)(void);
     bool (*is_capturing_keyboard)(void);
-
-    // Gizmo
-    // use `gizmo_using` to determine if the user is working with gizmo, so you can freeze other stuff
-    // 
-    bool (*gizmo_hover)();
-    bool (*gizmo_using)();
-    void (*gizmo_set_current_window)();
-    void (*gizmo_set_rect)(const sx_rect rc);
-    void (*gizmo_set_ortho)(bool ortho);
-    void (*gizmo_enable)(bool enable);
-    void (*gizmo_decompose_mat4)(const sx_mat4* mat, sx_vec3* translation, sx_vec3* rotation,
-                                 sx_vec3* scale);
-    void (*gizmo_compose_mat4)(sx_mat4* mat, const sx_vec3 translation, const sx_vec3 rotation,
-                               const sx_vec3 scale);
-    void (*gizmo_translate)(sx_mat4* mat, const sx_mat4* view, const sx_mat4* proj, gizmo_mode mode,
-                            sx_mat4* delta_mat, sx_vec3* snap);
-    void (*gizmo_rotation)(sx_mat4* mat, const sx_mat4* view, const sx_mat4* proj, gizmo_mode mode,
-                           sx_mat4* delta_mat, float* snap);
-    void (*gizmo_scale)(sx_mat4* mat, const sx_mat4* view, const sx_mat4* proj, gizmo_mode mode,
-                        sx_mat4* delta_mat, float* snap);
-
 } rizz_api_imgui_extra;

@@ -166,6 +166,7 @@ static void update(float dt)
 
     rizz_temp_alloc_begin(tmp_alloc);
 
+    rizz_profile_begin(update, 0);
     // move shapes around
     int64_t frame = the_core->frame_index();
     int num_pairs;
@@ -259,6 +260,7 @@ static void update(float dt)
     }
 
     rizz_temp_alloc_end(tmp_alloc);
+    rizz_profile_end(update);
 }
 
 static void render(void)
@@ -379,7 +381,7 @@ rizz_plugin_decl_event_handler(collideboxes, e)
             float dy = sx_torad(e->mouse_y - last_mouse.y) * rotate_speed * dt;
             last_mouse = sx_vec2f(e->mouse_x, e->mouse_y);
 
-            if (!the_imguix->gizmo_using() && !the_imguix->is_capturing_mouse()) {
+            if (!the_imguix->gizmo.is_using() && !the_imguix->is_capturing_mouse()) {
                 the_cam->fps_pitch(&g_coll.cam, dy);
                 the_cam->fps_yaw(&g_coll.cam, dx);
             }

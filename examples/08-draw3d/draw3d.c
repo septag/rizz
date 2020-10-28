@@ -363,9 +363,9 @@ static void render(void)
     the_gfx->staged.end();
 
     switch (g_draw3d.gizmo_type) {
-    case GIZMO_TYPE_TRANSLATE:  the_imguix->gizmo_translate(&g_draw3d.world_mat, &view, &proj, GIZMO_MODE_WORLD, NULL, NULL); break;
-    case GIZMO_TYPE_ROTATE:     the_imguix->gizmo_rotation(&g_draw3d.world_mat, &view, &proj, GIZMO_MODE_WORLD, NULL, NULL); break;
-    case GIZMO_TYPE_SCALE:      the_imguix->gizmo_scale(&g_draw3d.world_mat, &view, &proj, GIZMO_MODE_WORLD, NULL, NULL); break;
+    case GIZMO_TYPE_TRANSLATE:  the_imguix->gizmo.translate(&g_draw3d.world_mat, &view, &proj, GIZMO_MODE_WORLD, NULL, NULL); break;
+    case GIZMO_TYPE_ROTATE:     the_imguix->gizmo.rotation(&g_draw3d.world_mat, &view, &proj, GIZMO_MODE_WORLD, NULL, NULL); break;
+    case GIZMO_TYPE_SCALE:      the_imguix->gizmo.scale(&g_draw3d.world_mat, &view, &proj, GIZMO_MODE_WORLD, NULL, NULL); break;
     }
 }
 
@@ -439,7 +439,7 @@ rizz_plugin_decl_event_handler(draw3d, e)
             float dy = sx_torad(e->mouse_y - last_mouse.y) * rotate_speed * dt;
             last_mouse = sx_vec2f(e->mouse_x, e->mouse_y);
 
-            if (!the_imguix->gizmo_using() && !the_imguix->is_capturing_mouse()) {
+            if (!the_imguix->gizmo.is_using() && !the_imguix->is_capturing_mouse()) {
                 the_camera->fps_pitch(&g_draw3d.cam, dy);
                 the_camera->fps_yaw(&g_draw3d.cam, dx);
             }
