@@ -38,9 +38,6 @@ typedef struct imgui__log_context {
     bool reset_focus;
 } imgui__log_context;
 
-
-
-
 static imgui__log_context g_log;
 
 #define LOG_ENTRY sx_makefourcc('_', 'L', 'O', 'G')
@@ -112,6 +109,7 @@ static void imgui__show_command_console(void)
     the__imgui.SetItemDefaultFocus();
     if (the__imgui.InputTextWithHint("##commands", "Enter commands", cmd, sizeof(cmd), ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
         rizz_log_debug(cmd);
+        rizz_log_debug_channels(0xff000000, cmd);
         g_log.reset_focus = true;
     }
     the__imgui.PopItemWidth();
@@ -120,6 +118,22 @@ static void imgui__show_command_console(void)
         the__imgui.SetKeyboardFocusHere(-1);
         g_log.reset_focus = false;
     }
+}
+
+static bool imgui__entry_filtered_out(rizz_log_level type, uint32_t channels)
+{
+    uint32_t filter_channels = g_log.filter_channels;
+    uint32_t filter_types = g_log.filter_types;
+    
+    switch (type) {
+    case RIZZ_LOG_LEVEL_INFO:      if (!(filter_types & LOG_FILTER_INFO))    return true;   break;
+    case RIZZ_LOG_LEVEL_DEBUG:     if (!(filter_types & LOG_FILTER_DEBUG))   return true;   break; 
+    case RIZZ_LOG_LEVEL_VERBOSE:   if (!(filter_types & LOG_FILTER_VERBOSE)) return true;   break;
+    case RIZZ_LOG_LEVEL_WARNING:   if (!(filter_types & LOG_FILTER_WARNING)) return true;   break;
+    case RIZZ_LOG_LEVEL_ERROR:     if (!(filter_types & LOG_FILTER_ERROR))   return true;   break;
+    }
+
+    return !(filter_channels & channels) ? true : false;
 }
 
 void imgui__show_log(bool* p_open)
@@ -180,11 +194,21 @@ void imgui__show_log(bool* p_open)
                 int read = sx_ringbuffer_read_noadvance(g_log.buffer, &tag, sizeof(log_tag), &offset);
                 if (tag == log_tag) {
                     int entry_sz;
-                    read += sx_ringbuffer_read_noadvance(g_log.buffer, &entry_sz, sizeof(entry_sz),
-                                                         &offset);
-                    imgui__log_entry_ref ref =
-                        (imgui__log_entry_ref){ .offset = offset, .size = (int)entry_sz };
-                    sx_array_push(tmp_alloc, entries, ref);
+                    read += sx_ringbuffer_read_noadvance(g_log.buffer, &entry_sz, sizeof(entry_sz), &offset);
+
+                    // read channels/type for filtering
+                    rizz_log_level type;
+                    uint32_t channels;
+                    int cur_offset = offset;
+                    sx_ringbuffer_read_noadvance(g_log.buffer, &type, sizeof(type), &offset);
+                    sx_ringbuffer_read_noadvance(g_log.buffer, &channels, sizeof(channels), &offset);
+                    offset = cur_offset;
+
+                    if (!imgui__entry_filtered_out(type, channels)) {
+                        imgui__log_entry_ref ref =
+                            (imgui__log_entry_ref){ .offset = offset, .size = (int)entry_sz };
+                        sx_array_push(tmp_alloc, entries, ref);
+                    }
                     offset = (offset + (int)entry_sz) % g_log.buffer->capacity;
                     read += (int)entry_sz;
                 } else {
@@ -215,7 +239,6 @@ void imgui__show_log(bool* p_open)
                     the__imgui.PushStyleColorVec4(ImGuiCol_Text, k_log_colors[entry->type]);
                     if (the__imgui.SelectableBool(text, g_log.selected == i, 
                         ImGuiSelectableFlags_SpanAllColumns|ImGuiSelectableFlags_AllowDoubleClick, sx_vec2f(0, 0))) {
-                        //the__imgui.SetKeyboardFocusHere(0);
                         // copy to clipboard
                         int len = entry->text_len + entry->source_file_len + 32;
                         char* clipboard_text = alloca(len);
@@ -236,8 +259,6 @@ void imgui__show_log(bool* p_open)
                     the__imgui.NextColumn();
 
                     sx_free(tmp_alloc, entry);
-
-
                 }
             }
 

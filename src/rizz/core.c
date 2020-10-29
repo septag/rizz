@@ -424,9 +424,8 @@ static void rizz__log_backend_remotery(const rizz_log_entry* entry, void* user)
     }
 }
 
-static void rizz__log_dispatch_entry(const rizz_log_entry* entry)
+static void rizz__log_dispatch_entry(rizz_log_entry* entry)
 {
-    
     // built-in backends are thread-safe, so we pass them immediately
     rizz__log_backend_terminal(entry, NULL);
     rizz__log_backend_debugger(entry, NULL);
@@ -436,13 +435,16 @@ static void rizz__log_dispatch_entry(const rizz_log_entry* entry)
 #endif
 
     if (g_core.num_log_backends > 0) {
+        if (entry->channels == 0) {
+            entry->channels = 0xffffffff;
+        }
+
         rizz__log_pipe pipe =
             g_core.jobs ? g_core.log_pipes[sx_job_thread_index(g_core.jobs)] : g_core.log_pipes[0];
 
         sx_str_t text = sx_strpool_add(pipe.strpool, entry->text, entry->text_len);
         sx_str_t source = entry->source_file ? sx_strpool_add(pipe.strpool, entry->source_file,
-                                                              entry->source_file_len)
-                                             : 0;
+                                                              entry->source_file_len) : 0;
         rizz__log_entry_internal entry_internal = { .e = *entry,
                                                     .text_id = text,
                                                     .source_id = source,
@@ -456,8 +458,7 @@ static void rizz__set_log_level(rizz_log_level level)
     g_core.log_level = level;
 }
 
-static void rizz__print_info(uint32_t channels, const char* source_file, int line, const char* fmt,
-                             ...)
+static void rizz__print_info(uint32_t channels, const char* source_file, int line, const char* fmt, ...)
 {
     if (g_core.log_level < RIZZ_LOG_LEVEL_INFO) {
         return;
@@ -484,8 +485,7 @@ static void rizz__print_info(uint32_t channels, const char* source_file, int lin
                                                 .line = line });
 }
 
-static void rizz__print_debug(uint32_t channels, const char* source_file, int line, const char* fmt,
-                              ...)
+static void rizz__print_debug(uint32_t channels, const char* source_file, int line, const char* fmt, ...)
 {
 #ifdef _DEBUG
     if (g_core.log_level < RIZZ_LOG_LEVEL_DEBUG) {
@@ -863,6 +863,8 @@ static void rizz__rmt_read_sample(sx_mem_reader* r)
 
 static void rizz__rmt_view_handler(const void* data, uint32_t size, void* context)
 {
+    sx_unused(context);
+
     sx_mem_reader r;
     sx_mem_init_reader(&r, data, size);
 

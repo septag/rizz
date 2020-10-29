@@ -402,8 +402,6 @@ bool rizz__asset_dump_unused(const char* filepath)
         return false;
     }
 }
-// end: asset database
-
 
 static rizz_asset rizz__asset_create_new(const char* path, const void* params, rizz_asset_obj obj,
                                          uint32_t name_hash, const sx_alloc* obj_alloc,
