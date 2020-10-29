@@ -137,6 +137,10 @@ static void shutdown(void)
 
 static void update_cam_movement(float dt)
 {
+    if (the_imguix->is_capturing_keyboard()) {
+        return;
+    }
+
     float move_speed = 3.0f;
     if (the_app->key_pressed(RIZZ_APP_KEYCODE_RIGHT_SHIFT) || the_app->key_pressed(RIZZ_APP_KEYCODE_LEFT_SHIFT)) {
         move_speed *= 4.0f;

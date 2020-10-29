@@ -36,6 +36,7 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 #define IMGUI_VERSION "1.77"
 #define MAX_VERTS 32768      // 32k
 #define MAX_INDICES 98304    // 96k
+#define MAX_BUFFERED_FRAME_TIMES 120
 
 typedef struct rizz_api_gfx rizz_api_gfx;
 static void imgui__render(void);
@@ -890,6 +891,9 @@ typedef struct imgui__context {
     ImWchar* char_input;    // sx_array
     ImGuiMouseCursor last_cursor;
     sg_imgui_t sg_imgui;
+    float fts[MAX_BUFFERED_FRAME_TIMES];
+    int ft_iter;
+    int ft_iter_nomod;
 } imgui__context;
 
 typedef struct imgui__shader_uniforms {
@@ -1474,15 +1478,38 @@ static void imgui__dual_progress_bar(float fraction1, float fraction2, const sx_
 static void imgui__graphics_debugger(const rizz_gfx_trace_info* info, bool* p_open)
 {
     sx_assert(info);
-    the__imgui.SetNextWindowSizeConstraints(sx_vec2f(400.0f, 300.0f), sx_vec2f(FLT_MAX, FLT_MAX),
+    the__imgui.SetNextWindowSizeConstraints(sx_vec2f(500.0f, 350.0f), sx_vec2f(FLT_MAX, FLT_MAX),
                                             NULL, NULL);
+
+    float ft = the_core->delta_time()*1000.0f;
+
+    g_imgui.fts[g_imgui.ft_iter] = ft;
+    g_imgui.ft_iter = (g_imgui.ft_iter + 1) % MAX_BUFFERED_FRAME_TIMES;
+    ++g_imgui.ft_iter_nomod;
+    float fts[MAX_BUFFERED_FRAME_TIMES];
+    int ft_count;
+    if (g_imgui.ft_iter_nomod > g_imgui.ft_iter) {
+        sx_memcpy(fts, &g_imgui.fts[g_imgui.ft_iter], sizeof(float)*(MAX_BUFFERED_FRAME_TIMES - g_imgui.ft_iter));
+        sx_memcpy(&fts[MAX_BUFFERED_FRAME_TIMES - g_imgui.ft_iter], g_imgui.fts, g_imgui.ft_iter*sizeof(float));
+        ft_count = MAX_BUFFERED_FRAME_TIMES;
+    } else {
+        sx_memcpy(fts, g_imgui.fts, g_imgui.ft_iter*sizeof(float));
+        ft_count = g_imgui.ft_iter;
+    }
+
     if (the__imgui.Begin("Graphics Debugger", p_open, 0)) {
         if (the__imgui.BeginTabBar("#gfx_debugger_tabs", 0)) {
             if (the__imgui.BeginTabItem("General", NULL, 0)) {
                 const rizz_gfx_perframe_trace_info* pf = &info->pf[RIZZ_GFX_TRACE_COMMON];
                 the__imgui.LabelText("Fps", "%.1f", the_core->fps());
                 the__imgui.LabelText("Fps (mean)", "%.1f", the_core->fps_mean());
-                the__imgui.LabelText("FrameTime (ms)", "%.1f", the_core->delta_time() * 1000.0f);
+                the__imgui.LabelText("FrameTime (ms)", "%.1f", ft);
+
+                the__imgui.PushItemWidth(-1);
+                the__imgui.PlotHistogramFloatPtr("##Ft_plot", fts, ft_count, 0, NULL, 0, 32.0f, 
+                                                 sx_vec2f(0, 50.0f), sizeof(float));
+                the__imgui.PopItemWidth();
+
                 the__imgui.LabelText("Draws", "%d", pf->num_draws);
                 the__imgui.LabelText("Instances", "%d", pf->num_instances);
                 the__imgui.LabelText("Elements", "%d", pf->num_elements);
