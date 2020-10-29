@@ -131,6 +131,7 @@ static bool imgui__entry_filtered_out(rizz_log_level type, uint32_t channels)
     case RIZZ_LOG_LEVEL_VERBOSE:   if (!(filter_types & LOG_FILTER_VERBOSE)) return true;   break;
     case RIZZ_LOG_LEVEL_WARNING:   if (!(filter_types & LOG_FILTER_WARNING)) return true;   break;
     case RIZZ_LOG_LEVEL_ERROR:     if (!(filter_types & LOG_FILTER_ERROR))   return true;   break;
+    default:    break;
     }
 
     return !(filter_channels & channels) ? true : false;
