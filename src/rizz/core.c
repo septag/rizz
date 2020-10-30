@@ -875,6 +875,7 @@ static void rizz__rmt_view_handler(const void* data, uint32_t size, void* contex
     sx_mem_read(&r, empty_frame_header, sizeof(empty_frame_header));
 
     uint32_t buff_size = *((uint32_t*)(empty_frame_header + 4));
+    sx_unused(buff_size);
 
     uint32_t flag[2];
     sx_mem_read(&r, flag, sizeof(flag));

@@ -26,6 +26,6 @@ if (NOT ENABLE_PROFILER)
     target_compile_definitions(remotery PUBLIC -DRMT_ENABLED=0)
 endif()
 
-if (NOT MSVC)
-    target_compile_options(cimgui PRIVATE -Wno-switch)
+if (NOT MSVC OR (MSVC AND CMAKE_C_COMPILER_ID MATCHES "Clang"))
+    target_compile_options(remotery PRIVATE -Wno-switch -Wno-uninitialized -Wno-unused-function)
 endif()

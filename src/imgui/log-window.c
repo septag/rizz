@@ -34,6 +34,7 @@ typedef struct imgui__log_context {
     sx_ringbuffer* buffer;
     uint32_t filter_channels;
     uint32_t filter_types;
+    imgui__log_entry_ref* cached;   // sx_array
     int selected;
     bool reset_focus;
 } imgui__log_context;
@@ -62,10 +63,12 @@ static bool imgui__bitselector(const char* label, uint32_t* bits)
     the__imgui.SameLine(0, -1.0f);
     if (the__imgui.SmallButton("All")) {
         *bits = 0xffffffff;
+        pressed = true;
     }
     the__imgui.SameLine(0, -1.0f);
     if (the__imgui.SmallButton("None")) {
         *bits = 0;
+        pressed = true;
     }
     the__imgui.SameLine(0, -1.0f);
     the__imgui.LabelText(label, "0x%x (%u)", *bits, *bits);
@@ -137,6 +140,46 @@ static bool imgui__entry_filtered_out(rizz_log_level type, uint32_t channels)
     return !(filter_channels & channels) ? true : false;
 }
 
+static void imgui__update_entry_cache(void)
+{
+    const sx_alloc* alloc = g_log.alloc;
+    int offset = g_log.buffer->start;
+    int size_read = 0;
+    const uint32_t log_tag = LOG_ENTRY;
+
+    do {
+        uint32_t tag;
+        int last_offset = offset;
+        int read = sx_ringbuffer_read_noadvance(g_log.buffer, &tag, sizeof(log_tag), &offset);
+        if (tag == log_tag) {
+            int entry_sz;
+            read +=
+                sx_ringbuffer_read_noadvance(g_log.buffer, &entry_sz, sizeof(entry_sz), &offset);
+
+            // read channels/type for filtering
+            rizz_log_level type;
+            uint32_t channels;
+            int cur_offset = offset;
+            sx_ringbuffer_read_noadvance(g_log.buffer, &type, sizeof(type), &offset);
+            sx_ringbuffer_read_noadvance(g_log.buffer, &channels, sizeof(channels), &offset);
+            offset = cur_offset;
+
+            if (!imgui__entry_filtered_out(type, channels)) {
+                imgui__log_entry_ref ref = (imgui__log_entry_ref){ .offset = offset, .size = (int)entry_sz };
+                sx_array_push(alloc, g_log.cached, ref);
+            }
+            offset = (offset + (int)entry_sz) % g_log.buffer->capacity;
+            read += (int)entry_sz;
+        } else {
+            // advance only 1-byte and check for the existing tag
+            offset = (last_offset + 1) % g_log.buffer->capacity;
+            read = 1;
+        }
+        size_read += read;
+    } while (size_read < g_log.buffer->size);
+
+}
+
 void imgui__show_log(bool* p_open)
 {
     static const sx_vec4 k_log_colors[_RIZZ_LOG_LEVEL_COUNT] = {
@@ -152,12 +195,17 @@ void imgui__show_log(bool* p_open)
     if (the__imgui.Begin("Log", p_open, 0)) {
         imgui__show_command_console();
 
-        the__imgui.CheckboxFlags("Error", &g_log.filter_types, LOG_FILTER_ERROR);   the__imgui.SameLine(0, -1);
-        the__imgui.CheckboxFlags("Warning", &g_log.filter_types, LOG_FILTER_WARNING); the__imgui.SameLine(0, -1);
-        the__imgui.CheckboxFlags("Info", &g_log.filter_types, LOG_FILTER_INFO); the__imgui.SameLine(0, -1);
-        the__imgui.CheckboxFlags("Verbose", &g_log.filter_types, LOG_FILTER_VERBOSE); the__imgui.SameLine(0, -1);
-        the__imgui.CheckboxFlags("Debug", &g_log.filter_types, LOG_FILTER_DEBUG); the__imgui.SameLine(0, -1);
-        imgui__bitselector("##Channels", &g_log.filter_channels);
+        bool filter_changed = false;
+        filter_changed |= the__imgui.CheckboxFlags("Error", &g_log.filter_types, LOG_FILTER_ERROR);   the__imgui.SameLine(0, -1);
+        filter_changed |= the__imgui.CheckboxFlags("Warning", &g_log.filter_types, LOG_FILTER_WARNING); the__imgui.SameLine(0, -1);
+        filter_changed |= the__imgui.CheckboxFlags("Info", &g_log.filter_types, LOG_FILTER_INFO); the__imgui.SameLine(0, -1);
+        filter_changed |= the__imgui.CheckboxFlags("Verbose", &g_log.filter_types, LOG_FILTER_VERBOSE); the__imgui.SameLine(0, -1);
+        filter_changed |= the__imgui.CheckboxFlags("Debug", &g_log.filter_types, LOG_FILTER_DEBUG); the__imgui.SameLine(0, -1);
+        filter_changed |= imgui__bitselector("##Channels", &g_log.filter_channels);
+
+        if (filter_changed) {
+            sx_array_clear(g_log.cached);
+        }
 
         ImGuiListClipper clipper;
         float width = the__imgui.GetWindowContentRegionWidth();
@@ -182,52 +230,18 @@ void imgui__show_log(bool* p_open)
             the__imgui.BeginChildStr("LogEntries", sx_vec2f(region.x, -1.0f), false, 0);
             the__imgui.Columns(3, NULL, false);
 
-            // Read all log addresses by jumping through the buffer
-            int offset = g_log.buffer->start;
-            int size_read = 0;
-            const uint32_t log_tag = LOG_ENTRY;
-            imgui__log_entry_ref* entries = NULL;    // entries are offsets to the ring-buffer
-            rizz_temp_alloc_begin(tmp_alloc);
-            sx_array_reserve(tmp_alloc, entries, 16);
-            do {
-                uint32_t tag;
-                int last_offset = offset;
-                int read = sx_ringbuffer_read_noadvance(g_log.buffer, &tag, sizeof(log_tag), &offset);
-                if (tag == log_tag) {
-                    int entry_sz;
-                    read += sx_ringbuffer_read_noadvance(g_log.buffer, &entry_sz, sizeof(entry_sz), &offset);
-
-                    // read channels/type for filtering
-                    rizz_log_level type;
-                    uint32_t channels;
-                    int cur_offset = offset;
-                    sx_ringbuffer_read_noadvance(g_log.buffer, &type, sizeof(type), &offset);
-                    sx_ringbuffer_read_noadvance(g_log.buffer, &channels, sizeof(channels), &offset);
-                    offset = cur_offset;
-
-                    if (!imgui__entry_filtered_out(type, channels)) {
-                        imgui__log_entry_ref ref =
-                            (imgui__log_entry_ref){ .offset = offset, .size = (int)entry_sz };
-                        sx_array_push(tmp_alloc, entries, ref);
-                    }
-                    offset = (offset + (int)entry_sz) % g_log.buffer->capacity;
-                    read += (int)entry_sz;
-                } else {
-                    // advance only 1-byte and check for the existing tag
-                    offset = (last_offset + 1) % g_log.buffer->capacity;
-                    read = 1;
-                }
-                size_read += read;
-            } while(size_read < g_log.buffer->size);
-            
+            if (sx_array_count(g_log.cached) == 0) {
+                imgui__update_entry_cache();
+            }
+            imgui__log_entry_ref* entries = g_log.cached;    // entries are offsets to the ring-buffer
             int num_items = sx_array_count(entries);
 
+            rizz_temp_alloc_begin(tmp_alloc);
             the__imgui.ImGuiListClipper_Begin(&clipper, num_items, -1.0f);
             while (the__imgui.ImGuiListClipper_Step(&clipper)) {
-                int end = num_items - clipper.DisplayEnd;
                 for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
                     const imgui__log_entry_ref* ref = &entries[i];
-                    offset = ref->offset;
+                    int offset = ref->offset;
                     rizz_log_entry* entry = sx_malloc(tmp_alloc, ref->size);
                     sx_assert(entry);
                     sx_ringbuffer_read_noadvance(g_log.buffer, entry, ref->size, &offset);
@@ -270,9 +284,7 @@ void imgui__show_log(bool* p_open)
             the__imgui.ImGuiListClipper_End(&clipper);
             the__imgui.EndChild();
 
-            sx_array_free(tmp_alloc, entries);
             rizz_temp_alloc_end(tmp_alloc);
-
         }    //
 
     }
@@ -334,6 +346,8 @@ static void imgui__log_entryfn(const rizz_log_entry* entry, void* user)
 
     sx_free(tmp_alloc, _entry);
     rizz_temp_alloc_end(tmp_alloc);
+
+    sx_array_clear(g_log.cached);
 }
 
 bool imgui__log_init(rizz_api_core* core, rizz_api_app* app, const sx_alloc* alloc, uint32_t buffer_size)
