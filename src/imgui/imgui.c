@@ -1175,6 +1175,8 @@ static void imgui__frame()
         g_imgui.last_cursor = mouse_cursor;
         imgui__update_cursor();
     }
+
+    imgui__log_update();
 }
 
 static void imgui__draw(ImDrawData* draw_data)

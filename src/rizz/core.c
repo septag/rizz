@@ -94,6 +94,7 @@ typedef struct rizz__core_tmpalloc {
 typedef struct rizz__core_cmd {
     char name[32];
     rizz_core_cmd_cb* callback;
+    void* user;
 } rizz__core_cmd;
 
 typedef struct rizz__proxy_alloc_header {
@@ -763,60 +764,7 @@ static void rizz__job_thread_shutdown_cb(sx_job_context* ctx, int thread_index, 
 static void rizz__rmt_input_handler(const char* text, void* context)
 {
     sx_unused(context);
-
-    // parse text into argc/argv
-    int argc = 0;
-    char arg[256];
-
-    const char* cline = sx_skip_whitespace(text);
-    while (cline && *cline) {
-        for (char c = *cline; !sx_isspace(c) && *cline; c = *(++cline)) {
-        }
-        cline = sx_skip_whitespace(cline);
-        argc++;
-    }
-    if (argc == 0)
-        return;
-
-    const sx_alloc* alloc = the__core.alloc(RIZZ_MEMID_CORE);
-    char** argv = sx_malloc(alloc, sizeof(char*) * argc);
-    sx_assert(argv);
-
-    cline = sx_skip_whitespace(text);
-    int arg_idx = 0;
-    while (cline && *cline) {
-        int char_idx = 0;
-        for (char c = *cline; !sx_isspace(c) && *cline && char_idx < (int)sizeof(arg);
-             c = *(++cline), ++char_idx) {
-            arg[char_idx] = c;
-        }
-        arg[char_idx] = '\0';
-        cline = sx_skip_whitespace(cline);
-        argv[arg_idx] = sx_malloc(alloc, (size_t)strlen(arg) + 1);
-        sx_assert(argv);
-        sx_strcpy(argv[arg_idx++], sizeof(arg), arg);
-    }
-
-    bool cmd_found = false;
-    for (int i = 0; i < sx_array_count(g_core.console_cmds); i++) {
-        if (sx_strequal(g_core.console_cmds[i].name, argv[0])) {
-            cmd_found = true;
-            int r;
-            if ((r = g_core.console_cmds[i].callback(argc, argv)) < 0) {
-                char err_msg[256];
-                sx_snprintf(err_msg, sizeof(err_msg), "command '%s' failed with error: %d", argv[0],
-                            r);
-                rmt_LogText(err_msg);
-            }
-            break;
-        }
-    }
-
-    if (!cmd_found) {
-        char msg[256];
-        sx_snprintf(msg, sizeof(msg), "command '%s' not found", argv[0]);
-        rmt_LogText(msg);
-    }
+    the__core.execute_console_command(text);
 }
 
 static void rizz__rmt_read_string(sx_mem_reader* r, char* str, uint32_t size)
@@ -900,7 +848,14 @@ static void rizz__rmt_view_handler(const void* data, uint32_t size, void* contex
     return;
 }
 
-static void rizz__core_register_console_command(const char* cmd, rizz_core_cmd_cb* callback)
+static void rizz__console_shortcut_callback(void* user)
+{
+    rizz__core_cmd* c = user;
+    the__core.execute_console_command(c->name);
+}
+
+static void rizz__register_console_command(const char* cmd, rizz_core_cmd_cb* callback, 
+                                           const char* shortcut, void* user)
 {
     sx_assert(cmd);
     sx_assert(cmd[0]);
@@ -909,7 +864,86 @@ static void rizz__core_register_console_command(const char* cmd, rizz_core_cmd_c
     rizz__core_cmd c;
     sx_strcpy(c.name, sizeof(c.name), cmd);
     c.callback = callback;
+    c.user = user;
     sx_array_push(rizz__alloc(RIZZ_MEMID_CORE), g_core.console_cmds, c);
+
+    if (shortcut && shortcut[0]) {
+        the__app.register_shortcut(shortcut, rizz__console_shortcut_callback, &sx_array_last(g_core.console_cmds));
+    }
+}
+
+static void rizz__execute_console_command(const char* cmd_and_args)
+{
+    // parse text into argc/argv
+    int argc = 0;
+    char arg[256];
+
+    const char* cline = sx_skip_whitespace(cmd_and_args);
+    while (cline && *cline) {
+        for (char c = *cline; !sx_isspace(c) && *cline; c = *(++cline)) {
+            if (*cline == '\"') {
+                sx_str_block block = sx_findblock(cline, '\"', '\"');
+                if (block.end) {
+                    cline = block.end + 1;
+                }
+            }
+        }
+        cline = sx_skip_whitespace(cline);
+        argc++;
+    }
+    if (argc == 0)
+        return;
+
+    const sx_alloc* alloc = the__core.alloc(RIZZ_MEMID_CORE);
+    char** argv = sx_malloc(alloc, sizeof(char*) * argc);
+    sx_assert(argv);
+
+    cline = sx_skip_whitespace(cmd_and_args);
+    int arg_idx = 0;
+    while (cline && *cline) {
+        int char_idx = 0;
+        for (char c = *cline; !sx_isspace(c) && *cline && char_idx < (int)sizeof(arg); c = *(++cline), ++char_idx) {
+            if (*cline == '\"') {
+                sx_str_block block = sx_findblock(cline, '\"', '\"');
+                if (block.end) {
+                    cline = block.end + 1;
+                    char_idx = (int)(uintptr_t)(block.end - block.start + 1);
+                    sx_memcpy(arg, block.start, char_idx);
+                    break;
+                }
+            } else {
+                arg[char_idx] = c;
+            }
+        }
+        arg[char_idx] = '\0';
+        cline = sx_skip_whitespace(cline);
+        argv[arg_idx] = sx_malloc(alloc, (size_t)strlen(arg) + 1);
+        sx_assert(argv);
+        sx_strcpy(argv[arg_idx++], sizeof(arg), arg);
+    }
+
+    bool cmd_found = false;
+    for (int i = 0; i < sx_array_count(g_core.console_cmds); i++) {
+        if (sx_strequal(g_core.console_cmds[i].name, argv[0])) {
+            cmd_found = true;
+            int r;
+            if ((r = g_core.console_cmds[i].callback(argc, argv, g_core.console_cmds[i].user)) <
+                0) {
+                rizz__log_warn("command '%s' failed with error code %d", argv[0], r);
+            }
+            break;
+        }
+    }
+
+    if (!cmd_found) {
+        rizz__log_warn("command '%s' not found", argv[0]);
+    }
+
+    for (int i = 0; i < argc; i++) {
+        sx_free(alloc, argv[i]);
+    }
+    sx_free(alloc, argv);
+
 }
 
 static inline void rizz__atomic_max(sx_atomic_size* _max, intptr_t val)
@@ -1185,6 +1219,16 @@ static void* rizz__track_alloc_cb(void* ptr, size_t size, uint32_t align, const 
     }
 }
 
+static int rizz__core_echo_command(int argc, char* argv[], void* user)
+{
+    if (argc > 1) {
+        rizz__log_debug(argv[1]);
+        return 0;
+    }
+
+    return -1;
+}
+
 bool rizz__core_init(const rizz_config* conf)
 {
     g_core.heap_alloc = (conf->core_flags & RIZZ_CORE_FLAG_DETECT_LEAKS)
@@ -1412,6 +1456,8 @@ bool rizz__core_init(const rizz_config* conf)
     }
 
     rizz__json_init();
+
+    the__core.register_console_command("echo", rizz__core_echo_command, NULL, NULL);
 
     return true;
 }
@@ -1746,8 +1792,7 @@ void rizz__core_fix_callback_ptrs(const void** ptrs, const void** new_ptrs, int 
 }
 
 static void rizz__core_tls_register(const char* name, void* user,
-                                    void* (*init_cb)(int thread_idx, uint32_t thread_id,
-                                                     void* user))
+                                    void* (*init_cb)(int thread_idx, uint32_t thread_id, void* user))
 {
     sx_assert(name);
     sx_assert(init_cb);
@@ -1844,7 +1889,8 @@ rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .set_log_level = rizz__set_log_level,
                             .begin_profile_sample = rizz__begin_profile_sample,
                             .end_profile_sample = rizz__end_profile_sample,
-                            .register_console_command = rizz__core_register_console_command,
+                            .register_console_command = rizz__register_console_command,
+                            .execute_console_command = rizz__execute_console_command,
                             .show_graphics_debugger = rizz__show_graphics_debugger,
                             .show_memory_debugger = rizz__show_memory_debugger,
                             .show_log = rizz__show_log };

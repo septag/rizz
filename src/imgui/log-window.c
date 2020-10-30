@@ -37,6 +37,8 @@ typedef struct imgui__log_context {
     imgui__log_entry_ref* cached;   // sx_array
     int selected;
     bool reset_focus;
+    bool toggle;
+    bool* popen;
 } imgui__log_context;
 
 static imgui__log_context g_log;
@@ -111,8 +113,7 @@ static void imgui__show_command_console(void)
     the__imgui.PushItemWidth(-1);
     the__imgui.SetItemDefaultFocus();
     if (the__imgui.InputTextWithHint("##commands", "Enter commands", cmd, sizeof(cmd), ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
-        rizz_log_debug(cmd);
-        rizz_log_debug_channels(0xff000000, cmd);
+        the_core->execute_console_command(cmd);
         g_log.reset_focus = true;
     }
     the__imgui.PopItemWidth();
@@ -181,6 +182,12 @@ static void imgui__update_entry_cache(void)
 }
 
 void imgui__show_log(bool* p_open)
+{
+    g_log.toggle = true;
+    g_log.popen = p_open;
+}
+
+static void imgui__draw_log(bool* p_open)
 {
     static const sx_vec4 k_log_colors[_RIZZ_LOG_LEVEL_COUNT] = {
         {{1.0f, 0, 0, 1.0f}},
@@ -350,6 +357,24 @@ static void imgui__log_entryfn(const rizz_log_entry* entry, void* user)
     sx_array_clear(g_log.cached);
 }
 
+void imgui__log_update(void)
+{
+    if (g_log.toggle) {
+        imgui__draw_log(g_log.popen);
+    }
+}
+
+static int imgui__toggle_log_cb(int argc, char* argv[], void* user)
+{
+    sx_unused(argc);
+    sx_unused(argv);
+    sx_unused(user);
+
+    g_log.toggle = !g_log.toggle;
+    g_log.popen = NULL;
+    return 0;
+}
+
 bool imgui__log_init(rizz_api_core* core, rizz_api_app* app, const sx_alloc* alloc, uint32_t buffer_size)
 {
     the_core = core;
@@ -367,12 +392,15 @@ bool imgui__log_init(rizz_api_core* core, rizz_api_app* app, const sx_alloc* all
     g_log.filter_channels = 0xffffffff;
     g_log.selected = -1;
     g_log.filter_types = 0xffffffff;
+
+    the_core->register_console_command("toggle_log", imgui__toggle_log_cb, "`", NULL);
     
     return true;
 }
 
 void imgui__log_release(void)
 {
+    sx_array_free(g_log.alloc, g_log.cached);
     the_core->unregister_log_backend("imgui_log");
 
     if (g_log.buffer) {

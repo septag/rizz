@@ -248,6 +248,7 @@ typedef struct rizz_app_event {
 } rizz_app_event;
 
 typedef void(rizz_app_event_cb)(const rizz_app_event*);
+typedef void(rizz_app_shortcut_cb)(void* user);
 
 typedef struct rizz_config rizz_config;
 
@@ -279,6 +280,7 @@ typedef struct rizz_api_app {
     bool (*cmdline_arg_exists)(const char* name);
     void (*set_clipboard_string)(const char* str);
     const char* (*clipboard_string)(void);
+    void (*register_shortcut)(const char* shortcut, rizz_app_shortcut_cb* shortcut_cb, void* user);
 } rizz_api_app;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -600,7 +602,7 @@ RIZZ_API void ANativeActivity_onCreate_(ANativeActivity*, void*, size_t);
 
 // custom console commands that can be registered (sent via profiler)
 // return >= 0 for success and -1 for failure
-typedef int(rizz_core_cmd_cb)(int argc, char* argv[]);
+typedef int(rizz_core_cmd_cb)(int argc, char* argv[], void* user);
 
 typedef struct rizz_log_entry {
     rizz_log_level type;
@@ -743,7 +745,8 @@ typedef struct rizz_api_core {
     void (*begin_profile_sample)(const char* name, rizz_profile_flags flags, uint32_t* hash_cache);
     void (*end_profile_sample)();
 
-    void (*register_console_command)(const char* cmd, rizz_core_cmd_cb* callback);
+    void (*register_console_command)(const char* cmd, rizz_core_cmd_cb* callback, const char* shortcut, void* user);
+    void (*execute_console_command)(const char* cmd_and_args);
 
     // debugging
     void (*show_graphics_debugger)(bool* p_open);

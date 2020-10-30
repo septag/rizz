@@ -9,6 +9,7 @@ typedef struct sx_alloc sx_alloc;
 void imgui__show_log(bool* p_open);
 bool imgui__log_init(rizz_api_core* core, rizz_api_app* app, const sx_alloc* alloc, uint32_t buffer_size);
 void imgui__log_release(void);
+void imgui__log_update(void);
 
 void imgui__get_imguizmo_api(rizz_api_imguizmo* api);
 void imgui__imguizmo_begin(void);

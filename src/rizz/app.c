@@ -48,6 +48,13 @@ typedef struct rizz__cmdline_item {
     };
 } rizz__cmdline_item;
 
+typedef struct rizz__shortcut_item {
+    rizz_keycode keys[2];       // maximum 2 keys are allowed
+    rizz_modifier_keys mods;    // with any combination of modifier keys
+    rizz_app_shortcut_cb* callback;
+    void* user;
+} rizz__shortcut_item;
+
 typedef struct rizz__app {
     rizz_config conf;
     const sx_alloc* alloc;
@@ -56,6 +63,7 @@ typedef struct rizz__app {
     bool keys_pressed[RIZZ_APP_MAX_KEYCODES];
     sx_cmdline_opt* cmdline_args;       // sx_array
     rizz__cmdline_item* cmdline_items;  // saved items with values
+    rizz__shortcut_item* shortcuts;     // sx_array;
 } rizz__app;
 
 static rizz__app g_app;
@@ -204,6 +212,20 @@ static void rizz__app_cleanup(void)
     sx_array_free(g_app.alloc, g_app.cmdline_items);
 }
 
+static void rizz__app_process_shortcuts(rizz_modifier_keys input_mods)
+{
+    for (int i = 0, c = sx_array_count(g_app.shortcuts); i < c; i++) {
+        rizz_keycode key1 = g_app.shortcuts[i].keys[0];
+        rizz_keycode key2 = g_app.shortcuts[i].keys[1];
+        rizz_modifier_keys keymods = g_app.shortcuts[i].mods;
+
+        if (g_app.keys_pressed[key1] && (key2 == SAPP_KEYCODE_INVALID || g_app.keys_pressed[key2]) &&
+            (keymods == 0 || (keymods & input_mods))) {
+            g_app.shortcuts[i].callback(g_app.shortcuts[i].user);
+        } 
+    }
+}
+
 static void rizz__app_event(const sapp_event* e)
 {
     static_assert(sizeof(rizz_app_event) == sizeof(sapp_event),
@@ -228,6 +250,7 @@ static void rizz__app_event(const sapp_event* e)
         break;
     case RIZZ_APP_EVENTTYPE_KEY_DOWN:
         g_app.keys_pressed[e->key_code] = true;
+        rizz__app_process_shortcuts(e->modifiers);
         break;
     case RIZZ_APP_EVENTTYPE_KEY_UP:
         g_app.keys_pressed[e->key_code] = false;
@@ -653,6 +676,82 @@ static bool rizz__app_cmdline_arg_exists(const char* name)
     return false;
 }
 
+// shortcut string example:
+// "key1+key2+mod1+mod2+.."
+// "K+SHIFT+CTRL"
+static void rizz__parse_shortcut_string(const char* shortcut, rizz_keycode keys[2], rizz_modifier_keys* mods)
+{
+    shortcut = sx_skip_whitespace(shortcut);
+
+    int num_keys = 0;
+    const char* plus;
+    char keystr[32];
+
+    while (shortcut[0] && (plus = sx_strchar(shortcut, '+'))) {
+        sx_strncpy(keystr, sizeof(keystr), shortcut, (int)(uintptr_t)(plus - shortcut));
+        int len = sx_strlen(keystr);
+        if (len > 1) {
+            sx_toupper(keystr, sizeof(keystr), keystr);
+            if (sx_strequal(keystr, "ALT")) {
+                *mods |= RIZZ_APP_MODIFIERKEY_ALT;
+            } else if (sx_strequal(keystr, "CTRL")) {
+                *mods |= RIZZ_APP_MODIFIERKEY_CTRL;
+            } else if (sx_strequal(keystr, "SHIFT")) {
+                *mods |= RIZZ_APP_MODIFIERKEY_SHIFT;
+            }
+        } else if (len == 1 && num_keys < 2) {
+            char key = sx_toupperchar(shortcut[0]);
+            if (shortcut[0] > RIZZ_APP_KEYCODE_SPACE && shortcut[0] < RIZZ_APP_KEYCODE_LEFT_SHIFT) {
+                keys[num_keys++] = (rizz_keycode)key;
+            }
+        }
+        shortcut = sx_skip_whitespace(plus + 1);
+    }
+
+    // read the last one
+    if (shortcut[0]) {
+        sx_strcpy(keystr, sizeof(keystr), shortcut);
+        int len = sx_strlen(keystr);
+        if (len > 1) {
+            sx_toupper(keystr, sizeof(keystr), keystr);
+            if (sx_strequal(keystr, "ALT")) {
+                *mods |= RIZZ_APP_MODIFIERKEY_ALT;
+            } else if (sx_strequal(keystr, "CTRL")) {
+                *mods |= RIZZ_APP_MODIFIERKEY_CTRL;
+            } else if (sx_strequal(keystr, "SHIFT")) {
+                *mods |= RIZZ_APP_MODIFIERKEY_SHIFT;
+            }
+        } else if (len == 1 && num_keys < 2) {
+            char key = sx_toupperchar(shortcut[0]);
+            if (shortcut[0] > RIZZ_APP_KEYCODE_SPACE && shortcut[0] < RIZZ_APP_KEYCODE_LEFT_SHIFT) {
+                keys[num_keys++] = (rizz_keycode)key;
+            }
+        }
+    }
+}
+
+static void rizz__register_shortcut(const char* shortcut, rizz_app_shortcut_cb* shortcut_cb, void* user)
+{
+    sx_assert(shortcut_cb);
+
+    rizz_keycode keys[2] = {0, 0};
+    rizz_modifier_keys mods = 0;
+
+    rizz__parse_shortcut_string(shortcut, keys, &mods);
+    sx_assertf(keys[0], "Invalid shortcut string (example: A+CTRL)");
+    if (keys[0]) {
+        rizz__shortcut_item item = {
+            .callback = shortcut_cb,
+            .keys[0] = keys[0],
+            .keys[1] = keys[1],
+            .mods = mods,
+            .user = user
+        };
+        sx_array_push(g_app.alloc, g_app.shortcuts, item);
+    } 
+}
+
+
 rizz_api_app the__app = { .width = sapp_width,
                           .height = sapp_height,
                           .sizef = rizz__app_sizef,
@@ -673,5 +772,5 @@ rizz_api_app the__app = { .width = sapp_width,
                           .cmdline_arg_value = rizz__app_cmdline_arg_value,
                           .cmdline_arg_exists = rizz__app_cmdline_arg_exists,
                           .set_clipboard_string = sapp_set_clipboard_string,
-                          .clipboard_string = sapp_get_clipboard_string 
-};
+                          .clipboard_string = sapp_get_clipboard_string,
+                          .register_shortcut = rizz__register_shortcut };
