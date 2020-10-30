@@ -701,7 +701,7 @@ static void rizz__parse_shortcut_string(const char* shortcut, rizz_keycode keys[
             }
         } else if (len == 1 && num_keys < 2) {
             char key = sx_toupperchar(shortcut[0]);
-            if (shortcut[0] > RIZZ_APP_KEYCODE_SPACE && shortcut[0] < RIZZ_APP_KEYCODE_LEFT_SHIFT) {
+            if (shortcut[0] > RIZZ_APP_KEYCODE_SPACE && shortcut[0] <= RIZZ_APP_KEYCODE_GRAVE_ACCENT) {
                 keys[num_keys++] = (rizz_keycode)key;
             }
         }
@@ -723,7 +723,7 @@ static void rizz__parse_shortcut_string(const char* shortcut, rizz_keycode keys[
             }
         } else if (len == 1 && num_keys < 2) {
             char key = sx_toupperchar(shortcut[0]);
-            if (shortcut[0] > RIZZ_APP_KEYCODE_SPACE && shortcut[0] < RIZZ_APP_KEYCODE_LEFT_SHIFT) {
+            if (shortcut[0] > RIZZ_APP_KEYCODE_SPACE && shortcut[0] <= RIZZ_APP_KEYCODE_GRAVE_ACCENT) {
                 keys[num_keys++] = (rizz_keycode)key;
             }
         }
