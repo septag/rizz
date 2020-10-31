@@ -998,6 +998,7 @@ static bool imgui__init(void)
     conf->KeyMap[ImGuiKey_Backspace] = RIZZ_APP_KEYCODE_BACKSPACE;
     conf->KeyMap[ImGuiKey_Space] = RIZZ_APP_KEYCODE_SPACE;
     conf->KeyMap[ImGuiKey_Enter] = RIZZ_APP_KEYCODE_ENTER;
+    conf->KeyMap[ImGuiKey_KeyPadEnter] = RIZZ_APP_KEYCODE_KP_ENTER;
     conf->KeyMap[ImGuiKey_Escape] = RIZZ_APP_KEYCODE_ESCAPE;
     conf->KeyMap[ImGuiKey_A] = RIZZ_APP_KEYCODE_A;
     conf->KeyMap[ImGuiKey_C] = RIZZ_APP_KEYCODE_C;
