@@ -32,11 +32,6 @@ typedef struct rizz__refl_data {
     char base[32];
 } rizz__refl_data;
 
-typedef struct rizz__refl_field {
-    rizz_refl_info info;
-    void* value;    // pointer than contains arbitary field value(s) based on info.type/array/etc.
-} rizz__refl_field;
-
 typedef struct rizz_refl_context {
     rizz__refl_struct* structs; // sx_array
     rizz__refl_enum* enums;     // sx_array
@@ -492,6 +487,51 @@ static bool rizz__refl_enumerate(rizz_refl_context* ctx, const char* type_name, 
     return found;
 }
 
+static int rizz__refl_get_fields(rizz_refl_context* ctx, const char* base_type, void* obj, 
+                                 rizz_refl_field* fields, int max_fields)
+{
+    int num_fields = 0;
+    for (int i = 0, c = sx_array_count(ctx->regs); i < c; i++) {
+        rizz__refl_data* r = &ctx->regs[i];
+        if (r->r.internal_type == RIZZ_REFL_FIELD && sx_strequal(r->base, base_type)) {
+            sx_assert(r->base_id < sx_array_count(ctx->structs));
+            sx_assert(ctx->structs);
+            rizz__refl_struct* s = &ctx->structs[r->base_id];
+
+            if (fields && num_fields < max_fields) {
+                bool value_nil = obj == NULL;
+                void* value = (uint8_t*)obj + r->r.offset;
+                rizz_refl_info rinfo = { .any = r->r.any,
+                                         .type = r->type,
+                                         .name = r->name,
+                                         .base = r->base,
+                                         .desc = r->r.desc,
+                                         .size = r->r.size,
+                                         .array_size = r->r.array_size,
+                                         .stride = r->r.stride,
+                                         .flags = r->r.flags,
+                                         .internal_type = r->r.internal_type,
+                                         .meta = r->r.meta };
+
+                if (!(r->r.flags & (RIZZ_REFL_FLAG_IS_PTR | RIZZ_REFL_FLAG_IS_ARRAY))) {
+                    fields[num_fields] = (rizz_refl_field){ .info = rinfo, .value = value };
+                } else {
+                    // type names for pointers must only include the _type_ part without '*' or '[]'
+                    if (value && !value_nil && (r->r.flags & RIZZ_REFL_FLAG_IS_PTR))
+                        value = (void*)*((uintptr_t*)value);
+                    fields[num_fields] = (rizz_refl_field){ .info = rinfo, .value = value };
+                }
+            }    // if (fields)
+
+            ++num_fields;
+            if (num_fields == s->num_fields)
+                break;
+        }
+    }
+
+    return num_fields;
+}
+
 static int rizz__refl_reg_count(rizz_refl_context* ctx)
 {
     return sx_array_count(ctx->regs);
@@ -506,4 +546,5 @@ rizz_api_refl the__refl = { .create_context = rizz__refl_create_context,
                             .get_field = rizz__refl_get_field,
                             .get_enum_name = rizz__refl_get_enum_name,
                             .reg_count = rizz__refl_reg_count,
-                            .enumerate = rizz__refl_enumerate };
+                            .enumerate = rizz__refl_enumerate,
+                            .get_fields = rizz__refl_get_fields };

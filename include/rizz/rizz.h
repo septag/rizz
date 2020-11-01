@@ -1519,6 +1519,11 @@ typedef struct rizz_refl_enumerate_callbacks {
     void (*on_enum)(const char* name, int value, const char* value_name, void* user, const void* meta);
 } rizz_refl_enumerate_callbacks;
 
+typedef struct rizz_refl_field {
+    rizz_refl_info info;
+    void* value;    // pointer than contains arbitary field value(s) based on info.type/array/etc.
+} rizz_refl_field;
+
 typedef struct rizz_api_refl {
     rizz_refl_context* (*create_context)(const sx_alloc* alloc);
     void (*destroy_context)(rizz_refl_context* ctx);
@@ -1545,6 +1550,9 @@ typedef struct rizz_api_refl {
 
     bool (*enumerate)(rizz_refl_context* ctx, const char* type_name, const void* data, void* user, 
                       const rizz_refl_enumerate_callbacks* callbacks);
+    int (*get_fields)(rizz_refl_context* ctx, const char* base_type, void* obj, rizz_refl_field* fields, 
+                      int max_fields);
+    
 } rizz_api_refl;
 
 #define rizz_refl_reg_enum(_ctx, _type, _name, _meta) \

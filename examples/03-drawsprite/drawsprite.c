@@ -76,8 +76,23 @@ RIZZ_STATE static drawsprite_state g_ds;
 
 RIZZ_STATE static rizz_api_refl* the_refl;
 
-static void test_refl_on_builtin(const char* name, rizz_refl_variant value, void* user,
-                                 const void* meta)
+#include <stdio.h>
+
+typedef struct write_json_context {
+    FILE* f;
+    int depth;
+} write_json_context;
+
+static const char* test_get_depth_tabs(int depth)
+{
+    static char tabs[128];
+    sx_strcpy(tabs, sizeof(tabs), "\t");
+    for (int i = 0; i < depth; i++) {
+        sx_strcat(tabs, sizeof(tabs), "\t");
+    }
+}
+
+static void test_refl_on_builtin(const char* name, rizz_refl_variant value, void* user, const void* meta)
 {
     rizz_log_debug("builtin - name: %s, value_type: %d", name, (int)value.type);
 }
@@ -91,6 +106,8 @@ static void test_refl_on_builtin_array(const char* name, const rizz_refl_variant
 static void test_refl_on_struct(const char* name, const char* type_name, int size, int count,
                                 void* user, const void* meta)
 {
+    write_json_context* jctx = user;
+    // fprintf(jctx->f, "%s\"%s\": \"%s\" {", name);
     rizz_log_debug("struct name: %s, type_name: %s, size: %d, count: %d", name, type_name, size, count);
 }
 
@@ -104,6 +121,8 @@ static void test_refl_on_enum(const char* name, int value, const char* value_nam
 {
     rizz_log_debug("enum name: %s, value: %d, value_name: %s", name, value, value_name);
 }
+
+
 
 static void test_refl(void)
 {
