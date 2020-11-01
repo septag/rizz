@@ -1354,12 +1354,6 @@ bool rizz__core_init(const rizz_config* conf)
                    sx_job_num_worker_threads(g_core.jobs), conf->job_max_fibers,
                    conf->job_stack_size);
 
-    // reflection
-    if (!rizz__refl_init(rizz__alloc(RIZZ_MEMID_REFLECT), 0)) {
-        rizz__log_error("initializing reflection failed");
-        return false;
-    }
-
     // asset system
 #if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
     const char* asset_dbpath = "/assets/asset-db.json";
@@ -1506,7 +1500,6 @@ void rizz__core_release()
     rizz__asset_release();
     rizz__gfx_release();
     rizz__vfs_release();
-    rizz__refl_release();
 
     if (g_core.rmt) {
         rmt_DestroyGlobalInstance(g_core.rmt);

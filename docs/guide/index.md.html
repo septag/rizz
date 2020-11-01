@@ -14,7 +14,7 @@
 <body style="margin:auto">
     **_rizz_ Architecture and Basic usage**
     <small>This document is subject to change</small>
-    <small>Revision 1.13: 18 October 2020</small>
+    <small>Revision 1.14: 31 October 2020</small>
 
     **Github Page**: [github.com/septag/rizz](https://github.com/septag/rizz)
 
@@ -670,15 +670,18 @@
     **Note** that currently, gpu profiling support is limited to D3d11 and OpenGL backends, Metal profiling is in the works, but currently turned off because of some existing issues.
 
     ## Command console
-    There is also a simple console command interface, that can be accessed within the remote profiler web interface. To add your own commands to the console commands, use `the_core->register_console_command`.
+    There is also a simple console command interface. Commands can be executed with either `the_core->execute_command` function or through profiler web interface, or _log window_ which will describe later in "Logging" section.  
+    To add your own commands to the console commands, use `the_core->register_console_command`.
 
     ```cpp
-    the_core->register_console_command("my_command", [](int argc, char* argv[]) {
+    the_core->register_console_command("my_command", [](int argc, char* argv[], void* user) {
         // argc = number of args
         // argv[0] = command
         // argv[1], ... = arguments seperated by space
-    });
+    }, NULL, NULL);
     ```
+
+    **Shotcut keys**: Note that, the 3rd argument of `register_console_command` is _shortcut_ string. Shortcuts can be assigned to simple console commands, they are useful for commands that have default arguments or require none, like "trigger" types. So pressing the shortcut key button will only run the command without any arguments. The shortcut string is a human friendly key + modifier combination. In which "CTRL"/"SHIFT"/"ALT" stand to modifier keys. Examples are "F1", "CTRL+A", "SHIFT+CTRL+O"
 	
 	## Command line arguments
 	There are two types of command-line arguments, ones that are pre-defined by _rizz_ itself, and user-defined ones.
@@ -711,6 +714,15 @@
 
     You can control logging level with either setting `rizz_config.log_level` field on initialize, or use `the_core->set_log_level` function.
 
+    Besides logging level, you have another filter to categorize log entries called channels which is just a 32bit bitset variable, you can use the `rizz_log_xxxx_channels` macro variants to provide channels for log entries.
+
+    ```cpp
+    #define ENTITY_SPAWN_LOG 0x1
+    #define ENTITY_KILL_LOG 0x2
+    #define ENTITY_LOGS (ENTITY_SPAWN_LOG|ENTITY_KILL_LOG)
+    rizz_log_debug_channels(ENTITY_SPAWN_LOG, "Entity spawned");
+    ```
+
     ## Log backends
     There are several built-in backends, however you can implement additional logging backends by registering them with `the_core->register_log_backend` function and provide a callback to receive log entries.
 
@@ -718,8 +730,18 @@
     
     However, there are exceptions to this. Some built-in logging backends, like **Terminal**/**Debugger window** and **Android native log** outputs the log immediately after calling `rizz_log_xxx` functions and doesn't wait for queued results, because by nature they are thread-safe and we want to have some immediate log feedback in case something goes wrong.  
 
+    ## Log window
+    When using `imgui` plugin, you will get a log window along with console command. By default, pressing "~" shortcut key will bring it up. 
+
+    ![log-console-window](log-console-window.png)
+
+    You can issue commands, filter out entries based on their level and channel bits (0-31). Also, double clicking on each entry will copy it to the clipboard.
+
+    
     # Changelist
-	- Version 1.13 (October 2020): Added command-line section
+    
+    - Version 1.14 (October 2020): Logging improvements, added shortcut
+    - Version 1.13 (October 2020): Added command-line section
     - Version 1.12 (July 2020): Better descriptions for built-in asset types
     - Version 1.1 (May 2020): Added Gpu Profiling, Tweaked shader docs, Added logging
     - Version 1.0 (April 2020): Initial version

@@ -754,7 +754,6 @@ typedef struct rizz_api_core {
     void (*show_log)(bool* p_open);
 } rizz_api_core;
 
-// clang-format off
 #define rizz_log_info(_text, ...)     (RIZZ_CORE_API_VARNAME)->print_info(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
 #define rizz_log_debug(_text, ...)    (RIZZ_CORE_API_VARNAME)->print_debug(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
 #define rizz_log_verbose(_text, ...)  (RIZZ_CORE_API_VARNAME)->print_verbose(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
@@ -802,8 +801,6 @@ typedef struct rizz_api_core {
 #define rizz_temp_alloc_end(_name) \
         (void)_temp_alloc_raii_##_name; \
         (RIZZ_CORE_API_VARNAME)->tmp_alloc_pop()
-
-// clang-format on
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @graphics
@@ -1415,7 +1412,13 @@ typedef struct rizz_api_http {
 } rizz_api_http;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// @reflect
+// @reflection
+//
+//
+//
+//
+//
+//
 typedef enum rizz_refl_type {
     RIZZ_REFL_ENUM,    //
     RIZZ_REFL_FUNC,    //
@@ -1425,7 +1428,7 @@ typedef enum rizz_refl_type {
 enum rizz_refl_flags_ {
     RIZZ_REFL_FLAG_IS_PTR = 0x1,       // field is pointer
     RIZZ_REFL_FLAG_IS_STRUCT = 0x2,    // field is struct type
-    RIZZ_REFL_FLAG_IS_ARRAY = 0x4,     // field is array (only built-in types are supported)
+    RIZZ_REFL_FLAG_IS_ARRAY = 0x4,     // field is array
     RIZZ_REFL_FLAG_IS_ENUM = 0x8       // field is enum
 };
 typedef uint32_t rizz_refl_flags;
@@ -1445,34 +1448,111 @@ typedef struct rizz_refl_info {
     int stride;
     uint32_t flags;
     rizz_refl_type internal_type;
+    const void* meta;
 } rizz_refl_info;
 
-typedef struct rizz__refl_field {
-    rizz_refl_info info;
-    void* value;
-} rizz__refl_field;
+typedef struct rizz_refl_context rizz_refl_context;
+
+typedef enum rizz_refl_variant_type {
+    RIZZ_REFL_VARIANTTYPE_UNKNOWN = 0,
+    RIZZ_REFL_VARIANTTYPE_CSTRING,
+    RIZZ_REFL_VARIANTTYPE_CHAR,
+    RIZZ_REFL_VARIANTTYPE_FLOAT,
+    RIZZ_REFL_VARIANTTYPE_DOUBLE,
+    RIZZ_REFL_VARIANTTYPE_INT32,
+    RIZZ_REFL_VARIANTTYPE_INT8,
+    RIZZ_REFL_VARIANTTYPE_INT16,
+    RIZZ_REFL_VARIANTTYPE_INT64,
+    RIZZ_REFL_VARIANTTYPE_UINT8,
+    RIZZ_REFL_VARIANTTYPE_UINT16,
+    RIZZ_REFL_VARIANTTYPE_UINT32,
+    RIZZ_REFL_VARIANTTYPE_UINT64,
+    RIZZ_REFL_VARIANTTYPE_BOOL,
+    RIZZ_REFL_VARIANTTYPE_MAT4,
+    RIZZ_REFL_VARIANTTYPE_MAT3,
+    RIZZ_REFL_VARIANTTYPE_VEC4,
+    RIZZ_REFL_VARIANTTYPE_VEC3,
+    RIZZ_REFL_VARIANTTYPE_VEC2,
+    RIZZ_REFL_VARIANTTYPE_IVEC2,
+    RIZZ_REFL_VARIANTTYPE_COLOR,
+    RIZZ_REFL_VARIANTTYPE_AABB,
+    RIZZ_REFL_VARIANTTYPE_RECT,
+    _RIZZ_REFL_VARIANTTYPE_COUNT
+} rizz_refl_variant_type;
+
+typedef struct rizz_refl_variant {
+    rizz_refl_variant_type type;
+    union {
+        const char* str;
+        bool b;
+        
+        uint8_t u8;
+        uint16_t u16;
+        uint32_t u32;
+        uint64_t u64;
+
+        int8_t i8;
+        int16_t i16;
+        int32_t i32;
+        int64_t i64;
+
+        float f;
+        double d;
+
+        sx_mat4 mat4;
+        sx_mat3 mat3;
+        sx_vec4 v4;
+        sx_vec3 v3;
+        sx_vec2 v2;
+        sx_ivec2 iv2;
+        sx_color color;
+        sx_aabb aabb;
+        sx_rect rect;
+    };
+} rizz_refl_variant;
+
+typedef struct rizz_refl_enumerate_callbacks {
+    void (*on_builtin)(const char* name, rizz_refl_variant value, void* user, const void* meta);
+    void (*on_builtin_array)(const char* name, const rizz_refl_variant* var, int count, void* user, const void* meta);
+    void (*on_struct)(const char* name, const char* type_name, int size, int count, void* user, const void* meta);
+    void (*on_struct_array_element)(int index);
+    void (*on_enum)(const char* name, int value, const char* value_name, void* user, const void* meta);
+} rizz_refl_enumerate_callbacks;
 
 typedef struct rizz_api_refl {
-    void (*_reg)(rizz_refl_type internal_type, void* any, const char* type, const char* name,
-                 const char* base, const char* desc, int size, int base_size);
-    int (*size_of)(const char* base_type);
-    void* (*get_func)(const char* name);
-    int (*get_enum)(const char* name, int not_found);
-    const char* (*get_enum_name)(const char* type, int val);
-    void* (*get_field)(const char* base_type, void* obj, const char* name);
-    int (*get_fields)(const char* base_type, void* obj, rizz__refl_field* fields, int max_fields);
-    int (*reg_count)();
-    bool (*is_cstring)(const rizz_refl_info* r);
+    rizz_refl_context* (*create_context)(const sx_alloc* alloc);
+    void (*destroy_context)(rizz_refl_context* ctx);
+
+    // use provided macros instead of this function
+    int (*_reg_private)(rizz_refl_context* ctx, 
+                        rizz_refl_type internal_type,  // core type (enum/func/field)
+                        void* any,                     // offset_in_struct for fields, integer value for enums, func pointer for functions
+                        const char* type,              // enums: enum name string, fields: type of field (int/float/struct_type), func: typedef of func
+                        const char* name,              // enums: enum value string, fields: name of the field, func: function name
+                        const char* base,              // only valid for fields, which is owner struct name
+                        const char* desc,              // description
+                        int size,                      // enums: size of parent enum type, fields: size of the field value, func: size of function pointer
+                        int base_size,                 // only valid for fields, size of owner struct
+                        const void* meta               // meta data per type, will be passed to callbacks (mostly extra UI stuff)
+                        );                
+
+    int (*size_of)(rizz_refl_context* ctx, const char* base_type);
+    void* (*get_func)(rizz_refl_context* ctx,const char* name);
+    int (*get_enum)(rizz_refl_context* ctx,const char* name, int not_found);
+    void* (*get_field)(rizz_refl_context* ctx,const char* base_type, void* obj, const char* name);
+    const char* (*get_enum_name)(rizz_refl_context* ctx,const char* type, int val);
+    int (*reg_count)(rizz_refl_context* ctx);
+
+    bool (*enumerate)(rizz_refl_context* ctx, const char* type_name, const void* data, void* user, 
+                      const rizz_refl_enumerate_callbacks* callbacks);
 } rizz_api_refl;
 
-// clang-format off
-#define rizz_refl_enum(_type, _name) \
-    (RIZZ_REFLECT_API_VARNAME)->_reg(RIZZ_REFL_ENUM, (void*)(intptr_t)_name, #_type, #_name, NULL, "", sizeof(_type), 0)
-#define rizz_refl_func(_type, _name, _desc) \
-    (RIZZ_REFLECT_API_VARNAME)->_reg(RIZZ_REFL_FUNC, &_name, #_type, #_name, NULL, _desc, sizeof(void*), 0)
-#define rizz_refl_field(_struct, _type, _name, _desc)   \
-    (RIZZ_REFLECT_API_VARNAME)->_reg(RIZZ_REFL_FIELD, &(((_struct*)0)->_name), #_type, #_name, #_struct, _desc, sizeof(_type), sizeof(_struct))
-// clang-format on
+#define rizz_refl_reg_enum(_ctx, _type, _name, _meta) \
+    (RIZZ_REFLECT_API_VARNAME)->_reg_private(_ctx, RIZZ_REFL_ENUM, (void*)(intptr_t)_name, #_type, #_name, NULL, "", sizeof(_type), 0, _meta)
+#define rizz_refl_reg_func(_ctx, _type, _name, _desc, _meta) \
+    (RIZZ_REFLECT_API_VARNAME)->_reg_private(_ctx, RIZZ_REFL_FUNC, &_name, #_type, #_name, NULL, _desc, sizeof(void*), 0, _meta)
+#define rizz_refl_reg_field(_ctx, _struct, _type, _name, _desc, _meta)   \
+    (RIZZ_REFLECT_API_VARNAME)->_reg_private(_ctx, RIZZ_REFL_FIELD, &(((_struct*)0)->_name), #_type, #_name, #_struct, _desc, sizeof(_type), sizeof(_struct), _meta)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @json

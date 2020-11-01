@@ -39,6 +39,7 @@ typedef struct imgui__log_context {
     bool reset_focus;
     bool toggle;
     bool* popen;
+    bool focus_command;
 } imgui__log_context;
 
 static imgui__log_context g_log;
@@ -112,7 +113,12 @@ static void imgui__show_command_console(void)
 
     the__imgui.PushItemWidth(-1);
     the__imgui.SetItemDefaultFocus();
-    if (the__imgui.InputTextWithHint("##commands", "Enter commands", cmd, sizeof(cmd), ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
+    if (g_log.focus_command) {
+        the__imgui.SetKeyboardFocusHere(0);
+        g_log.focus_command = false;
+    }
+    if (the__imgui.InputTextWithHint("##commands", "Enter commands", cmd, sizeof(cmd), 
+                                     ImGuiInputTextFlags_EnterReturnsTrue, NULL, NULL)) {
         the_core->execute_console_command(cmd);
         g_log.reset_focus = true;
     }
@@ -154,8 +160,7 @@ static void imgui__update_entry_cache(void)
         int read = sx_ringbuffer_read_noadvance(g_log.buffer, &tag, sizeof(log_tag), &offset);
         if (tag == log_tag) {
             int entry_sz;
-            read +=
-                sx_ringbuffer_read_noadvance(g_log.buffer, &entry_sz, sizeof(entry_sz), &offset);
+            read += sx_ringbuffer_read_noadvance(g_log.buffer, &entry_sz, sizeof(entry_sz), &offset);
 
             // read channels/type for filtering
             rizz_log_level type;
@@ -372,6 +377,7 @@ static int imgui__toggle_log_cb(int argc, char* argv[], void* user)
 
     g_log.toggle = !g_log.toggle;
     g_log.popen = NULL;
+    g_log.focus_command = true;
     return 0;
 }
 

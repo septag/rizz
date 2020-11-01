@@ -74,6 +74,75 @@ typedef struct {
 
 RIZZ_STATE static drawsprite_state g_ds;
 
+RIZZ_STATE static rizz_api_refl* the_refl;
+
+static void test_refl_on_builtin(const char* name, rizz_refl_variant value, void* user,
+                                 const void* meta)
+{
+    rizz_log_debug("builtin - name: %s, value_type: %d", name, (int)value.type);
+}
+
+static void test_refl_on_builtin_array(const char* name, const rizz_refl_variant* var, int count,
+                                       void* user, const void* meta)
+{
+    rizz_log_debug("built-in - name: %s, count: %d, value_type: %d", name, count, (int)var[0].type);
+}
+
+static void test_refl_on_struct(const char* name, const char* type_name, int size, int count,
+                                void* user, const void* meta)
+{
+    rizz_log_debug("struct name: %s, type_name: %s, size: %d, count: %d", name, type_name, size, count);
+}
+
+static void test_refl_on_struct_array_element(int index)
+{
+    rizz_log_debug("struct array_index: %d", index);
+}
+
+static void test_refl_on_enum(const char* name, int value, const char* value_name, void* user,
+                              const void* meta)
+{
+    rizz_log_debug("enum name: %s, value: %d, value_name: %s", name, value, value_name);
+}
+
+static void test_refl(void)
+{
+    rizz_refl_context* ctx = the_refl->create_context(the_core->heap_alloc());
+
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_FLOAT, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_FLOAT2, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_FLOAT3, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_FLOAT4, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_BYTE4, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_BYTE4N, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_UBYTE4, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_UBYTE4N, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_SHORT2, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_SHORT2N, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_SHORT4, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_SHORT4N, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_UINT10_N2, NULL);
+
+    rizz_refl_reg_field(ctx, rizz_shader_refl_input, char[32], name, "shader input name", NULL);
+    rizz_refl_reg_field(ctx, rizz_shader_refl_input, char[32], semantic, "shader semantic name", NULL);
+    rizz_refl_reg_field(ctx, rizz_shader_refl_input, int, semantic_index, "shader semantic index", NULL);
+    rizz_refl_reg_field(ctx, rizz_shader_refl_input, sg_vertex_format, type, "shader input type", NULL);
+
+    rizz_refl_reg_field(ctx, rizz_shader_info, rizz_shader_refl_input[SG_MAX_VERTEX_ATTRIBUTES], inputs, "shader inputs", NULL);
+    rizz_refl_reg_field(ctx, rizz_shader_info, int, num_inputs, "shader input count", NULL);
+
+    rizz_shader* shader = the_asset->obj(g_ds.shader).ptr;
+
+    the_refl->enumerate(ctx, "rizz_shader_info", &shader->info, NULL, &(rizz_refl_enumerate_callbacks) {
+        .on_builtin = test_refl_on_builtin,
+        .on_builtin_array = test_refl_on_builtin_array,
+        .on_struct = test_refl_on_struct,
+        .on_struct_array_element = test_refl_on_struct_array_element,
+        .on_enum = test_refl_on_enum
+    });
+}
+
+
 static bool init()
 {
 #if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
@@ -105,14 +174,10 @@ static bool init()
                                                          .size = sizeof(uint16_t) * MAX_INDICES });
 
     char shader_path[RIZZ_MAX_PATH];
-    g_ds.shader = the_asset->load(
-        "shader",
-        ex_shader_path(shader_path, sizeof(shader_path), "/assets/shaders", "drawsprite.sgs"), NULL,
-        0, NULL, 0);
-    g_ds.shader_wire = the_asset->load(
-        "shader",
-        ex_shader_path(shader_path, sizeof(shader_path), "/assets/shaders", "drawsprite_wire.sgs"),
-        NULL, 0, NULL, 0);
+    g_ds.shader = the_asset->load("shader",
+        ex_shader_path(shader_path, sizeof(shader_path), "/assets/shaders", "drawsprite.sgs"), NULL, 0, NULL, 0);
+    g_ds.shader_wire = the_asset->load("shader",
+        ex_shader_path(shader_path, sizeof(shader_path), "/assets/shaders", "drawsprite_wire.sgs"), NULL, 0, NULL, 0);
 
     // pipeline
     sg_pipeline_desc pip_desc = { .layout.buffers[0].stride = sizeof(drawsprite_vertex),
@@ -160,6 +225,8 @@ static bool init()
                                                                   .size = sx_vec2f(SPRITE_WIDTH, 0),
                                                                   .color = sx_colorn(0xffffffff) });
     }
+
+    test_refl();
     return true;
 }
 
@@ -382,6 +449,8 @@ rizz_plugin_decl_main(drawsprite, plugin, e)
         the_font = plugin->api->get_api_byname("font", 0);
         sx_assertf(the_sprite, "sprite plugin is not loaded!");
 
+        the_refl = plugin->api->get_api(RIZZ_API_REFLECT, 0);
+
         if (!init())
             return -1;
         break;
@@ -424,8 +493,9 @@ rizz_game_decl_config(conf)
     conf->app_version = 1000;
     conf->app_title = "03 - DrawSprite";
     conf->app_flags |= RIZZ_APP_FLAG_HIGHDPI;
-    conf->window_width = 800;
-    conf->window_height = 600;
+    conf->log_level = RIZZ_LOG_LEVEL_DEBUG;
+    conf->window_width = 1280;
+    conf->window_height = 800;
     conf->swap_interval = 2;
     conf->plugins[0] = "imgui";
     conf->plugins[1] = "2dtools";

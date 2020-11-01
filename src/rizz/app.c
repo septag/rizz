@@ -676,6 +676,38 @@ static bool rizz__app_cmdline_arg_exists(const char* name)
     return false;
 }
 
+static void rizz__parse_single_shortcut_key(const char* keystr, rizz_keycode keys[2], int* num_keys, rizz_modifier_keys* mods)
+{
+    int len = sx_strlen(keystr);
+    // function keys
+    bool is_fn = (len == 2 || len == 3) && sx_toupperchar(keystr[0]) == 'F' && 
+        ((len == 2 && sx_isnumchar(keystr[1])) || (len == 3 && sx_isnumchar(keystr[1]) && sx_isnumchar(keystr[2])));
+    if (is_fn && *num_keys < 2) {
+        char numstr[3] = {keystr[1], keystr[2], 0};
+        int fnum = sx_toint(numstr) - 1;
+        if (fnum >= 0 && fnum < 25) {
+            keys[(*num_keys)++] = RIZZ_APP_KEYCODE_F1 + fnum;
+        }
+    }
+    else if (len > 1) {
+        char modstr[32];
+        sx_toupper(modstr, sizeof(modstr), keystr);
+        if (sx_strequal(modstr, "ALT")) {
+            *mods |= RIZZ_APP_MODIFIERKEY_ALT;
+        } else if (sx_strequal(modstr, "CTRL")) {
+            *mods |= RIZZ_APP_MODIFIERKEY_CTRL;
+        } else if (sx_strequal(modstr, "SHIFT")) {
+            *mods |= RIZZ_APP_MODIFIERKEY_SHIFT;
+        }
+    } 
+    else if (len == 1 && *num_keys < 2) {
+        char key = sx_toupperchar(keystr[0]);
+        if (keystr[0] > RIZZ_APP_KEYCODE_SPACE && keystr[0] <= 127) {
+            keys[(*num_keys)++] = (rizz_keycode)key;
+        }
+    }
+}
+
 // shortcut string example:
 // "key1+key2+mod1+mod2+.."
 // "K+SHIFT+CTRL"
@@ -689,44 +721,14 @@ static void rizz__parse_shortcut_string(const char* shortcut, rizz_keycode keys[
 
     while (shortcut[0] && (plus = sx_strchar(shortcut, '+'))) {
         sx_strncpy(keystr, sizeof(keystr), shortcut, (int)(uintptr_t)(plus - shortcut));
-        int len = sx_strlen(keystr);
-        if (len > 1) {
-            sx_toupper(keystr, sizeof(keystr), keystr);
-            if (sx_strequal(keystr, "ALT")) {
-                *mods |= RIZZ_APP_MODIFIERKEY_ALT;
-            } else if (sx_strequal(keystr, "CTRL")) {
-                *mods |= RIZZ_APP_MODIFIERKEY_CTRL;
-            } else if (sx_strequal(keystr, "SHIFT")) {
-                *mods |= RIZZ_APP_MODIFIERKEY_SHIFT;
-            }
-        } else if (len == 1 && num_keys < 2) {
-            char key = sx_toupperchar(shortcut[0]);
-            if (shortcut[0] > RIZZ_APP_KEYCODE_SPACE && shortcut[0] <= RIZZ_APP_KEYCODE_GRAVE_ACCENT) {
-                keys[num_keys++] = (rizz_keycode)key;
-            }
-        }
+        rizz__parse_single_shortcut_key(keystr, keys, &num_keys, mods);
         shortcut = sx_skip_whitespace(plus + 1);
     }
 
     // read the last one
     if (shortcut[0]) {
         sx_strcpy(keystr, sizeof(keystr), shortcut);
-        int len = sx_strlen(keystr);
-        if (len > 1) {
-            sx_toupper(keystr, sizeof(keystr), keystr);
-            if (sx_strequal(keystr, "ALT")) {
-                *mods |= RIZZ_APP_MODIFIERKEY_ALT;
-            } else if (sx_strequal(keystr, "CTRL")) {
-                *mods |= RIZZ_APP_MODIFIERKEY_CTRL;
-            } else if (sx_strequal(keystr, "SHIFT")) {
-                *mods |= RIZZ_APP_MODIFIERKEY_SHIFT;
-            }
-        } else if (len == 1 && num_keys < 2) {
-            char key = sx_toupperchar(shortcut[0]);
-            if (shortcut[0] > RIZZ_APP_KEYCODE_SPACE && shortcut[0] <= RIZZ_APP_KEYCODE_GRAVE_ACCENT) {
-                keys[num_keys++] = (rizz_keycode)key;
-            }
-        }
+        rizz__parse_single_shortcut_key(keystr, keys, &num_keys, mods);
     }
 }
 
