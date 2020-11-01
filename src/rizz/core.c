@@ -1221,6 +1221,8 @@ static void* rizz__track_alloc_cb(void* ptr, size_t size, uint32_t align, const 
 
 static int rizz__core_echo_command(int argc, char* argv[], void* user)
 {
+    sx_unused(user);
+    
     if (argc > 1) {
         rizz__log_debug(argv[1]);
         return 0;
