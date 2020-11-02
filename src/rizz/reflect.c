@@ -378,8 +378,8 @@ static int rizz__refl_size_of(rizz_refl_context* ctx, const char* base_type)
     return 0;
 }
 
-static bool rizz__refl_enumerate(rizz_refl_context* ctx, const char* type_name, const void* data,
-                                 void* user, const rizz_refl_enumerate_callbacks* callbacks)
+static bool rizz__refl_enumerate_internal(rizz_refl_context* ctx, const char* type_name, const void* data,
+                                          void* user, const rizz_refl_enumerate_callbacks* callbacks)
 {
     sx_assert(callbacks);
     sx_assert(ctx);
@@ -387,7 +387,6 @@ static bool rizz__refl_enumerate(rizz_refl_context* ctx, const char* type_name, 
     sx_assert(data);
 
     bool found = false;
-
     // enumerate struct fields fields
     // search in all registers that base_type (struct) matches type_name
     for (int i = 0, c = sx_array_count(ctx->regs); i < c; i++) {
@@ -424,25 +423,27 @@ static bool rizz__refl_enumerate(rizz_refl_context* ctx, const char* type_name, 
                 callbacks->on_enum(rinfo.name, e, rizz__refl_get_enum_name(ctx, rinfo.type, e), user, rinfo.meta);
             }
             else if (rinfo.flags & RIZZ_REFL_FLAG_IS_STRUCT) {
-                callbacks->on_struct(rinfo.name, 
-                                     rinfo.type, 
-                                     (rinfo.flags & RIZZ_REFL_FLAG_IS_ARRAY) ? rinfo.stride : rinfo.size, 
-                                     rinfo.array_size,
-                                     user, 
-                                     rinfo.meta);
+                callbacks->on_struct_begin(rinfo.name, 
+                                           rinfo.type, 
+                                           (rinfo.flags & RIZZ_REFL_FLAG_IS_ARRAY) ? rinfo.stride : rinfo.size, 
+                                           rinfo.array_size,
+                                           user, 
+                                           rinfo.meta);
 
                 if (rinfo.flags & RIZZ_REFL_FLAG_IS_ARRAY) {
                     for (int i = 0; i < rinfo.array_size; i++) {
-                        callbacks->on_struct_array_element(i);
-                        rizz__refl_enumerate(ctx, rinfo.type, (uint8_t*)value + (size_t)i*(size_t)rinfo.stride, user, callbacks);
+                        callbacks->on_struct_array_element(i, user, rinfo.meta);
+                        rizz__refl_enumerate_internal(ctx, rinfo.type, (uint8_t*)value + (size_t)i*(size_t)rinfo.stride, user, callbacks);
                     }
                 } else {
-                    if (!rizz__refl_enumerate(ctx, rinfo.type, value, user, callbacks)) {
+                    if (!rizz__refl_enumerate_internal(ctx, rinfo.type, value, user, callbacks)) {
                         rizz__log_warn("reflection info for '%s' not found", type_name);
                         sx_assertf(0, "reflection info for '%s' not found", type_name);
                         return false;
                     }
                 }
+
+                callbacks->on_struct_end(user, rinfo.meta);
             }
             else {
                 // built-in types
@@ -464,13 +465,13 @@ static bool rizz__refl_enumerate(rizz_refl_context* ctx, const char* type_name, 
                         callbacks->on_builtin_array(rinfo.name, vars, rinfo.array_size, user, rinfo.meta);
                         the__core.tmp_alloc_pop();
                     } else {
-                        rizz_refl_variant var = { .type = RIZZ_REFL_VARIANTTYPE_CSTRING, .str = (const char*)data };
+                        rizz_refl_variant var = { .type = RIZZ_REFL_VARIANTTYPE_CSTRING, .str = (const char*)value };
                         callbacks->on_builtin(rinfo.name, var, user, rinfo.meta);
                     }
                 } else {
                     rizz_refl_variant var;
                     var.type = var_type;
-                    rizz__refl_set_builtin_type(&var, data, rinfo.size);
+                    rizz__refl_set_builtin_type(&var, value, rinfo.size);
                     callbacks->on_builtin(rinfo.name, var, user, rinfo.meta);
                 }
             }
@@ -485,6 +486,25 @@ static bool rizz__refl_enumerate(rizz_refl_context* ctx, const char* type_name, 
 
     sx_assertf(found, "reflection info for '%s' not found", type_name);
     return found;
+}
+
+static bool rizz__refl_enumerate(rizz_refl_context* ctx, const char* type_name, const void* data,
+                                 void* user, const rizz_refl_enumerate_callbacks* callbacks)
+{
+    sx_assert(callbacks);
+    sx_assert(ctx);
+    sx_assert(type_name);
+    sx_assert(data);
+
+    if (!callbacks->on_begin(type_name, user)) {
+        return false;
+    }
+
+    bool r = rizz__refl_enumerate_internal(ctx, type_name, data, user, callbacks);
+    
+    callbacks->on_end(user);
+    
+    return r;
 }
 
 static int rizz__refl_get_fields(rizz_refl_context* ctx, const char* base_type, void* obj, 

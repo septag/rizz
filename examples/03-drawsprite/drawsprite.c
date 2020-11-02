@@ -79,49 +79,159 @@ RIZZ_STATE static rizz_api_refl* the_refl;
 #include <stdio.h>
 
 typedef struct write_json_context {
+    const char* filename;
     FILE* f;
-    int depth;
+    const char* newline;
+    const char* tab;
+
+    int _depth;
+    bool _is_struct_array;
+    char _tabs[128];
 } write_json_context;
 
-static const char* test_get_depth_tabs(int depth)
+static const char* test_refl_update_tabs(write_json_context* jctx)
 {
-    static char tabs[128];
-    sx_strcpy(tabs, sizeof(tabs), "\t");
-    for (int i = 0; i < depth; i++) {
-        sx_strcat(tabs, sizeof(tabs), "\t");
+    if (jctx->tab[0]) {
+        sx_strcpy(jctx->_tabs, sizeof(jctx->_tabs), jctx->tab);
+        for (int i = 0; i < jctx->_depth; i++) {
+            sx_strcat(jctx->_tabs, sizeof(jctx->_tabs), jctx->tab);
+        }
+    } else {
+        jctx->_tabs[0] = '\0';
     }
+
+    return jctx->_tabs;
+}
+
+static bool test_refl_on_begin(const char* type_name, void* user) 
+{
+    write_json_context* jctx = user;
+    sx_assertf(jctx->filename, "must provide a valid json filename");
+    sx_assert(jctx->f == NULL);
+
+    if (!jctx->newline) {
+        jctx->newline = "";
+    }
+    if (!jctx->tab) {
+        jctx->tab = "";
+    }
+    
+    jctx->f = fopen(jctx->filename, "wt");
+    if (!jctx->f) {
+        return false;
+    }
+    fprintf(jctx->f, "\"%s\": {%s", type_name, jctx->newline);
+    return true;
+}
+
+static void test_refl_on_end(void* user)
+{
+    write_json_context* jctx = user;
+    fprintf(jctx->f, "}%s", jctx->newline);
+    fclose(jctx->f);
+    jctx->f = NULL;
 }
 
 static void test_refl_on_builtin(const char* name, rizz_refl_variant value, void* user, const void* meta)
 {
-    rizz_log_debug("builtin - name: %s, value_type: %d", name, (int)value.type);
+    write_json_context* jctx = user;
+    const char* tabs = jctx->_tabs;
+    switch (value.type) {
+    case RIZZ_REFL_VARIANTTYPE_FLOAT:   fprintf(jctx->f, "%s\"%s\": %f,%s", tabs, name, value.f, jctx->newline);   break;
+    case RIZZ_REFL_VARIANTTYPE_INT32:   fprintf(jctx->f, "%s\"%s\": %d,%s", tabs, name, value.i32, jctx->newline); break;
+    case RIZZ_REFL_VARIANTTYPE_BOOL:    fprintf(jctx->f, "%s\"%s\": %s,%s", tabs, name, value.b ? "true" : "false", jctx->newline);   break;
+    case RIZZ_REFL_VARIANTTYPE_CSTRING:    fprintf(jctx->f, "%s\"%s\": \"%s\",%s", tabs, name, value.str, jctx->newline); break;
+    default:    break;
+    }
+    
 }
 
-static void test_refl_on_builtin_array(const char* name, const rizz_refl_variant* var, int count,
+static void test_refl_on_builtin_array(const char* name, const rizz_refl_variant* vars, int count,
                                        void* user, const void* meta)
 {
-    rizz_log_debug("built-in - name: %s, count: %d, value_type: %d", name, count, (int)var[0].type);
+    write_json_context* jctx = user;
+    fprintf(jctx->f, "%s\"%s\": [", jctx->_tabs, name);
+    for (int i = 0; i < count; i++) {
+        switch (vars[i].type) {
+        case RIZZ_REFL_VARIANTTYPE_FLOAT:
+            fprintf(jctx->f, "%f,", vars[i].f);
+            break;
+        case RIZZ_REFL_VARIANTTYPE_INT32:
+            fprintf(jctx->f, "%d,", vars[i].i32);
+            break;
+        case RIZZ_REFL_VARIANTTYPE_BOOL:
+            fprintf(jctx->f, "%s,", vars[i].b ? "true" : "false");
+            break;
+        case RIZZ_REFL_VARIANTTYPE_CSTRING:
+            fprintf(jctx->f, "\"%s\",", vars[i].str);
+            break;
+        default:
+            break;
+        }
+    }
+    fprintf(jctx->f, "],%s", jctx->newline);
 }
 
-static void test_refl_on_struct(const char* name, const char* type_name, int size, int count,
-                                void* user, const void* meta)
+static void test_refl_on_struct_begin(const char* name, const char* type_name, int size, int count,
+                                      void* user, const void* meta)
 {
     write_json_context* jctx = user;
-    // fprintf(jctx->f, "%s\"%s\": \"%s\" {", name);
-    rizz_log_debug("struct name: %s, type_name: %s, size: %d, count: %d", name, type_name, size, count);
+
+    if (count == 1) {
+        fprintf(jctx->f, "%s\"%s\": {%s", jctx->_tabs, name, jctx->newline);
+
+    } else {
+        fprintf(jctx->f, "%s\"%s\": [%s", jctx->_tabs, name, jctx->newline);
+        jctx->_is_struct_array = true;
+    }
+
+    ++jctx->_depth;
+    test_refl_update_tabs(jctx);
 }
 
-static void test_refl_on_struct_array_element(int index)
+static void test_refl_on_struct_array_element(int index, void* user, const void* meta)
 {
     rizz_log_debug("struct array_index: %d", index);
+    write_json_context* jctx = user;
+    if (index != 0) {
+        char tabs[128];
+        if (jctx->tab[0]) {
+            sx_strncpy(tabs, sizeof(tabs), jctx->_tabs, sx_strlen(jctx->_tabs) - sx_strlen(jctx->tab));
+        } else {
+            tabs[0] = '\0';
+        }
+        fprintf(jctx->f, "%s],%s%s[%s", tabs, jctx->newline, tabs, jctx->newline);
+    } 
+}
+
+static void test_refl_on_struct_end(void* user, const void* meta)
+{
+    write_json_context* jctx = user;
+
+    char tabs[128];
+    if (jctx->tab[0]) {
+        sx_strncpy(tabs, sizeof(tabs), jctx->_tabs, sx_strlen(jctx->_tabs) - sx_strlen(jctx->tab));
+    } else {
+        tabs[0] = '\0';
+    }
+
+    if (jctx->_is_struct_array) {
+        fprintf(jctx->f, "%s],%s", tabs, jctx->newline);
+        jctx->_is_struct_array = false;
+    } else {
+        fprintf(jctx->f, "%s},%s", tabs, jctx->newline);
+    }
+    --jctx->_depth;
+    test_refl_update_tabs(jctx);
 }
 
 static void test_refl_on_enum(const char* name, int value, const char* value_name, void* user,
                               const void* meta)
 {
-    rizz_log_debug("enum name: %s, value: %d, value_name: %s", name, value, value_name);
-}
+    write_json_context* jctx = user;
 
+    fprintf(jctx->f, "%s\"%s\": \"%s\",%s", jctx->_tabs, name, value_name, jctx->newline);
+}
 
 
 static void test_refl(void)
@@ -149,16 +259,27 @@ static void test_refl(void)
 
     rizz_refl_reg_field(ctx, rizz_shader_info, rizz_shader_refl_input[SG_MAX_VERTEX_ATTRIBUTES], inputs, "shader inputs", NULL);
     rizz_refl_reg_field(ctx, rizz_shader_info, int, num_inputs, "shader input count", NULL);
-
+    
     rizz_shader* shader = the_asset->obj(g_ds.shader).ptr;
+    sx_memset(&shader->info.inputs[shader->info.num_inputs], 0x0, 
+              (SG_MAX_VERTEX_ATTRIBUTES-shader->info.num_inputs)*sizeof(rizz_shader_refl_input));
 
-    the_refl->enumerate(ctx, "rizz_shader_info", &shader->info, NULL, &(rizz_refl_enumerate_callbacks) {
+    write_json_context jctx = {
+        .filename = "test.json",
+        .newline = "\n",
+        .tab = "\t",
+    };   
+    the_refl->enumerate(ctx, "rizz_shader_info", &shader->info, &jctx, &(rizz_refl_enumerate_callbacks) {
+        .on_begin = test_refl_on_begin,
+        .on_end = test_refl_on_end,
         .on_builtin = test_refl_on_builtin,
         .on_builtin_array = test_refl_on_builtin_array,
-        .on_struct = test_refl_on_struct,
+        .on_struct_begin = test_refl_on_struct_begin,
         .on_struct_array_element = test_refl_on_struct_array_element,
+        .on_struct_end = test_refl_on_struct_end,
         .on_enum = test_refl_on_enum
     });
+
 }
 
 
