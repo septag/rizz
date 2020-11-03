@@ -14,13 +14,13 @@
 #define DEFAULT_REG_SIZE 256
 
 typedef struct rizz__refl_struct {
-    char type[32];
+    char type[64];
     int size;    // size of struct
     int num_fields;
 } rizz__refl_struct;
 
 typedef struct rizz__refl_enum {
-    char type[32];
+    char type[64];
     int* name_ids;    // index-to: rizz__reflect_context:regs
 } rizz__refl_enum;
 
@@ -28,8 +28,9 @@ typedef struct rizz__refl_data {
     rizz_refl_info r;
     int base_id;
     char type[64];    // keep the raw type name, cuz pointer types have '*' in their type names
-    char name[32];
-    char base[32];
+    char name[64];
+    char base[64];
+    uint32_t base_hash;
 } rizz__refl_data;
 
 typedef struct rizz_refl_context {
@@ -280,6 +281,7 @@ static int rizz__refl_reg(rizz_refl_context* ctx, rizz_refl_type internal_type, 
     sx_strcpy(r.name, sizeof(r.name), name);
     if (base) {
         sx_strcpy(r.base, sizeof(r.base), base);
+        r.base_hash = sx_hash_fnv32_str(base);
     }
 
     // check for array types []
@@ -378,8 +380,8 @@ static int rizz__refl_size_of(rizz_refl_context* ctx, const char* base_type)
     return 0;
 }
 
-static bool rizz__refl_enumerate_internal(rizz_refl_context* ctx, const char* type_name, const void* data,
-                                          void* user, const rizz_refl_enumerate_callbacks* callbacks)
+static bool rizz__refl_deserialize_internal(rizz_refl_context* ctx, const char* type_name, const void* data,
+                                            void* user, const rizz_refl_deserialize_callbacks* callbacks)
 {
     sx_assert(callbacks);
     sx_assert(ctx);
@@ -387,10 +389,23 @@ static bool rizz__refl_enumerate_internal(rizz_refl_context* ctx, const char* ty
     sx_assert(data);
 
     bool found = false;
+    
     // enumerate struct fields fields
     // search in all registers that base_type (struct) matches type_name
+    uint32_t type_hash = sx_hash_fnv32_str(type_name);
+    int reg_ids[256];
+    int num_reg_ids = 0;
     for (int i = 0, c = sx_array_count(ctx->regs); i < c; i++) {
         rizz__refl_data* r = &ctx->regs[i];
+        if (r->r.internal_type == RIZZ_REFL_FIELD && type_hash == r->base_hash) {
+            reg_ids[num_reg_ids++] = i;
+            sx_assert(num_reg_ids <= 256);
+        }
+    }
+
+    for (int i = 0; i < num_reg_ids; i++) {
+        bool last_one = i == (num_reg_ids - 1);
+        rizz__refl_data* r = &ctx->regs[reg_ids[i]];
         int num_fields = 0;
         if (r->r.internal_type == RIZZ_REFL_FIELD && sx_strequal(r->base, type_name)) {
             sx_assert(r->base_id < sx_array_count(ctx->structs));
@@ -420,7 +435,7 @@ static bool rizz__refl_enumerate_internal(rizz_refl_context* ctx, const char* ty
             
             if (rinfo.flags & RIZZ_REFL_FLAG_IS_ENUM) {
                 int e = *((int*)value);
-                callbacks->on_enum(rinfo.name, e, rizz__refl_get_enum_name(ctx, rinfo.type, e), user, rinfo.meta);
+                callbacks->on_enum(rinfo.name, e, rizz__refl_get_enum_name(ctx, rinfo.type, e), user, rinfo.meta, last_one);
             }
             else if (rinfo.flags & RIZZ_REFL_FLAG_IS_STRUCT) {
                 callbacks->on_struct_begin(rinfo.name, 
@@ -433,17 +448,18 @@ static bool rizz__refl_enumerate_internal(rizz_refl_context* ctx, const char* ty
                 if (rinfo.flags & RIZZ_REFL_FLAG_IS_ARRAY) {
                     for (int i = 0; i < rinfo.array_size; i++) {
                         callbacks->on_struct_array_element(i, user, rinfo.meta);
-                        rizz__refl_enumerate_internal(ctx, rinfo.type, (uint8_t*)value + (size_t)i*(size_t)rinfo.stride, user, callbacks);
+                        rizz__refl_deserialize_internal(ctx, rinfo.type, (uint8_t*)value + (size_t)i*(size_t)rinfo.stride,
+                                                        user, callbacks);
                     }
                 } else {
-                    if (!rizz__refl_enumerate_internal(ctx, rinfo.type, value, user, callbacks)) {
+                    if (!rizz__refl_deserialize_internal(ctx, rinfo.type, value, user, callbacks)) {
                         rizz__log_warn("reflection info for '%s' not found", type_name);
                         sx_assertf(0, "reflection info for '%s' not found", type_name);
                         return false;
                     }
                 }
 
-                callbacks->on_struct_end(user, rinfo.meta);
+                callbacks->on_struct_end(user, rinfo.meta, last_one);
             }
             else {
                 // built-in types
@@ -462,17 +478,17 @@ static bool rizz__refl_enumerate_internal(rizz_refl_context* ctx, const char* ty
                             rizz__refl_set_builtin_type(&vars[k], buff + (size_t)rinfo.stride*(size_t)k, rinfo.stride);
                         }
 
-                        callbacks->on_builtin_array(rinfo.name, vars, rinfo.array_size, user, rinfo.meta);
+                        callbacks->on_builtin_array(rinfo.name, vars, rinfo.array_size, user, rinfo.meta, last_one);
                         the__core.tmp_alloc_pop();
                     } else {
                         rizz_refl_variant var = { .type = RIZZ_REFL_VARIANTTYPE_CSTRING, .str = (const char*)value };
-                        callbacks->on_builtin(rinfo.name, var, user, rinfo.meta);
+                        callbacks->on_builtin(rinfo.name, var, user, rinfo.meta, last_one);
                     }
                 } else {
                     rizz_refl_variant var;
                     var.type = var_type;
                     rizz__refl_set_builtin_type(&var, value, rinfo.size);
-                    callbacks->on_builtin(rinfo.name, var, user, rinfo.meta);
+                    callbacks->on_builtin(rinfo.name, var, user, rinfo.meta, last_one);
                 }
             }
 
@@ -488,22 +504,141 @@ static bool rizz__refl_enumerate_internal(rizz_refl_context* ctx, const char* ty
     return found;
 }
 
-static bool rizz__refl_enumerate(rizz_refl_context* ctx, const char* type_name, const void* data,
-                                 void* user, const rizz_refl_enumerate_callbacks* callbacks)
+static bool rizz__refl_deserialize(rizz_refl_context* ctx, const char* type_name, const void* data,
+                                 void* user, const rizz_refl_deserialize_callbacks* callbacks)
+{
+    if (!callbacks->on_begin(type_name, user)) {
+        return false;
+    }
+
+    bool r = rizz__refl_deserialize_internal(ctx, type_name, data, user, callbacks);
+    
+    callbacks->on_end(user);
+    
+    return r;
+}
+
+static bool rizz__refl_serialize_internal(rizz_refl_context* ctx, const char* type_name, const void* data,
+                                          void* user, const rizz_refl_serialize_callbacks* callbacks)
 {
     sx_assert(callbacks);
     sx_assert(ctx);
     sx_assert(type_name);
     sx_assert(data);
 
+    bool found = false;
+    
+    // enumerate struct fields fields
+    // search in all registers that base_type (struct) matches type_name
+    uint32_t type_hash = sx_hash_fnv32_str(type_name);
+    int reg_ids[256];
+    int num_reg_ids = 0;
+    for (int i = 0, c = sx_array_count(ctx->regs); i < c; i++) {
+        rizz__refl_data* r = &ctx->regs[i];
+        if (r->r.internal_type == RIZZ_REFL_FIELD && type_hash == r->base_hash) {
+            reg_ids[num_reg_ids++] = i;
+            sx_assert(num_reg_ids <= 256);
+        }
+    }
+
+    for (int i = 0; i < num_reg_ids; i++) {
+        bool last_one = i == (num_reg_ids - 1);
+        rizz__refl_data* r = &ctx->regs[reg_ids[i]];
+        int num_fields = 0;
+        if (r->r.internal_type == RIZZ_REFL_FIELD && sx_strequal(r->base, type_name)) {
+            sx_assert(r->base_id < sx_array_count(ctx->structs));
+            sx_assert(ctx->structs);
+            rizz__refl_struct* s = &ctx->structs[r->base_id];
+
+            bool value_nil = data == NULL;
+            void* value = (uint8_t*)data + r->r.offset;
+            rizz_refl_info rinfo = { .any = r->r.any,
+                                     .type = r->type,
+                                     .name = r->name,
+                                     .base = r->base,
+                                     .desc = r->r.desc,
+                                     .size = r->r.size,
+                                     .array_size = r->r.array_size,
+                                     .stride = r->r.stride,
+                                     .flags = r->r.flags,
+                                     .internal_type = r->r.internal_type,
+                                     .meta = r->r.meta };
+
+            if (r->r.flags & (RIZZ_REFL_FLAG_IS_PTR | RIZZ_REFL_FLAG_IS_ARRAY)) {
+                // type names for pointers must only include the _type_ part without '*' or '[]'
+                if (value && !value_nil && (r->r.flags & RIZZ_REFL_FLAG_IS_PTR)) {
+                    value = (void*)*((uintptr_t*)value);
+                }
+            }
+            
+            if (rinfo.flags & RIZZ_REFL_FLAG_IS_ENUM) {
+                callbacks->on_enum(rinfo.name, (int*)value, user, rinfo.meta, last_one);
+            }
+            else if (rinfo.flags & RIZZ_REFL_FLAG_IS_STRUCT) {
+                callbacks->on_struct_begin(rinfo.name, 
+                                           rinfo.type, 
+                                           (rinfo.flags & RIZZ_REFL_FLAG_IS_ARRAY) ? rinfo.stride : rinfo.size, 
+                                           rinfo.array_size,
+                                           user, 
+                                           rinfo.meta);
+
+                if (rinfo.flags & RIZZ_REFL_FLAG_IS_ARRAY) {
+                    for (int i = 0; i < rinfo.array_size; i++) {
+                        callbacks->on_struct_array_element(i, user, rinfo.meta);
+                        rizz__refl_serialize_internal(ctx, rinfo.type, (uint8_t*)value + (size_t)i*(size_t)rinfo.stride,
+                                                      user, callbacks);
+                    }
+                } else {
+                    if (!rizz__refl_serialize_internal(ctx, rinfo.type, value, user, callbacks)) {
+                        rizz__log_warn("reflection info for '%s' not found", type_name);
+                        sx_assertf(0, "reflection info for '%s' not found", type_name);
+                        return false;
+                    }
+                }
+
+                callbacks->on_struct_end(user, rinfo.meta, last_one);
+            }
+            else {
+                // built-in types
+                rizz_refl_variant_type var_type = rizz__refl_builtin_type(rinfo.type);
+                if (rinfo.flags & RIZZ_REFL_FLAG_IS_ARRAY) {
+                    sx_memset(value, 0x0,  (size_t)rinfo.stride*(size_t)rinfo.array_size);
+                    if (var_type != RIZZ_REFL_VARIANTTYPE_CHAR) {
+                        callbacks->on_builtin_array(rinfo.name, value, var_type, rinfo.array_size, rinfo.stride, 
+                                                    user, rinfo.meta, last_one);
+                    } else {
+                        callbacks->on_builtin(rinfo.name, value, RIZZ_REFL_VARIANTTYPE_CSTRING, rinfo.array_size,
+                                              user, rinfo.meta, last_one);
+                    }
+                } else {
+                    callbacks->on_builtin(rinfo.name, value, var_type, rinfo.size, user, rinfo.meta, last_one);
+                }
+            }
+
+            found = true;
+
+            if (++num_fields == s->num_fields) {
+                break;    
+            }
+        }
+    }
+
+    sx_assertf(found, "reflection info for '%s' not found", type_name);
+    return found;
+}
+
+
+static bool rizz__refl_serialize(rizz_refl_context* ctx, const char* type_name, const void* data,
+                                 void* user, const rizz_refl_serialize_callbacks* callbacks)
+{
     if (!callbacks->on_begin(type_name, user)) {
         return false;
     }
 
-    bool r = rizz__refl_enumerate_internal(ctx, type_name, data, user, callbacks);
-    
+    bool r = rizz__refl_serialize_internal(ctx, type_name, data, user, callbacks);
+
     callbacks->on_end(user);
-    
+
     return r;
 }
 
@@ -566,5 +701,6 @@ rizz_api_refl the__refl = { .create_context = rizz__refl_create_context,
                             .get_field = rizz__refl_get_field,
                             .get_enum_name = rizz__refl_get_enum_name,
                             .reg_count = rizz__refl_reg_count,
-                            .enumerate = rizz__refl_enumerate,
+                            .deserialize = rizz__refl_deserialize,
+                            .serialize = rizz__refl_serialize,
                             .get_fields = rizz__refl_get_fields };

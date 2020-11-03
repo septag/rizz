@@ -124,7 +124,7 @@ typedef struct cj5_token {
     int start;
     int end;
     int size;
-    int parent_id;
+    int parent_id;      // = -1 if there is no parent
 } cj5_token;
 
 typedef struct cj5_result {

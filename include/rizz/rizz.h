@@ -1511,16 +1511,30 @@ typedef struct rizz_refl_variant {
     };
 } rizz_refl_variant;
 
-typedef struct rizz_refl_enumerate_callbacks {
+typedef struct rizz_refl_deserialize_callbacks {
     bool (*on_begin)(const char* type_name, void* user);
     void (*on_end)(void* user);
-    void (*on_builtin)(const char* name, rizz_refl_variant value, void* user, const void* meta);
-    void (*on_builtin_array)(const char* name, const rizz_refl_variant* var, int count, void* user, const void* meta);
+    void (*on_builtin)(const char* name, rizz_refl_variant value, void* user, const void* meta, bool last_in_parent);
+    void (*on_builtin_array)(const char* name, const rizz_refl_variant* var, int count, void* user, 
+                             const void* meta, bool last_in_parent);
     void (*on_struct_begin)(const char* name, const char* type_name, int size, int count, void* user, const void* meta);
     void (*on_struct_array_element)(int index, void* user, const void* meta);
-    void (*on_struct_end)(void* user, const void* meta);
-    void (*on_enum)(const char* name, int value, const char* value_name, void* user, const void* meta);
-} rizz_refl_enumerate_callbacks;
+    void (*on_struct_end)(void* user, const void* meta, bool last_in_parent);
+    void (*on_enum)(const char* name, int value, const char* value_name, void* user, const void* meta, bool last_in_parent);
+} rizz_refl_deserialize_callbacks;
+
+typedef struct rizz_refl_serialize_callbacks {
+    bool (*on_begin)(const char* type_name, void* user);
+    void (*on_end)(void* user);
+    void (*on_builtin)(const char* name, void* data, rizz_refl_variant_type type, int size, void* user, 
+                       const void* meta, bool last_in_parent);
+    void (*on_builtin_array)(const char* name, void* data, rizz_refl_variant_type type, int count, int stride, 
+                             void* user, const void* meta, bool last_in_parent);
+    void (*on_struct_begin)(const char* name, const char* type_name, int size, int count, void* user, const void* meta);
+    void (*on_struct_array_element)(int index, void* user, const void* meta);
+    void (*on_struct_end)(void* user, const void* meta, bool last_in_parent);
+    void (*on_enum)(const char* name, int* out_value, void* user, const void* meta, bool last_in_parent);
+} rizz_refl_serialize_callbacks;
 
 typedef struct rizz_refl_field {
     rizz_refl_info info;
@@ -1551,8 +1565,10 @@ typedef struct rizz_api_refl {
     const char* (*get_enum_name)(rizz_refl_context* ctx,const char* type, int val);
     int (*reg_count)(rizz_refl_context* ctx);
 
-    bool (*enumerate)(rizz_refl_context* ctx, const char* type_name, const void* data, void* user, 
-                      const rizz_refl_enumerate_callbacks* callbacks);
+    bool (*deserialize)(rizz_refl_context* ctx, const char* type_name, const void* data, void* user, 
+                        const rizz_refl_deserialize_callbacks* callbacks);
+    bool (*serialize)(rizz_refl_context* ctx, const char* type_name, const void* data, void* user,
+                      const rizz_refl_serialize_callbacks* callbacks);
     int (*get_fields)(rizz_refl_context* ctx, const char* base_type, void* obj, rizz_refl_field* fields, 
                       int max_fields);
     
