@@ -21,7 +21,7 @@ see [CHANGELOG](CHANGES.md) for latest changes, new features and bug fixes.
 - *Minimal Dependencies*: No external/large dependencies. Only a handful of small dependencies included in the source.
 - *Hot-reloading of C/C++ code*: Plugins/Game code are all hot-reloadable with some restrictions and rules.
 - *Fiber based job system*: Simple to use fiber-based job system.
-- *Reflection*: Provides simple reflection system for _structs_, _enums_ and _functions_.
+- *Reflection*: Provides simple reflection system for _structs_, _enums_ and _functions_ along with built-in _JSON_ serialization/deserialization.
 - *Async Asset Manager*: Flexible reference counting asset manager. New asset types can be added by third-party code to the manager.
 - *Hot-reloading of assets and shaders*: All in-game resources and shaders can be hot-reloaded.
 - *Virtual file system*: Async read/write. Directories or archives can be mounted as virtual directories.

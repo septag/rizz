@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef RIZZ_BUNDLE
+#if defined(RIZZ_BUNDLE) || defined(CJ5_IGNORE_IMPLEMENT)
 #    include "cj5/cj5.h"
 #else
 #    define CJ5_ASSERT(e) sx_assert(e);
@@ -13,3 +13,4 @@ typedef struct rizz_json {
     cj5_result result;
     void* user;
 } rizz_json;
+

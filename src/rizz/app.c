@@ -702,7 +702,7 @@ static void rizz__parse_single_shortcut_key(const char* keystr, rizz_keycode key
     } 
     else if (len == 1 && *num_keys < 2) {
         char key = sx_toupperchar(keystr[0]);
-        if (keystr[0] > RIZZ_APP_KEYCODE_SPACE && keystr[0] <= 127) {
+        if (keystr[0] > RIZZ_APP_KEYCODE_SPACE) {
             keys[(*num_keys)++] = (rizz_keycode)key;
         }
     }

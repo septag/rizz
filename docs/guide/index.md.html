@@ -14,7 +14,7 @@
 <body style="margin:auto">
     **_rizz_ Architecture and Basic usage**
     <small>This document is subject to change</small>
-    <small>Revision 1.14: 31 October 2020</small>
+    <small>Revision 1.15: 3 November 2020</small>
 
     **Github Page**: [github.com/septag/rizz](https://github.com/septag/rizz)
 
@@ -737,9 +737,73 @@
 
     You can issue commands, filter out entries based on their level and channel bits (0-31). Also, double clicking on each entry will copy it to the clipboard.
 
+
+    # Reflection/Serialization
+    _rizz_ includes a simple built-in reflection system that also implements _json_ serialization.  
+    It doesn't do any fancy stuff like magic macro or any kind of code-gen, you just have to register all the types up front.
+    However there are `rizz_refl_reg_XXX` family of macros  to facilitate this process:
+
+    - `rizz_refl_reg_enum(context, type, name, meta)`: register enum type along with it's value
+        - **context**: reflection context that is created with `create_context`
+        - **type**: type name of the enum (typedef enum **my_enum**)
+        - **name**: name of each enumerator. (typedef enum my_enum { **MY_FIRST_ENUM** })
+        - **meta**: you can provide a custom static pointer that you can get in serializer for extra functionality (like GUI state/presets)
+    - `rizz_refl_reg_func(ctx, type, name, desc, meta)`: register a function pointer
+        - **context**: reflection context that is created with `create_context`
+        - **type**: type of the function `(typedef void (*foo)())`
+        - **name**: name of the function instance.
+        - **meta**: you can provide a custom static pointer that you can get in serializer for extra functionality (like GUI state/presets)
+    - `rizz_refl_reg_field(ctx, struct, type, name, desc, meta)`: register a struct field, you can also use already registered struct types as a field for other structs.
+        - **context**: reflection context that is created with `create_context`
+        - **struct**: parent _struct_ type name. for example in `struct A { int x; int y; }` example, _A_ would be struct for member 'x' and 'y'
+        - **type**: type name of the field. in the example above, typename would be _int_. For arrays *(only static arrays are supported)*, you should include it here. for example, 32-byte char type would be _char[32]_
+        - **name**: name of the field in the struct.
+        - **meta**: you can provide a custom static pointer that you can get in serializer for extra functionality (like GUI state/presets)
+
+    Here's an example of registering all fields of `rizz_shader_info` POD type. _Note_ that before we register the fields of `rizz_shader_info` itself, we registered all child types and enums that are used in it.
+
+    ```cpp
+    rizz_refl_context* ctx = the_refl->create_context(the_core->heap_alloc());
+
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_FLOAT, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_FLOAT2, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_FLOAT3, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_FLOAT4, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_BYTE4, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_BYTE4N, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_UBYTE4, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_UBYTE4N, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_SHORT2, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_SHORT2N, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_SHORT4, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_SHORT4N, NULL);
+    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_UINT10_N2, NULL);
     
+    rizz_refl_reg_field(ctx, rizz_shader_refl_input, char[32], name, "shader input name", NULL);
+    rizz_refl_reg_field(ctx, rizz_shader_refl_input, char[32], semantic, "shader semantic name", NULL);
+    rizz_refl_reg_field(ctx, rizz_shader_refl_input, int, semantic_index, "shader semantic index", NULL);
+    rizz_refl_reg_field(ctx, rizz_shader_refl_input, sg_vertex_format, type, "shader input type", NULL);
+    
+    rizz_refl_reg_field(ctx, rizz_shader_info, rizz_shader_refl_input[SG_MAX_VERTEX_ATTRIBUTES], inputs, "shader inputs", NULL);
+    rizz_refl_reg_field(ctx, rizz_shader_info, int, num_inputs, "shader input count", NULL);    
+    ```
+
+    Now you have three registered types: "sg_vertex_format", "rizz_shader_refl_input" and "rizz_shader_info". After registration, you can serialize/deserialize struct instance. Currently, _rizz_ includes json serializer, so you can use `serialize_json` to serialize the data in json file into struct instance on memory and use `deserialize_json` to deserialize struct from memory to json representation.
+
+    ## Custom Serializers/Deserializers
+    Besides included _JSON_, you can make your own custom serializer by using `serialize`/`deserialize` functions and override callbacks for each. 
+
+    - **rizz_refl_serialize_callbacks**: callbacks for serialization (data source to memory)
+    - **rizz_refl_deserialize_callbacks**: callbacks for deserialization (memory to data source)
+
+    If you look at the callbacks, there are two callbacks for *builtin* types, built-in types does not need to be registered, and are supported by reflection system. They include opaque types like int/float/int64_t/etc (just make sure you use the stddef/standard definitions when registering and not typedefs) plus some math types like sx_vec2/3/4/matrix. See `rizz_refl_variant_type` enums for all supported built-in types.
+
+    Also, writing a full serializer is beyond the scope of this document, but it's pretty easy and you can look at json serializer code in reflect.c as a working example. (`rizz__refl_serialize_json`/`rizz__refl_deserialize_json` functions)
+
+
     # Changelist
-    
+
+    - Version 1.15 (November 2020): Added reflection section
     - Version 1.14 (October 2020): Logging improvements, added shortcut
     - Version 1.13 (October 2020): Added command-line section
     - Version 1.12 (July 2020): Better descriptions for built-in asset types

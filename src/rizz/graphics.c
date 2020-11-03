@@ -1465,8 +1465,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
         for (int i = 0; i < jres.tokens[jinputs].size; i++) {
             jinput = cj5_get_array_elem_incremental(&jres, jinputs, i, jinput);
             cj5_seekget_string(&jres, jinput, "name", input->name, sizeof(input->name), "");
-            cj5_seekget_string(&jres, jinput, "semantic", input->semantic, sizeof(input->semantic),
-                               "");
+            cj5_seekget_string(&jres, jinput, "semantic", input->semantic, sizeof(input->semantic), "");
             input->semantic_index = cj5_seekget_int(&jres, jinput, "semantic_index", 0);
             input->type = rizz__shader_str_to_vertex_format(
                 cj5_seekget_string(&jres, jinput, "type", tmpstr, sizeof(tmpstr), ""));

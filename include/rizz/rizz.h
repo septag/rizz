@@ -1413,11 +1413,54 @@ typedef struct rizz_api_http {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @reflection
+// 
+// A simple reflection/serialization system that supports POD types and tested structs
+// Before using the reflection data for any of your types, you should first register them with rizz_refl_reg_XXX 
+// family of macros (see below). There are 3 types of reflection types: 1)enums 2)functions 3)struct fields
+// Enums are registered by their Type, Enumerator and enum value
+// Functions are registered by function name and pointer
+// Fields are registered by their parent struct type, their own type and field name, along with their offset and other info
+// You can register already registered struct types as fields for other structs. 
+// In the example below, our goal is to regiter `rizz_shader_info` struct, which has an array of rizz_shader_refl_input struct:
 //
+//    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_FLOAT, NULL);
+//    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_FLOAT2, NULL);
+//    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_FLOAT3, NULL);
+//    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_FLOAT4, NULL);
+//    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_BYTE4, NULL);
+//    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_BYTE4N, NULL);
+//    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_UBYTE4, NULL);
+//    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_UBYTE4N, NULL);
+//    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_SHORT2, NULL);
+//    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_SHORT2N, NULL);
+//    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_SHORT4, NULL);
+//    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_SHORT4N, NULL);
+//    rizz_refl_reg_enum(ctx, sg_vertex_format, SG_VERTEXFORMAT_UINT10_N2, NULL);
 //
+//    rizz_refl_reg_field(ctx, rizz_shader_refl_input, char[32], name, "shader input name", NULL);
+//    rizz_refl_reg_field(ctx, rizz_shader_refl_input, char[32], semantic, "shader semantic name", NULL);
+//    rizz_refl_reg_field(ctx, rizz_shader_refl_input, int, semantic_index, "shader semantic index", NULL);
+//    rizz_refl_reg_field(ctx, rizz_shader_refl_input, sg_vertex_format, type, "shader input type", NULL);
 //
+//    rizz_refl_reg_field(ctx, rizz_shader_info, rizz_shader_refl_input[SG_MAX_VERTEX_ATTRIBUTES], inputs, "shader inputs", NULL);
+//    rizz_refl_reg_field(ctx, rizz_shader_info, int, num_inputs, "shader input count", NULL);
 //
+// After you have registered the fields and enums, you can use in-engine json serializer to serialize data back and forth
+// Or make a custom parser yourself. See basic-usage document for more detailed info on that topic.
+// Now in the example above, we want to write the data in rizz_shader_info instance to a json file:
 //
+//        sx_mem_block* jmem = the_refl->deserialize_json(ctx, "rizz_shader_info", &shader->info, the_core->heap_alloc(), true);
+//        sx_assert(jmem);
+//        FILE* f = fopen("test.json", "wb");
+//        fwrite(jmem->data, jmem->size - 1, 1, f);
+//        fclose(f); 
+//
+// And now, serialize the rizz_shader_info data from the same json file:
+//
+//        rizz_shader_info info;
+//        rizz_asset a = the_asset->load("json", "test.json", &(rizz_json_load_params){0}, 
+//                        RIZZ_ASSET_LOAD_FLAG_ABSOLUTE_PATH|RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD, NULL, 0);
+//        the_refl->serialize_json(ctx, "rizz_shader_info", &info, the_asset->obj(a).ptr, 0);
 //
 typedef enum rizz_refl_type {
     RIZZ_REFL_ENUM,    //
@@ -1452,6 +1495,7 @@ typedef struct rizz_refl_info {
 } rizz_refl_info;
 
 typedef struct rizz_refl_context rizz_refl_context;
+typedef struct rizz_json rizz_json;    // rizz/json.h
 
 typedef enum rizz_refl_variant_type {
     RIZZ_REFL_VARIANTTYPE_UNKNOWN = 0,
@@ -1567,10 +1611,18 @@ typedef struct rizz_api_refl {
 
     bool (*deserialize)(rizz_refl_context* ctx, const char* type_name, const void* data, void* user, 
                         const rizz_refl_deserialize_callbacks* callbacks);
-    bool (*serialize)(rizz_refl_context* ctx, const char* type_name, const void* data, void* user,
+    bool (*serialize)(rizz_refl_context* ctx, const char* type_name, void* data, void* user,
                       const rizz_refl_serialize_callbacks* callbacks);
     int (*get_fields)(rizz_refl_context* ctx, const char* base_type, void* obj, rizz_refl_field* fields, 
                       int max_fields);
+
+    bool (*serialize_json)(rizz_refl_context* ctx, const char* type_name, void* data, 
+                           rizz_json* json, int root_token_id);
+    sx_mem_block* (*deserialize_json)(rizz_refl_context* ctx, 
+                                      const char* type_name, 
+                                      const void* data, 
+                                      const sx_alloc* alloc,
+                                      bool prettify);
     
 } rizz_api_refl;
 
@@ -1590,8 +1642,6 @@ typedef struct rizz_api_refl {
 // json data is loaded or reloaded. They will always run in the main thread.
 // NOTE: keeping callback functions in framework will likely cause trouble when the guest program reloads
 // TODO: fix this
-
-typedef struct rizz_json rizz_json; // rizz/json.h
 
 typedef void (rizz_json_reload_cb)(rizz_json* new_json, rizz_json* prev_json);
 typedef void (rizz_json_load_cb)(rizz_json* json);
