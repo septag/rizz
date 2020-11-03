@@ -1199,6 +1199,8 @@ static void refl__serialize_struct_begin(const char* name, const char* type_name
                                          void* user, const void* meta)
 {
     sx_unused(meta);
+    sx_unused(type_name);
+    sx_unused(size);
 
     refl__read_json_context* jctx = user;
     cj5_result* r = &jctx->json->result;
