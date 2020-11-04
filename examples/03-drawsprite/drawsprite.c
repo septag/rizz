@@ -335,7 +335,6 @@ static void render()
         the_font->pop_state(font);
     }
 
-
     the_gfx->staged.end_pass();
     the_gfx->staged.end();
 

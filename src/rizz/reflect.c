@@ -386,8 +386,8 @@ static int refl__size_of(rizz_refl_context* ctx, const char* base_type)
     return 0;
 }
 
-static bool refl__deserialize_internal(rizz_refl_context* ctx, const char* type_name, const void* data,
-                                       void* user, const rizz_refl_deserialize_callbacks* callbacks)
+static bool refl__serialize_internal(rizz_refl_context* ctx, const char* type_name, const void* data,
+                                     void* user, const rizz_refl_serialize_callbacks* callbacks)
 {
     sx_assert(callbacks);
     sx_assert(ctx);
@@ -454,11 +454,11 @@ static bool refl__deserialize_internal(rizz_refl_context* ctx, const char* type_
                 if (rinfo.flags & RIZZ_REFL_FLAG_IS_ARRAY) {
                     for (int k = 0; k < rinfo.array_size; k++) {
                         callbacks->on_struct_array_element(k, user, rinfo.meta);
-                        refl__deserialize_internal(ctx, rinfo.type, (uint8_t*)value + (size_t)k*(size_t)rinfo.stride,
-                                                        user, callbacks);
+                        refl__serialize_internal(ctx, rinfo.type, (uint8_t*)value + (size_t)k*(size_t)rinfo.stride,
+                                                 user, callbacks);
                     }
                 } else {
-                    if (!refl__deserialize_internal(ctx, rinfo.type, value, user, callbacks)) {
+                    if (!refl__serialize_internal(ctx, rinfo.type, value, user, callbacks)) {
                         rizz__log_warn("reflection info for '%s' not found", type_name);
                         sx_assertf(0, "reflection info for '%s' not found", type_name);
                         return false;
@@ -510,22 +510,22 @@ static bool refl__deserialize_internal(rizz_refl_context* ctx, const char* type_
     return found;
 }
 
-static bool refl__deserialize(rizz_refl_context* ctx, const char* type_name, const void* data,
-                              void* user, const rizz_refl_deserialize_callbacks* callbacks)
+static bool refl__serialize(rizz_refl_context* ctx, const char* type_name, const void* data,
+                            void* user, const rizz_refl_serialize_callbacks* callbacks)
 {
     if (!callbacks->on_begin(type_name, user)) {
         return false;
     }
 
-    bool r = refl__deserialize_internal(ctx, type_name, data, user, callbacks);
+    bool r = refl__serialize_internal(ctx, type_name, data, user, callbacks);
     
     callbacks->on_end(user);
     
     return r;
 }
 
-static bool refl__serialize_internal(rizz_refl_context* ctx, const char* type_name, void* data,
-                                     void* user, const rizz_refl_serialize_callbacks* callbacks)
+static bool refl__deserialize_internal(rizz_refl_context* ctx, const char* type_name, void* data,
+                                       void* user, const rizz_refl_deserialize_callbacks* callbacks)
 {
     sx_assert(callbacks);
     sx_assert(ctx);
@@ -591,11 +591,11 @@ static bool refl__serialize_internal(rizz_refl_context* ctx, const char* type_na
                 if (rinfo.flags & RIZZ_REFL_FLAG_IS_ARRAY) {
                     for (int k = 0; k < rinfo.array_size; k++) {
                         callbacks->on_struct_array_element(k, user, rinfo.meta);
-                        refl__serialize_internal(ctx, rinfo.type, (uint8_t*)value + (size_t)k*(size_t)rinfo.stride,
-                                                      user, callbacks);
+                        refl__deserialize_internal(ctx, rinfo.type, (uint8_t*)value + (size_t)k*(size_t)rinfo.stride,
+                                                   user, callbacks);
                     }
                 } else {
-                    if (!refl__serialize_internal(ctx, rinfo.type, value, user, callbacks)) {
+                    if (!refl__deserialize_internal(ctx, rinfo.type, value, user, callbacks)) {
                         rizz__log_warn("reflection info for '%s' not found", type_name);
                         sx_assertf(0, "reflection info for '%s' not found", type_name);
                         return false;
@@ -634,14 +634,14 @@ static bool refl__serialize_internal(rizz_refl_context* ctx, const char* type_na
 }
 
 
-static bool refl__serialize(rizz_refl_context* ctx, const char* type_name, void* data,
-                            void* user, const rizz_refl_serialize_callbacks* callbacks)
+static bool refl__deserialize(rizz_refl_context* ctx, const char* type_name, void* data,
+                              void* user, const rizz_refl_deserialize_callbacks* callbacks)
 {
     if (!callbacks->on_begin(type_name, user)) {
         return false;
     }
 
-    bool r = refl__serialize_internal(ctx, type_name, data, user, callbacks);
+    bool r = refl__deserialize_internal(ctx, type_name, data, user, callbacks);
 
     callbacks->on_end(user);
 
@@ -731,7 +731,7 @@ SX_INLINE void refl__writef(sx_mem_writer* writer, const char* fmt, ...)
     sx_mem_write(writer, str, sx_strlen(str));
 }
 
-static const char* refl__deserialize_update_tabs(refl__write_json_context* jctx)
+static const char* refl__serialize_json_update_tabs(refl__write_json_context* jctx)
 {
     if (jctx->tab[0]) {
         sx_strcpy(jctx->_tabs, sizeof(jctx->_tabs), jctx->tab);
@@ -745,7 +745,7 @@ static const char* refl__deserialize_update_tabs(refl__write_json_context* jctx)
     return jctx->_tabs;
 }
 
-static bool refl__deserialize_begin(const char* type_name, void* user) 
+static bool refl__serialize_json_begin(const char* type_name, void* user) 
 {
     sx_unused(type_name);
 
@@ -762,11 +762,11 @@ static bool refl__deserialize_begin(const char* type_name, void* user)
     
     refl__writef(&jctx->writer, "{%s", jctx->newline);
 
-    refl__deserialize_update_tabs(jctx);
+    refl__serialize_json_update_tabs(jctx);
     return true;
 }
 
-static void refl__deserialize_end(void* user)
+static void refl__serialize_json_end(void* user)
 {
     refl__write_json_context* jctx = user;
 
@@ -779,8 +779,8 @@ static void refl__deserialize_end(void* user)
 
 #define COMMA() (!last_in_parent ? "," : "")
 
-static void refl__deserialize_builtin(const char* name, rizz_refl_variant value, void* user, 
-                                      const void* meta, bool last_in_parent)
+static void refl__serialize_json_builtin(const char* name, rizz_refl_variant value, void* user, 
+                                         const void* meta, bool last_in_parent)
 {
     sx_unused(meta);
 
@@ -878,8 +878,8 @@ static void refl__deserialize_builtin(const char* name, rizz_refl_variant value,
     }    
 }
 
-static void refl__deserialize_builtin_array(const char* name, const rizz_refl_variant* vars, int count,
-                                            void* user, const void* meta, bool last_in_parent)
+static void refl__serialize_json_builtin_array(const char* name, const rizz_refl_variant* vars, int count,
+                                               void* user, const void* meta, bool last_in_parent)
 {
     sx_unused(meta);
     sx_unused(last_in_parent);
@@ -979,8 +979,8 @@ static void refl__deserialize_builtin_array(const char* name, const rizz_refl_va
     refl__writef(&jctx->writer, "]%s%s", COMMA(), jctx->newline);
 }
 
-static void refl__deserialize_struct_begin(const char* name, const char* type_name, int size, 
-                                           int count, void* user, const void* meta)
+static void refl__serialize_json_struct_begin(const char* name, const char* type_name, int size, 
+                                              int count, void* user, const void* meta)
 {
     sx_unused(type_name);
     sx_unused(size);
@@ -997,12 +997,12 @@ static void refl__deserialize_struct_begin(const char* name, const char* type_na
     }
 
     ++jctx->_depth;
-    refl__deserialize_update_tabs(jctx);
+    refl__serialize_json_update_tabs(jctx);
     
     jctx->_array_count = count;
 }
 
-static void refl__deserialize_struct_array_element(int index, void* user, const void* meta)
+static void refl__serialize_json_struct_array_element(int index, void* user, const void* meta)
 {
     sx_unused(meta);
 
@@ -1018,7 +1018,7 @@ static void refl__deserialize_struct_array_element(int index, void* user, const 
     } 
 }
 
-static void refl__deserialize_struct_end(void* user, const void* meta, bool last_in_parent)
+static void refl__serialize_json_struct_end(void* user, const void* meta, bool last_in_parent)
 {
     sx_unused(meta);
     sx_unused(last_in_parent);
@@ -1039,10 +1039,10 @@ static void refl__deserialize_struct_end(void* user, const void* meta, bool last
         refl__writef(&jctx->writer, "%s}%s%s", tabs, COMMA(), jctx->newline);
     }
     --jctx->_depth;
-    refl__deserialize_update_tabs(jctx);
+    refl__serialize_json_update_tabs(jctx);
 }
 
-static void refl__deserialize_enum(const char* name, int value, const char* value_name, void* user,
+static void refl__serialize_json_enum(const char* name, int value, const char* value_name, void* user,
                                    const void* meta, bool last_in_parent)
 {
     sx_unused(value);
@@ -1054,7 +1054,7 @@ static void refl__deserialize_enum(const char* name, int value, const char* valu
     refl__writef(&jctx->writer, "%s\"%s\": \"%s\"%s%s", jctx->_tabs, name, value_name, COMMA(), jctx->newline);
 }
 
-static bool refl__serialize_begin(const char* type_name, void* user)
+static bool refl__deserialize_json_begin(const char* type_name, void* user)
 {
     sx_unused(type_name);
 
@@ -1063,13 +1063,13 @@ static bool refl__serialize_begin(const char* type_name, void* user)
     return true;
 }
 
-static void refl__serialize_end(void* user)
+static void refl__deserialize_json_end(void* user)
 {
     sx_unused(user);
 }
 
-static void refl__serialize_builtin(const char* name, void* data, rizz_refl_variant_type type, int size, 
-                                    void* user, const void* meta, bool last_in_parent)
+static void refl__deserialize_json_builtin(const char* name, void* data, rizz_refl_variant_type type, 
+                                           int size, void* user, const void* meta, bool last_in_parent)
 {
     sx_unused(meta);
     sx_unused(last_in_parent);
@@ -1177,8 +1177,9 @@ static void refl__serialize_builtin(const char* name, void* data, rizz_refl_vari
     }
 }
 
-static void refl__serialize_builtin_array(const char* name, void* data, rizz_refl_variant_type type, 
-                                          int count, int stride, void* user, const void* meta, bool last_in_parent)
+static void refl__deserialize_json_builtin_array(const char* name, void* data, rizz_refl_variant_type type, 
+                                                 int count, int stride, void* user, const void* meta, 
+                                                 bool last_in_parent)
 {
     sx_unused(meta);
 
@@ -1191,12 +1192,12 @@ static void refl__serialize_builtin_array(const char* name, void* data, rizz_ref
     int elem_id = 0;
     for (int i = 0; i < count; i++) {
         elem_id = cj5_get_array_elem_incremental(r, array_id, i, elem_id);
-        refl__serialize_builtin(name, (uint8_t*)data + (size_t)stride*(size_t)i, type, stride, user, meta, last_in_parent);
+        refl__deserialize_json_builtin(name, (uint8_t*)data + (size_t)stride*(size_t)i, type, stride, user, meta, last_in_parent);
     }
 }
 
-static void refl__serialize_struct_begin(const char* name, const char* type_name, int size, int count, 
-                                         void* user, const void* meta)
+static void refl__deserialize_json_struct_begin(const char* name, const char* type_name, int size, 
+                                                int count, void* user, const void* meta)
 {
     sx_unused(meta);
     sx_unused(type_name);
@@ -1211,7 +1212,7 @@ static void refl__serialize_struct_begin(const char* name, const char* type_name
     }
 }
 
-static void refl__serialize_struct_array_element(int index, void* user, const void* meta)
+static void refl__deserialize_json_struct_array_element(int index, void* user, const void* meta)
 {
     sx_unused(meta);
 
@@ -1221,7 +1222,7 @@ static void refl__serialize_struct_array_element(int index, void* user, const vo
     jctx->cur_token = cj5_get_array_elem(r, jctx->struct_array_parent, index);
 }
 
-static void refl__serialize_struct_end(void* user, const void* meta, bool last_in_parent)
+static void refl__deserialize_json_struct_end(void* user, const void* meta, bool last_in_parent)
 {
     sx_unused(meta);
     sx_unused(last_in_parent);
@@ -1234,7 +1235,7 @@ static void refl__serialize_struct_end(void* user, const void* meta, bool last_i
     jctx->last_token = -1;
 }
 
-static void refl__serialize_enum(const char* name, int* out_value, void* user, const void* meta, bool last_in_parent)
+static void refl__deserialize_json_enum(const char* name, int* out_value, void* user, const void* meta, bool last_in_parent)
 {
     sx_unused(meta);
     sx_unused(last_in_parent);
@@ -1246,8 +1247,8 @@ static void refl__serialize_enum(const char* name, int* out_value, void* user, c
 }
 
 
-static bool rizz__refl_serialize_json(rizz_refl_context* ctx, const char* type_name, void* data, 
-                                      rizz_json* json, int root_token_id)
+static bool rizz__refl_deserialize_json(rizz_refl_context* ctx, const char* type_name, void* data, 
+                                        rizz_json* json, int root_token_id)
 {
     sx_assert(json);
     sx_assert(data);
@@ -1258,16 +1259,16 @@ static bool rizz__refl_serialize_json(rizz_refl_context* ctx, const char* type_n
         .cur_token = root_token_id
     };
 
-    if (refl__serialize(ctx, type_name, data, &jctx,
-                        &(rizz_refl_serialize_callbacks) {
-                            .on_begin = refl__serialize_begin,
-                            .on_end = refl__serialize_end,
-                            .on_enum = refl__serialize_enum,
-                            .on_builtin = refl__serialize_builtin,
-                            .on_builtin_array = refl__serialize_builtin_array,
-                            .on_struct_begin = refl__serialize_struct_begin,
-                            .on_struct_end = refl__serialize_struct_end,
-                            .on_struct_array_element = refl__serialize_struct_array_element }))
+    if (refl__deserialize(ctx, type_name, data, &jctx,
+                        &(rizz_refl_deserialize_callbacks) {
+                            .on_begin = refl__deserialize_json_begin,
+                            .on_end = refl__deserialize_json_end,
+                            .on_enum = refl__deserialize_json_enum,
+                            .on_builtin = refl__deserialize_json_builtin,
+                            .on_builtin_array = refl__deserialize_json_builtin_array,
+                            .on_struct_begin = refl__deserialize_json_struct_begin,
+                            .on_struct_end = refl__deserialize_json_struct_end,
+                            .on_struct_array_element = refl__deserialize_json_struct_array_element }))
     {
         return true;
     }
@@ -1275,8 +1276,8 @@ static bool rizz__refl_serialize_json(rizz_refl_context* ctx, const char* type_n
     return false;
 }
 
-static sx_mem_block* rizz__refl_deserialize_json(rizz_refl_context* ctx, const char* type_name, 
-                                                 const void* data, const sx_alloc* alloc, bool prettify)
+static sx_mem_block* rizz__refl_serialize_json(rizz_refl_context* ctx, const char* type_name, 
+                                               const void* data, const sx_alloc* alloc, bool prettify)
 {
     sx_assert(data);
     sx_assert(alloc);
@@ -1289,16 +1290,16 @@ static sx_mem_block* rizz__refl_deserialize_json(rizz_refl_context* ctx, const c
     sx_mem_init_writer(&jctx.writer, alloc, 4096);
 
     sx_mem_block* mem = NULL;
-    if (refl__deserialize(ctx, type_name, data, &jctx,
-                          &(rizz_refl_deserialize_callbacks) {
-                              .on_begin = refl__deserialize_begin,
-                              .on_end = refl__deserialize_end,
-                              .on_builtin = refl__deserialize_builtin,
-                              .on_builtin_array = refl__deserialize_builtin_array,
-                              .on_struct_begin = refl__deserialize_struct_begin,
-                              .on_struct_array_element = refl__deserialize_struct_array_element,
-                              .on_struct_end = refl__deserialize_struct_end,
-                              .on_enum = refl__deserialize_enum }))
+    if (refl__serialize(ctx, type_name, data, &jctx,
+                          &(rizz_refl_serialize_callbacks) {
+                              .on_begin = refl__serialize_json_begin,
+                              .on_end = refl__serialize_json_end,
+                              .on_builtin = refl__serialize_json_builtin,
+                              .on_builtin_array = refl__serialize_json_builtin_array,
+                              .on_struct_begin = refl__serialize_json_struct_begin,
+                              .on_struct_array_element = refl__serialize_json_struct_array_element,
+                              .on_struct_end = refl__serialize_json_struct_end,
+                              .on_enum = refl__serialize_json_enum }))
     {
         mem = jctx.writer.mem;
         mem->size = jctx.writer.top;

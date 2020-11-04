@@ -1449,18 +1449,18 @@ typedef struct rizz_api_http {
 // Or make a custom parser yourself. See basic-usage document for more detailed info on that topic.
 // Now in the example above, we want to write the data in rizz_shader_info instance to a json file:
 //
-//        sx_mem_block* jmem = the_refl->deserialize_json(ctx, "rizz_shader_info", &shader->info, the_core->heap_alloc(), true);
+//        sx_mem_block* jmem = the_refl->serialize_json(ctx, "rizz_shader_info", &shader->info, the_core->heap_alloc(), true);
 //        sx_assert(jmem);
 //        FILE* f = fopen("test.json", "wb");
 //        fwrite(jmem->data, jmem->size - 1, 1, f);
 //        fclose(f); 
 //
-// And now, serialize the rizz_shader_info data from the same json file:
+// And now, deserialize the rizz_shader_info data from the same json file:
 //
 //        rizz_shader_info info;
 //        rizz_asset a = the_asset->load("json", "test.json", &(rizz_json_load_params){0}, 
 //                        RIZZ_ASSET_LOAD_FLAG_ABSOLUTE_PATH|RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD, NULL, 0);
-//        the_refl->serialize_json(ctx, "rizz_shader_info", &info, the_asset->obj(a).ptr, 0);
+//        the_refl->deserialize_json(ctx, "rizz_shader_info", &info, the_asset->obj(a).ptr, 0);
 //
 typedef enum rizz_refl_type {
     RIZZ_REFL_ENUM,    //
@@ -1555,7 +1555,7 @@ typedef struct rizz_refl_variant {
     };
 } rizz_refl_variant;
 
-typedef struct rizz_refl_deserialize_callbacks {
+typedef struct rizz_refl_serialize_callbacks {
     bool (*on_begin)(const char* type_name, void* user);
     void (*on_end)(void* user);
     void (*on_builtin)(const char* name, rizz_refl_variant value, void* user, const void* meta, bool last_in_parent);
@@ -1565,9 +1565,9 @@ typedef struct rizz_refl_deserialize_callbacks {
     void (*on_struct_array_element)(int index, void* user, const void* meta);
     void (*on_struct_end)(void* user, const void* meta, bool last_in_parent);
     void (*on_enum)(const char* name, int value, const char* value_name, void* user, const void* meta, bool last_in_parent);
-} rizz_refl_deserialize_callbacks;
+} rizz_refl_serialize_callbacks;
 
-typedef struct rizz_refl_serialize_callbacks {
+typedef struct rizz_refl_deserialize_callbacks {
     bool (*on_begin)(const char* type_name, void* user);
     void (*on_end)(void* user);
     void (*on_builtin)(const char* name, void* data, rizz_refl_variant_type type, int size, void* user, 
@@ -1578,7 +1578,7 @@ typedef struct rizz_refl_serialize_callbacks {
     void (*on_struct_array_element)(int index, void* user, const void* meta);
     void (*on_struct_end)(void* user, const void* meta, bool last_in_parent);
     void (*on_enum)(const char* name, int* out_value, void* user, const void* meta, bool last_in_parent);
-} rizz_refl_serialize_callbacks;
+} rizz_refl_deserialize_callbacks;
 
 typedef struct rizz_refl_field {
     rizz_refl_info info;
@@ -1609,23 +1609,27 @@ typedef struct rizz_api_refl {
     const char* (*get_enum_name)(rizz_refl_context* ctx,const char* type, int val);
     int (*reg_count)(rizz_refl_context* ctx);
 
-    bool (*deserialize)(rizz_refl_context* ctx, const char* type_name, const void* data, void* user, 
-                        const rizz_refl_deserialize_callbacks* callbacks);
-    bool (*serialize)(rizz_refl_context* ctx, const char* type_name, void* data, void* user,
+    bool (*serialize)(rizz_refl_context* ctx, const char* type_name, const void* data, void* user, 
                       const rizz_refl_serialize_callbacks* callbacks);
+    bool (*deserialize)(rizz_refl_context* ctx, const char* type_name, void* data, void* user,
+                        const rizz_refl_deserialize_callbacks* callbacks);
     int (*get_fields)(rizz_refl_context* ctx, const char* base_type, void* obj, rizz_refl_field* fields, 
                       int max_fields);
 
-    bool (*serialize_json)(rizz_refl_context* ctx, const char* type_name, void* data, 
-                           rizz_json* json, int root_token_id);
-    sx_mem_block* (*deserialize_json)(rizz_refl_context* ctx, 
-                                      const char* type_name, 
-                                      const void* data, 
-                                      const sx_alloc* alloc,
-                                      bool prettify);
+    bool (*deserialize_json)(rizz_refl_context* ctx, 
+                             const char* type_name, 
+                             void* data, 
+                             rizz_json* json, 
+                             int root_token_id);
+    sx_mem_block* (*serialize_json)(rizz_refl_context* ctx, 
+                                    const char* type_name, 
+                                    const void* data, 
+                                    const sx_alloc* alloc,
+                                    bool prettify);
     
 } rizz_api_refl;
 
+// reflection info registration macros
 #define rizz_refl_reg_enum(_ctx, _type, _name, _meta) \
     (RIZZ_REFLECT_API_VARNAME)->_reg_private(_ctx, RIZZ_REFL_ENUM, (void*)(intptr_t)_name, #_type, #_name, NULL, "", sizeof(_type), 0, _meta)
 #define rizz_refl_reg_func(_ctx, _type, _name, _desc, _meta) \

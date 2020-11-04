@@ -2017,7 +2017,7 @@ static void sprite__show_sprite_preview(sprite__data* spr) {
         sx_vec2     wsize;
         sx_vec2     wpos;
         the_imgui->GetWindowSize(&wsize);
-        the_imgui->GetWindowSize(&wpos);
+        the_imgui->GetWindowPos(&wpos);
         sx_vec2 padded_wsize = sx_vec2_mulf(wsize, 0.9f);
         sx_rect sprite_rect;
         sx_vec2 uv1, uv2;
@@ -2075,14 +2075,12 @@ static void sprite__show_sprite_preview(sprite__data* spr) {
                                       sx_color4u(255, 255, 0, 255).n, 0, 0, 1.0f);
 
         // sprite frame
-        the_imgui->ImDrawList_AddRect(draw_list, vmin, vmax, sx_color4u(255, 0, 0, 255).n, 0, 0,
-                                      1.0f);
+        the_imgui->ImDrawList_AddRect(draw_list, vmin, vmax, sx_color4u(255, 0, 0, 255).n, 0, 0, 1.0f);
 
         // origin
         sx_vec2 origin = sx_vec2_add(
             sx_vec2_mul(sx_vec2f(spr->origin.x + 0.5f, 0.5f - spr->origin.y), wsize), wpos);
-        the_imgui->ImDrawList_AddCircleFilled(draw_list, origin, 5.0f, sx_color4u(0, 255, 0, 255).n,
-                                              6);
+        the_imgui->ImDrawList_AddCircleFilled(draw_list, origin, 5.0f, sx_color4u(0, 255, 0, 255).n, 6);
     }
 
     the_imgui->EndChild();

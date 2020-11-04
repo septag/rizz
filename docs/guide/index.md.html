@@ -788,13 +788,13 @@
     rizz_refl_reg_field(ctx, rizz_shader_info, int, num_inputs, "shader input count", NULL);    
     ```
 
-    Now you have three registered types: "sg_vertex_format", "rizz_shader_refl_input" and "rizz_shader_info". After registration, you can serialize/deserialize struct instance. Currently, _rizz_ includes json serializer, so you can use `serialize_json` to serialize the data in json file into struct instance on memory and use `deserialize_json` to deserialize struct from memory to json representation.
+    Now you have three registered types: "sg_vertex_format", "rizz_shader_refl_input" and "rizz_shader_info". After registration, you can serialize/deserialize struct instance. Currently, _rizz_ includes json serializer, so you can use `serialize_json` to serialize the data to json file and use `deserialize_json` to deserialize json data to memory.
 
     ## Custom Serializers/Deserializers
     Besides included _JSON_, you can make your own custom serializer by using `serialize`/`deserialize` functions and override callbacks for each. 
 
-    - **rizz_refl_serialize_callbacks**: callbacks for serialization (data source to memory)
-    - **rizz_refl_deserialize_callbacks**: callbacks for deserialization (memory to data source)
+    - **rizz_refl_serialize_callbacks**: callbacks for serialization (memory to disk/storage)
+    - **rizz_refl_deserialize_callbacks**: callbacks for deserialization (disk/storage to memory)
 
     If you look at the callbacks, there are two callbacks for *builtin* types, built-in types does not need to be registered, and are supported by reflection system. They include opaque types like int/float/int64_t/etc (just make sure you use the stddef/standard definitions when registering and not typedefs) plus some math types like sx_vec2/3/4/matrix. See `rizz_refl_variant_type` enums for all supported built-in types.
 
