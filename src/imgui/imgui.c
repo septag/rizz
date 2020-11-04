@@ -951,6 +951,83 @@ static bool imgui__resize_buffers(int max_verts, int max_indices)
     return true;
 }
 
+static void apply_theme(void)
+{
+    ImGuiStyle* style = the__imgui.GetStyle();
+    
+    style->WindowTitleAlign = sx_vec2f(0.5f, 0.5f);
+
+    style->ScrollbarSize = 18;
+    style->GrabMinSize = 12;
+    style->WindowBorderSize = 0;
+    style->ChildBorderSize = 0;
+    style->PopupBorderSize = 0;
+    style->FrameBorderSize = 0;
+    style->TabBorderSize = 0;
+
+    style->WindowRounding = 0;
+    style->ChildRounding = 3;
+    style->FrameRounding = 3;
+    style->PopupRounding = 3;
+    style->ScrollbarRounding = 3;
+    style->GrabRounding = 3;
+    style->TabRounding = 2;
+
+    style->AntiAliasedFill = true;
+    style->AntiAliasedLines = true;
+
+    // clang-format off
+    style->Colors[ImGuiCol_Text]                   = sx_vec4f(1.00f, 1.00f, 1.00f, 0.89f);
+    style->Colors[ImGuiCol_TextDisabled]           = sx_vec4f(1.00f, 1.00f, 1.00f, 0.39f);
+    style->Colors[ImGuiCol_WindowBg]               = sx_vec4f(0.20f, 0.20f, 0.20f, 1.00f);
+    style->Colors[ImGuiCol_ChildBg]                = sx_vec4f(0.24f, 0.24f, 0.24f, 1.00f);
+    style->Colors[ImGuiCol_PopupBg]                = sx_vec4f(0.20f, 0.20f, 0.20f, 1.00f);
+    style->Colors[ImGuiCol_Border]                 = sx_vec4f(1.00f, 1.00f, 1.00f, 0.10f);
+    style->Colors[ImGuiCol_BorderShadow]           = sx_vec4f(0.18f, 0.18f, 0.18f, 1.00f);
+    style->Colors[ImGuiCol_FrameBg]                = sx_vec4f(0.14f, 0.14f, 0.14f, 1.00f);
+    style->Colors[ImGuiCol_FrameBgHovered]         = sx_vec4f(1.00f, 1.00f, 1.00f, 0.08f);
+    style->Colors[ImGuiCol_FrameBgActive]          = sx_vec4f(1.00f, 1.00f, 1.00f, 0.12f);
+    style->Colors[ImGuiCol_TitleBg]                = sx_vec4f(0.22f, 0.22f, 0.22f, 1.00f);
+    style->Colors[ImGuiCol_TitleBgActive]          = sx_vec4f(0.14f, 0.14f, 0.14f, 1.00f);
+    style->Colors[ImGuiCol_TitleBgCollapsed]       = sx_vec4f(0.00f, 0.00f, 0.00f, 0.51f);
+    style->Colors[ImGuiCol_MenuBarBg]              = sx_vec4f(0.14f, 0.14f, 0.14f, 1.00f);
+    style->Colors[ImGuiCol_ScrollbarBg]            = sx_vec4f(0.02f, 0.02f, 0.02f, 0.53f);
+    style->Colors[ImGuiCol_ScrollbarGrab]          = sx_vec4f(0.31f, 0.31f, 0.31f, 1.00f);
+    style->Colors[ImGuiCol_ScrollbarGrabHovered]   = sx_vec4f(0.41f, 0.41f, 0.41f, 1.00f);
+    style->Colors[ImGuiCol_ScrollbarGrabActive]    = sx_vec4f(0.51f, 0.51f, 0.51f, 1.00f);
+    style->Colors[ImGuiCol_CheckMark]              = sx_vec4f(1.00f, 0.59f, 0.00f, 1.00f);
+    style->Colors[ImGuiCol_SliderGrab]             = sx_vec4f(0.39f, 0.39f, 0.39f, 1.00f);
+    style->Colors[ImGuiCol_SliderGrabActive]       = sx_vec4f(1.00f, 0.59f, 0.00f, 1.00f);
+    style->Colors[ImGuiCol_Button]                 = sx_vec4f(0.33f, 0.33f, 0.33f, 1.00f);
+    style->Colors[ImGuiCol_ButtonHovered]          = sx_vec4f(1.00f, 1.00f, 1.00f, 0.39f);
+    style->Colors[ImGuiCol_ButtonActive]           = sx_vec4f(1.00f, 1.00f, 1.00f, 0.55f);
+    style->Colors[ImGuiCol_Header]                 = sx_vec4f(0.00f, 0.00f, 0.00f, 0.39f);
+    style->Colors[ImGuiCol_HeaderHovered]          = sx_vec4f(1.00f, 1.00f, 1.00f, 0.16f);
+    style->Colors[ImGuiCol_HeaderActive]           = sx_vec4f(1.00f, 1.00f, 1.00f, 0.16f);
+    style->Colors[ImGuiCol_Separator]              = sx_vec4f(1.00f, 1.00f, 1.00f, 0.06f);
+    style->Colors[ImGuiCol_SeparatorHovered]       = sx_vec4f(1.00f, 0.59f, 0.00f, 0.50f);
+    style->Colors[ImGuiCol_SeparatorActive]        = sx_vec4f(1.00f, 0.59f, 0.00f, 1.00f);
+    style->Colors[ImGuiCol_ResizeGrip]             = sx_vec4f(1.00f, 1.00f, 1.00f, 0.25f);
+    style->Colors[ImGuiCol_ResizeGripHovered]      = sx_vec4f(1.00f, 1.00f, 1.00f, 0.31f);
+    style->Colors[ImGuiCol_ResizeGripActive]       = sx_vec4f(1.00f, 0.59f, 0.00f, 0.86f);
+    style->Colors[ImGuiCol_Tab]                    = sx_vec4f(0.14f, 0.14f, 0.14f, 1.00f);
+    style->Colors[ImGuiCol_TabHovered]             = sx_vec4f(1.00f, 0.59f, 0.00f, 0.25f);
+    style->Colors[ImGuiCol_TabActive]              = sx_vec4f(1.00f, 0.59f, 0.00f, 0.59f);
+    style->Colors[ImGuiCol_TabUnfocused]           = sx_vec4f(0.07f, 0.10f, 0.15f, 0.97f);
+    style->Colors[ImGuiCol_TabUnfocusedActive]     = sx_vec4f(0.14f, 0.26f, 0.42f, 1.00f);
+    style->Colors[ImGuiCol_PlotLines]              = sx_vec4f(0.86f, 0.86f, 0.86f, 1.00f);
+    style->Colors[ImGuiCol_PlotLinesHovered]       = sx_vec4f(1.00f, 0.59f, 0.00f, 1.00f);
+    style->Colors[ImGuiCol_PlotHistogram]          = sx_vec4f(1.00f, 0.59f, 0.00f, 1.00f);
+    style->Colors[ImGuiCol_PlotHistogramHovered]   = sx_vec4f(1.00f, 0.89f, 0.62f, 1.00f);
+    style->Colors[ImGuiCol_TextSelectedBg]         = sx_vec4f(1.00f, 0.59f, 0.00f, 0.25f);
+    style->Colors[ImGuiCol_DragDropTarget]         = sx_vec4f(1.00f, 0.86f, 0.00f, 0.86f);
+    style->Colors[ImGuiCol_NavHighlight]           = sx_vec4f(1.00f, 0.59f, 0.00f, 1.00f);
+    style->Colors[ImGuiCol_NavWindowingHighlight]  = sx_vec4f(1.00f, 1.00f, 1.00f, 0.71f);
+    style->Colors[ImGuiCol_NavWindowingDimBg]      = sx_vec4f(0.80f, 0.80f, 0.80f, 0.20f);
+    style->Colors[ImGuiCol_ModalWindowDimBg]       = sx_vec4f(0.80f, 0.80f, 0.80f, 0.35f);
+    // clang-format on
+}
+
 static bool imgui__init(void)
 {
     sx_assert(g_imgui.ctx == NULL);
@@ -1049,6 +1126,7 @@ static bool imgui__init(void)
     g_imgui.pip = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader, &pip_desc, &k__imgui_vertex));
 
+    apply_theme();
     the_core->tmp_alloc_pop();
 
     return true;
