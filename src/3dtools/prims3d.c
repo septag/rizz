@@ -257,6 +257,8 @@ bool prims3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
     return true;
 }
 
+void prims3d__set_draw_api(rizz_api_gfx_draw* draw_api) { g_prims3d.draw_api = draw_api; }
+
 static void prims3d__destroy_shape(prims3d__shape* shape) 
 {
     if (shape->vb.id) {
