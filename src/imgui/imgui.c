@@ -1017,7 +1017,7 @@ static void apply_theme(void)
     style->Colors[ImGuiCol_Header]                 = sx_vec4f(0.00f, 0.00f, 0.00f, 0.39f);
     style->Colors[ImGuiCol_HeaderHovered]          = sx_vec4f(1.00f, 1.00f, 1.00f, 0.16f);
     style->Colors[ImGuiCol_HeaderActive]           = sx_vec4f(1.00f, 1.00f, 1.00f, 0.16f);
-    style->Colors[ImGuiCol_Separator]              = sx_vec4f(1.00f, 1.00f, 1.00f, 0.06f);
+    style->Colors[ImGuiCol_Separator]              = sx_vec4f(1.00f, 1.00f, 1.00f, 0.15f);
     style->Colors[ImGuiCol_SeparatorHovered]       = sx_vec4f(0.80f, 0.47f, 0.00f, 0.50f);
     style->Colors[ImGuiCol_SeparatorActive]        = sx_vec4f(0.80f, 0.47f, 0.00f, 1.00f);
     style->Colors[ImGuiCol_ResizeGrip]             = sx_vec4f(1.00f, 1.00f, 1.00f, 0.25f);
@@ -1026,8 +1026,8 @@ static void apply_theme(void)
     style->Colors[ImGuiCol_Tab]                    = sx_vec4f(0.14f, 0.14f, 0.14f, 1.00f);
     style->Colors[ImGuiCol_TabHovered]             = sx_vec4f(0.80f, 0.47f, 0.00f, 0.25f);
     style->Colors[ImGuiCol_TabActive]              = sx_vec4f(0.80f, 0.47f, 0.00f, 0.59f);
-    style->Colors[ImGuiCol_TabUnfocused]           = sx_vec4f(0.07f, 0.10f, 0.15f, 0.97f);
-    style->Colors[ImGuiCol_TabUnfocusedActive]     = sx_vec4f(0.14f, 0.26f, 0.42f, 1.00f);
+    style->Colors[ImGuiCol_TabUnfocused]           = sx_vec4f(0.24f, 0.24f, 0.24f, 1.00f);
+    style->Colors[ImGuiCol_TabUnfocusedActive]     = sx_vec4f(0.10f, 0.10f, 0.10f, 1.00f);
     style->Colors[ImGuiCol_PlotLines]              = sx_vec4f(0.86f, 0.86f, 0.86f, 1.00f);
     style->Colors[ImGuiCol_PlotLinesHovered]       = sx_vec4f(0.80f, 0.47f, 0.00f, 1.00f);
     style->Colors[ImGuiCol_PlotHistogram]          = sx_vec4f(0.80f, 0.47f, 0.00f, 1.00f);
@@ -1097,6 +1097,10 @@ static bool imgui__init(void)
     conf->KeyMap[ImGuiKey_Y] = RIZZ_APP_KEYCODE_Y;
     conf->KeyMap[ImGuiKey_Z] = RIZZ_APP_KEYCODE_Z;
 
+    conf->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    conf->BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
+    conf->ConfigWindowsResizeFromEdges = true;
+    
     // Setup graphic objects
     if (!imgui__resize_buffers(MAX_VERTS, MAX_INDICES)) {
         rizz_log_error("imgui: could not create vertex/index buffers");
