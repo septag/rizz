@@ -155,7 +155,7 @@ void gradient__edit(const rizz_api_imgui* gui, const char* label, rizz_gradient*
         gui->ImDrawList_AddCircleFilled(dlst, kpos, 2, ic.n, 16);
 
         gui->SetCursorScreenPos(sx_vec2_subf(kpos, 5));
-        gui->InvisibleButton("grad-inv-btn", sx_vec2f(10, 10));
+        gui->InvisibleButton("grad-inv-btn", sx_vec2f(10, 10), 0);
         if (gui->IsItemActive()) {
             float t = (mpos.x - rpos.x) / rsize.x;
             gradient__move_key(gradient, i, t);
@@ -190,7 +190,7 @@ void gradient__edit(const rizz_api_imgui* gui, const char* label, rizz_gradient*
 
     // invisible button for add new key
     gui->SetCursorScreenPos(rpos);
-    if (gui->InvisibleButton("grad-add-key", rsize)) {
+    if (gui->InvisibleButton("grad-add-key", rsize, 0)) {
         float t = (mpos.x - rpos.x) / rsize.x;
         sx_color c = gradient__eval(gradient, t);
         gradient__add_key(gradient, (rizz_gradient_key){ t, c });

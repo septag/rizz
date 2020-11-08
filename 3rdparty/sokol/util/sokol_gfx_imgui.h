@@ -2686,7 +2686,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_embedded_image(sg_imgui_t* ctx, sg_image img,
         sg_imgui_image_t* img_ui = &ctx->images.slots[_sg_imgui_slot_index(img.id)];
         if (_sg_imgui_image_renderable(ctx, img_ui->desc.type, img_ui->desc.pixel_format)) {
             the__imgui.PushIDInt((int)img.id);
-            the__imgui.SliderFloat("Scale", scale, 0.125f, 8.0f, "%.3f", 2.0f);
+            the__imgui.SliderFloat("Scale", scale, 0.125f, 8.0f, "%.3f", ImGuiSliderFlags_None);
             float w = (float)img_ui->desc.width * (*scale);
             float h = (float)img_ui->desc.height * (*scale);
             the__imgui.Image((ImTextureID)(intptr_t)img.id, sx_vec2f(w, h), sx_vec2f(0, 0), 

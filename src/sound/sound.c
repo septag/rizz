@@ -1195,8 +1195,8 @@ static void snd__show_mixer_tab_contents()
 {
     the_imgui->LabelText("sample_rate", "%d", saudio_sample_rate());
     the_imgui->LabelText("channels", "%d", saudio_channels());
-    the_imgui->SliderFloat("master", &g_snd.master_volume, 0.0f, 1.2f, "%.1f", 1.0f);
-    the_imgui->SliderFloat("pan", &g_snd.master_pan, -1.0f, 1.0f, "%.1f", 1.0f);
+    the_imgui->SliderFloat("master", &g_snd.master_volume, 0.0f, 1.2f, "%.1f", 0);
+    the_imgui->SliderFloat("pan", &g_snd.master_pan, -1.0f, 1.0f, "%.1f", 0);
 
     // plot samples
     static float plot_scale = 1.0f;
@@ -1218,8 +1218,7 @@ static void snd__show_mixer_tab_contents()
     plot_width -= 25.0f;
     the_imgui->SetColumnWidth(1, plot_width * 0.5f);
     the_imgui->SetColumnWidth(2, plot_width * 0.5f);
-    the_imgui->VSliderFloat("##plot_scale", sx_vec2f(12.0f, 50.0f), &plot_scale, 1.0f, 10.0f, "",
-                            1.0f);
+    the_imgui->VSliderFloat("##plot_scale", sx_vec2f(12.0f, 50.0f), &plot_scale, 1.0f, 10.0f, "", 0);
     the_imgui->NextColumn();
     for (int ch = 0; ch < num_channels; ch++) {
         char plot_str[32];
