@@ -54,6 +54,7 @@ typedef struct rizz_api_prims3d {
     void (*draw_path)(const sx_vec3* points, int num_points, const sx_mat4* viewproj_mat, const sx_color color);
     void (*draw_line)(const sx_vec3 p0, const sx_vec3 p1, const sx_mat4* viewproj_mat, const sx_color color);
 
+    void (*set_draw_api)(rizz_api_gfx_draw* draw_api);
     void (*set_max_instances)(int max_instances);
     void (*set_max_vertices)(int max_verts);
     void (*set_max_indices)(int max_indices);
