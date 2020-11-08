@@ -210,7 +210,7 @@ void graph__edit_multiple(const rizz_api_imgui* gui, rizz_graph** graphs, const 
         gui->ImDrawList_AddCircleFilled(dlst, kpos, 4, c.n, 16);
 
         gui->SetCursorScreenPos(sx_vec2_subf(kpos, 8));
-        gui->InvisibleButton("graph-inv-btn", sx_vec2f(16, 16));
+        gui->InvisibleButton("graph-inv-btn", sx_vec2f(16, 16), 0);
         if (gui->IsItemActive()) {
             float t = (mpos.x - rpos.x) / rsize.x;
             float value = 1 - ((mpos.y - rpos.y) / rsize.y);
@@ -238,7 +238,7 @@ void graph__edit_multiple(const rizz_api_imgui* gui, rizz_graph** graphs, const 
             gui->ImDrawList_AddLine(dlst, kpos, kposl, c.n, 2);
             gui->ImDrawList_AddCircleFilled(dlst, kposl, 2, c.n, 16);
             gui->SetCursorScreenPos(sx_vec2_subf(kposl, 4));
-            gui->InvisibleButton("graph-lwing", sx_vec2f(8, 8));
+            gui->InvisibleButton("graph-lwing", sx_vec2f(8, 8), 0);
             if (gui->IsItemActive()) {
                 graph->keys[i].lwing = (kpos.y - mpos.y) / wdist;
                 graph->keys[i].lwing = sx_clamp(graph->keys[i].lwing, -1, 1);
@@ -249,7 +249,7 @@ void graph__edit_multiple(const rizz_api_imgui* gui, rizz_graph** graphs, const 
             gui->ImDrawList_AddLine(dlst, kpos, kposr, c.n, 2);
             gui->ImDrawList_AddCircleFilled(dlst, kposr, 2, c.n, 16);
             gui->SetCursorScreenPos(sx_vec2_subf(kposr, 4));
-            gui->InvisibleButton("graph-rwing", sx_vec2f(8, 8));
+            gui->InvisibleButton("graph-rwing", sx_vec2f(8, 8), 0);
             if (gui->IsItemActive()) {
                 graph->keys[i].rwing = (kpos.y - mpos.y) / wdist;
                 graph->keys[i].rwing = sx_clamp(graph->keys[i].rwing, -1, 1);
@@ -262,7 +262,7 @@ void graph__edit_multiple(const rizz_api_imgui* gui, rizz_graph** graphs, const 
 
     // invisible button for add new key
     gui->SetCursorScreenPos(rpos);
-    if (gui->InvisibleButton("graph-add-key", rsize)) {
+    if (gui->InvisibleButton("graph-add-key", rsize, 0)) {
         float t = (mpos.x - rpos.x) / rsize.x;
         float value = 1 - ((mpos.y - rpos.y) / rsize.y);
         graph__add_key(graph, (rizz_graph_key){ t, value });

@@ -15,6 +15,7 @@
 #   remove 'struct ImNewDummy {};'
 #   in imgui.h, change `#ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS` to `#if !defined(CIMGUI_DEFINE_ENUMS_AND_STRUCTS) && !defined(RIZZ__IMGUI)`
 #   Change `.Render = imgui__render` in the api struct def
+#   
 from __future__ import print_function
 import sys
 import os
@@ -158,7 +159,7 @@ def generate_imgui(source_file, output_file):
 
         file.write('} rizz_api_imgui;\n')
 
-        file.write('\nstatic rizz_api_imgui the__imgui = {\n')
+        file.write('\nrizz_api_imgui the__imgui = {\n')
         for i, f in enumerate(func_nodes):
             node = f['node']
             src_name = f['src_name']

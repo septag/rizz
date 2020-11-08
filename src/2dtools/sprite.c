@@ -2119,7 +2119,7 @@ static void sprite__show_sprite_tab_contents(sprite__data* spr) {
     sx_vec4 color = sx_color_vec4(spr->color);
     the_imgui->ColorButton("sprite_color", color, 0, SX_VEC2_ZERO); the_imgui->NextColumn();
     the_imgui->Text("origin"); the_imgui->NextColumn();
-    the_imgui->DragFloat2("", spr->origin.f, 0.01f, -0.5f, 0.5f, "%.2f", 1.0);
+    the_imgui->DragFloat2("", spr->origin.f, 0.01f, -0.5f, 0.5f, "%.2f", 0);
     the_imgui->NextColumn();
     the_imgui->Text("dbounds"); the_imgui->NextColumn();
     the_imgui->Text("(%.2f, %.2f, %.2f, %.2f)", spr->draw_bounds.xmin, spr->draw_bounds.ymin, 
@@ -2169,7 +2169,7 @@ static void sprite__show_animclip_tab_contents(sprite__data* spr)
     the_imgui->NextColumn();
     the_imgui->Text("fps");
     the_imgui->NextColumn();
-    if (the_imgui->DragFloat("", &clip->fps, 0.1f, 0.1f, 200.0f, "%.1f", 1.0f)) {
+    if (the_imgui->DragFloat("", &clip->fps, 0.1f, 0.1f, 200.0f, "%.1f", 0)) {
         clip->len = (float)clip->num_frames / clip->fps;
     }
     the_imgui->NextColumn();
