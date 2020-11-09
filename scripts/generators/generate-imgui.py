@@ -15,6 +15,13 @@
 #   remove 'struct ImNewDummy {};'
 #   in imgui.h, change `#ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS` to `#if !defined(CIMGUI_DEFINE_ENUMS_AND_STRUCTS) && !defined(RIZZ__IMGUI)`
 #   Change `.Render = imgui__render` in the api struct def
+#   Remove all these references in cimgui.cpp and imgui.c:
+#       ImGui::ShowDemoWindow
+#       ImGui::ShowAboutWindow
+#       ImGui::ShowStyleEditor
+#       ImGui::ShowStyleSelector
+#       ImGui::ShowFontSelector
+#       ImGui::ShowUserGuide
 #   
 from __future__ import print_function
 import sys
