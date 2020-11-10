@@ -1258,15 +1258,15 @@ SX_FORCE_INLINE sx_vec3 sx_vec3_fromlatlong(float _u, float _v)
     const float ct = sx_cos(theta);
     const float cp = sx_cos(phi);
 
-    return sx_vec3f(-st * sp, ct, -st * cp);
+    return sx_vec3f(-st * sp, -st * cp, ct);
 }
 
 SX_FORCE_INLINE sx_vec2 sx_vec3_tolatlong(sx_vec3 _dir)
 {
-    const float phi = sx_atan2(_dir.x, _dir.z);
-    const float theta = sx_acos(_dir.y);
+    const float phi = sx_atan2(_dir.x, _dir.y);
+    const float theta = sx_acos(_dir.z);
 
-    return sx_vec2f((SX_PI + phi) / SX_PI2, theta * SX_PI);
+    return sx_vec2f((SX_PI + phi) / SX_PI2, theta * SX_INVPI);
 }
 
 SX_FORCE_INLINE sx_vec3 sx_vec3_mul_quat(sx_vec3 _vec, sx_quat _quat)

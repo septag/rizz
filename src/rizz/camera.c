@@ -19,6 +19,16 @@ static void rizz__cam_init(rizz_camera* cam, float fov_deg, const sx_rect viewpo
     cam->viewport = viewport;
 }
 
+static void rizz__cam_location(rizz_camera* cam, sx_vec3 pos, sx_quat rot)
+{
+    cam->pos = pos;
+    cam->quat = rot;
+    sx_mat3 m = sx_quat_mat3(rot);
+    cam->right = m.col1;
+    cam->forward = m.col2;
+    cam->up = m.col3;
+}
+
 static void rizz__cam_lookat(rizz_camera* cam, const sx_vec3 pos, const sx_vec3 target,
                              const sx_vec3 up)
 {
@@ -170,6 +180,7 @@ static void rizz__cam_fps_strafe(rizz_camera_fps* fps, float strafe)
 
 rizz_api_camera the__camera = { .init = rizz__cam_init,
                                 .lookat = rizz__cam_lookat,
+                                .location = rizz__cam_location,
                                 .perspective_mat = rizz__cam_perspective_mat,
                                 .ortho_mat = rizz__cam_ortho_mat,
                                 .view_mat = rizz__cam_view_mat,

@@ -482,6 +482,7 @@ typedef struct rizz_camera_fps {
 typedef struct rizz_api_camera {
     void (*init)(rizz_camera* cam, float fov_deg, const sx_rect viewport, float fnear, float ffar);
     void (*lookat)(rizz_camera* cam, const sx_vec3 pos, const sx_vec3 target, const sx_vec3 up);
+    void (*location)(rizz_camera* cam, sx_vec3 pos, sx_quat rot);
     sx_mat4 (*ortho_mat)(const rizz_camera* cam);
     sx_mat4 (*perspective_mat)(const rizz_camera* cam);
     sx_mat4 (*view_mat)(const rizz_camera* cam);
