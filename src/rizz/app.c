@@ -93,6 +93,7 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wlogical-not-parentheses")
 #endif
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-parameter")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(5105)
 #define SOKOL_IMPL
 #include "sokol/sokol_app.h"
 SX_PRAGMA_DIAGNOSTIC_POP();
@@ -228,15 +229,11 @@ static void rizz__app_process_shortcuts(rizz_modifier_keys input_mods)
 
 static void rizz__app_event(const sapp_event* e)
 {
-    static_assert(sizeof(rizz_app_event) == sizeof(sapp_event),
+    static_assert(sizeof(rizz_app_event) == sizeof(sapp_event), "sapp_event is not identical to rizz_app_event");
+    static_assert(_RIZZ_APP_EVENTTYPE_NUM == _SAPP_EVENTTYPE_NUM, "rizz_app_event_type does not match sokol");
+    static_assert(offsetof(sapp_event, framebuffer_height) == offsetof(rizz_app_event, framebuffer_height),
                   "sapp_event is not identical to rizz_app_event");
-    static_assert(_RIZZ_APP_EVENTTYPE_NUM == _SAPP_EVENTTYPE_NUM,
-                  "rizz_app_event_type does not match sokol");
-    static_assert(offsetof(sapp_event, framebuffer_height) ==
-                      offsetof(rizz_app_event, framebuffer_height),
-                  "sapp_event is not identical to rizz_app_event");
-    static_assert(sizeof(sapp_event) == sizeof(rizz_app_event),
-                  "sapp_event is not identical to rizz_app_event");
+    static_assert(sizeof(sapp_event) == sizeof(rizz_app_event), "sapp_event is not identical to rizz_app_event");
 
     switch (e->type) {
     case RIZZ_APP_EVENTTYPE_RESIZED:

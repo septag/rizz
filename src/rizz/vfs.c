@@ -109,7 +109,10 @@ static rizz__vfs g_vfs;
 #        define DMON_LOG_DEBUG(s)
 #    endif
 #    define DMON_MAX_PATH RIZZ_MAX_PATH
+SX_PRAGMA_DIAGNOSTIC_PUSH()
+SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(5105)
 #    include "dmon/dmon.h"
+SX_PRAGMA_DIAGNOSTIC_POP()
 #    if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
 #        error "RIZZ_CONFIG_HOT_LOADING will not work under iOS/Android"
 #    endif

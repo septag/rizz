@@ -53,6 +53,7 @@ RIZZ_STATE static const sx_alloc* g_snd_alloc;
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-parameter")
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG("-Wunused-function")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(5105)
 #include "sokol/sokol_audio.h"
 SX_PRAGMA_DIAGNOSTIC_POP()
 

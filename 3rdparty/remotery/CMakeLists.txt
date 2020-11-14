@@ -28,4 +28,6 @@ endif()
 
 if (NOT MSVC OR (MSVC AND CMAKE_C_COMPILER_ID MATCHES "Clang"))
     target_compile_options(remotery PRIVATE -Wno-switch -Wno-uninitialized -Wno-unused-function)
+elseif (MSVC)
+    target_compile_options(remotery PRIVATE /wd5105)
 endif()

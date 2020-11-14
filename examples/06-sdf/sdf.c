@@ -202,13 +202,13 @@ static void update(float dt)
     if (the_imgui->Begin("SDF", NULL, 0)) {
         the_imgui->LabelText("Fps", "%.3f", the_core->fps());
         float deg = sx_todeg(g_sdf.light_orbit);
-        if (the_imgui->SliderFloat("Light", &deg, -180.0f, 180.0f, "%.1f", 1.0f)) {
+        if (the_imgui->SliderFloat("Light", &deg, -180.0f, 180.0f, "%.1f", 0)) {
             g_sdf.light_orbit = sx_torad(deg);
             orbit_lights();
         }
 
-        the_imgui->SliderFloat("shadow", &g_sdf.shadow_penumbra, 2.0f, 100.0f, "%.1f", 1.0f);
-        the_imgui->SliderFloat("duration", &g_sdf.anim_duration, 1.0f, 10.0f, "%.1f", 1.0f);
+        the_imgui->SliderFloat("shadow", &g_sdf.shadow_penumbra, 2.0f, 100.0f, "%.1f", 0);
+        the_imgui->SliderFloat("duration", &g_sdf.anim_duration, 1.0f, 10.0f, "%.1f", 0);
     }
     the_imgui->End();
 }

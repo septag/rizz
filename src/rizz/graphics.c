@@ -91,6 +91,7 @@ static void rizz__gfx_log_error(const char* source_file, int line, const char* s
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-variable")
+SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(5105)
 #define SOKOL_IMPL
 #define SOKOL_API_DECL static
 #define SOKOL_API_IMPL static

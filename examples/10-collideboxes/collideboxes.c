@@ -233,7 +233,7 @@ static void update(float dt)
             "Entity Heatmap"
         };
         the_imgui->ComboStr_arr("Collision vis Mode", (int*)&g_coll.collision_vis_mode, items, 3, -1);
-        the_imgui->SliderFloat("Raycast len", &g_coll.raycast_len, 1.0f, 100.0f, "%.0f", 1.0f);
+        the_imgui->SliderFloat("Raycast len", &g_coll.raycast_len, 1.0f, 100.0f, "%.0f", 0);
         if (the_imgui->Checkbox("Debug Raycast", &g_coll.show_raycast_debugger)) {
             if (g_coll.show_raycast_debugger) {
                 g_coll.show_collision_debugger = false;
