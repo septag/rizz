@@ -6,7 +6,7 @@
 #include "sx/array.h"
 #include "sx/atomic.h"
 #include "sx/handle.h"
-#include "sx/math.h"
+#include "sx/math-scalar.h"
 #include "sx/os.h"
 #include "sx/pool.h"
 #include "sx/string.h"

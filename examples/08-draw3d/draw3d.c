@@ -1,7 +1,7 @@
 #include "rizz/config.h"
 #include "sx/allocator.h"
 #include "sx/io.h"
-#include "sx/math.h"
+#include "sx/math-vec.h"
 #include "sx/os.h"
 #include "sx/string.h"
 #include "sx/rng.h"

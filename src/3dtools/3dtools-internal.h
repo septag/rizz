@@ -1,6 +1,6 @@
 #pragma once
 
-#include "sx/math.h"
+#include "sx/math-types.h"
 #include "rizz/3dtools.h"
 
 typedef rizz_camera rizz_camera;

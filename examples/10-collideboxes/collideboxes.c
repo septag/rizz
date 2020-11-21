@@ -7,6 +7,7 @@
 #include "sx/timer.h"
 #include "sx/rng.h"
 #include "sx/array.h"
+#include "sx/math-vec.h"
 
 #include "../common.h"
 

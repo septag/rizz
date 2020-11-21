@@ -1,7 +1,9 @@
 #include "rizz/astar.h"
+
 #include "sx/array.h"
 #include "sx/bheap.h"
 #include "sx/string.h"
+#include "sx/math-vec.h"
 
 #define ASTAR_DEFAULT_COST 10
 #define ASTAR_DIAGONAL_COST 14

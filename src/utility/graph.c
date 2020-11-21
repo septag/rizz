@@ -1,6 +1,8 @@
 #include "rizz/imgui.h"
 #include "rizz/utility.h"
 
+#include "sx/math-vec.h"
+
 static inline void sortkeys(rizz_graph* graph)
 {
     uint32_t n = graph->num_keys;
@@ -161,7 +163,7 @@ void graph__edit_multiple(const rizz_api_imgui* gui, rizz_graph** graphs, const 
         }
     }
 
-    gui->ImDrawList_PushClipRect(dlst, clip_rect.vmin, clip_rect.vmax, true);
+    gui->ImDrawList_PushClipRect(dlst, sx_vec2fv(clip_rect.vmin), sx_vec2fv(clip_rect.vmax), true);
     // draw curve
     const int segments = 64;
 
@@ -195,9 +197,8 @@ void graph__edit_multiple(const rizz_api_imgui* gui, rizz_graph** graphs, const 
         }
     }
     gui->PopClipRect();
-    clip_rect.vmin = sx_vec2_subf(clip_rect.vmin, 4);
-    clip_rect.vmax = sx_vec2_addf(clip_rect.vmax, 4);
-    gui->ImDrawList_PushClipRect(dlst, clip_rect.vmin, clip_rect.vmax, true);
+    clip_rect = sx_rectv(sx_vec2_subf(sx_vec2fv(clip_rect.vmin), 4), sx_vec2_addf(sx_vec2fv(clip_rect.vmax), 4));
+    gui->ImDrawList_PushClipRect(dlst, sx_vec2fv(clip_rect.vmin), sx_vec2fv(clip_rect.vmax), true);
     // draw keys
     int del_i = -1;
     for (int i = 0; i < count; i++) {

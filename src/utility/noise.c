@@ -1,4 +1,4 @@
-#include "sx/math.h"
+#include "sx/math-scalar.h"
 
 // clang-format off
 static int perm[] = {

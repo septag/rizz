@@ -5,7 +5,7 @@
 #include "sx/handle.h"
 #include "sx/hash.h"
 #include "sx/linear-buffer.h"
-#include "sx/math.h"
+#include "sx/math-vec.h"
 #include "sx/os.h"
 #include "sx/pool.h"
 #include "sx/string.h"
@@ -958,21 +958,21 @@ static void sprite__update_bounds(sprite__data* spr)
         sx_vec2 origin = spr->origin;
         sx_vec2 base_size_rcp = sx_vec2f(1.0f / aspr->base_size.x, 1.0f / aspr->base_size.y);
         sx_rect sprite_rect =
-            sx_rectv(sprite__normalize_pos(aspr->sprite_rect.vmin, base_size_rcp),
-                     sprite__normalize_pos(aspr->sprite_rect.vmax, base_size_rcp));
+            sx_rectv(sprite__normalize_pos(sx_vec2fv(aspr->sprite_rect.vmin), base_size_rcp),
+                     sprite__normalize_pos(sx_vec2fv(aspr->sprite_rect.vmax), base_size_rcp));
 
-        spr->draw_bounds = sx_rectv(sx_vec2_mul(sx_vec2_sub(sprite_rect.vmin, origin), size),
-                                    sx_vec2_mul(sx_vec2_sub(sprite_rect.vmax, origin), size));
-        spr->bounds = sx_rectv(sx_vec2_mul(sx_vec2_sub(rect.vmin, origin), size),
-                               sx_vec2_mul(sx_vec2_sub(rect.vmax, origin), size));
+        spr->draw_bounds = sx_rectv(sx_vec2_mul(sx_vec2_sub(sx_vec2fv(sprite_rect.vmin), origin), size),
+                                    sx_vec2_mul(sx_vec2_sub(sx_vec2fv(sprite_rect.vmax), origin), size));
+        spr->bounds = sx_rectv(sx_vec2_mul(sx_vec2_sub(sx_vec2fv(rect.vmin), origin), size),
+                               sx_vec2_mul(sx_vec2_sub(sx_vec2fv(rect.vmax), origin), size));
     } else {
         rizz_texture* tex = (rizz_texture*)the_asset->obj(spr->texture).ptr;
         sx_assert(tex);
         sx_vec2 base_size = sx_vec2f((float)tex->info.width, (float)tex->info.height);
         sx_vec2 size = sprite__calc_size(spr->size, base_size, spr->flip);
         sx_vec2 origin = spr->origin;
-        spr->bounds = sx_rectv(sx_vec2_mul(sx_vec2_sub(rect.vmin, origin), size),
-                               sx_vec2_mul(sx_vec2_sub(rect.vmax, origin), size));
+        spr->bounds = sx_rectv(sx_vec2_mul(sx_vec2_sub(sx_vec2fv(rect.vmin), origin), size),
+                               sx_vec2_mul(sx_vec2_sub(sx_vec2fv(rect.vmax), origin), size));
         spr->draw_bounds = spr->bounds;
     }
 }
@@ -1157,8 +1157,8 @@ static bool atlas__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
             aspr->num_verts = 4;
             rizz_sprite_vertex* verts = &atlas->vertices[vb_index];
             uint16_t* indices = &atlas->indices[ib_index];
-            sx_rect uv_rect = sx_rectv(sx_vec2_mul(aspr->sheet_rect.vmin, atlas_size_rcp),
-                                       sx_vec2_mul(aspr->sheet_rect.vmax, atlas_size_rcp));
+            sx_rect uv_rect = sx_rectv(sx_vec2_mul(sx_vec2fv(aspr->sheet_rect.vmin), atlas_size_rcp),
+                                       sx_vec2_mul(sx_vec2fv(aspr->sheet_rect.vmax), atlas_size_rcp));
             verts[0].pos =
                 sprite__normalize_pos(sx_rect_corner(&aspr->sprite_rect, 0), base_size_rcp);
             verts[0].uv = sx_rect_corner(&uv_rect, 0);
@@ -2030,13 +2030,13 @@ static void sprite__show_sprite_preview(sprite__data* spr) {
             sx_vec2 base_size = aspr->base_size;
             sx_vec2 atlas_size_rcp =
                 sx_vec2f(1.0f / atlas->a.info.img_width, 1.0f / atlas->a.info.img_height);
-            uv1 = sx_vec2_mul(aspr->sheet_rect.vmin, atlas_size_rcp);
-            uv2 = sx_vec2_mul(aspr->sheet_rect.vmax, atlas_size_rcp);
+            uv1 = sx_vec2_mul(sx_vec2fv(aspr->sheet_rect.vmin), atlas_size_rcp);
+            uv2 = sx_vec2_mul(sx_vec2fv(aspr->sheet_rect.vmax), atlas_size_rcp);
 
             // normalize sprite_rect
             sx_vec2 base_size_rcp = sx_vec2f(1.0f / base_size.x, 1.0f / base_size.y);
-            sprite_rect = sx_rectv(sx_vec2_mul(aspr->sprite_rect.vmin, base_size_rcp),
-                                   sx_vec2_mul(aspr->sprite_rect.vmax, base_size_rcp));
+            sprite_rect = sx_rectv(sx_vec2_mul(sx_vec2fv(aspr->sprite_rect.vmin), base_size_rcp),
+                                   sx_vec2_mul(sx_vec2fv(aspr->sprite_rect.vmax), base_size_rcp));
 
             // fit into padded_size
             sx_vec2 s1 = sprite__calc_size(sx_vec2f(padded_wsize.x, 0), base_size, 0);
@@ -2064,8 +2064,8 @@ static void sprite__show_sprite_preview(sprite__data* spr) {
         wpos = sx_vec2_add(wpos, sx_vec2_mulf(sx_vec2_sub(wsize, padded_wsize), 0.5f));
         wsize = padded_wsize;
 
-        sx_vec2     vmin = sx_vec2_add(wpos, sx_vec2_mul(sprite_rect.vmin, wsize));
-        sx_vec2     vmax = sx_vec2_add(wpos, sx_vec2_mul(sprite_rect.vmax, wsize));
+        sx_vec2     vmin = sx_vec2_add(wpos, sx_vec2_mul(sx_vec2fv(sprite_rect.vmin), wsize));
+        sx_vec2     vmax = sx_vec2_add(wpos, sx_vec2_mul(sx_vec2fv(sprite_rect.vmax), wsize));
         ImTextureID tex_id =
             (ImTextureID)(uintptr_t)the_gfx->texture_get(spr->texture)->img.id;
         the_imgui->ImDrawList_AddImage(draw_list, tex_id, vmin, vmax, uv1, uv2, 0xffffffff);

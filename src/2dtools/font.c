@@ -1,7 +1,7 @@
 #include "rizz/2dtools.h"
 
 #include "sx/array.h"
-#include "sx/math.h"
+#include "sx/math-scalar.h"
 #include "sx/os.h"
 #include "sx/string.h"
 

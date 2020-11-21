@@ -4,10 +4,11 @@
 #include "rizz/imgui-extra.h"
 #include "rizz/imgui.h"
 #include "rizz/rizz.h"
+
 #include "sx/allocator.h"
 #include "sx/array.h"
 #include "sx/io.h"
-#include "sx/math.h"
+#include "sx/math-vec.h"
 #include "sx/os.h"
 #include "sx/rng.h"
 #include "sx/string.h"

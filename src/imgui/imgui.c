@@ -12,7 +12,7 @@
 #include "sx/allocator.h"
 #include "sx/array.h"
 #include "sx/io.h"
-#include "sx/math.h"
+#include "sx/math-vec.h"
 #include "sx/string.h"
 #include "sx/timer.h"
 

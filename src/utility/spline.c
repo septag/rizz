@@ -1,5 +1,7 @@
 #include "rizz/utility.h"
 
+#include "sx/math-vec.h"
+
 static sx_vec3 bezier3d(sx_vec3 a, sx_vec3 b, sx_vec3 c, sx_vec3 d, float t)
 {
     t = sx_clamp(t, 0, 1);

@@ -843,13 +843,13 @@ static void refl__serialize_json_builtin(const char* name, rizz_refl_variant val
         refl__writef(&jctx->writer, "%s\"%s\": %u%s%s", tabs, name, value.u32, COMMA(), jctx->newline);
         break;
     case RIZZ_REFL_VARIANTTYPE_AABB:
-        refl__writef(&jctx->writer, "%s\"%s\": [%f, %f, %f, %f, %f, %f]%s%s", tabs, name, value.aabb.vmin.x,
-                value.aabb.vmin.y, value.aabb.vmin.z, value.aabb.vmax.x, value.aabb.vmax.y,
-                value.aabb.vmax.z, COMMA(), jctx->newline);
+        refl__writef(&jctx->writer, "%s\"%s\": [%f, %f, %f, %f, %f, %f]%s%s", tabs, name, value.aabb.xmin,
+                value.aabb.ymin, value.aabb.zmin, value.aabb.xmax, value.aabb.ymax,
+                value.aabb.zmax, COMMA(), jctx->newline);
         break;
     case RIZZ_REFL_VARIANTTYPE_RECT:
-        refl__writef(&jctx->writer, "%s\"%s\": [%f, %f, %f, %f]%s%s", tabs, name, value.rect.vmin.x,
-                value.rect.vmin.y, value.rect.vmax.x, value.aabb.vmax.y, COMMA(), jctx->newline);
+        refl__writef(&jctx->writer, "%s\"%s\": [%f, %f, %f, %f]%s%s", tabs, name, value.rect.xmin,
+                value.rect.ymin, value.rect.xmax, value.aabb.ymax, COMMA(), jctx->newline);
         break;
     case RIZZ_REFL_VARIANTTYPE_INT8:
         refl__writef(&jctx->writer, "%s\"%s\": %d%s%s", tabs, name, value.i8, COMMA(), jctx->newline);
@@ -942,13 +942,13 @@ static void refl__serialize_json_builtin_array(const char* name, const rizz_refl
             refl__writef(&jctx->writer, "%u%s", value.u32, comma);
             break;
         case RIZZ_REFL_VARIANTTYPE_AABB:
-            refl__writef(&jctx->writer, "[%f, %f, %f, %f, %f, %f]%s", value.aabb.vmin.x,
-                    value.aabb.vmin.y, value.aabb.vmin.z, value.aabb.vmax.x, value.aabb.vmax.y,
-                    value.aabb.vmax.z, comma);
+            refl__writef(&jctx->writer, "[%f, %f, %f, %f, %f, %f]%s", value.aabb.xmin,
+                    value.aabb.ymin, value.aabb.zmin, value.aabb.xmax, value.aabb.ymax,
+                    value.aabb.zmax, comma);
             break;
         case RIZZ_REFL_VARIANTTYPE_RECT:
-            refl__writef(&jctx->writer, "[%f, %f, %f, %f]%s", value.rect.vmin.x,
-                    value.rect.vmin.y, value.rect.vmax.x, value.aabb.vmax.y, comma);
+            refl__writef(&jctx->writer, "[%f, %f, %f, %f]%s", value.rect.xmin,
+                    value.rect.ymin, value.rect.xmax, value.aabb.ymax, comma);
             break;
         case RIZZ_REFL_VARIANTTYPE_INT8:
             refl__writef(&jctx->writer, "%d%s", value.i8, comma);

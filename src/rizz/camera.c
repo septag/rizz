@@ -3,6 +3,7 @@
 // License: https://github.com/septag/rizz#license-bsd-2-clause
 //
 #include "internal.h"
+#include "sx/math-vec.h"
 
 static void rizz__cam_init(rizz_camera* cam, float fov_deg, const sx_rect viewport, float fnear,
                            float ffar)
@@ -24,9 +25,9 @@ static void rizz__cam_location(rizz_camera* cam, sx_vec3 pos, sx_quat rot)
     cam->pos = pos;
     cam->quat = rot;
     sx_mat3 m = sx_quat_mat3(rot);
-    cam->right = m.col1;
-    cam->up = sx_vec3_neg(m.col2);
-    cam->forward = m.col3;
+    cam->right = sx_vec3fv(m.fc1);
+    cam->up = sx_vec3_neg(sx_vec3fv(m.fc2));
+    cam->forward = sx_vec3fv(m.fc3);
 }
 
 static void rizz__cam_lookat(rizz_camera* cam, const sx_vec3 pos, const sx_vec3 target,
@@ -139,9 +140,9 @@ static void rizz__cam_fps_lookat(rizz_camera_fps* cam, const sx_vec3 pos, const 
 static void rizz__cam_update_rot(rizz_camera* cam)
 {
     sx_mat4 m = sx_quat_mat4(cam->quat);
-    cam->right = sx_vec3fv(m.col1.f);
-    cam->up = sx_vec3_mulf(sx_vec3fv(m.col2.f), -1.0f);
-    cam->forward = sx_vec3fv(m.col3.f);
+    cam->right = sx_vec3fv(m.fc1);
+    cam->up = sx_vec3_mulf(sx_vec3fv(m.fc2), -1.0f);
+    cam->forward = sx_vec3fv(m.fc3);
 }
 
 static void rizz__cam_fps_pitch(rizz_camera_fps* fps, float pitch)

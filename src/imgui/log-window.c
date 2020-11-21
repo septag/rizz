@@ -7,10 +7,12 @@
 #include "sx/ringbuffer.h"
 #include "sx/string.h"
 #include "sx/linear-buffer.h"
+#include "sx/math-vec.h"
 
 #include "imgui-internal.h"
 
 #include <float.h>
+#include <alloca.h>
 
 extern rizz_api_imgui the__imgui;
 RIZZ_STATE rizz_api_core* the_core;

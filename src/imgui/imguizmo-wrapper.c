@@ -2,7 +2,7 @@
 
 #include "imguizmo/ImGuizmo.h"
 #include "imgui-internal.h"
-#include "sx/math.h"
+#include "sx/math-vec.h"
 
 // gizmo
 static void imgui__gizmo_set_rect(const sx_rect rc)

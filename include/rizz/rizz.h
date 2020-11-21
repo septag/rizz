@@ -10,7 +10,7 @@
 #include "sx/fiber.h"
 #include "sx/io.h"
 #include "sx/jobs.h"
-#include "sx/math.h"
+#include "sx/math-types.h"
 #include "sx/platform.h"
 #include "sx/timer.h"
 

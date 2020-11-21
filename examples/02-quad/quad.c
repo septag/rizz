@@ -1,6 +1,7 @@
 #include "sx/os.h"
 #include "sx/string.h"
 #include "sx/timer.h"
+#include "sx/math-vec.h"
 
 #include "rizz/rizz.h"
 #include "rizz/imgui-extra.h"

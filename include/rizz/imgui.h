@@ -2,7 +2,7 @@
 
 #include <stdarg.h>
 #include <stdio.h>
-#include "sx/math.h"
+#include "sx/math-types.h"
 
 typedef struct ImGuiViewportP ImGuiViewportP;
 typedef struct ImGuiPtrOrIndex ImGuiPtrOrIndex;

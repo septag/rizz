@@ -5,7 +5,7 @@
 #include "rizz/imgui.h"
 
 #include "sx/allocator.h"
-#include "sx/math.h"
+#include "sx/math-vec.h"
 #include "sx/string.h"
 #include "sx/os.h"
 #include "sx/lin-alloc.h"
@@ -534,7 +534,7 @@ static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
 
             if (_node->has_rotation) {
                 sx_mat4 rot_mat = sx_quat_mat4(sx_quat4fv(_node->rotation));
-                node->local_tx.rot = sx_mat3fv(rot_mat.col1.f, rot_mat.col2.f, rot_mat.col3.f);
+                node->local_tx.rot = sx_mat3fv(rot_mat.fc1, rot_mat.fc2, rot_mat.fc3);
             }
 
             if (_node->has_translation) {

@@ -1,6 +1,8 @@
 #include "rizz/imgui.h"
 #include "rizz/utility.h"
 
+#include "sx/math-vec.h"
+
 static inline void sortkeys(rizz_gradient* gradient)
 {
     uint32_t n = gradient->num_keys;

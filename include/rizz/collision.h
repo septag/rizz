@@ -1,6 +1,6 @@
 #pragma once
 
-#include "sx/math.h"
+#include "sx/math-types.h"
 
 typedef struct sx_alloc sx_alloc;
 typedef struct sx_hashtbl sx_hashtbl;
@@ -102,11 +102,4 @@ SX_INLINE rizz_coll_ray rizz_coll_ray_set(sx_vec3 origin, sx_vec3 dir, float len
 #else
     return { origin, dir, len };
 #endif
-}
-
-SX_INLINE rizz_coll_ray rizz_coll_ray_setdenorm(sx_vec3 origin, sx_vec3 dir_len)
-{
-    float len;
-    sx_vec3 dir = sx_vec3_norm_len(dir_len, &len);
-    return rizz_coll_ray_set(origin, dir, len);
 }

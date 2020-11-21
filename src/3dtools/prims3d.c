@@ -3,7 +3,7 @@
 
 #include "sx/allocator.h"
 #include "sx/linear-buffer.h"
-#include "sx/math.h"
+#include "sx/math-vec.h"
 
 #include "3dtools-internal.h"
 

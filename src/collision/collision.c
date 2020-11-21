@@ -5,7 +5,7 @@
 #include "sx/array.h"
 #include "sx/hash.h"
 #include "sx/handle.h"
-#include "sx/math.h"
+#include "sx/math-vec.h"
 #include "sx/string.h"
 
 #ifndef STRIKE_DEBUG_COLLISION
@@ -372,15 +372,15 @@ static void coll_update_transforms(rizz_coll_context* ctx, const uint64_t* ents,
 
         sx_aabb aabb = ctx->aabbs[index];
         sx_aabb prev_aabb = ctx->transformed_aabbs[index];
-        sx_ivec2 prev_hmin = coll__hash_point(ctx, sx_vec2fv(prev_aabb.vmin.f));
-        sx_ivec2 prev_hmax = coll__hash_point(ctx, sx_vec2fv(prev_aabb.vmax.f));
+        sx_ivec2 prev_hmin = coll__hash_point(ctx, sx_vec2fv(prev_aabb.vmin));
+        sx_ivec2 prev_hmax = coll__hash_point(ctx, sx_vec2fv(prev_aabb.vmax));
         sx_irect prev_area = sx_irectv(prev_hmin, prev_hmax);
 
         // transform and pop/push from spatial grid
         sx_mat4 transform_mat = sx_tx3d_mat4(&new_transforms[i]);
         aabb = sx_aabb_transform(&aabb, &transform_mat);
-        sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(aabb.vmin.f));
-        sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(aabb.vmax.f));
+        sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(aabb.vmin));
+        sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(aabb.vmax));
         sx_irect area = sx_irectv(hmin, hmax);
 
         ctx->transformed_aabbs[index] = aabb;
@@ -423,8 +423,8 @@ static void coll_update_transforms(rizz_coll_context* ctx, const uint64_t* ents,
 static void coll__mark_collision(rizz_coll_context* ctx, const sx_aabb* aabb)
 {
     int const num_cells_x = ctx->num_cells_x;
-    sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(aabb->vmin.f));
-    sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(aabb->vmax.f));
+    sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(aabb->vmin));
+    sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(aabb->vmax));
 
     for (int y = hmin.y; y <= hmax.y; y++) {
         for (int x = hmin.x; x <= hmax.x; x++) {
@@ -437,8 +437,8 @@ static void coll__mark_collision(rizz_coll_context* ctx, const sx_aabb* aabb)
 static void coll__mark_rayhit(rizz_coll_context* ctx, const sx_aabb* aabb)
 {
     int const num_cells_x = ctx->num_cells_x;
-    sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(aabb->vmin.f));
-    sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(aabb->vmax.f));
+    sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(aabb->vmin));
+    sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(aabb->vmax));
 
     for (int y = hmin.y; y <= hmax.y; y++) {
         for (int x = hmin.x; x <= hmax.x; x++) {
@@ -484,8 +484,8 @@ static rizz_coll_pair* coll_detect(rizz_coll_context* ctx, const sx_alloc* alloc
 
         // collect all candidates for collision
         sx_aabb aabb = ctx->transformed_aabbs[index];
-        sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(aabb.vmin.f));
-        sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(aabb.vmax.f));
+        sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(aabb.vmin));
+        sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(aabb.vmax));
 
         for (int y = hmin.y; y <= hmax.y; y++) {
             for (int x = hmin.x; x <= hmax.x; x++) {
@@ -584,8 +584,8 @@ static void coll_remove(rizz_coll_context* ctx, const uint64_t* ents, int count)
         int index = sx_handle_index(handle);
 
         sx_aabb aabb = ctx->transformed_aabbs[index];
-        sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(aabb.vmin.f));
-        sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(aabb.vmax.f));
+        sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(aabb.vmin));
+        sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(aabb.vmax));
 
         for (int y = hmin.y; y <= hmax.y; y++) {
             for (int x = hmin.x; x <= hmax.x; x++) {
@@ -623,8 +623,8 @@ static uint64_t* coll_query_sphere(rizz_coll_context* ctx, sx_vec3 center, float
 {
     int const num_cells_x = ctx->num_cells_x;
     sx_aabb aabb = sx_aabbv(sx_vec3_sub(center, sx_vec3splat(radius)), sx_vec3_add(center, sx_vec3splat(radius)));
-    sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(aabb.vmin.f));
-    sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(aabb.vmax.f));
+    sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(aabb.vmin));
+    sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(aabb.vmax));
 
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
@@ -695,8 +695,8 @@ static uint64_t* coll_query_poly(rizz_coll_context* ctx, const rizz_coll_shape_p
     for (int i = 0; i < poly->count; i++) {
         sx_rect_add_point(&rect, poly->verts[i]);
     }
-    sx_ivec2 hmin = coll__hash_point(ctx, rect.vmin);
-    sx_ivec2 hmax = coll__hash_point(ctx, rect.vmax);
+    sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(rect.vmin));
+    sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(rect.vmax));
 
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
@@ -728,7 +728,7 @@ static uint64_t* coll_query_poly(rizz_coll_context* ctx, const rizz_coll_shape_p
     for (int e = 0; e < num_candidates; e++) {
         int test_index = sx_handle_index(candidates[e]);
         sx_aabb test_aabb = ctx->transformed_aabbs[test_index];
-        sx_rect test_rect = sx_rectv(sx_vec2fv(test_aabb.vmin.f), sx_vec2fv(test_aabb.vmax.f));
+        sx_rect test_rect = sx_rectv(sx_vec2fv(test_aabb.vmin), sx_vec2fv(test_aabb.vmax));
         coll_entity_mask_pair test_entmask = ctx->ent_mask_pairs[test_index];
 
         if ((mask & test_entmask.mask) == 0 || !sx_rect_test_rect(rect, test_rect)) {
@@ -760,10 +760,10 @@ static uint64_t* coll_query_poly(rizz_coll_context* ctx, const rizz_coll_shape_p
 static inline float coll_ray_intersect_plane(rizz_coll_ray ray, sx_plane p)
 {
     /* put (pt + t*dir) into plane equation and solve t -> (pt + t*dir)*N + d = 0 */
-    float v_dot_n = ray.dir.x*p.normal.x + ray.dir.y*p.normal.y + ray.dir.z*p.normal.z;
+    float v_dot_n = ray.dir.x*p.normal[0] + ray.dir.y*p.normal[1] + ray.dir.z*p.normal[2];
     if (sx_abs(v_dot_n) < 0.000001f)
         return -1.0f;
-    float p_dot_n = ray.origin.x*p.normal.x + ray.origin.y*p.normal.y + ray.origin.z*p.normal.z;
+    float p_dot_n = ray.origin.x*p.normal[0] + ray.origin.y*p.normal[1] + ray.origin.z*p.normal[2];
     float t = -(p_dot_n + p.dist)/v_dot_n;
     return t;    
 }
@@ -1090,8 +1090,8 @@ static void coll_debug_collisions(rizz_coll_context* ctx, float opacity,
         for (int i = 0; i < ctx->num_cells; i++) {
             coll_spatial_grid_cell* cell = &ctx->cells[i];
             sx_rect cell_rect = sx_rectce(cell->center, sx_vec2splat(ctx->grid_cell_size * 0.5f));
-            sx_vec2 v1 = the_imguix->project_to_screen(sx_vec3v2(cell_rect.vmin, 0), &viewproj, NULL);
-            sx_vec2 v2 = the_imguix->project_to_screen(sx_vec3v2(cell_rect.vmax, 0), &viewproj, NULL);
+            sx_vec2 v1 = the_imguix->project_to_screen(sx_vec3v2(sx_vec2fv(cell_rect.vmin), 0), &viewproj, NULL);
+            sx_vec2 v2 = the_imguix->project_to_screen(sx_vec3v2(sx_vec2fv(cell_rect.vmax), 0), &viewproj, NULL);
             sx_swap(v1.y, v2.y, float);
 
             float count_ratio;
@@ -1113,8 +1113,8 @@ static void coll_debug_collisions(rizz_coll_context* ctx, float opacity,
 
     // world bounds
     the_imgui->ImDrawList_AddRect(draw_list, 
-        the_imguix->project_to_screen(sx_vec3v2(map_rect.vmin, 0), &viewproj, NULL),
-        the_imguix->project_to_screen(sx_vec3v2(map_rect.vmax, 0), &viewproj, NULL),
+        the_imguix->project_to_screen(sx_vec3v2(sx_vec2fv(map_rect.vmin), 0), &viewproj, NULL),
+        the_imguix->project_to_screen(sx_vec3v2(sx_vec2fv(map_rect.vmax), 0), &viewproj, NULL),
         SX_COLOR_YELLOW.n, 0, 0, 2.0f);
 }
 
@@ -1176,8 +1176,8 @@ static void coll_debug_raycast(rizz_coll_context* ctx, float opacity,
         for (int i = 0; i < ctx->num_cells; i++) {
             coll_spatial_grid_cell* cell = &ctx->cells[i];
             sx_rect cell_rect = sx_rectce(cell->center, sx_vec2splat(ctx->grid_cell_size * 0.5f));
-            sx_vec2 v1 = the_imguix->project_to_screen(sx_vec3v2(cell_rect.vmin, 0), &viewproj, NULL);
-            sx_vec2 v2 = the_imguix->project_to_screen(sx_vec3v2(cell_rect.vmax, 0), &viewproj, NULL);
+            sx_vec2 v1 = the_imguix->project_to_screen(sx_vec3v2(sx_vec2fv(cell_rect.vmin), 0), &viewproj, NULL);
+            sx_vec2 v2 = the_imguix->project_to_screen(sx_vec3v2(sx_vec2fv(cell_rect.vmax), 0), &viewproj, NULL);
             sx_swap(v1.y, v2.y, float);
 
             float count_ratio;
@@ -1200,8 +1200,8 @@ static void coll_debug_raycast(rizz_coll_context* ctx, float opacity,
 
     // world bounds
     the_imgui->ImDrawList_AddRect(draw_list, 
-        the_imguix->project_to_screen(sx_vec3v2(map_rect.vmin, 0), &viewproj, NULL),
-        the_imguix->project_to_screen(sx_vec3v2(map_rect.vmax, 0), &viewproj, NULL),
+        the_imguix->project_to_screen(sx_vec3v2(sx_vec2fv(map_rect.vmin), 0), &viewproj, NULL),
+        the_imguix->project_to_screen(sx_vec3v2(sx_vec2fv(map_rect.vmax), 0), &viewproj, NULL),
         SX_COLOR_YELLOW.n, 0, 0, 2.0f);    
 
     // rays
@@ -1315,3 +1315,4 @@ rizz_plugin_decl_event_handler(collision, e)
 
 static const char* collision__deps[] = { "imgui" };
 rizz_plugin_implement_info(collision, 1000, "collision plugin", collision__deps, 1);
+

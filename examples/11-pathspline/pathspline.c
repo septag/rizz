@@ -2,7 +2,7 @@
 #include "rizz/utility.h"
 #include "sx/allocator.h"
 #include "sx/io.h"
-#include "sx/math.h"
+#include "sx/math-vec.h"
 #include "sx/os.h"
 #include "sx/rng.h"
 #include "sx/string.h"
@@ -122,12 +122,7 @@ static sx_quat quat_lookat(sx_vec3 pos, sx_vec3 target)
     sx_vec3 x = sx_vec3_norm(sx_vec3_cross(y, SX_VEC3_UNITZ));
     sx_vec3 z = sx_vec3_cross(x, y);
 
-    sx_mat4 m = (sx_mat4){
-        .col1 = sx_vec4v3(x, 0),
-        .col2 = sx_vec4v3(y, 0),
-        .col3 = sx_vec4v3(z, 0),
-        .col4 = SX_VEC4_ZERO,
-    };
+    sx_mat4 m = sx_mat4v(sx_vec4v3(x, 0), sx_vec4v3(y, 0), sx_vec4v3(z, 0), SX_VEC4_ZERO);
     return sx_mat4_quat(&m);
 }
 
@@ -332,9 +327,9 @@ static void update(float dt)
                        .z = (the_utility->noise.perlin1d(freq * (t + 100)) * sx_torad(gain)) });
         g_draw3d.cam.quat = sx_quat_mul(g_draw3d.cam.quat, shake);
         sx_mat3 m = sx_quat_mat3(g_draw3d.cam.quat);
-        g_draw3d.cam.right = m.col1;
-        g_draw3d.cam.forward = m.col2;
-        g_draw3d.cam.up = m.col3;
+        g_draw3d.cam.right = sx_vec3fv(m.fc1);
+        g_draw3d.cam.forward = sx_vec3fv(m.fc2);
+        g_draw3d.cam.up = sx_vec3fv(m.fc3);
         g_draw3d.cam.fov = g_draw3d.cam_evalresult.fov;
     }
 
