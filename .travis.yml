@@ -14,6 +14,7 @@ addons:
     - libxrandr-dev
     - libxi-dev
     - libasound2-dev
+    - libc6-dev
 
 before_script:
   - mkdir build
