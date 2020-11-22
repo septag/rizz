@@ -39,6 +39,7 @@ if (NOT MACOSX_BUNDLE_ROOT_DIR)
     set (MACOSX_BUNDLE_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
+set(CMAKE_CXX_STANDARD 14)
 
 # output directories for binary files
 if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)

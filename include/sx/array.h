@@ -102,3 +102,77 @@ SX_INLINE void* sx__sbgrowf(void* arr, int increment, int itemsize, const sx_all
         return 0x0;    // NULL
     }
 }
+
+
+// cpp wrapper (minimal template)
+#ifdef __cplusplus
+template <typename _T>
+struct sx_array 
+{
+    _T* p;
+    const sx_alloc* alloc;
+
+    sx_array() { p = nullptr; alloc = nullptr; }
+    explicit sx_array(const sx_alloc* _alloc) : alloc(_alloc), p(nullptr) {} 
+
+    ~sx_array() 
+    { 
+        if (alloc) {
+            sx_array_free(alloc, p); 
+        }
+        p = nullptr;
+    }
+
+    void push(const _T& _value) 
+    {
+        sx_assert(alloc);
+        sx_array_push(alloc, p, _value);
+    }
+
+    void pop(int _index)
+    {
+        sx_assert(alloc);
+        sx_assert(_index < sx_array_count(p));
+        sx_array_pop(alloc, _index);
+    }
+
+    void pop_last()
+    {
+        sx_assert(alloc);
+        sx_assert(sx_array_count(p));
+        sx_array_pop_last(p);
+    }
+
+    void clear()
+    {
+        sx_assert(alloc);
+        sx_array_clear(p);
+    }
+
+    void free() 
+    {
+        sx_assert(alloc);
+        sx_array_free(alloc, p);
+        p = nullptr;
+    }
+
+    int count() const 
+    {
+        sx_assert(alloc);
+        return sx_array_count(p);
+    }
+
+    _T* expand(int _count) 
+    {
+        sx_assert(alloc);
+        return sx_array_add(alloc, p, _count);
+    }
+
+    void reserve(int _count)
+    {
+        sx_assert(alloc);
+        sx_array_reserve(alloc, p, _count);
+    }
+
+};
+#endif // __cplusplus

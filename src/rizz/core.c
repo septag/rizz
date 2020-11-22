@@ -6,8 +6,8 @@
 
 #include "rizz/imgui.h"
 #include "rizz/imgui-extra.h"
-
 #include "rizz/rizz.h"
+
 #include "sx/allocator.h"
 #include "sx/array.h"
 #include "sx/atomic.h"
@@ -85,11 +85,32 @@ typedef struct rizz__core_tmpalloc_inst {
 
 typedef struct rizz__core_tmpalloc {
     sx_vmem_context vmem;
-    rizz__core_tmpalloc_inst* alloc_stack;    // sx_array - keep offsets in a stack for push()/pop()
+    rizz__core_tmpalloc_inst* alloc_stack;    // sx_array - stack for push()/pop()
     int stack_depth;
     size_t peak;
     size_t frame_peak;
 } rizz__core_tmpalloc;
+
+typedef struct rizz__core_tmpalloc_debug_item {
+    void* ptr;
+    size_t size;
+    char file[32];
+    uint32_t line;
+} rizz__core_tmpalloc_debug_item;
+
+typedef struct rizz__core_tmpalloc_debug_inst {
+    sx_alloc alloc;
+    rizz__core_tmpalloc_debug_item* items;  // sx_array: allocated items within 
+} rizz__core_tmpalloc_debug_inst;
+
+// debug temp-allocator is a replacement for tmpalloc, which allocates from heap instead of linear alloc
+typedef struct rizz__core_tmpalloc_debug {
+    size_t offset;
+    size_t max_size;
+    size_t peak;
+    size_t frame_peak;
+    rizz__core_tmpalloc_debug_inst* alloc_stack;    // sx_array - stack for push()/pop() api
+} rizz__core_tmpalloc_debug;
 
 typedef struct rizz__core_cmd {
     char name[32];
@@ -952,6 +973,18 @@ static inline void rizz__atomic_max(sx_atomic_size* _max, intptr_t val)
     while (cur_max < val && sx_atomic_cas_size(_max, val, cur_max) != cur_max) {
         cur_max = *_max;
     }
+}
+
+static void* rizz__tmp_alloc_debug_cb(void* ptr, size_t size, uint32_t align, const char* file,
+                                      const char* func, uint32_t line, void* user_data)
+{
+    sx_unused(ptr);
+    sx_unused(size);
+    sx_unused(align);
+    sx_unused(file);
+    sx_unused(func);
+    sx_unused(line);
+    sx_unused(user_data);
 }
 
 static void* rizz__tmp_alloc_cb(void* ptr, size_t size, uint32_t align, const char* file,
