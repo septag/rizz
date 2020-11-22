@@ -119,8 +119,26 @@ struct sx_array
     { 
         if (alloc) {
             sx_array_free(alloc, p); 
+            alloc = nullptr;
         }
         p = nullptr;
+    }
+
+    void init(const sx_alloc* _alloc, int init_count = 0)
+    {
+        sx_assert(_alloc);
+        this->alloc = _alloc;
+        if (init_count > 0) {
+            sx_array_reserve(_alloc, p, init_count);
+        }
+    }
+
+    void release()
+    {
+        sx_assert(alloc);
+        sx_array_free(alloc, p);
+        p = nullptr;
+        alloc = nullptr;
     }
 
     void push(const _T& _value) 
@@ -172,6 +190,18 @@ struct sx_array
     {
         sx_assert(alloc);
         sx_array_reserve(alloc, p, _count);
+    }
+
+    _T& operator[](int _index)
+    {
+        sx_assert(p);
+        return this->p[_index];
+    }
+
+    const _T& operator[](int index) const
+    {
+        sx_assert(p);
+        return this->p[index];
     }
 
 };

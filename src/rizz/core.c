@@ -985,6 +985,7 @@ static void* rizz__tmp_alloc_debug_cb(void* ptr, size_t size, uint32_t align, co
     sx_unused(func);
     sx_unused(line);
     sx_unused(user_data);
+    return NULL;
 }
 
 static void* rizz__tmp_alloc_cb(void* ptr, size_t size, uint32_t align, const char* file,
