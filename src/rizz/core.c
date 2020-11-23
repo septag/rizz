@@ -975,7 +975,7 @@ static inline void rizz__atomic_max(sx_atomic_size* _max, intptr_t val)
     }
 }
 
-static void* rizz__tmp_alloc_debug_cb(void* ptr, size_t size, uint32_t align, const char* file,
+SX_ALLOW_UNUSED static void* rizz__tmp_alloc_debug_cb(void* ptr, size_t size, uint32_t align, const char* file,
                                       const char* func, uint32_t line, void* user_data)
 {
     sx_unused(ptr);

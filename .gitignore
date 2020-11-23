@@ -24,6 +24,7 @@ __pycache__
 Thumbs.db
 .build*
 .clangd
+build.bat
 
 # Gradle
 .gradle
