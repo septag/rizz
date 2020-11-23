@@ -167,7 +167,8 @@ static bool init()
     // camera
     // projection: setup for perspective
     // view: Z-UP Y-Forward (like blender)
-    sx_vec2 screen_size = the_app->sizef();
+    sx_vec2 screen_size;
+    the_app->window_size(&screen_size);
     const float view_width = screen_size.x;
     const float view_height = screen_size.y;
     the_camera->init(&g_draw3d.cam, 60.0f, sx_rectwh(0, 0, view_width, view_height), 0.1f, 500.0f);
@@ -346,8 +347,9 @@ static void render(void)
     the_gfx->staged.begin(g_draw3d.stage);
     the_gfx->staged.begin_default_pass(&pass_action, the_app->width(), the_app->height());
 
-    sx_mat4 proj = the_camera->perspective_mat(&g_draw3d.cam);
-    sx_mat4 view = the_camera->view_mat(&g_draw3d.cam);
+    sx_mat4 proj, view;
+    the_camera->perspective_mat(&g_draw3d.cam, &proj);
+    the_camera->view_mat(&g_draw3d.cam, &view);
     sx_mat4 viewproj = sx_mat4_mul(&proj, &view);
 
     the_prims->grid_xyplane_cam(1.0f, 5.0f, 50.0f, &g_draw3d.cam, &viewproj);

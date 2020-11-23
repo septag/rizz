@@ -261,7 +261,7 @@ typedef enum rizz_cmdline_argtype {
 typedef struct rizz_api_app {
     int (*width)(void);
     int (*height)(void);
-    sx_vec2 (*sizef)(void);
+    void (*window_size)(sx_vec2* size);
     bool (*highdpi)(void);
     float (*dpiscale)(void);
     const rizz_config* (*config)(void);
@@ -480,20 +480,16 @@ typedef struct rizz_camera_fps {
 } rizz_camera_fps;
 
 typedef struct rizz_api_camera {
-    void (*init)(rizz_camera* cam, float fov_deg, const sx_rect viewport, float fnear, float ffar);
-    void (*lookat)(rizz_camera* cam, const sx_vec3 pos, const sx_vec3 target, const sx_vec3 up);
+    void (*init)(rizz_camera* cam, float fov_deg, sx_rect viewport, float fnear, float ffar);
+    void (*lookat)(rizz_camera* cam, sx_vec3 pos, sx_vec3 target, sx_vec3 up);
     void (*location)(rizz_camera* cam, sx_vec3 pos, sx_quat rot);
-    sx_mat4 (*ortho_mat)(const rizz_camera* cam);
-    sx_mat4 (*perspective_mat)(const rizz_camera* cam);
-    sx_mat4 (*view_mat)(const rizz_camera* cam);
+    void (*ortho_mat)(const rizz_camera* cam, sx_mat4* proj);
+    void (*perspective_mat)(const rizz_camera* cam, sx_mat4* proj);
+    void (*view_mat)(const rizz_camera* cam, sx_mat4* view);
     void (*calc_frustum_points)(const rizz_camera* cam, sx_vec3 frustum[8]);
-    void (*calc_frustum_points_range)(const rizz_camera* cam, sx_vec3 frustum[8], float fnear,
-                                      float ffar);
-
-    void (*fps_init)(rizz_camera_fps* cam, float fov_deg, const sx_rect viewport, float fnear,
-                     float ffar);
-    void (*fps_lookat)(rizz_camera_fps* cam, const sx_vec3 pos, const sx_vec3 target,
-                       const sx_vec3 up);
+    void (*calc_frustum_points_range)(const rizz_camera* cam, sx_vec3 frustum[8], float fnear, float ffar);
+    void (*fps_init)(rizz_camera_fps* cam, float fov_deg, sx_rect viewport, float fnear, float ffar);
+    void (*fps_lookat)(rizz_camera_fps* cam, sx_vec3 pos, sx_vec3 target, sx_vec3 up);
     void (*fps_pitch)(rizz_camera_fps* cam, float pitch);
     void (*fps_pitch_range)(rizz_camera_fps* cam, float pitch, float _min, float _max);
     void (*fps_yaw)(rizz_camera_fps* cam, float yaw);

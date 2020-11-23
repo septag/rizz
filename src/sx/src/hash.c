@@ -6,7 +6,7 @@
 #include "sx/allocator.h"
 
 // https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
-static inline SX_CONSTEXPR int sx__nearest_pow2(int n)
+static inline SX_CONSTFN int sx__nearest_pow2(int n)
 {
     n--;
     n |= n >> 1;
@@ -18,7 +18,7 @@ static inline SX_CONSTEXPR int sx__nearest_pow2(int n)
     return n;
 }
 
-static inline SX_ALLOW_UNUSED SX_CONSTEXPR bool sx__ispow2(int n)
+static inline SX_ALLOW_UNUSED SX_CONSTFN bool sx__ispow2(int n)
 {
     return (n & (n - 1)) == 0;
 }

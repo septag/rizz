@@ -87,7 +87,7 @@ typedef struct rizz_api_utility {
         bool (*add_key)(rizz_gradient* gradient, rizz_gradient_key key);
         bool (*remove_key)(rizz_gradient* gradient, int index);
         bool (*move_key)(rizz_gradient* gradient, int index, float t);
-        sx_color (*eval)(const rizz_gradient* gradient, float t);
+        void (*eval)(const rizz_gradient* gradient, float t, sx_color* outcolor);
         void (*edit)(const rizz_api_imgui* api, const char* label, rizz_gradient* gradient);
     } gradient;
     struct {

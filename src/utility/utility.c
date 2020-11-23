@@ -15,7 +15,7 @@ void gradient__init(rizz_gradient* gradient, sx_color start, sx_color end);
 bool gradient__add_key(rizz_gradient* gradient, rizz_gradient_key key);
 bool gradient__remove_key(rizz_gradient* gradient, int index);
 bool gradient__move_key(rizz_gradient* gradient, int index, float t);
-sx_color gradient__eval(const rizz_gradient* gradient, float t);
+void gradient__eval(const rizz_gradient* gradient, float t, sx_color* outcolor);
 void gradient__edit(const rizz_api_imgui* gui, const char* label, rizz_gradient* gradient);
 
 void graph__init(rizz_graph* graph, float start, float end);

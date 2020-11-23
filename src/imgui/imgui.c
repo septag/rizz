@@ -1218,7 +1218,8 @@ static void imgui__update_cursor()
 static void imgui__frame()
 {
     ImGuiIO* io = the__imgui.GetIO();
-    io->DisplaySize = the_app->sizef();
+    io->DisplaySize;
+    the_app->window_size(&io->DisplaySize);
     io->DeltaTime = (float)sx_tm_sec(the_core->delta_tick());
     if (io->DeltaTime == 0) {
         io->DeltaTime = 0.033f;
@@ -1925,7 +1926,7 @@ rizz_plugin_decl_event_handler(imgui, e)
         imgui__update_cursor();
         break;
     case RIZZ_APP_EVENTTYPE_RESIZED:
-        io->DisplaySize = the_app->sizef();
+        the_app->window_size(&io->DisplaySize);
         imgui__imguizmo_setrect(0, 0, io->DisplaySize.x, io->DisplaySize.y);
         break;
     default:

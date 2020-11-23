@@ -66,12 +66,14 @@ bool gradient__remove_key(rizz_gradient* gradient, int index)
     return true;
 }
 
-sx_color gradient__eval(const rizz_gradient* gradient, float t)
+void gradient__eval(const rizz_gradient* gradient, float t, sx_color* outcolor)
 {
     sx_assert(gradient->num_keys);
 
-    if (gradient->num_keys == 1)
-        return gradient->keys[0].color;
+    if (gradient->num_keys == 1) {
+        *outcolor = gradient->keys[0].color;
+        return;
+    }
 
     int a = 0;
     int b = 1;
@@ -91,7 +93,7 @@ sx_color gradient__eval(const rizz_gradient* gradient, float t)
     float bt = gradient->keys[b].t;
     t = (t - at) / (bt - at);
     t = sx_clamp(t, 0.0f, 1.0f);
-    return (sx_color){
+    *outcolor = (sx_color){
         .r = (uint8_t)sx_lerp((float)ac.r, (float)bc.r, t),
         .g = (uint8_t)sx_lerp((float)ac.g, (float)bc.g, t),
         .b = (uint8_t)sx_lerp((float)ac.b, (float)bc.b, t),
@@ -194,7 +196,8 @@ void gradient__edit(const rizz_api_imgui* gui, const char* label, rizz_gradient*
     gui->SetCursorScreenPos(rpos);
     if (gui->InvisibleButton("grad-add-key", rsize, 0)) {
         float t = (mpos.x - rpos.x) / rsize.x;
-        sx_color c = gradient__eval(gradient, t);
+        sx_color c;
+        gradient__eval(gradient, t, &c);
         gradient__add_key(gradient, (rizz_gradient_key){ t, c });
     }
 

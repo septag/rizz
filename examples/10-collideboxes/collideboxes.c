@@ -109,7 +109,8 @@ static bool init(void)
     // camera
     // projection: setup for perspective
     // view: Z-UP Y-Forward (like blender)
-    sx_vec2 screen_size = the_app->sizef();
+    sx_vec2 screen_size;
+    the_app->window_size(&screen_size);
     const float view_width = screen_size.x;
     const float view_height = screen_size.y;
     the_cam->fps_init(&g_coll.cam, 50.0f, sx_rectwh(0, 0, view_width, view_height), 0.1f, 500.0f);
@@ -260,7 +261,9 @@ static void update(float dt)
         the_coll->debug_raycast(g_coll.ctx, 0.6f, g_coll.raycast_vis_mode, 1.0f);
         // crossair
         ImDrawList* draw_list = the_imguix->begin_fullscreen_draw("crossair");
-        sx_vec2 center = sx_vec2_mulf(the_app->sizef(), 0.5f);
+        sx_vec2 size;
+        the_app->window_size(&size);
+        sx_vec2 center = sx_vec2_mulf(size, 0.5f);
         the_imgui->ImDrawList_AddCircle(draw_list, center, 5.0f, SX_COLOR_YELLOW.n, 12, 4.0f);
     }
 
@@ -275,8 +278,9 @@ static void render(void)
     the_gfx->staged.begin(g_coll.main_stage);
     the_gfx->staged.begin_default_pass(&pass_action, the_app->width(), the_app->height());
 
-    sx_mat4 proj = the_cam->perspective_mat(&g_coll.cam.cam);
-    sx_mat4 view = the_cam->view_mat(&g_coll.cam.cam);
+    sx_mat4 proj, view;
+    the_cam->perspective_mat(&g_coll.cam.cam, &proj);
+    the_cam->view_mat(&g_coll.cam.cam, &view);
     sx_mat4 viewproj = sx_mat4_mul(&proj, &view);
 
     if (g_coll.show_grid) {

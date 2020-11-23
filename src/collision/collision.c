@@ -1045,8 +1045,11 @@ static void coll_debug_collisions(rizz_coll_context* ctx, float opacity,
                                   rizz_coll_debug_collision_mode mode, float heatmap_limit)
 {
     ImDrawList* draw_list = the_imguix->begin_fullscreen_draw("strike_coll_collisions");
+
+    sx_vec2 wsize;
+    the_app->window_size(&wsize);
     // dim background
-    the_imgui->ImDrawList_AddRectFilled(draw_list, SX_VEC2_ZERO, the_app->sizef(),
+    the_imgui->ImDrawList_AddRectFilled(draw_list, SX_VEC2_ZERO, wsize,
                                         sx_color4u(0, 0, 0, (uint8_t)(opacity*255.0f)).n, 0, 0);
 
     sx_rect map_rect = sx_rectwh(-ctx->map_size_x * 0.5f, -ctx->map_size_y * 0.5f,
@@ -1127,7 +1130,9 @@ static void coll_debug_raycast(rizz_coll_context* ctx, float opacity,
     float map_size_y = ctx->map_size_y;
     
     // dim background
-    the_imgui->ImDrawList_AddRectFilled(draw_list, SX_VEC2_ZERO, the_app->sizef(),
+    sx_vec2 wsize;
+    the_app->window_size(&wsize);
+    the_imgui->ImDrawList_AddRectFilled(draw_list, SX_VEC2_ZERO, wsize,
                                         sx_color4u(0, 0, 0, (uint8_t)(opacity*255.0f)).n, 0, 0);
 
     sx_rect map_rect = sx_rectwh(-map_size_x*0.5f, -map_size_y*0.5f, map_size_x, map_size_y);

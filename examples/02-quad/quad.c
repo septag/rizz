@@ -111,7 +111,8 @@ static bool init()
     // camera
     // projection: setup for ortho, total-width = 10 units
     // view: Z-UP Y-Forward (like blender)
-    sx_vec2 screen_size = the_app->sizef();
+    sx_vec2 screen_size;
+    the_app->window_size(&screen_size);
     const float view_width = 5.0f;
     const float view_height = screen_size.y * view_width / screen_size.x;
     the_camera->fps_init(&g_quad.cam, 50.0f,
@@ -148,8 +149,9 @@ static void render()
 
     // draw textured quad
     {
-        sx_mat4 proj = the_camera->ortho_mat(&g_quad.cam.cam);
-        sx_mat4 view = the_camera->view_mat(&g_quad.cam.cam);
+        sx_mat4 proj, view;
+        the_camera->ortho_mat(&g_quad.cam.cam, &proj);
+        the_camera->view_mat(&g_quad.cam.cam, &view);
 
         quad_matrices mats = { .mvp = sx_mat4_mul(&proj, &view) };
 

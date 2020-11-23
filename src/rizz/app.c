@@ -581,9 +581,10 @@ sapp_desc sokol_main(int argc, char* argv[])
     };
 }
 
-static sx_vec2 rizz__app_sizef(void)
+static void rizz__app_window_size(sx_vec2* size)
 {
-    return g_app.window_size;
+    sx_assert(size);
+    *size = g_app.window_size;
 }
 
 static const char* rizz__app_name(void)
@@ -753,7 +754,7 @@ static void rizz__register_shortcut(const char* shortcut, rizz_app_shortcut_cb* 
 
 rizz_api_app the__app = { .width = sapp_width,
                           .height = sapp_height,
-                          .sizef = rizz__app_sizef,
+                          .window_size = rizz__app_window_size,
                           .highdpi = sapp_high_dpi,
                           .dpiscale = sapp_dpi_scale,
                           .config = rizz__app_config,

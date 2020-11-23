@@ -226,7 +226,8 @@ static void render()
     sdf_vs_vars vs_vars;
     sdf_fs_vars fs_vars;
 
-    sx_vec2 sizef = the_app->sizef();
+    sx_vec2 sizef;
+    the_app->window_size(&sizef);
 
     the_camera->calc_frustum_points(&g_sdf.cam.cam, frustum);
     vs_vars.camera_corners[0] = sx_vec4v3(frustum[0], 0);

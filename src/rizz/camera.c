@@ -5,8 +5,7 @@
 #include "internal.h"
 #include "sx/math-vec.h"
 
-static void rizz__cam_init(rizz_camera* cam, float fov_deg, const sx_rect viewport, float fnear,
-                           float ffar)
+static void rizz__cam_init(rizz_camera* cam, float fov_deg, sx_rect viewport, float fnear, float ffar)
 {
     cam->right = SX_VEC3_UNITX;
     cam->up = SX_VEC3_UNITZ;
@@ -30,8 +29,7 @@ static void rizz__cam_location(rizz_camera* cam, sx_vec3 pos, sx_quat rot)
     cam->forward = sx_vec3fv(m.fc3);
 }
 
-static void rizz__cam_lookat(rizz_camera* cam, const sx_vec3 pos, const sx_vec3 target,
-                             const sx_vec3 up)
+static void rizz__cam_lookat(rizz_camera* cam, sx_vec3 pos, sx_vec3 target, sx_vec3 up)
 {
     // TODO: figure UP vector out, I hacked up vector (in the matrix) to make it work correctly
     cam->forward = sx_vec3_norm(sx_vec3_sub(target, pos));
@@ -45,37 +43,37 @@ static void rizz__cam_lookat(rizz_camera* cam, const sx_vec3 pos, const sx_vec3 
     cam->quat = sx_mat4_quat(&m);
 }
 
-static sx_mat4 rizz__cam_perspective_mat(const rizz_camera* cam)
+static void rizz__cam_perspective_mat(const rizz_camera* cam, sx_mat4* proj)
 {
+    sx_assert(proj);
     float w = cam->viewport.xmax - cam->viewport.xmin;
     float h = cam->viewport.ymax - cam->viewport.ymin;
-    return sx_mat4_perspectiveFOV(sx_torad(cam->fov), w / h, cam->fnear, cam->ffar,
-                                  the__gfx.GL_family());
+    *proj = sx_mat4_perspectiveFOV(sx_torad(cam->fov), w / h, cam->fnear, cam->ffar, the__gfx.GL_family());
 }
 
-static sx_mat4 rizz__cam_ortho_mat(const rizz_camera* cam)
+static void rizz__cam_ortho_mat(const rizz_camera* cam, sx_mat4* proj)
 {
-    return sx_mat4_ortho(cam->viewport.xmax - cam->viewport.xmin,
-                         cam->viewport.ymax - cam->viewport.ymin, cam->fnear, cam->ffar, 0,
-                         the__gfx.GL_family());
+    sx_assert(proj);
+    *proj = sx_mat4_ortho(cam->viewport.xmax - cam->viewport.xmin,
+                          cam->viewport.ymax - cam->viewport.ymin, cam->fnear, cam->ffar, 0,
+                          the__gfx.GL_family());
 }
 
-static sx_mat4 rizz__cam_view_mat(const rizz_camera* cam)
+static void rizz__cam_view_mat(const rizz_camera* cam, sx_mat4* view)
 {
+    sx_assert(view);
+
     sx_vec3 zaxis = cam->forward;
     sx_vec3 xaxis = cam->right;    // sx_vec3_norm(sx_vec3_cross(zaxis, up));
     sx_vec3 yaxis = cam->up;       // sx_vec3_cross(xaxis, zaxis);
 
-    // clang-format off
-    return sx_mat4f(xaxis.x, xaxis.y, xaxis.z, -sx_vec3_dot(xaxis, cam->pos), 
-                    yaxis.x, yaxis.y, yaxis.z, -sx_vec3_dot(yaxis, cam->pos), 
-                    -zaxis.x, -zaxis.y, -zaxis.z, sx_vec3_dot(zaxis, cam->pos), 
-                    0.0f, 0.0f, 0.0f, 1.0f);
-    // clang-format on
+    *view = sx_mat4f(xaxis.x, xaxis.y, xaxis.z, -sx_vec3_dot(xaxis, cam->pos), 
+                     yaxis.x, yaxis.y, yaxis.z, -sx_vec3_dot(yaxis, cam->pos), 
+                     -zaxis.x, -zaxis.y, -zaxis.z, sx_vec3_dot(zaxis, cam->pos), 
+                     0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-static void rizz__calc_frustum_points_range(const rizz_camera* cam, sx_vec3 frustum[8], float fnear,
-                                            float ffar)
+static void rizz__calc_frustum_points_range(const rizz_camera* cam, sx_vec3 frustum[8], float fnear, float ffar)
 {
     const float fov = sx_torad(cam->fov);
     const float w = cam->viewport.xmax - cam->viewport.xmin;
@@ -120,15 +118,13 @@ static void rizz__calc_frustum_points(const rizz_camera* cam, sx_vec3 frustum[8]
     rizz__calc_frustum_points_range(cam, frustum, cam->fnear, cam->ffar);
 }
 
-static void rizz__cam_fps_init(rizz_camera_fps* cam, float fov_deg, const sx_rect viewport,
-                               float fnear, float ffar)
+static void rizz__cam_fps_init(rizz_camera_fps* cam, float fov_deg, const sx_rect viewport, float fnear, float ffar)
 {
     rizz__cam_init(&cam->cam, fov_deg, viewport, fnear, ffar);
     cam->pitch = cam->yaw = 0;
 }
 
-static void rizz__cam_fps_lookat(rizz_camera_fps* cam, const sx_vec3 pos, const sx_vec3 target,
-                                 const sx_vec3 up)
+static void rizz__cam_fps_lookat(rizz_camera_fps* cam, sx_vec3 pos, sx_vec3 target, sx_vec3 up)
 {
     rizz__cam_lookat(&cam->cam, pos, target, up);
 

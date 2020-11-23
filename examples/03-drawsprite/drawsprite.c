@@ -136,7 +136,8 @@ static bool init()
     // camera
     // projection: setup for ortho, total-width = 10 units
     // view: Y-UP
-    sx_vec2 screen_size = the_app->sizef();
+    sx_vec2 screen_size;
+    the_app->window_size(&screen_size);
     const float view_width = 5.0f;
     const float view_height = screen_size.y * view_width / screen_size.x;
     the_camera->fps_init(&g_ds.cam, 50.0f,
@@ -282,8 +283,9 @@ static void render()
     the_gfx->staged.begin_default_pass(&pass_action, the_app->width(), the_app->height());
 
     // draw sprite
-    sx_mat4 proj = the_camera->ortho_mat(&g_ds.cam.cam);
-    sx_mat4 view = the_camera->view_mat(&g_ds.cam.cam);
+    sx_mat4 proj, view;
+    the_camera->ortho_mat(&g_ds.cam.cam, &proj);
+    the_camera->view_mat(&g_ds.cam.cam, &view);
     sx_mat4 vp = sx_mat4_mul(&proj, &view);
 
     drawsprite_params params = {

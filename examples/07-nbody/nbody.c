@@ -194,7 +194,8 @@ static bool init()
     // camera
     // projection: setup for perspective, SPREAD*3.0f away from the center
     // view: Z-UP Y-Forward (like blender)
-    sx_vec2 screen_size = the_app->sizef();
+    sx_vec2 screen_size;
+    the_app->window_size(&screen_size);
     const float view_width = screen_size.x;
     const float view_height = screen_size.y;
     the_camera->fps_init(&g_nbody.cam, 50.0f, sx_rectwh(0, 0, view_width, view_height), 10.0f,
@@ -265,8 +266,9 @@ static void render()
 
     // draw textured quad with the CS processed texture
     {
-        sx_mat4 proj = the_camera->perspective_mat(&g_nbody.cam.cam);
-        sx_mat4 view = the_camera->view_mat(&g_nbody.cam.cam);
+        sx_mat4 proj, view;
+        the_camera->perspective_mat(&g_nbody.cam.cam, &proj);
+        the_camera->view_mat(&g_nbody.cam.cam, &view);
 
         the_gfx->staged.apply_pipeline(g_nbody.draw_pip);
         the_gfx->staged.apply_bindings(
