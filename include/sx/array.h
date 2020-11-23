@@ -48,7 +48,10 @@
 //     Note that 'TYPE *a' in sx_array_push and sx_array_add must be lvalues
 //     so that the library can overwrite the existing pointer if the object has to be reallocated.
 //
-
+// NOTE for C++ users:
+//     take a look at `sx_array` struct and it's members at the end of this file. It's a thing template 
+//     wrapper over array macros for more convenient C++ usage
+//
 #pragma once
 
 typedef struct sx_alloc sx_alloc;

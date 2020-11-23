@@ -72,6 +72,10 @@
 //                  integer anymore. It can be any POD type. you just define the size of your type
 //      The function are pretty much the same as sx_hashtbl, but with `sx_hashtbltval_` prefix.
 //
+// NOTE for C++ users:
+//      Take a look at `sx_hashtable_t` struct and it's members (C++ only) in this file. It is a very 
+//      thin template wrapper over sx_hashtbl_tval for more convenient C++ usage
+//
 #pragma once
 
 #include "sx.h"

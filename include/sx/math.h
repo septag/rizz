@@ -23,6 +23,8 @@
 //          transform vector (v) by matrix (M) = M.v
 //          matrix transforms are multiplied in reverse: Scale->Rotation->Translate = TxRxS
 //
+// C++ Programmers:
+//     Some useful operators for basic vector and matrix arithmatic are included. See the end of math-vec.h
 //
 #pragma once
 
