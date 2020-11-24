@@ -32,19 +32,19 @@
   <Type Name="sx_mat3">
     <DisplayString>{{matrix 3x3}}</DisplayString>
     <Expand>
-      <Item Name="col1">col1</Item>
-      <Item Name="col2">col2</Item>
-      <Item Name="col3">col3</Item>
+      <Item Name="col1">fc1</Item>
+      <Item Name="col2">fc2</Item>
+      <Item Name="col3">fc3</Item>
     </Expand>
   </Type>
 
   <Type Name="sx_mat4">
     <DisplayString>{{matrix 4x4}}</DisplayString>
     <Expand>
-      <Item Name="col1">col1</Item>
-      <Item Name="col2">col2</Item>
-      <Item Name="col3">col3</Item>
-      <Item Name="col4">col4</Item>
+      <Item Name="col1">fc1</Item>
+      <Item Name="col2">fc2</Item>
+      <Item Name="col3">fc3</Item>
+      <Item Name="col4">fc4</Item>
     </Expand>
   </Type>
 
