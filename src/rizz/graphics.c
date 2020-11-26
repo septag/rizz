@@ -1891,6 +1891,8 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
 static void rizz__shader_on_finalize(rizz_asset_load_data* data,
                                      const rizz_asset_load_params* params, const sx_mem_block* mem)
 {
+    sx_unused(params);
+
     const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
     sg_shader_desc shader_desc;
 
