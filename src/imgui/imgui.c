@@ -1218,7 +1218,6 @@ static void imgui__update_cursor()
 static void imgui__frame()
 {
     ImGuiIO* io = the__imgui.GetIO();
-    io->DisplaySize;
     the_app->window_size(&io->DisplaySize);
     io->DeltaTime = (float)sx_tm_sec(the_core->delta_tick());
     if (io->DeltaTime == 0) {

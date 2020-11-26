@@ -490,8 +490,7 @@ static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
     char ext[32];
     sx_os_path_ext(ext, sizeof(ext), params->path);
     if (sx_strequalnocase(ext, ".glb")) {
-        rizz_temp_alloc_begin(tmp_alloc);
-        sx_unused(tmp_alloc);
+        const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
         cgltf_data* gltf = data->user1;
         cgltf_options options = {
@@ -586,8 +585,8 @@ static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
 
         sx_memcpy(&model->layout, layout, sizeof(rizz_model_geometry_layout));
 
-        rizz_temp_alloc_end(tmp_alloc);
-    }
+        the_core->tmp_alloc_pop();
+    }   // if glb
 
     return true;
 }

@@ -820,8 +820,7 @@ static rizz_asset rizz__asset_load(const char* name, const char* path, const voi
                                    rizz_asset_load_flags flags, const sx_alloc* alloc,
                                    uint32_t tags)
 {
-    rizz_asset asset =
-        rizz__asset_load_hashed(sx_hash_fnv32_str(name), path, params, flags, alloc, tags);
+    rizz_asset asset = rizz__asset_load_hashed(sx_hash_fnv32_str(name), path, params, flags, alloc, tags);
     if (asset.id && g_asset.cur_group.id) {
         rizz__asset_group* g = &g_asset.groups[sx_handle_index(g_asset.cur_group.id)];
         sx_array_push(g_asset.alloc, g->assets, asset);

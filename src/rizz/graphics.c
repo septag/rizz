@@ -1310,7 +1310,9 @@ static rizz_shader_refl* rizz__shader_parse_reflect_bin(const sx_alloc* alloc,
             struct sgs_refl_uniformbuffer u;
             sx_mem_read_var(&r, u);
             refl->uniform_buffers[i] = (rizz_shader_refl_uniform_buffer){
-                .size_bytes = u.size_bytes, .binding = u.binding, .array_size = u.array_size
+                .size_bytes = u.size_bytes, 
+                .binding = u.binding, 
+                .array_size = u.array_size
             };
             sx_strcpy(refl->uniform_buffers[i].name, sizeof(refl->uniform_buffers[i].name), u.name);
         }
@@ -1874,17 +1876,23 @@ static rizz_asset_load_data rizz__shader_on_prepare(const rizz_asset_load_params
     shader->shd = the__gfx.alloc_shader();
     sx_assert(shader->shd.id);
 
-    return (rizz_asset_load_data){ .obj = { .ptr = shader },
-                                   .user1 = sx_malloc(g_gfx_alloc, sizeof(sg_shader_desc)) };
+    return (rizz_asset_load_data){ .obj = { .ptr = shader } };
 }
 
-static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params,
-                                 const sx_mem_block* mem)
+static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_load_params* params, const sx_mem_block* mem)
 {
     sx_unused(params);
+    sx_unused(mem);
+    sx_unused(data);
 
+    return true;
+}
+
+static void rizz__shader_on_finalize(rizz_asset_load_data* data,
+                                     const rizz_asset_load_params* params, const sx_mem_block* mem)
+{
     const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
-    sg_shader_desc* shader_desc = data->user1;
+    sg_shader_desc shader_desc;
 
     rizz_shader_refl *vs_refl = NULL, *fs_refl = NULL, *cs_refl = NULL;
     const uint8_t *vs_data = NULL, *fs_data = NULL, *cs_data = NULL;
@@ -1895,7 +1903,8 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
     uint32_t _sgs;
     sx_mem_read_var(&reader, _sgs);
     if (_sgs != SGS_CHUNK) {
-        return false;
+        sx_assert_alwaysf(0, "invalid shader SGS file");
+        return;
     }
     sx_mem_seekr(&reader, sizeof(uint32_t), SX_WHENCE_CURRENT);
 
@@ -1914,8 +1923,10 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
         rizz__sgs_chunk code_chunk = rizz__sgs_get_iff_chunk(&reader, stage_chunk.size, SGS_CHUNK_CODE);
         if (code_chunk.pos == -1) {
             code_chunk = rizz__sgs_get_iff_chunk(&reader, stage_chunk.size, SGS_CHUNK_DATA);
-            if (code_chunk.pos == -1)
-                return false;    // nor data or code chunk is found!
+            if (code_chunk.pos == -1) {
+                sx_assert_alwaysf(0, "neither data or code chunk is found");
+                return;
+            }
             code_type = RIZZ_SHADER_CODE_BYTECODE;
         }
 
@@ -1964,29 +1975,16 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
     }
 
     if (cs_refl && cs_data) {
-        rizz__shader_setup_desc_cs(shader_desc, cs_refl, cs_data, cs_size);
+        rizz__shader_setup_desc_cs(&shader_desc, cs_refl, cs_data, cs_size);
     } else {
         sx_assert(vs_refl && fs_refl);
-        rizz__shader_setup_desc(shader_desc, vs_refl, vs_data, vs_size, fs_refl, fs_data, fs_size);
+        rizz__shader_setup_desc(&shader_desc, vs_refl, vs_data, vs_size, fs_refl, fs_data, fs_size);
     }
 
-    the__core.tmp_alloc_pop();
-    return true;
-}
-
-static void rizz__shader_on_finalize(rizz_asset_load_data* data,
-                                     const rizz_asset_load_params* params, const sx_mem_block* mem)
-{
-    sx_unused(mem);
-    sx_unused(params);
-
     rizz_shader* shader = data->obj.ptr;
-    sg_shader_desc* desc = data->user1;
-    sx_assert(desc);
 
-    the__gfx.init_shader(shader->shd, desc);
-
-    sx_free(g_gfx_alloc, data->user1);
+    the__gfx.init_shader(shader->shd, &shader_desc);
+    the__core.tmp_alloc_pop();
 }
 
 static void rizz__shader_on_reload(rizz_asset handle, rizz_asset_obj prev_obj,

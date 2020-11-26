@@ -523,7 +523,7 @@ sapp_desc sokol_main(int argc, char* argv[])
         }
 
         // write to file
-        rizz__app_write_help_tofile("rizz_args.txt", cmdline, 
+        rizz__app_write_help_tofile("rizz_args.txt", cmdline,
                                     sx_array_count(g_app.cmdline_args) > 1 ? cmdline_app : NULL);
     }
 

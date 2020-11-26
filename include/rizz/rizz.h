@@ -519,7 +519,8 @@ enum rizz_core_flags_ {
     RIZZ_CORE_FLAG_LOG_TO_PROFILER = 0x02,      // log to remote profiler
     RIZZ_CORE_FLAG_PROFILE_GPU = 0x04,          // enable GPU profiling
     RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS = 0x08,   // write `unused-assets.json` on exit
-    RIZZ_CORE_FLAG_DETECT_LEAKS = 0x10          // Detect memory leaks (default on in _DEBUG builds)
+    RIZZ_CORE_FLAG_DETECT_LEAKS = 0x10,         // Detect memory leaks (default on in _DEBUG builds)
+    RIZZ_CORE_FLAG_DEBUG_TEMP_ALLOCATOR = 0x20  // Replace temp allocator backends with heap, so we can better trace out-of-bounds and corruption
 };
 typedef uint32_t rizz_core_flags;
 
