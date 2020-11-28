@@ -266,11 +266,10 @@ static void rizz__asset_on_read(const char* path, sx_mem_block* mem, void* user)
                                                                .flags = a->load_flags };
 
     char fixed_path[RIZZ_MAX_PATH];
-    bool path_is_fixed = false;
-    rizz_asset_meta_keyval* metas;
-    if ((path_is_fixed = rizz__asset_checkandfix_asset_type(mem, path, fixed_path, sizeof(fixed_path), 
-                                                            &aparams.num_meta))) 
-    {
+    bool path_is_fixed = rizz__asset_checkandfix_asset_type(mem, path, fixed_path, 
+                                                            sizeof(fixed_path), &aparams.num_meta);
+    rizz_asset_meta_keyval* metas = NULL;
+    if (path_is_fixed) {
         aparams.path = fixed_path;
         if (aparams.num_meta > 0) {
             sx_assert(aparams.num_meta < 64);

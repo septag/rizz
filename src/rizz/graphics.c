@@ -280,6 +280,7 @@ SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4267)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4244)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4146)
+SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4505)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG("-Wshorten-64-to-32")
 #include "sort/sort.h"
@@ -297,6 +298,7 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
     SOKOL_ASSERT(shd->slot.state == SG_RESOURCESTATE_VALID);
     SOKOL_ASSERT(shd->d3d11.vs_blob && shd->d3d11.vs_blob_length > 0);
     sx_unused(desc);
+    sx_unused(info);
 
     pip->shader = shd;
     pip->cmn.shader_id = shader_id;
@@ -1589,8 +1591,9 @@ static sg_shader_desc* rizz__shader_setup_desc(sg_shader_desc* desc,
         }
         // clang-format on
 
-        if (SX_PLATFORM_APPLE)
+        #if SX_PLATFORM_APPLE
             stage_desc->entry = "main0";
+        #endif
 
         if (stage->refl->code_type == RIZZ_SHADER_CODE_BYTECODE) {
             stage_desc->byte_code = (const uint8_t*)stage->code;
@@ -1654,9 +1657,9 @@ static sg_shader_desc* rizz__shader_setup_desc_cs(sg_shader_desc* desc,
         }
         // clang-format on
 
-        if (SX_PLATFORM_APPLE) {
+        #if SX_PLATFORM_APPLE
             stage_desc->entry = "main0";
-        }
+        #endif
 
         if (stage->refl->code_type == RIZZ_SHADER_CODE_BYTECODE) {
             stage_desc->byte_code = (const uint8_t*)stage->code;
@@ -3568,7 +3571,7 @@ static rizz_gfx_stage rizz__stage_find(const char* name)
             return (rizz_gfx_stage){ .id = rizz_to_id(i) };
     }
     sx_unlock(&g_gfx.stage_lk);
-    return (rizz_gfx_stage){ .id = -1 };
+    return (rizz_gfx_stage){ .id = 0 };
 }
 
 static void rizz__init_pipeline(sg_pipeline pip_id, const sg_pipeline_desc* desc)

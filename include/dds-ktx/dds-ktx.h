@@ -1221,7 +1221,7 @@ void ddsktx_get_sub(const ddsktx_texture_info* tc, ddsktx_sub_data* sub_data,
             r.offset = ddsktx__align_mask(r.offset, 3); // mip-padding
         }   // foreach mip     
     } else {
-        ddsktx_assert(0 && "invalid file format");
+        ddsktx_assert("invalid file format" && 0);
     }
 }
 

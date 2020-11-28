@@ -2743,6 +2743,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_image_panel(sg_imgui_t* ctx, sg_image img) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_shader_stage(sg_imgui_t* ctx, const sg_shader_stage_desc* stage) {
+    sx_unused(ctx);
     int num_valid_ubs = 0;
     for (int i = 0; i < SG_MAX_SHADERSTAGE_UBS; i++) {
         const sg_shader_uniform_block_desc* ub = &stage->uniform_blocks[i];

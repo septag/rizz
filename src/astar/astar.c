@@ -41,8 +41,8 @@ static inline void gridcoord(const rizz_astar_world* world, sx_vec2 wpos, loc* _
     int x = (int)wpos.x;
     int y = (int)wpos.y;
     *_loc = (loc){
-        .x = sx_clamp(x, 0, xmax),
-        .y = sx_clamp(y, 0, ymax),
+        .x = (uint16_t)sx_clamp(x, 0, xmax),
+        .y = (uint16_t)sx_clamp(y, 0, ymax),
     };
 }
 

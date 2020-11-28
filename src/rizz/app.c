@@ -717,7 +717,11 @@ static void rizz__parse_shortcut_string(const char* shortcut, rizz_keycode keys[
     const char* plus;
     char keystr[32];
 
-    while (shortcut[0] && (plus = sx_strchar(shortcut, '+'))) {
+    while (shortcut[0]) {
+        plus = sx_strchar(shortcut, '+');
+        if (!plus) {
+            break;
+        }
         sx_strncpy(keystr, sizeof(keystr), shortcut, (int)(uintptr_t)(plus - shortcut));
         rizz__parse_single_shortcut_key(keystr, keys, &num_keys, mods);
         shortcut = sx_skip_whitespace(plus + 1);

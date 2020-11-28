@@ -215,20 +215,29 @@ if (MSVC)
     if (MSVC_MULTITHREADED_COMPILE AND NOT CMAKE_MAKE_PROGRAM MATCHES "ninja.exe")
         add_compile_options(/MP)    # multiprocessor compilation
     endif()
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Ob1")
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Ob1")
 
     if (MSVC_STATIC_RUNTIME) 
         rizz__remove_compile_options(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}" "/MD")
         rizz__remove_compile_options(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}" "/MD")
 		set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
 		set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
+
+        rizz__remove_compile_options(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}" "/MDd")
+        rizz__remove_compile_options(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}" "/MDd")
+		set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
+		set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MTd")
     endif()
 
     if (${MSVC_VERSION} GREATER_EQUAL 1928)
         message(STATUS "MSVC compiler supports C17 standard")
-        add_compile_options(/std:c17)
+        # add_compile_options(/std:c17)
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /std:c17")
     endif()
+
+    rizz__remove_compile_options(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}" "/Ob0")
+    rizz__remove_compile_options(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}" "/Ob0")
+	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Ob1")
+	set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /Ob1")
 else()
     add_compile_options(-Wno-deprecated-declarations -fPIC)
     add_compile_options("$<$<CONFIG:Debug>:-D_DEBUG>")
@@ -339,7 +348,18 @@ endforeach()
 foreach (native_project ${native_projects})
     add_subdirectory(src/${native_project})
     if (MSVC)
-        target_compile_options(${native_project} PRIVATE /WX)
+        if (CMAKE_MAKE_PROGRAM MATCHES "ninja.exe")
+            target_compile_options(${native_project} PRIVATE /WX /W3)
+        else()
+            target_compile_options(${native_project} PRIVATE /WX /W4)
+            target_compile_options(${native_project} PRIVATE 
+                /wd4201  # nonstandard extension used : nameless struct/union
+                /wd4324  # structure was padded due to alignment specifier
+                /wd4206  # nonstandard extension used: translation unit is empty
+                /wd4214  # nonstandard extension used: bit field types other than int
+                /wd4221  # cannot be initialized using address of automatic variable
+                /wd4053) # one void operand for
+        endif()
     else()
         target_compile_options(${native_project} PRIVATE 
             -Wextra 

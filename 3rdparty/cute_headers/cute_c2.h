@@ -1903,12 +1903,12 @@ void c2CapsuletoPolyManifold(c2Capsule A, const c2Poly* B, const c2x* bx_ptr, c2
 			c2h h = c2PlaneAt(B, i);
 			float da = c2Dot(A_in_B.a, c2Neg(h.n));
 			float db = c2Dot(A_in_B.b, c2Neg(h.n));
-			float d;
-			if (da > db) d = c2Dist(h, A_in_B.a);
-			else d = c2Dist(h, A_in_B.b);
-			if (d > sep)
+			float _d;
+			if (da > db) _d = c2Dist(h, A_in_B.a);
+			else _d = c2Dist(h, A_in_B.b);
+			if (_d > sep)
 			{
-				sep = d;
+				sep = _d;
 				index = i;
 			}
 		}

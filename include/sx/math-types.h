@@ -24,6 +24,9 @@
 #define SX_FLOAT_MIN (1.175494e-38f)
 #define SX_FLOAT_MAX (3.402823e+38f)
 
+SX_PRAGMA_DIAGNOSTIC_PUSH()
+SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4201)     // nonstandard extension used : nameless struct/union
+
 typedef union sx_vec2 {
     struct {
         float x;
@@ -348,6 +351,8 @@ typedef struct sx_box {
     sx_tx3d tx;   // transform (pos = origin of the box, rot = rotation of the box)
     sx_vec3 e;    // half-extent from the origin (0.5*width, 0.5*height, 0.5f*depth)
 } sx_box;
+
+SX_PRAGMA_DIAGNOSTIC_POP()  // ignore msvc warnings
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // C-style constructors

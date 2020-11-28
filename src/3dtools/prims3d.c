@@ -321,7 +321,7 @@ void prims3d__draw_spheres(const sx_vec3* centers, const float* radiuss, int cou
     };
 
     // clang-format off
-    sg_image map;
+    sg_image map = {0};
     switch (map_type) {
     case RIZZ_PRIMS3D_MAPTYPE_WHITE:        map = the_gfx->texture_white(); break;
     case RIZZ_PRIMS3D_MAPTYPE_CHECKER:      map = g_prims3d.checker_tex.img; break;
@@ -412,7 +412,7 @@ void prims3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
     };
 
     // clang-format off
-    sg_image map;
+    sg_image map = {0};
     switch (map_type) {
     case RIZZ_PRIMS3D_MAPTYPE_WHITE:        map = the_gfx->texture_white(); break;
     case RIZZ_PRIMS3D_MAPTYPE_CHECKER:      map = g_prims3d.checker_tex.img; break;
@@ -507,6 +507,9 @@ bool prims3d__generate_sphere_geometry(const sx_alloc* alloc, rizz_prims3d_geome
 
     int const num_verts = num_segments*num_rings + 2;
     int const num_indices = 6*num_segments*num_rings;
+
+    sx_assert(num_verts < UINT16_MAX);
+
     size_t total_sz = num_verts*sizeof(rizz_prims3d_vertex) + num_indices*sizeof(uint16_t);
     uint8_t* buff = sx_malloc(alloc, total_sz);
     if (!buff) {
@@ -556,7 +559,7 @@ bool prims3d__generate_sphere_geometry(const sx_alloc* alloc, rizz_prims3d_geome
     // indices
     vindex = 1;
     {   // lower part
-        for (int i = 0; i < num_segments; i++) {
+        for (uint16_t i = 0, ic = (uint16_t)num_segments; i < ic; i++) {
             indices[iindex++] = 0;
             indices[iindex++] = vindex + i;
             indices[iindex++] = vindex + ((i + 1) % num_segments);
@@ -567,9 +570,10 @@ bool prims3d__generate_sphere_geometry(const sx_alloc* alloc, rizz_prims3d_geome
 
     // quads between lower..upper parts
     for (int ring = 0; ring < num_rings - 1; ring++) {   
-        int lower_vindex = vindex - num_segments;
-        for (int i = 0; i < num_segments; i++) {
-            int next_i = (i + 1)%num_segments;
+        uint16_t num_segs16u = (uint16_t)num_segments;
+        uint16_t lower_vindex = vindex - num_segs16u;
+        for (uint16_t i = 0; i < num_segs16u; i++) {
+            uint16_t next_i = (i + 1)%num_segs16u;
             indices[iindex++] = lower_vindex + i;
             indices[iindex++] = vindex + i;
             indices[iindex++] = vindex + next_i;
@@ -582,11 +586,12 @@ bool prims3d__generate_sphere_geometry(const sx_alloc* alloc, rizz_prims3d_geome
     }
 
     {   // upper part
-        vindex -= num_segments;
-        for (int i = 0; i < num_segments; i++) {
+        uint16_t num_segs16u = (uint16_t)num_segments;
+        vindex -= num_segs16u;
+        for (uint16_t i = 0; i < num_segs16u; i++) {
             indices[iindex++] = vindex + i;
             indices[iindex++] = (uint16_t)num_verts - 1;
-            indices[iindex++] = vindex + ((i + 1) % num_segments);
+            indices[iindex++] = vindex + ((i + 1) % num_segs16u);
         }
     }
 
@@ -780,18 +785,20 @@ void prims3d__draw_aabbs(const sx_aabb* aabbs, int num_aabbs, const sx_mat4* vie
         _verts += 8;
         
         int vindex = i*8;
-        _indices[0] = vindex;             _indices[1] = vindex + 1;           
-        _indices[2] = vindex + 1;         _indices[3] = vindex + 3;
-        _indices[4] = vindex + 3;         _indices[5] = vindex + 2;
-        _indices[6] = vindex + 2;         _indices[7] = vindex + 0;
-        _indices[8] = vindex + 5;         _indices[9] = vindex + 4;
-        _indices[10] = vindex + 4;        _indices[11] = vindex + 6;
-        _indices[12] = vindex + 6;        _indices[13] = vindex + 7;
-        _indices[14] = vindex + 7;        _indices[15] = vindex + 5;
-        _indices[16] = vindex + 5;        _indices[17] = vindex + 1;
-        _indices[18] = vindex + 7;        _indices[19] = vindex + 3;
-        _indices[20] = vindex + 0;        _indices[21] = vindex + 4;
-        _indices[22] = vindex + 2;        _indices[23] = vindex + 6;
+        sx_assert(vindex < UINT16_MAX);
+        uint16_t vindexu16 = (uint16_t)vindex;
+        _indices[0] = vindexu16;             _indices[1] = vindexu16 + 1;           
+        _indices[2] = vindexu16 + 1;         _indices[3] = vindexu16 + 3;
+        _indices[4] = vindexu16 + 3;         _indices[5] = vindexu16 + 2;
+        _indices[6] = vindexu16 + 2;         _indices[7] = vindexu16 + 0;
+        _indices[8] = vindexu16 + 5;         _indices[9] = vindexu16 + 4;
+        _indices[10] = vindexu16 + 4;        _indices[11] = vindexu16 + 6;
+        _indices[12] = vindexu16 + 6;        _indices[13] = vindexu16 + 7;
+        _indices[14] = vindexu16 + 7;        _indices[15] = vindexu16 + 5;
+        _indices[16] = vindexu16 + 5;        _indices[17] = vindexu16 + 1;
+        _indices[18] = vindexu16 + 7;        _indices[19] = vindexu16 + 3;
+        _indices[20] = vindexu16 + 0;        _indices[21] = vindexu16 + 4;
+        _indices[22] = vindexu16 + 2;        _indices[23] = vindexu16 + 6;
 
         _indices += 24;
     }

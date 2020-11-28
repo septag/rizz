@@ -1320,7 +1320,8 @@ static void imgui__draw(ImDrawData* draw_data)
         sx_memcpy(&verts[num_verts], dl->VtxBuffer.Data, dl_num_verts * sizeof(ImDrawVert));
 
         const ImDrawIdx* src_index_ptr = (ImDrawIdx*)dl->IdxBuffer.Data;
-        const uint16_t base_vertex_idx = num_verts;
+        sx_assert(num_verts <= UINT16_MAX);
+        const uint16_t base_vertex_idx = (uint16_t)num_verts;
         for (int i = 0; i < dl_num_indices; i++)
             indices[num_indices++] = src_index_ptr[i] + base_vertex_idx;
         num_verts += dl_num_verts;

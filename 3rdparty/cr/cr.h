@@ -659,7 +659,7 @@ static bool cr_plugin_rollback(cr_plugin &ctx);
 static int cr_plugin_main(cr_plugin &ctx, cr_op operation);
 static void cr_plugin_event_call(cr_plugin &ctx, const void* e);
 
-static void cr_set_temporary_path(cr_plugin &ctx, const std::string &path) {
+extern "C" void cr_set_temporary_path(cr_plugin &ctx, const std::string &path) {
     auto pimpl = (cr_internal *)ctx.p;
     pimpl->temppath = path;
 }
@@ -997,8 +997,8 @@ static bool cr_pdb_replace(const std::string &filename, const std::string &pdbna
     return result;
 }
 
-bool static cr_pdb_process(const std::string &source,
-                           const std::string &desination) {
+bool static cr_pdb_process(const std::string &source, const std::string &desination) {
+    (void)(source);
     std::string folder, fname, ext, orig_pdb;
     cr_split_path(desination, folder, fname, ext);
     bool result = cr_pdb_replace(desination, fname + ".pdb", orig_pdb);

@@ -297,11 +297,10 @@ rizz_sprite_animclip sprite__animclip_create(const rizz_sprite_animclip_desc* de
         int sidx = sx_hashtbl_find(&atlas->sprite_tbl,
                                    sx_hash_fnv32(frame_desc->name, sx_strlen(frame_desc->name)));
         if (sidx != -1) {
-            frame->atlas_id = sx_hashtbl_get(&atlas->sprite_tbl, sidx);
+            frame->atlas_id = (int16_t)sx_hashtbl_get(&atlas->sprite_tbl, sidx);
         } else {
             frame->atlas_id = -1;
-            rizz_log_warn("sprite not found: '%s' in '%s'", frame_desc->name,
-                          the_asset->path(desc->atlas));
+            rizz_log_warn("sprite not found: '%s' in '%s'", frame_desc->name, the_asset->path(desc->atlas));
         }
         frame->trigger = frame_desc->trigger_event;
         frame->e = frame_desc->event;
@@ -1696,6 +1695,7 @@ rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs, int n
         sx_color color = spr->color;
         int index_start = index_idx;
         int vertex_start = vertex_idx;
+        sx_assert(vertex_start <= UINT16_MAX);
 
         // there are two types of sprites :
         //  - atlas sprites
@@ -1719,11 +1719,10 @@ rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs, int n
             }
 
             for (int ii = 0, c = aspr->num_indices; ii < c; ii += 3) {
-                dst_indices[ii] = src_indices[ii] + vertex_start;
-                dst_indices[ii + 1] = src_indices[ii + 1] + vertex_start;
-                dst_indices[ii + 2] = src_indices[ii + 2] + vertex_start;
+                dst_indices[ii] = src_indices[ii] + (uint16_t)vertex_start;
+                dst_indices[ii + 1] = src_indices[ii + 1] + (uint16_t)vertex_start;
+                dst_indices[ii + 2] = src_indices[ii + 2] + (uint16_t)vertex_start;
             }
-
 
             vertex_idx += aspr->num_verts;
             index_idx += aspr->num_indices;
@@ -1750,7 +1749,7 @@ rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs, int n
             verts[3].color = color;
 
             // clang-format off
-            int v = vertex_start;
+            uint16_t v = (uint16_t)vertex_start;
             indices[3] = v;         indices[4] = v + 2;     indices[5] = v + 1;
             indices[0] = v + 1;     indices[1] = v + 2;     indices[2] = v + 3;
             // clang-format on            

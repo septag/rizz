@@ -223,6 +223,7 @@ SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4267)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4244)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4146)
+SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4505)
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG("-Wshorten-64-to-32")
 #include "sort/sort.h"
@@ -290,7 +291,7 @@ static void rizz__log_register_backend(const char* name,
 {    // backend name must be unique
     for (int i = 0, c = sx_array_count(g_core.log_backends); i < c; i++) {
         if (sx_strequal(g_core.log_backends[i].name, name)) {
-            sx_assert_always(0 && "duplicate backend name/already registered?");
+            sx_assert_alwaysf(0, "duplicate backend name/already registered?");
             return;
         }
     }
@@ -348,7 +349,7 @@ static void rizz__log_backend_debugger(const rizz_log_entry* entry, void* user)
                     entry->text);
         OutputDebugStringA(text);
     } else {
-        sx_assert_always(0 && "out of stack memory");
+        sx_assert_alwaysf(0, "out of stack memory");
     }
 #else
     sx_unused(entry);
@@ -382,7 +383,7 @@ static void rizz__log_backend_terminal(const rizz_log_entry* entry, void* user)
                     entry->text, close_fmt);
         puts(text);
     } else {
-        sx_assert_always(0 && "out of stack memory");
+        sx_assert_alwaysf(0, "out of stack memory");
     }
 }
 
@@ -447,7 +448,7 @@ static void rizz__log_backend_remotery(const rizz_log_entry* entry, void* user)
         sx_snprintf(text, new_size, "%s%s%s", source, k_log_entry_types[entry->type], entry->text);
         rmt_LogText(text);
     } else {
-        sx_assert_always(0 && "out of stack memory");
+        sx_assert_alwaysf(0, "out of stack memory");
     }
 }
 
@@ -494,7 +495,7 @@ static void rizz__print_info(uint32_t channels, const char* source_file, int lin
     int fmt_len = sx_strlen(fmt);
     char* text = alloca(fmt_len + 1024);    // reserve only 1k for format replace strings
     if (!text) {
-        sx_assert_always(0 && "out of stack memory");
+        sx_assert_alwaysf(0, "out of stack memory");
         return;
     }
 
@@ -522,7 +523,7 @@ static void rizz__print_debug(uint32_t channels, const char* source_file, int li
     int fmt_len = sx_strlen(fmt);
     char* text = alloca(fmt_len + 1024);    // reserve only 1k for format replace strings
     if (!text) {
-        sx_assert_always(0 && "out of stack memory");
+        sx_assert_alwaysf(0, "out of stack memory");
         return;
     }
 
@@ -556,7 +557,7 @@ static void rizz__print_verbose(uint32_t channels, const char* source_file, int 
     int fmt_len = sx_strlen(fmt);
     char* text = alloca(fmt_len + 1024);    // reserve only 1k for format replace strings
     if (!text) {
-        sx_assert_always(0 && "out of stack memory");
+        sx_assert_alwaysf(0, "out of stack memory");
         return;
     }
 
@@ -584,7 +585,7 @@ static void rizz__print_error(uint32_t channels, const char* source_file, int li
     int fmt_len = sx_strlen(fmt);
     char* text = alloca(fmt_len + 1024);    // reserve only 1k for format replace strings
     if (!text) {
-        sx_assert_always(0 && "out of stack memory");
+        sx_assert_alwaysf(0, "out of stack memory");
         return;
     }
 
@@ -612,7 +613,7 @@ static void rizz__print_warning(uint32_t channels, const char* source_file, int 
     int fmt_len = sx_strlen(fmt);
     char* text = alloca(fmt_len + 1024);    // reserve only 1k for format replace strings
     if (!text) {
-        sx_assert_always(0 && "out of stack memory");
+        sx_assert_alwaysf(0, "out of stack memory");
         return;
     }
 
@@ -1457,7 +1458,7 @@ bool rizz__core_init(const rizz_config* conf)
         rmt_config->free = rmt__free;
         rmt_config->realloc = rmt__realloc;
         rmt_config->mm_context = (void*)rizz__alloc(RIZZ_MEMID_TOOLSET);
-        rmt_config->port = conf->profiler_listen_port;
+        rmt_config->port = (uint16_t)conf->profiler_listen_port;
         rmt_config->msSleepBetweenServerUpdates = conf->profiler_update_interval_ms;
         rmt_config->reuse_open_port = true;
         rmt_config->input_handler = rizz__rmt_input_handler;

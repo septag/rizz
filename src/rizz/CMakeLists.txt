@@ -45,6 +45,13 @@ if (IOS)
     list(APPEND SOURCE_FILES ios.m)
 endif()
 
+# FIXME: due to some bug in msvc or cmake, I have to set this for all sources
+if (MSVC)
+    if (${MSVC_VERSION} GREATER_EQUAL 1928)
+        set_source_files_properties(${SOURCE_FILES} PROPERTIES COMPILE_OPTIONS /std:c17)
+    endif()
+endif()
+
 # bundle: make static lib to link it to the game.exe later
 # no-bundle: make rizz.exe and run the game.dll as a plugin
 if (BUNDLE)

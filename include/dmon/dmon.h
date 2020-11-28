@@ -497,6 +497,7 @@ _DMON_PRIVATE void dmon__win32_process_events(void)
 
 _DMON_PRIVATE DWORD WINAPI dmon__thread(LPVOID arg)
 {
+    (void)(arg);
     HANDLE wait_handles[DMON_MAX_WATCHES];
 
     SYSTEMTIME starttm;

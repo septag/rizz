@@ -328,8 +328,10 @@ static int cj5__strlen(const char* str)
         }
     }
 
-    CJ5_ASSERT(0 && "Not a null-terminated string");
+    #ifndef _MSC_VER
+    CJ5_ASSERT(0);
     return -1;
+    #endif
 }
 
 static inline cj5_token* cj5__alloc_token(cj5__parser* parser, cj5_token* tokens, int max_tokens)
@@ -949,7 +951,7 @@ bool cj5_get_bool(cj5_result* r, int id)
     } else if (fourcc == CJ5__FALSE_FOURCC) {
         return false;
     } else {
-        CJ5_ASSERT(0 && "invalid bool value");
+        CJ5_ASSERT(0);
         return false;
     }
 }

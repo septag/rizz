@@ -13,6 +13,8 @@ if (CMAKE_C_COMPILER_ID MATCHES "GNU")
     set_source_files_properties(stb_vorbis.c PROPERTIES COMPILE_FLAGS "-Wno-shadow -Wno-maybe-uninitialized -Wno-type-limits")
 elseif (CMAKE_C_COMPILER_ID MATCHES "Clang")
     set_source_files_properties(stb_vorbis.c PROPERTIES COMPILE_FLAGS "-Wno-shadow -Wno-uninitialized -Wno-unused-parameter")
+elseif (MSVC)
+    set_source_files_properties(stb_vorbis.c PROPERTIES COMPILE_FLAGS /W3)
 endif()
 
 if (APPLE) 

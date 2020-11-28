@@ -458,7 +458,7 @@ static void input__show_debugger(bool* p_open)
                 InputDevice::DeviceState state =
                     g_input.mgr->GetDevice(rizz_to_index(g_input.devices[i].id.id))->GetState();
 
-                sx_vec4 button_color;
+                sx_vec4 button_color = SX_VEC4_ZERO;
                 switch (state) {
                 case InputDevice::DS_OK:
                     button_color = sx_vec4f(0.0f, 0.8f, 0.1f, 1.0f);
@@ -471,8 +471,7 @@ static void input__show_debugger(bool* p_open)
                     button_color = sx_vec4f(0.8f, 0.8f, 0.0f, 1.0f);
                 }
 
-                the_imgui->ColorButton("input_device_state", button_color, 0,
-                                       sx_vec2f(14.0f, 14.0f));
+                the_imgui->ColorButton("input_device_state", button_color, 0, sx_vec2f(14.0f, 14.0f));
                 the_imgui->NextColumn();
             }
         }    // while(clipper)

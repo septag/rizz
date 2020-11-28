@@ -620,13 +620,13 @@ static bool sx__iff_read_all_chunks(sx_iff_file* iff)
         sx_iff_chunk chunk;
         int64_t r = sx__iff_read(iff, &chunk, sizeof(chunk));
         if (r < (int64_t)sizeof(chunk)) {
-            sx_assert_always(r == 0 && "file is probably corrupt");
+            sx_assert_alwaysf(r == 0, "file is probably corrupt");
             return r == 0;
         }
 
         int64_t pos = sx__iff_seek(iff, chunk.size, SX_WHENCE_CURRENT);
         if (pos <= 0 || (pos - chunk.pos) < chunk.size) {
-            sx_assert_always(0 && "file is probably corrupt");
+            sx_assert_alwaysf(0, "file is probably corrupt");
             return false;  
         }
 
@@ -800,14 +800,14 @@ int sx_iff_get_chunk(sx_iff_file* iff, uint32_t fourcc, int parent_id)
             sx_iff_chunk chunk;
             int64_t r = sx__iff_read(iff, &chunk, sizeof(chunk));
             if (r < (int64_t)sizeof(chunk)) {
-                sx_assert_always(r == 0 && "file is probably corrupt");
+                sx_assert_alwaysf(r == 0, "file is probably corrupt");
                 iff->read_all = true;
                 break;  // EOF
             }
 
             int64_t pos = sx__iff_seek(iff, chunk.size, SX_WHENCE_CURRENT);
             if (pos <= 0 || (pos - chunk.pos) < chunk.size) {
-                sx_assert_always(0 && "file is probably corrupt");
+                sx_assert_alwaysf(0, "file is probably corrupt");
                 break;  
             }
 
@@ -841,11 +841,11 @@ bool sx_iff_read_chunk(sx_iff_file* iff, int chunk_id, void* chunk_data, int64_t
 
     int64_t pos = sx__iff_seek(iff, chunk->pos, SX_WHENCE_BEGIN);
     sx_unused(pos);
-    sx_assert_always(pos == chunk->pos && "probably file corruption");
+    sx_assert_alwaysf(pos == chunk->pos, "probably file corruption");
 
     int64_t r = sx__iff_read(iff, chunk_data, size);
     if (r != chunk->size) {
-        sx_assert_always(0 && "corrupt file");
+        sx_assert_alwaysf(0, "corrupt file");
         return false;
     }
 

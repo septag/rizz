@@ -207,6 +207,7 @@ static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometr
     int start_vertex = 0;
     for (int i = 0; i < (int)srcmesh->primitives_count; i++) {
         cgltf_primitive* srcprim = &srcmesh->primitives[i];
+        
 
         // vertices
         int count = 0;
@@ -225,8 +226,11 @@ static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometr
             uint16_t* indices = (uint16_t*)mesh->cpu.ibuff + start_index;
             uint16_t* _srcindices = (uint16_t*)((uint8_t*)srcindices->buffer_view->buffer->data + 
                                     srcindices->buffer_view->offset);
+            sx_assert(start_vertex <= UINT16_MAX);
+            uint16_t start_vertex_u16 = (uint16_t)start_vertex;
+
             for (cgltf_size k = 0; k < srcindices->count; k++) {
-                indices[k] = _srcindices[k] + start_vertex;
+                indices[k] = _srcindices[k] + start_vertex_u16;
             }
             // flip the winding
             for (int k = 0, num_tris = (int)srcindices->count/3; k < num_tris; k++) {

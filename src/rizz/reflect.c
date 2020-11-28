@@ -1161,11 +1161,11 @@ static void refl__deserialize_json_builtin(const char* name, void* data, rizz_re
         break;
     case RIZZ_REFL_VARIANTTYPE_UINT8:
         sx_assert(size == sizeof(uint8_t));
-        *((uint8_t*)data) = cj5_seekget_uint(r, jctx->cur_token, name, 0);
+        *((uint8_t*)data) = (uint8_t)(cj5_seekget_uint(r, jctx->cur_token, name, 0) & 0xff);
         break;
     case RIZZ_REFL_VARIANTTYPE_UINT16:
         sx_assert(size == sizeof(uint16_t));
-        *((uint16_t*)data) = cj5_seekget_uint(r, jctx->cur_token, name, 0);
+        *((uint16_t*)data) = (uint16_t)(cj5_seekget_uint(r, jctx->cur_token, name, 0) & 0xffff);
         break;
     case RIZZ_REFL_VARIANTTYPE_UINT64:
         sx_assert(size == sizeof(uint64_t));

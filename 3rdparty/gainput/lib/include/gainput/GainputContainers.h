@@ -340,7 +340,7 @@ public:
 		Node node;
 		node.first = k;
 		node.second = v;
-		node.next = InvalidKey;
+		node.next = (uint32_t)InvalidKey;
 		values_.push_back(node);
 
 		++size_;
@@ -438,7 +438,7 @@ private:
 		Array<Node> values(allocator_, values_.size());
 
 		for (size_t i = 0; i < newSize; ++i)
-			keys.push_back(InvalidKey);
+			keys.push_back((uint32_t)InvalidKey);
 
 		keys_.swap(keys);
 		values_.swap(values);

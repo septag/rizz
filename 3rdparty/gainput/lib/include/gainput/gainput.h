@@ -125,11 +125,11 @@ typedef unsigned int ListenerId;
 typedef unsigned int ModifierId;
 
 /// An invalid device ID.
-static const DeviceId InvalidDeviceId = -1;
+static const DeviceId InvalidDeviceId = (DeviceId)-1;
 /// An invalid device button ID.
-static const DeviceButtonId InvalidDeviceButtonId = -1;
+static const DeviceButtonId InvalidDeviceButtonId = (DeviceButtonId)-1;
 /// An invalid user button ID.
-static const UserButtonId InvalidUserButtonId = -1;
+static const UserButtonId InvalidUserButtonId = (UserButtonId)-1;
 
 /// Returns the name of the library, should be "Gainput".
 const char* GetLibName();

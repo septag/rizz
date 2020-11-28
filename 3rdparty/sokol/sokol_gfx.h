@@ -2632,7 +2632,7 @@ typedef struct {
 
 _SOKOL_PRIVATE void _sg_shader_common_init(_sg_shader_common_t* cmn, const sg_shader_desc* desc) {
     for (int stage_index = 0; stage_index < SG_NUM_SHADER_STAGES; stage_index++) {
-        const sg_shader_stage_desc* stage_desc;
+        const sg_shader_stage_desc* stage_desc = NULL;
         switch (stage_index) {
             case SG_SHADERSTAGE_VS:     stage_desc = &desc->vs; break;
             case SG_SHADERSTAGE_FS:     stage_desc = &desc->fs; break;
