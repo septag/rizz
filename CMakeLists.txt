@@ -358,7 +358,9 @@ foreach (native_project ${native_projects})
                 /wd4206  # nonstandard extension used: translation unit is empty
                 /wd4214  # nonstandard extension used: bit field types other than int
                 /wd4221  # cannot be initialized using address of automatic variable
-                /wd4053) # one void operand for
+                /wd4053  # one void operand for
+                /wd4204  # nonstandard extension used: non-constant aggregate initializer
+                ) 
         endif()
     else()
         target_compile_options(${native_project} PRIVATE 

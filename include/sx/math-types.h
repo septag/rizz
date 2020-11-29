@@ -26,6 +26,7 @@
 
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4201)     // nonstandard extension used : nameless struct/union
+SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4204)     // nonstandard extension used: non-constant aggregate initializer
 
 typedef union sx_vec2 {
     struct {
@@ -351,8 +352,6 @@ typedef struct sx_box {
     sx_tx3d tx;   // transform (pos = origin of the box, rot = rotation of the box)
     sx_vec3 e;    // half-extent from the origin (0.5*width, 0.5*height, 0.5f*depth)
 } sx_box;
-
-SX_PRAGMA_DIAGNOSTIC_POP()  // ignore msvc warnings
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // C-style constructors
@@ -821,3 +820,5 @@ SX_FORCE_INLINE sx_plane sx_planev(sx_vec3 _normal, float _d)
     return (sx_plane){ .p = { .x = _normal.x, .y = _normal.y, .z = _normal.z, .w = _d } };
 #endif
 }
+
+SX_PRAGMA_DIAGNOSTIC_POP()    // ignore msvc warnings

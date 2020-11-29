@@ -229,7 +229,7 @@ typedef struct sx_iff_file {
         sx_mem_reader* mread;
         sx_mem_writer* mwrite;
         sx_file* disk;
-    };
+    } io;
     bool read_all;
 } sx_iff_file;
 #pragma pack(pop)
