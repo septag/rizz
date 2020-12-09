@@ -147,8 +147,6 @@ if (MSVC)
     if (${MSVC_VERSION} GREATER_EQUAL 1928)
         set_source_files_properties(${SOURCE_FILES} PROPERTIES COMPILE_OPTIONS /std:c17)
     endif() 
-
-    rizz__remove_compile_options(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}" "/W3")    # set by parent
 endif()
 
 if (EMSCRIPTEN) 

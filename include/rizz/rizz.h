@@ -265,6 +265,7 @@ typedef struct rizz_api_app {
     bool (*highdpi)(void);
     float (*dpiscale)(void);
     const rizz_config* (*config)(void);
+    const char* (*config_meta_value)(const char* section, const char* name);
     void (*show_keyboard)(bool show);
     bool (*keyboard_shown)(void);
     bool (*key_pressed)(rizz_keycode key);
@@ -365,21 +366,18 @@ typedef struct rizz_asset_callbacks {
     // The reason that it is decoupled from on_load and runs on main thread is because we cannot
     // garranty that object creation and custom memory allocation is thread-safe
     // if rizz_asset_load_data.obj.id == 0, then the asset manager assumes that an error has occured
-    rizz_asset_load_data (*on_prepare)(const rizz_asset_load_params* params,
-                                       const sx_mem_block* mem);
+    rizz_asset_load_data (*on_prepare)(const rizz_asset_load_params* params, const sx_mem_block* mem);
 
     // Runs on worker-thread
     // File data is loaded and passed as 'mem'. Should fill the allocated object and user-data.
     // It is recommended that you don't create/allocate any permanent objects/memory stuff here
     // instead, do them in `on_prepare` and pass them as `data`
-    bool (*on_load)(rizz_asset_load_data* data, const rizz_asset_load_params* params,
-                    const sx_mem_block* mem);
+    bool (*on_load)(rizz_asset_load_data* data, const rizz_asset_load_params* params, const sx_mem_block* mem);
 
     // Runs on main-thread
     // Any optional finalization should happen in this function.
     // This function should free any user-data allocated in 'on_prepare'
-    void (*on_finalize)(rizz_asset_load_data* data, const rizz_asset_load_params* params,
-                        const sx_mem_block* mem);
+    void (*on_finalize)(rizz_asset_load_data* data, const rizz_asset_load_params* params, const sx_mem_block* mem);
 
     // Runs on main-thread
     // Reloading of object happens automatically within asset-lib.
@@ -567,6 +565,8 @@ typedef struct rizz_config {
 
     int profiler_listen_port;           // default: 17815
     int profiler_update_interval_ms;    // default: 10ms
+
+    bool imgui_docking;     // Enable imgui docking. (also see rizz_api_imgui_extra.dock_space_id)
 } rizz_config;
 
 typedef void(rizz_register_cmdline_arg_cb)(const char* name, char short_name,

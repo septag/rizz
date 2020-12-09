@@ -912,6 +912,8 @@ typedef struct imgui__context {
     float fts[MAX_BUFFERED_FRAME_TIMES];
     int ft_iter;
     int ft_iter_nomod;
+    ImGuiID dock_space_id;
+    bool docking;
 } imgui__context;
 
 typedef struct imgui__shader_uniforms {
@@ -1049,6 +1051,9 @@ static void apply_theme(void)
 static bool imgui__init(void)
 {
     sx_assert(g_imgui.ctx == NULL);
+
+    g_imgui.docking = the_app->config()->imgui_docking;
+
     const sx_alloc* alloc = the_core->alloc(RIZZ_MEMID_TOOLSET);
     g_sg_imgui_alloc = alloc;
     the__imgui.SetAllocatorFunctions(imgui__malloc, imgui__free, (void*)alloc);
@@ -1102,9 +1107,11 @@ static bool imgui__init(void)
     conf->KeyMap[ImGuiKey_Y] = RIZZ_APP_KEYCODE_Y;
     conf->KeyMap[ImGuiKey_Z] = RIZZ_APP_KEYCODE_Z;
 
-    conf->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-    conf->BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
-    conf->ConfigWindowsResizeFromEdges = true;
+    if (g_imgui.docking) {
+        conf->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        conf->BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
+        conf->ConfigWindowsResizeFromEdges = true;
+    }
     
     // Setup graphic objects
     if (!imgui__resize_buffers(MAX_VERTS, MAX_INDICES)) {
@@ -1138,8 +1145,7 @@ static bool imgui__init(void)
 
     sg_pipeline_desc pip_desc = { .layout.buffers[0].stride = sizeof(ImDrawVert),
                                   .shader = g_imgui.shader,
-                                  .index_type = SG_INDEXTYPE_UINT16,
-                                  
+                                  .index_type = SG_INDEXTYPE_UINT16,                                  
                                   .rasterizer = { .cull_mode = SG_CULLMODE_NONE },
                                   .blend = { .enabled = true,
                                              .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
@@ -1266,6 +1272,12 @@ static void imgui__frame()
     }
 
     the__imgui.NewFrame();
+
+    if (g_imgui.docking) {
+        g_imgui.dock_space_id = the__imgui.DockSpaceOverViewport(
+            the__imgui.GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode, NULL);
+    }
+
     imgui__imguizmo_begin();
     imgui__imguizmo_setrect(0, 0, io->DisplaySize.x, io->DisplaySize.y);
 
@@ -1868,6 +1880,11 @@ static bool imgui__is_capturing_keyboard(void)
     return igGetIO()->WantCaptureKeyboard;
 }
 
+static ImGuiID imgui__dock_space_id(void)
+{
+    return g_imgui.dock_space_id;
+}
+
 static rizz_api_imgui_extra the__imgui_extra = {
     .memory_debugger = imgui__memory_debugger,
     .graphics_debugger = imgui__graphics_debugger,
@@ -1876,7 +1893,8 @@ static rizz_api_imgui_extra the__imgui_extra = {
     .draw_cursor = imgui__draw_cursor,
     .project_to_screen = imgui__project_to_screen,
     .is_capturing_mouse = imgui__is_capturing_mouse,
-    .is_capturing_keyboard = imgui__is_capturing_keyboard
+    .is_capturing_keyboard = imgui__is_capturing_keyboard,
+    .dock_space_id = imgui__dock_space_id
 };
 
 rizz_plugin_decl_event_handler(imgui, e)

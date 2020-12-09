@@ -11,6 +11,7 @@
 #include "sx/os.h"
 #include "sx/string.h"
 #include "sx/array.h"
+#include "sx/ini.h"
 
 #include <stdio.h>
 
@@ -57,35 +58,32 @@ typedef struct rizz__shortcut_item {
 
 typedef struct rizz__app {
     rizz_config conf;
+    sx_ini* conf_ini;
     const sx_alloc* alloc;
     char game_filepath[RIZZ_MAX_PATH];
     sx_vec2 window_size;
     bool keys_pressed[RIZZ_APP_MAX_KEYCODES];
     sx_cmdline_opt* cmdline_args;       // sx_array
     rizz__cmdline_item* cmdline_items;  // saved items with values
-    rizz__shortcut_item* shortcuts;     // sx_array;
+    rizz__shortcut_item* shortcuts;     // sx_array
 } rizz__app;
 
 static rizz__app g_app;
 
-SX_PRAGMA_DIAGNOSTIC_PUSH();
-SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
-static void* rizz__calloc(const sx_alloc* alloc, size_t num, size_t size)
-{
-    void* p = sx_malloc(alloc, num * size);
-    if (p)
-        sx_memset(p, 0x0, num * size);
-    return p;
-}
-SX_PRAGMA_DIAGNOSTIC_POP();
+// default config fields
+static char default_name[64];
+static char default_title[64];
+static char default_html5_canvas[64];
+static char default_plugin_path[256];
+static char default_cache_path[256];
+static char default_plugins[32][RIZZ_CONFIG_MAX_PLUGINS];
+static char default_cwd[256];
 
-// clang-format off
 #define SOKOL_MALLOC(s)     sx_malloc(g_app.alloc, s)
 #define SOKOL_FREE(p)       sx_free(g_app.alloc, p)
-#define SOKOL_CALLOC(n, s)  rizz__calloc(g_app.alloc ? g_app.alloc : sx_alloc_malloc(), n, s)
+#define SOKOL_CALLOC(n, s)  sx_calloc(g_app.alloc ? g_app.alloc : sx_alloc_malloc(), n*s)
 #define SOKOL_ASSERT(c)     sx_assert(c)
 #define SOKOL_LOG(s)        rizz__log_debug(s)
-// clang-format on
 
 SX_PRAGMA_DIAGNOSTIC_PUSH();
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
@@ -97,6 +95,8 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(5105)
 #define SOKOL_IMPL
 #include "sokol/sokol_app.h"
 SX_PRAGMA_DIAGNOSTIC_POP();
+
+#define CONFIG_FILENAME "rizz.ini"
 
 #define rizz__app_save_config_str(_cache_str, _str)      \
     if ((_str)) {                                        \
@@ -121,6 +121,181 @@ static void rizz__app_message_box(const char* text)
     puts(text);
 }
 #endif
+
+static uint32_t rizz__app_parse_flags(const char* flags_str, uint32_t(*convert_enum_cb)(const char* value))
+{
+    uint32_t flags = 0;
+    char value[64];
+    flags_str = sx_skip_whitespace(flags_str);
+    while (flags_str[0]) {
+        const char* next_pipe =  sx_strchar(flags_str, '|');
+        if (next_pipe) {
+            sx_strncpy(value, sizeof(value), flags_str, (int)(uintptr_t)(next_pipe - flags_str));
+            sx_trim_whitespace(value, sizeof(value), value);
+            flags_str = next_pipe + 1;
+
+            flags |= convert_enum_cb(value);
+        }
+        const char* next_flag = sx_skip_whitespace(flags_str);
+        if (next_flag == flags_str) {
+            break;
+        }
+        flags_str = next_flag;
+    }
+
+    if (flags_str[0]) {
+        sx_strcpy(value, sizeof(value), flags_str);
+        sx_trim_whitespace(value, sizeof(value), value);
+        flags |= convert_enum_cb(value);
+    }
+
+    return flags;
+}
+
+static uint32_t rizz__app_convert_app_flags(const char* value)
+{
+    if (sx_strequalnocase(value, "HIGHDPI")) {
+        return RIZZ_APP_FLAG_HIGHDPI;
+    } else if (sx_strequalnocase(value, "FULLSCREEN")) {
+        return RIZZ_APP_FLAG_FULLSCREEN;
+    } else if (sx_strequalnocase(value, "ALPHA")) {
+        return RIZZ_APP_FLAG_ALPHA;
+    } else if (sx_strequalnocase(value, "PREMULTIPLIED_ALPHA")) {
+        return RIZZ_APP_FLAG_PREMULTIPLIED_ALPHA;
+    } else if (sx_strequalnocase(value, "PRESERVE_DRAWING_BUFFER")) {
+        return RIZZ_APP_FLAG_PRESERVE_DRAWING_BUFFER;
+    } else if (sx_strequalnocase(value, "HTML5_CANVAS_RESIZE")) {
+        return RIZZ_APP_FLAG_HTML5_CANVAS_RESIZE;
+    } else if (sx_strequalnocase(value, "IOS_KEYBOARD_RESIZES_CANVAS")) {
+        return RIZZ_APP_FLAG_IOS_KEYBOARD_RESIZES_CANVAS;
+    } else if (sx_strequalnocase(value, "USER_CURSOR")) {
+        return RIZZ_APP_FLAG_USER_CURSOR;
+    } else if (sx_strequalnocase(value, "FORCE_GLES2")) {
+        return RIZZ_APP_FLAG_FORCE_GLES2;
+    } else {
+        return 0;
+    }
+}
+
+static uint32_t rizz__app_convert_core_flags(const char* value)
+{
+    if (sx_strequalnocase(value, "LOG_TO_FILE")) {
+        return RIZZ_CORE_FLAG_LOG_TO_FILE;
+    } else if (sx_strequalnocase(value, "LOG_TO_PROFILER")) {
+        return RIZZ_CORE_FLAG_LOG_TO_PROFILER;
+    } else if (sx_strequalnocase(value, "PROFILE_GPU")) {
+        return RIZZ_CORE_FLAG_PROFILE_GPU;
+    } else if (sx_strequalnocase(value, "DUMP_UNUSED_ASSETS")) {
+        return RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS;
+    } else if (sx_strequalnocase(value, "DETECT_LEAKS")) {
+        return RIZZ_CORE_FLAG_DETECT_LEAKS;
+    } else if (sx_strequalnocase(value, "DEBUG_TEMP_ALLOCATOR")) {
+        return RIZZ_CORE_FLAG_DEBUG_TEMP_ALLOCATOR;
+    } else {
+        return 0;
+    }
+}
+
+static rizz_log_level rizz__app_convert_log_level(const char* value)
+{
+    if (sx_strequalnocase(value, "ERROR")) {
+        return RIZZ_LOG_LEVEL_ERROR;
+    } else if (sx_strequalnocase(value, "WARNING")) {
+        return RIZZ_LOG_LEVEL_WARNING;
+    } else if (sx_strequalnocase(value, "INFO")) {
+        return RIZZ_LOG_LEVEL_INFO;
+    } else if (sx_strequalnocase(value, "VERBOSE")) {
+        return RIZZ_LOG_LEVEL_VERBOSE;
+    } else if (sx_strequalnocase(value, "DEBUG")) {
+        return RIZZ_LOG_LEVEL_DEBUG;
+    } else {
+        return 0;
+    }
+}
+
+static void rizz__app_load_ini(const char* filename, rizz_config* conf)
+{
+    sx_unused(filename);
+
+    sx_mem_block* mem = sx_file_load_text(g_app.alloc, filename);
+    if (mem) {
+        sx_ini* ini = sx_ini_load(mem->data, g_app.alloc);
+        if (ini) {
+            g_app.conf_ini = ini;
+            int rizz_id = sx_ini_find_section(ini, "rizz", 0);
+            if (rizz_id != -1) {
+                int id;
+                id = sx_ini_find_property(ini, rizz_id, "app_name", 0);
+                if (id != -1)
+                    sx_strcpy(default_name, sizeof(default_name), sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "app_title", 0);
+                if (id != -1)
+                    sx_strcpy(default_title, sizeof(default_title), sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "plugin_path", 0);
+                if (id != -1)
+                    sx_strcpy(default_plugin_path, sizeof(default_plugin_path), sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "cache_path", 0);
+                if (id != -1)
+                    sx_strcpy(default_cache_path, sizeof(default_cache_path), sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "cwd", 0);
+                if (id != -1)
+                    sx_strcpy(default_cwd, sizeof(default_cwd), sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "app_flags", 0);
+                if (id != -1)
+                    conf->app_flags = rizz__app_parse_flags(sx_ini_property_value(ini, rizz_id, id), rizz__app_convert_app_flags);
+                id = sx_ini_find_property(ini, rizz_id, "core_flags", 0);
+                if (id != -1)
+                    conf->core_flags = rizz__app_parse_flags(sx_ini_property_value(ini, rizz_id, id), rizz__app_convert_core_flags);
+                id = sx_ini_find_property(ini, rizz_id, "log_level", 0);
+                if (id != -1) 
+                    conf->log_level = rizz__app_convert_log_level(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "window_width", 0);
+                if (id != -1) 
+                    conf->window_width = sx_toint(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "window_height", 0);
+                if (id != -1)
+                    conf->window_height = sx_toint(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "window_height", 0);
+                if (id != -1)
+                    conf->window_height = sx_toint(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "multisample_count", 0);
+                if (id != -1)
+                    conf->multisample_count = sx_toint(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "swap_interval", 0);
+                if (id != -1)
+                    conf->swap_interval = sx_toint(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "job_num_threads", 0);
+                if (id != -1) 
+                    conf->job_num_threads = sx_toint(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "job_max_fibers", 0);
+                if (id != -1)
+                    conf->job_max_fibers = sx_toint(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "job_stack_size", 0);
+                if (id != -1)
+                    conf->job_stack_size = sx_toint(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "coro_num_init_fibers", 0);
+                if (id != -1)
+                    conf->coro_num_init_fibers = sx_toint(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "coro_stack_size", 0);
+                if (id != -1)
+                    conf->coro_stack_size = sx_toint(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "tmp_mem_max", 0);
+                if (id != -1)
+                    conf->tmp_mem_max = sx_toint(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "profiler_listen_port", 0);
+                if (id != -1)
+                    conf->profiler_listen_port = sx_toint(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "profiler_update_interval_ms", 0);
+                if (id != -1)
+                    conf->profiler_update_interval_ms = sx_toint(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "imgui_docking", 0);
+                if (id != -1) 
+                    conf->imgui_docking = sx_tobool(sx_ini_property_value(ini, rizz_id, id));
+            }
+        }
+        sx_mem_destroy_block(mem);
+    }
+}
 
 static void rizz__app_init(void)
 {
@@ -211,6 +386,10 @@ static void rizz__app_cleanup(void)
         }
     }
     sx_array_free(g_app.alloc, g_app.cmdline_items);
+
+    if (g_app.conf_ini) {
+        sx_ini_destroy(g_app.conf_ini);
+    }
 }
 
 static void rizz__app_process_shortcuts(rizz_modifier_keys input_mods)
@@ -456,14 +635,6 @@ sapp_desc sokol_main(int argc, char* argv[])
     rizz_game_config_cb* game_config_fn = rizz_game_config;
 #endif    // RIZZ_BUNDLE
 
-    static char default_name[64];
-    static char default_title[64];
-    static char default_html5_canvas[64] = { 0 };
-    static char default_plugin_path[256] = { 0 };
-    static char default_cache_path[256] = { 0 };
-    static char default_plugins[32][RIZZ_CONFIG_MAX_PLUGINS] = {{ 0 }};
-    static char default_cwd[256] = { 0 };
-
     char ext[16];
     sx_os_path_basename(default_name, sizeof(default_name), game_filepath);
     sx_os_path_splitext(ext, sizeof(ext), default_name, sizeof(default_name), default_name);
@@ -480,15 +651,15 @@ sapp_desc sokol_main(int argc, char* argv[])
 
     // Create default config
     rizz_config conf = { .app_name = default_name,
-                         .app_title = default_name,
+                         .app_title = default_title,
                          .plugin_path = "",
                          .cwd = cwd,
                          .app_version = 1000,
                          .app_flags = RIZZ_APP_FLAG_USER_CURSOR,
                          .core_flags = 0,
                          .log_level = RIZZ_LOG_LEVEL_INFO,
-                         .window_width = 640,
-                         .window_height = 480,
+                         .window_width = 800,
+                         .window_height = 600,
                          .multisample_count = 1,
                          .swap_interval = 1,
                          .job_num_threads = -1,    // defaults to num_cores-1
@@ -508,6 +679,10 @@ sapp_desc sokol_main(int argc, char* argv[])
     conf.core_flags |= RIZZ_CORE_FLAG_DETECT_LEAKS;
 #endif
 
+    // load ini file before game config
+    rizz__app_load_ini(CONFIG_FILENAME, &conf);
+
+    // run game config / override config
     game_config_fn(&conf, rizz__app_cmdline_arg);
 
     // command-line arguments must be registered to this point
@@ -652,6 +827,20 @@ static const rizz_config* rizz__app_config(void)
     return &g_app.conf;
 }
 
+static const char* rizz__app_config_meta_value(const char* section, const char* name)
+{
+    if (g_app.conf_ini) {
+        int section_id = sx_ini_find_section(g_app.conf_ini, section, 0);
+        if (section_id != -1) {
+            int prop_id = sx_ini_find_property(g_app.conf_ini, section_id, name, 0);
+            if (prop_id != -1) {
+                return sx_ini_property_value(g_app.conf_ini, section_id, prop_id);
+            }
+        }
+    }
+    return NULL;
+}
+
 static const char* rizz__app_cmdline_arg_value(const char* name)
 {
     for (int i = 0; i < sx_array_count(g_app.cmdline_items); i++) {
@@ -762,6 +951,7 @@ rizz_api_app the__app = { .width = sapp_width,
                           .highdpi = sapp_high_dpi,
                           .dpiscale = sapp_dpi_scale,
                           .config = rizz__app_config,
+                          .config_meta_value = rizz__app_config_meta_value,
                           .show_keyboard = sapp_show_keyboard,
                           .keyboard_shown = sapp_keyboard_shown,
                           .name = rizz__app_name,

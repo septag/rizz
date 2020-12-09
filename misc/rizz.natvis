@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="rizz_asset">
+    <DisplayString>{{Handle: {id,x}}</DisplayString>
+	<Expand>
+		<Item Name="Index">id &amp; 0x3FFFF</Item>
+		<Item Name="Generation">(id &gt;&gt; 18) &amp; 0x3FFF</Item>
+	</Expand>
+  </Type>
+
+</AutoVisualizer>

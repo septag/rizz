@@ -51,4 +51,12 @@ typedef struct rizz_api_imgui_extra {
 
     bool (*is_capturing_mouse)(void);
     bool (*is_capturing_keyboard)(void);
+
+    // returns dock space id (or zero if docking is disabled), 
+    // which can be used inside the program to get different docking views
+    // particularly useful for drawing inside viewports
+    // example:  
+    //      ImGuiDockNode* cnode = the_imgui->DockBuilderGetCentralNode(the_imguix->dock_space_id());
+    //      SetRenderViewport(cnode->Pos.x, cnode->Pos.y, cnode->Size.x, cnode->Size.y);
+    ImGuiID (*dock_space_id)(void);
 } rizz_api_imgui_extra;

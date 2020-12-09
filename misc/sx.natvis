@@ -11,14 +11,17 @@
   </Type>
 
   <Type Name="sx_vec2">
-    <DisplayString>{{{x,g},  y={y,g}}}</DisplayString>
+    <DisplayString>{{{x,g},  {y,g}}}</DisplayString>
   </Type>
 
   <Type Name="sx_color">
-    <DisplayString>{{{r,u},  {g,u},  {b,u}, {a,u}}}</DisplayString>
-    <Expand>
-        <Item Name="hex">n,x</Item>
-    </Expand>
+    <DisplayString>{{{r,u}, {g,u}, {b,u}, {a,u}} ({n,x})}</DisplayString>
+	<Expand>
+		<Item Name="R">(float)r/255.0f</Item>
+		<Item Name="G">(float)g/255.0f</Item>
+		<Item Name="B">(float)b/255.0f</Item>
+		<Item Name="A">(float)a/255.0f</Item>
+	</Expand>
   </Type>
 
   <Type Name="sx_ivec2">
@@ -32,20 +35,62 @@
   <Type Name="sx_mat3">
     <DisplayString>{{matrix 3x3}}</DisplayString>
     <Expand>
-      <Item Name="col1">fc1</Item>
-      <Item Name="col2">fc2</Item>
-      <Item Name="col3">fc3</Item>
+      <Item Name="col1">(sx_vec3*)fc1</Item>
+      <Item Name="col2">(sx_vec3*)fc2</Item>
+      <Item Name="col3">(sx_vec3*)fc3</Item>
     </Expand>
   </Type>
 
   <Type Name="sx_mat4">
     <DisplayString>{{matrix 4x4}}</DisplayString>
     <Expand>
-      <Item Name="col1">fc1</Item>
-      <Item Name="col2">fc2</Item>
-      <Item Name="col3">fc3</Item>
-      <Item Name="col4">fc4</Item>
+      <Item Name="col1">(sx_vec4*)fc1</Item>
+      <Item Name="col2">(sx_vec4*)fc2</Item>
+      <Item Name="col3">(sx_vec4*)fc3</Item>
+	  <Item Name="col3">(sx_vec4*)fc4</Item>
     </Expand>
+  </Type>
+  
+  <Type Name="sx_rect">
+	<DisplayString>{{rect: {xmax-xmin,g} x {ymax-ymin,g}}}</DisplayString>
+	<Expand>
+	  <Item Name="xmin">xmin</Item>
+      <Item Name="ymin">ymin</Item>
+      <Item Name="xmax">xmax</Item>
+	  <Item Name="ymax">ymax</Item>
+	  <Item Name="Width">xmax - xmin</Item>
+	  <Item Name="Height">ymax - ymin</Item>
+	  <Item Name="CenterX">(xmin + xmax)/2</Item>
+	  <Item Name="CenterY">(ymin + ymax)/2</Item>
+	</Expand>
+  </Type>
+  
+  <Type Name="sx_irect">
+	<DisplayString>{{rect: {xmax-xmin,u} x {ymax-ymin,u}}}</DisplayString>
+	<Expand>
+	  <Item Name="xmin">xmin</Item>
+      <Item Name="ymin">ymin</Item>
+      <Item Name="xmax">xmax</Item>
+	  <Item Name="ymax">ymax</Item>
+	  <Item Name="Width">xmax - xmin</Item>
+	  <Item Name="Height">ymax - ymin</Item>
+	  <Item Name="CenterX">(xmin + xmax)/2</Item>
+	  <Item Name="CenterY">(ymin + ymax)/2</Item>
+	</Expand>
+  </Type>
+  
+   <Type Name="sx_aabb">
+	<DisplayString>{{AABB: {xmax-xmin,g} x {ymax-ymin,g} x {zmax-zmin,g}}</DisplayString>
+  </Type>
+  
+  <Type Name="sx_array&lt;*&gt;">
+	<DisplayString>{{size: {*((uint32_t*)p-1)}, capacity:{*((uint32_t*)p-2)}}</DisplayString>
+	<Expand>
+	<ArrayItems>
+		<Size>*((uint32_t*)p-1)</Size>
+		<ValuePointer>p</ValuePointer>
+	</ArrayItems>
+	</Expand>
   </Type>
 
 </AutoVisualizer>
