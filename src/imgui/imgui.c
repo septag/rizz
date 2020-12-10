@@ -2047,7 +2047,11 @@ rizz_plugin_decl_main(imgui, plugin, e)
             imgui__submit_make_commands(make_cmdbuff, make_cmdbuff_sz);
         }
 
-        imgui__log_init(the_core, the_app, g_sg_imgui_alloc, 64*1024);
+        {
+            const char* log_buff_size_str = the_app->config_meta_value("imgui", "log_buffer_size");
+            int log_buff_size = log_buff_size_str ? sx_toint(log_buff_size_str) : 64;
+            imgui__log_init(the_core, the_app, g_sg_imgui_alloc, log_buff_size*1024);
+        }
         break;
     }
 

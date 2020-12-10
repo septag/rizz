@@ -12,10 +12,8 @@ For more detailed information about design principles, architecture and basic us
 #### Note
 This is not a game engine, it's a relatively low-level framework for programmers to build their own engine/renderer/physics on top of it. The core of _rizz_ does not and will not implement any rendering techniques/physics or impose any specific entity system to the user. It just provides the basic building blocks for game developers. Other features will be implemented as plugins.
   
-## Features and Changes
-see [CHANGELOG](CHANGES.md) for latest changes, new features and bug fixes.
-
-#### Core
+## Features
+### Core
 - *Portable C code*: C11 (gcc/clang), C99 (msvc) compatible code, designed with data-oriented mindset. 
 - *Plugin system*: Engine has a small core. Many functionalities are implemented through plugins.
 - *Minimal Dependencies*: No external/large dependencies. Only a handful of small dependencies included in the source.
@@ -27,31 +25,31 @@ see [CHANGELOG](CHANGES.md) for latest changes, new features and bug fixes.
 - *Virtual file system*: Async read/write. Directories or archives can be mounted as virtual directories.
 - *Support for coroutines*: Coroutines can be suspended for N frames or N milliseconds.
 
-#### Graphics
+### Graphics
 - *Multiple graphics API support*: Metal (iOS, MacOS). OpenGL-ES 2/3 (Android). Direct3D11 (Windows), OpenGL 3.3 (Linux)
 - *Portable shaders*: Write shaders once in GLSL, toolset will automatically translate the shader to other APIs.
 - *Multi-threaded GPU command-buffer*: Draw commands can be submitted by multiple threads with _staged_ API.
 - *Compute shader support (Experimental)*: Experimental compute-shader support, currently only under Direct3D, more backends will be added.
 - [basis_universal](https://github.com/BinomialLLC/basis_universal) texture format support
 
-#### Plugins
-Many of the engine features are implemented in the plugins:
+### Plugins
+Many of the engine features are implemented in the plugins, visit each link to read their README:
 
 - [imgui](src/imgui): Dear-imgui plugin with some utility API
 - [2dtools](src/2dtools): 2D rendering tools: sprite, sprite animation, font drawing with TTF support
 - [sound](src/sound): Simple sound system. Audio mixer and 2d-sounds. 
 - [input](src/input): Input system with gamepad and touch support
 - [3dtools](src/3dtools): 3D rendering tools: support for GLTF 3d models, basic debug primitive creation and drawing
-- [astar](src/astar): A* path-finding implementation plugin (see the readme in the directory for more info)
+- [astar](src/astar): A-star path-finding implementation plugin 
 - [collision](src/collision): 2.5D/Isometric Collision detection plugin
 - [utility](src/utility): misc utility functionality. Currently, _spline_ and _noise_ generator
 
-#### Debugging and Profiling
+### Debugging and Profiling
 - *Remote Profiler*: Integrated *Remotery* for remote debugger/command console and log viewer.
 - *Graphics API introspection*: Debug application level graphic calls and objects.
 - *Memory Debugger*: Debug and monitor memory allocations for all subsystems.
 
-#### Supported platforms
+## Supported platforms
 - *Windows*
 - *Linux*
 - *MacOS*
@@ -107,6 +105,37 @@ But as the engine is in it's early age, the current platforms are built and test
 **Space invaders clone** - [link to github project](https://github.com/septag/rizz-space-invaders)
   
 ![space-invaders](https://github.com/septag/rizz-space-invaders/raw/master/art/space-invaders.gif)
+
+## Changes
+#### v0.5
+WIP
+
+#### v0.4
+- BREAKING: json parser, replace sjson with cj5 
+- BREAKING: renamed _sprite_ plugin to _2dtools_
+- BREAKING: external macro APIS (rizz_log_xxxx) are now same as internal ones (api variable is defined in header)
+- BREAKING: Reflection now has contexts in it's API
+- NEW: imgui log window
+- NEW: true-type font (fontstash) support through 'rizz_api_font' API
+- NEW: basis texture support
+- NEW: astar path-finding plugin, thanks to @aminv
+- NEW: Hybrid collision detection plugin
+- NEW: "json" asset type (see rizz/json.h)
+- NEW: utility plugin (spline, noise, more stuff will be added), thanks to @aminv
+- Updated remotery
+- ImGui to 1.79-docking branch
+- sx io API and backend to native instead of std.fopen
+- Async vfs API tget individual files 
+- IFF load/save API in sx/io.h
+- `shader_get`/`texture_get` and other asset getters to all asset types
+- Lots of math lib improvements and refactors
+- tmp_alloc overhaul
+- fixes in dds-ktx parser
+- MSVC compiler C11 support
+- Better C-API compatbility with C++, and some simple wrappers for C++ (array, hash-table, math operators, ..)
+- Reflection system improvements, two new serialize/deserialize functions for writing custom serialization
+- Reflection system built-in JSON serialization
+- New ImGui theme (Thanks to @aminv)
 
 
 ## Open-Source libraries used

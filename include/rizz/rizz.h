@@ -597,6 +597,11 @@ RIZZ_API void ANativeActivity_onCreate_(ANativeActivity*, void*, size_t);
     rizz__app_android_decl() RIZZ_PLUGIN_EXPORT void rizz_game_config( \
         rizz_config* _conf_param_name, rizz_register_cmdline_arg_cb* register_cmdline_arg)
 
+// use this macro instead of rizz_game_decl_config, to declare config with custom command-line params function argument
+#define rizz_game_decl_config_cmdline(_conf_param_name, _register_cmdline_arg_fn)   \
+    rizz__app_android_decl() RIZZ_PLUGIN_EXPORT void rizz_game_config(              \
+        rizz_config* _conf_param_name, rizz_register_cmdline_arg_cb* _register_cmdline_arg_fn)
+
 
 // custom console commands that can be registered (sent via profiler)
 // return >= 0 for success and -1 for failure

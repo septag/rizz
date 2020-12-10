@@ -186,8 +186,8 @@
 
     There are also external libraries that are independent from the _rizz_ and you can use them wherever in your code. The main one is **sx**, the foundation library that I described earlier. It is linked to all child projects by default.
 
-    # Plugins
-    Plugins are common dynamic library (.so/.dylib/.dll) files that have specific descriptor functions that can be detected by _rizz_ plugin system. I will describe in more detail how to implement new plugins, in the *Basic Usage* section. Basically, the main game or app is just another _special_ plugin and almost behaves like one. Also, all plugins are auto reloaded when they are being overwritten on disk in non _BUNDLE_ mode. 
+    # Plugins and Apps
+    Plugins (and apps) are common dynamic library (.so/.dylib/.dll) files that have specific descriptor functions that can be detected by _rizz_ plugin system. I will describe in more detail how to implement new plugins in the below section. Basically, the main game or app is just another _special_ plugin and almost behaves like one. Also, all plugins are auto reloaded when they are being overwritten on disk in non _BUNDLE_ mode. 
 
     Plugins have various events which is triggered by the host (_rizz_) through a callback function:
     - **STEP**: This is essentially where _update_ happens, and is triggered on every frame.
@@ -272,8 +272,8 @@
     rizz_plugin_implement_info(box2d, 1000, "box2d physics plugin", box2d_deps, 1);
     ```
 
-    ### Main program/game
-    Games and Programs hosted by _rizz_ are actually another type of plugins. They need the same boilerplate code that the plugin needs, with the addition of *game config* function. The function can be defined by using `rizz_gamd_decl_config` helper macro:
+    ### Application/Game
+    Games and Programs hosted by _rizz_ are actually another type of plugins. They need the same boilerplate code that the plugin needs, but instead of `rizz_plugin_implement_info`, we would need a *game config* function. The function can be defined by using `rizz_gamd_decl_config` helper macro:
 
     ```
     rizz_game_decl_config(conf)
@@ -289,6 +289,9 @@
         conf->plugins[0] = "imgui"; 
     }
     ```
+	
+	*Note*: Alternatively, you can also use *rizz_game_decl_config_cmdline* macro to get register_cmdline_arg function. This can be used for registering custom command-line arguments with your application. (see [User-defined arguments](#profiling/commandlinearguments/user-definedarguments))
+	
 
     ### Deployment 
     Recommended deployment method for plugins is obviously open-source and on GIT repos. First, consider naming your plugins as the same folder that you put their source code in. So for example if your plugin name is "box2d", then name your source folder to "box2d". Secondly, always put `CMakeLists.txt` file on the root folder of your plugin source folder, so the build system can find it without problems.
@@ -699,7 +702,16 @@
 	For none _BUNDLE_ builds, you should always provide *--run* argument with a valid filename of the game module you are trying to launch.
 	
 	### User-defined arguments
-	User command-line arguments can be declared inside *rizz_game_decl_config* (rizz_game_config function) upon program initialization. you should use the function **register_cmdline_arg** (only available inside *rizz_game_config*), to add new command arguments. After that, the command line will be reparsed and the arguements along with their values cached for future access.
+	User command-line arguments can be declared inside *rizz_game_decl_config_cmdline* (rizz_game_config function with extra argument) upon program initialization. you should use the function pointer provided by the second argument of the macro, to add new command arguments. After that, the command line will be reparsed and the arguements along with their values cached for future access.
+	
+	```c
+	rizz_game_decl_config_cmdline(conf, register_arg)
+	{
+		// set config fields and whatnot ...
+		// register custom command arguments
+		register_arg("hidehud", 'H', RIZZ_CMDLINE_ARGTYPE_OPTIONAL, "hides game HUD", "can be 1 or 0 (default:0)");
+	}
+	```
 	
 	To use them, anywhere in your application, you can use `the_app->cmdline_arg_value` or `the_app->cmdline_arg_exists` API functions to check or get the value of the arguments.
 	
@@ -736,8 +748,73 @@
     ![log-console-window](log-console-window.png)
 
     You can issue commands, filter out entries based on their level and channel bits (0-31). Also, double clicking on each entry will copy it to the clipboard.
-
-
+	
+	## Configuration
+	When registering application to the engine, we define a _config_ function (see [Application/Game](#pluginsandapps/writingplugins/application/game)). This function receives a conf (*rizz_config* struct) that is filled with default values. You can override those fields in your code before initialization happens. 
+	
+	The steps that configuration data is filled and overrided are as follows:
+	
+	*************************************************************************************
+	*                                                                                   *
+	* .--------------------.      .------------.       .------------------------------. *
+	* | hardcoded default  +----->| rizz.ini   +------>|  rizz_game_decl_config(conf) | *
+	* |       values       |      '------------'       '------------------------------' *
+	* '--------------------'                                                            *
+	*                                                                                   *
+	*************************************************************************************
+	
+	So, first it is filled with hardcoded default values by the engine, then it tries to read *rizz.ini* from current directory, reads it's values and override *rizz_config* fields. At last, it is passed to the program's config function (rizz_game_decl_config flag) for final override.
+	
+	**rizz.ini**: It's the common _ini_ format, and can include different sections, the main one is `[rizz]` which can include all the fields in the `rizz_config` struct:
+	
+	rizz.h - see `rizz_config` for all members: 
+	```c
+	typedef struct rizz_config {
+		const char* app_name;
+		int window_width;
+		int window_height;
+		rizz_core_flags core_flags;	
+	} rizz_config;
+	```
+	
+	rizz.ini:
+	```ini
+	[rizz]
+	app_name = my_app_name
+	window_width = 1980
+	window_height = 1080
+	core_flags = LOG_TO_FILE|PROFILE_GPU
+	```
+	
+	you can also include extra configurations in different sections and fetch them with `the_app->config_meta_value` function, this is useful to include configuration for your plugins or the game itself:
+	
+	rizz.ini:
+	```ini
+	; main rizz config
+	[rizz]
+	app_name = my_app_name
+	window_width = 1980
+	window_height = 1080
+	core_flags = LOG_TO_FILE|PROFILE_GPU
+	
+	; imgui plugin
+	[imgui]
+	log_buff_size = 256
+	
+	; your game settings
+	[my_game]
+	god_mode = true
+	```
+	
+	your_game.c:
+	```c
+	// first argument is the section, second is the property
+	const char* s_god_mode = the_app->config_meta_value("my_game", "god_mode");
+	if (god_mode) {
+		the_game.god_mode = sx_tobool(s_god_mode);
+	}
+	```
+	
     # Reflection/Serialization
     _rizz_ includes a simple built-in reflection system that also implements _json_ serialization.  
     It doesn't do any fancy stuff like magic macro or any kind of code-gen, you just have to register all the types up front.
@@ -760,7 +837,7 @@
         - **name**: name of the field in the struct.
         - **meta**: you can provide a custom static pointer that you can get in serializer for extra functionality (like GUI state/presets)
 
-    Here's an example of registering all fields of `rizz_shader_info` POD type. _Note_ that before we register the fields of `rizz_shader_info` itself, we registered all child types and enums that are used in it.
+    Here's an example of registering all fields of `rizz_shader_info` POD type. _Note_ that before we register the fields of `rizz_shader_info` itself, we registered all child types and enums that are used in it. 
 
     ```cpp
     rizz_refl_context* ctx = the_refl->create_context(the_core->heap_alloc());
@@ -802,7 +879,7 @@
 
 
     # Changelist
-
+	- Version 1.16 (December 2020): Added ini config 
     - Version 1.15 (November 2020): Added reflection section
     - Version 1.14 (October 2020): Logging improvements, added shortcut
     - Version 1.13 (October 2020): Added command-line section
