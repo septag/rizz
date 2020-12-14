@@ -23,8 +23,7 @@ set(INCLUDE_FILES ../../include/rizz/config.h
                   ../../include/rizz/ios.h 
                   ../../include/rizz/rizz.h)
 
-set(TEXT_FILES  ../../README.md
-                ../../CHANGES.md)
+set(TEXT_FILES  ../../README.md)
 
 set(EXTERNAL_INCLUDES ../../3rdparty/sokol/sokol_app.h 
                       ../../3rdparty/sokol/sokol_gfx.h
