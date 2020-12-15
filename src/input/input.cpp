@@ -83,6 +83,41 @@ struct input__device_info {
     const char* name;
 };
 
+class input__gainput_listener : public gainput::InputListener {
+  private:
+    rizz_input_callbacks m_callbacks;
+    void* m_user;
+    int m_priority;
+
+  public:
+    gainput::ListenerId m_id = 0;
+
+    input__gainput_listener() = delete;
+    input__gainput_listener(const input__gainput_listener&) = delete;
+
+    explicit input__gainput_listener(const rizz_input_callbacks* callbacks, void* user, int priority)
+    {
+        m_callbacks = *callbacks;
+        m_user = user;
+        m_priority = priority;
+    }
+
+    bool OnDeviceButtonBool(DeviceId device, DeviceButtonId deviceButton, bool oldValue, bool newValue) override
+    {
+        return m_callbacks.on_bool({rizz_to_id(device)}, (int)deviceButton, oldValue, newValue, m_user);
+    }
+
+	bool OnDeviceButtonFloat(DeviceId device, DeviceButtonId deviceButton, float oldValue, float newValue) override
+    {
+        return m_callbacks.on_float({rizz_to_id(device)}, (int)deviceButton, oldValue, newValue, m_user);
+    }
+
+    int GetPriority() const override
+    {
+        return m_priority;
+    }
+}; 
+
 struct input__debug_item {
     enum Type { Circle, Line, Text };
 
@@ -119,8 +154,9 @@ struct input__context {
     ga_allocator ga_alloc;
     InputManager* mgr;
     InputMap* mapper;
-    input__device_info* devices;       // sx_array
-    input__debug_item* debug_items;    // sx_array
+    input__device_info* devices;           // sx_array
+    input__debug_item* debug_items;        // sx_array
+    input__gainput_listener* listeners;    // sx_array
     bool debugger;
 };
 
@@ -174,16 +210,14 @@ static bool input__init()
 {
     g_input_alloc = the_core->alloc(RIZZ_MEMID_INPUT);
 
-    g_input.mgr =
-        new (sx_malloc(g_input_alloc, sizeof(InputManager))) InputManager(false, g_input.ga_alloc);
+    g_input.mgr = sx_new(g_input_alloc, InputManager)(false, g_input.ga_alloc);
     if (!g_input.mgr) {
         sx_out_of_memory();
         return false;
     }
     g_input.mgr->SetDisplaySize(the_app->width(), the_app->height());
 
-    g_input.mapper = new (sx_malloc(g_input_alloc, sizeof(InputMap)))
-        InputMap(*g_input.mgr, "rizz_input_map", g_input.ga_alloc);
+    g_input.mapper = sx_new(g_input_alloc, InputMap)(*g_input.mgr, "rizz_input_map", g_input.ga_alloc);
     if (!g_input.mapper) {
         sx_out_of_memory();
         return false;
@@ -194,16 +228,9 @@ static bool input__init()
 
 static void input__release()
 {
-    if (g_input.mapper) {
-        g_input.mapper->~InputMap();
-        sx_free(g_input_alloc, g_input.mapper);
-    }
-
-    if (g_input.mgr) {
-        g_input.mgr->~InputManager();
-        sx_free(g_input_alloc, g_input.mgr);
-    }
-
+    sx_array_free(g_input_alloc, g_input.listeners);
+    sx_delete(g_input_alloc, InputMap, g_input.mapper);
+    sx_delete(g_input_alloc, InputManager, g_input.mgr);
     sx_array_free(g_input_alloc, g_input.devices);
     sx_array_free(g_input_alloc, g_input.debug_items);
 }
@@ -250,11 +277,7 @@ static rizz_input_device input__create_device(rizz_input_device_type type)
 
 static void input__map_bool(rizz_input_device device, int device_key, rizz_input_userkey key)
 {
-    sx_assert(g_input.mapper);
-    sx_assert(device.id);
-
-    g_input.mapper->MapBool((UserButtonId)key, (DeviceId)rizz_to_index(device.id),
-                            (DeviceButtonId)device_key);
+    g_input.mapper->MapBool((UserButtonId)key, (DeviceId)rizz_to_index(device.id), (DeviceButtonId)device_key);
 }
 
 static void input__map_float(rizz_input_device device, int device_key, rizz_input_userkey key,
@@ -262,9 +285,6 @@ static void input__map_float(rizz_input_device device, int device_key, rizz_inpu
                              float (*filter_cb)(float const value, void* user),
                              void* filter_user_ptr)
 {
-    sx_assert(g_input.mapper);
-    sx_assert(device.id);
-
     g_input.mapper->MapFloat((UserButtonId)key, (DeviceId)rizz_to_index(device.id),
                              (DeviceButtonId)device_key, min_val, max_val, filter_cb,
                              filter_user_ptr);
@@ -505,6 +525,33 @@ static void input__show_debugger(bool* p_open)
     sx_array_clear(g_input.debug_items);
 }
 
+static rizz_input_listener input__register_listener(const rizz_input_callbacks* callbacks, 
+                                                    void* user, int priority)
+{
+    sx_assert(callbacks);
+    sx_assert(g_input.mgr);
+    void* ptr = sx_array_add(g_input_alloc, g_input.listeners, 1);
+    sx_assert_always(ptr);
+    input__gainput_listener* listener = sx_pnew(ptr, input__gainput_listener)(callbacks, user, priority);
+    gainput::ListenerId id = {g_input.mgr->AddListener(listener)};
+    listener->m_id = id;
+    return {rizz_to_id(id)};
+}
+
+static void input__unregister_listener(rizz_input_listener listener_id)
+{
+    sx_assert(listener_id.id);
+
+    gainput::ListenerId _id = rizz_to_index(listener_id.id);
+    for (int i = 0, ic = sx_array_count(g_input.listeners); i < ic; i++) {
+        if (g_input.listeners[i].m_id == _id) {
+            g_input.mgr->RemoveListener(g_input.listeners[i].m_id);
+            sx_array_pop(g_input.listeners, i);
+            break;
+        }
+    }
+}
+
 static rizz_api_input the__input = { input__create_device,      input__map_bool,
                                      input__map_float,          input__unmap,
                                      input__clear_mappings,     input__device_avail,
@@ -512,7 +559,8 @@ static rizz_api_input the__input = { input__create_device,      input__map_bool,
                                      input__get_bool_released,  input__get_bool_previous,
                                      input__get_float,          input__get_float_previous,
                                      input__get_float_delta,    input__set_dead_zone,
-                                     input__set_userkey_policy, input__show_debugger };
+                                     input__set_userkey_policy, input__show_debugger,
+                                     input__register_listener,  input__unregister_listener };
 
 rizz_plugin_decl_main(input, plugin, e)
 {

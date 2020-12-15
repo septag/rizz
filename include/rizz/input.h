@@ -2,9 +2,8 @@
 
 #include "sx/sx.h"
 
-// clang-format off
 typedef struct { uint32_t id; } rizz_input_device;
-// clang-format on
+typedef struct { uint32_t id; } rizz_input_listener;
 typedef uint32_t rizz_input_userkey;
 
 typedef enum rizz_input_device_type {
@@ -383,6 +382,12 @@ typedef enum rizz_input_userkey_policy {
     RIZZ_INPUT_USERKEYPOLICY_AVERAGE    // The average of all device button states is the result.
 } rizz_input_userkey_policy;
 
+// note: return true from any of these functions to pass them to the next listener (lower priority)
+typedef struct rizz_input_callbacks {
+    bool (*on_bool)(rizz_input_device device, int device_key, bool old_value, bool new_value, void* user);
+    bool (*on_float)(rizz_input_device device, int device_key, float old_value, float new_value, void* user);
+} rizz_input_callbacks;
+
 typedef struct rizz_api_input {
     rizz_input_device (*create_device)(rizz_input_device_type type);
 
@@ -408,4 +413,8 @@ typedef struct rizz_api_input {
     void (*set_userkey_policy)(rizz_input_userkey key, rizz_input_userkey_policy policy);
 
     void (*show_debugger)(bool* p_open);
+
+    rizz_input_listener (*register_listener)(const rizz_input_callbacks* callbacks, void* user, int priority);
+    void (*unregister_listener)(rizz_input_listener listener_id);
+
 } rizz_api_input;
