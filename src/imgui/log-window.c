@@ -42,6 +42,7 @@ typedef struct imgui__log_context {
     bool toggle;
     bool* popen;
     bool focus_command;
+    bool show_filters;
 } imgui__log_context;
 
 static imgui__log_context g_log;
@@ -113,7 +114,7 @@ static void imgui__show_command_console(void)
 {
     char cmd[512] = {0};
 
-    the__imgui.PushItemWidth(-1);
+    the__imgui.PushItemWidth(-50);
     the__imgui.SetItemDefaultFocus();
     if (g_log.focus_command) {
         the__imgui.SetKeyboardFocusHere(0);
@@ -126,6 +127,10 @@ static void imgui__show_command_console(void)
     }
     the__imgui.PopItemWidth();
 
+    the__imgui.SameLine(0, 8);
+    if (the__imgui.Button("Filters", sx_vec2f(-1, the__imgui.GetFrameHeight())))
+        g_log.show_filters = !g_log.show_filters;
+
     if (g_log.reset_focus) {
         the__imgui.SetKeyboardFocusHere(-1);
         g_log.reset_focus = false;
@@ -136,7 +141,7 @@ static bool imgui__entry_filtered_out(rizz_log_level type, uint32_t channels)
 {
     uint32_t filter_channels = g_log.filter_channels;
     uint32_t filter_types = g_log.filter_types;
-    
+
     switch (type) {
     case RIZZ_LOG_LEVEL_INFO:      if (!(filter_types & LOG_FILTER_INFO))    return true;   break;
     case RIZZ_LOG_LEVEL_DEBUG:     if (!(filter_types & LOG_FILTER_DEBUG))   return true;   break; 
@@ -209,31 +214,33 @@ static void imgui__draw_log(bool* p_open)
     if (the__imgui.Begin("Log", p_open, 0)) {
         imgui__show_command_console();
 
-        bool filter_changed = false;
-        filter_changed |= the__imgui.CheckboxFlags("Error", &g_log.filter_types, LOG_FILTER_ERROR);   the__imgui.SameLine(0, -1);
-        filter_changed |= the__imgui.CheckboxFlags("Warning", &g_log.filter_types, LOG_FILTER_WARNING); the__imgui.SameLine(0, -1);
-        filter_changed |= the__imgui.CheckboxFlags("Info", &g_log.filter_types, LOG_FILTER_INFO); the__imgui.SameLine(0, -1);
-        filter_changed |= the__imgui.CheckboxFlags("Verbose", &g_log.filter_types, LOG_FILTER_VERBOSE); the__imgui.SameLine(0, -1);
-        filter_changed |= the__imgui.CheckboxFlags("Debug", &g_log.filter_types, LOG_FILTER_DEBUG); the__imgui.SameLine(0, -1);
-        filter_changed |= imgui__bitselector("##Channels", &g_log.filter_channels);
+        if (g_log.show_filters) {
+            bool filter_changed = false;
+            filter_changed |= the__imgui.CheckboxFlags("Error", &g_log.filter_types, LOG_FILTER_ERROR);   the__imgui.SameLine(0, -1);
+            filter_changed |= the__imgui.CheckboxFlags("Warning", &g_log.filter_types, LOG_FILTER_WARNING); the__imgui.SameLine(0, -1);
+            filter_changed |= the__imgui.CheckboxFlags("Info", &g_log.filter_types, LOG_FILTER_INFO); the__imgui.SameLine(0, -1);
+            filter_changed |= the__imgui.CheckboxFlags("Verbose", &g_log.filter_types, LOG_FILTER_VERBOSE); the__imgui.SameLine(0, -1);
+            filter_changed |= the__imgui.CheckboxFlags("Debug", &g_log.filter_types, LOG_FILTER_DEBUG); the__imgui.SameLine(0, -1);
+            filter_changed |= imgui__bitselector("##Channels", &g_log.filter_channels);
 
-        if (filter_changed) {
-            sx_array_clear(g_log.cached);
+            if (filter_changed) {
+                sx_array_clear(g_log.cached);
+            }
         }
 
         ImGuiListClipper clipper;
         float width = the__imgui.GetWindowContentRegionWidth();
-        float text_width = width - 145.0f;
+        float text_width = width - 170.0f;
 
         if (g_log.buffer->size) {
             the__imgui.Columns(3, NULL, false);
             the__imgui.SetColumnWidth(0, text_width);
             the__imgui.Text("Text");
             the__imgui.NextColumn();
-            the__imgui.SetColumnWidth(1, 100.0f);
+            the__imgui.SetColumnWidth(1, 110.0f);
             the__imgui.Text("File");
             the__imgui.NextColumn();
-            the__imgui.SetColumnWidth(2, 45.0f);
+            the__imgui.SetColumnWidth(2, 60.0f);
             the__imgui.Text("Line");
             the__imgui.NextColumn();
             the__imgui.Separator();
@@ -279,11 +286,11 @@ static void imgui__draw_log(bool* p_open)
                     the__imgui.PopStyleColor(1);
                     the__imgui.NextColumn();
 
-                    the__imgui.SetColumnWidth(1, 100.0f);
+                    the__imgui.SetColumnWidth(1, 110.0f);
                     the__imgui.TextEx(source_file, source_file + entry->source_file_len, 0);
                     the__imgui.NextColumn();
 
-                    the__imgui.SetColumnWidth(2, 45.0f);
+                    the__imgui.SetColumnWidth(2, 60.0f);
                     the__imgui.Text("%d", entry->line);
                     the__imgui.NextColumn();
 
