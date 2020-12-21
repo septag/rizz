@@ -24,6 +24,7 @@ This is not a game engine, it's a relatively low-level framework for programmers
 - *Hot-reloading of assets and shaders*: All in-game resources and shaders can be hot-reloaded.
 - *Virtual file system*: Async read/write. Directories or archives can be mounted as virtual directories.
 - *Support for coroutines*: Coroutines can be suspended for N frames or N milliseconds.
+- *Custom crash handling*: Custom callbacks for crashes. Along with Crash.dmp file creation (windows only)
 
 ### Graphics
 - *Multiple graphics API support*: Metal (iOS, MacOS). OpenGL-ES 2/3 (Android). Direct3D11 (Windows), OpenGL 3.3 (Linux)

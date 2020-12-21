@@ -66,6 +66,8 @@ typedef struct rizz__app {
     sx_cmdline_opt* cmdline_args;       // sx_array
     rizz__cmdline_item* cmdline_items;  // saved items with values
     rizz__shortcut_item* shortcuts;     // sx_array
+    void (*crash_cb)(void*, void*);
+    void* crash_user_data;
 } rizz__app;
 
 static rizz__app g_app;
@@ -96,6 +98,11 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(5105)
 #include "sokol/sokol_app.h"
 SX_PRAGMA_DIAGNOSTIC_POP();
 
+// crash dump is currently only supported on windows
+#if SX_PLATFORM_WINDOWS
+#    include <minidumpapiset.h>    // MiniDumpWriteDump
+#endif                             // !RIZZ_FINAL
+
 #define CONFIG_FILENAME "rizz.ini"
 
 #define rizz__app_save_config_str(_cache_str, _str)      \
@@ -115,6 +122,36 @@ static void rizz__app_message_box(const char* text)
 {
     MessageBoxA(NULL, text, "rizz", MB_OK|MB_ICONERROR);
 }
+
+static long WINAPI rizz__app_generate_crash_dump(EXCEPTION_POINTERS* except)
+{
+    if (g_app.crash_cb) {
+        g_app.crash_cb(except, g_app.crash_user_data);
+    }
+
+    if (g_app.conf.app_flags & RIZZ_APP_FLAG_CRASH_DUMP) {
+        MINIDUMP_EXCEPTION_INFORMATION einfo = { 0 };
+        HANDLE dump_handle;
+
+        einfo.ThreadId = GetCurrentThreadId();
+        einfo.ExceptionPointers = except;
+        einfo.ClientPointers = TRUE;
+
+        char filename[128];
+        sx_strcat(sx_strcpy(filename, sizeof(filename), g_app.conf.app_name), sizeof(filename), "_crash.dmp");
+        dump_handle = CreateFile(filename, GENERIC_READ | GENERIC_WRITE, 
+                                 FILE_SHARE_WRITE | FILE_SHARE_READ, 0, CREATE_ALWAYS, 0, 0);
+        MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), dump_handle, MiniDumpNormal, 
+                          &einfo, NULL, NULL);
+
+        char msg[256];
+        sx_snprintf(msg, sizeof(msg), "Program exception: Crash dump created '%s'", filename);
+        rizz__app_message_box(msg);
+    }
+
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
 #else
 static void rizz__app_message_box(const char* text)
 {
@@ -563,7 +600,7 @@ sapp_desc sokol_main(int argc, char* argv[])
 {
     g_app.alloc = sx_alloc_malloc();
 
-    int profile_gpu = 0, dump_unused_assets = 0;
+    int profile_gpu = 0, dump_unused_assets = 0, crash_dump = 0;
 
     int version = 0, show_help = 0;
     const sx_cmdline_opt opts[] = {
@@ -572,6 +609,7 @@ sapp_desc sokol_main(int argc, char* argv[])
         { "profile-gpu", 'g', SX_CMDLINE_OPTYPE_FLAG_SET, &profile_gpu, 1, "Enable gpu profiler", 0x0 },
         { "cwd", 'c', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'c', "Change current directory after initialization", 0x0 },
         { "dump-unused-assets", 'U', SX_CMDLINE_OPTYPE_FLAG_SET, &dump_unused_assets, 1, "Dump unused assets into `unused-assets.json`", 0x0 },
+        { "crash-dump", 'd', SX_CMDLINE_OPTYPE_FLAG_SET, &crash_dump, 1, "Create crash dump file on program exceptions", 0x0 },
         { "help", 'h', SX_CMDLINE_OPTYPE_FLAG_SET, &show_help, 1, "Show this help message", 0x0 },
         SX_CMDLINE_OPT_END
     };
@@ -675,6 +713,8 @@ sapp_desc sokol_main(int argc, char* argv[])
         conf.core_flags |= RIZZ_CORE_FLAG_PROFILE_GPU;
     if (dump_unused_assets)
         conf.core_flags |= RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS;
+    if (crash_dump)
+        conf.app_flags |= RIZZ_APP_FLAG_CRASH_DUMP;
 #ifdef _DEBUG
     conf.core_flags |= RIZZ_CORE_FLAG_DETECT_LEAKS;
 #endif
@@ -684,6 +724,10 @@ sapp_desc sokol_main(int argc, char* argv[])
 
     // run game config / override config
     game_config_fn(&conf, rizz__app_cmdline_arg);
+
+    #if SX_PLATFORM_WINDOWS
+        SetUnhandledExceptionFilter(rizz__app_generate_crash_dump);
+    #endif
 
     // command-line arguments must be registered to this point
     // parse them and save them for future use
@@ -944,6 +988,11 @@ static void rizz__register_shortcut(const char* shortcut, rizz_app_shortcut_cb* 
     } 
 }
 
+static void rizz__set_crash_callback(void (*crash_cb)(void*, void*), void* user)
+{
+    g_app.crash_cb = crash_cb;
+    g_app.crash_user_data = user;
+}
 
 rizz_api_app the__app = { .width = sapp_width,
                           .height = sapp_height,
@@ -967,4 +1016,5 @@ rizz_api_app the__app = { .width = sapp_width,
                           .cmdline_arg_exists = rizz__app_cmdline_arg_exists,
                           .set_clipboard_string = sapp_set_clipboard_string,
                           .clipboard_string = sapp_get_clipboard_string,
-                          .register_shortcut = rizz__register_shortcut };
+                          .register_shortcut = rizz__register_shortcut,
+                          .set_crash_callback = rizz__set_crash_callback };

@@ -282,6 +282,7 @@ typedef struct rizz_api_app {
     void (*set_clipboard_string)(const char* str);
     const char* (*clipboard_string)(void);
     void (*register_shortcut)(const char* shortcut, rizz_app_shortcut_cb* shortcut_cb, void* user);
+    void (*set_crash_callback)(void (*crash_cb)(void* crash_data, void* user), void* user);
 } rizz_api_app;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -508,7 +509,8 @@ enum rizz_app_flags_ {
     RIZZ_APP_FLAG_HTML5_CANVAS_RESIZE = 0x20,
     RIZZ_APP_FLAG_IOS_KEYBOARD_RESIZES_CANVAS = 0x40,
     RIZZ_APP_FLAG_USER_CURSOR = 0x80,           // manage cursor image in RIZZ_APP_EVENTTYPE_UPDATE_CURSOR event
-    RIZZ_APP_FLAG_FORCE_GLES2 = 0x100
+    RIZZ_APP_FLAG_FORCE_GLES2 = 0x100,
+    RIZZ_APP_FLAG_CRASH_DUMP = 0x200            // creates crash dump on program exceptions
 };
 typedef uint32_t rizz_app_flags;
 

@@ -454,7 +454,7 @@ rizz_plugin_decl_event_handler(draw3d, e)
 
 rizz_game_decl_config(conf)
 {
-    conf->app_name = "";
+    conf->app_name = "draw3d";
     conf->app_version = 1000;
     conf->app_title = "draw3d";
     conf->app_flags |= RIZZ_APP_FLAG_HIGHDPI;
