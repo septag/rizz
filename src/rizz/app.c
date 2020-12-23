@@ -68,6 +68,8 @@ typedef struct rizz__app {
     rizz__shortcut_item* shortcuts;     // sx_array
     void (*crash_cb)(void*, void*);
     void* crash_user_data;
+    bool suspended;
+    bool iconified;
 } rizz__app;
 
 static rizz__app g_app;
@@ -456,10 +458,40 @@ static void rizz__app_event(const sapp_event* e)
         g_app.conf.window_width = e->window_width;
         g_app.conf.window_height = e->window_height;
         g_app.window_size = sx_vec2f((float)e->window_width, (float)e->window_height);
+        if (!g_app.iconified && !g_app.suspended && the__core.is_paused()) {
+            the__core.resume();
+        }
+        break;
+    case RIZZ_APP_EVENTTYPE_MOVED:
+        if (!g_app.iconified && !g_app.suspended && the__core.is_paused()) {
+            the__core.resume();
+        }
         break;
     case RIZZ_APP_EVENTTYPE_SUSPENDED:
+        the__core.pause();
+        g_app.suspended = true;
+        break;
+    case RIZZ_APP_EVENTTYPE_ICONIFIED:
+        if (!(g_app.conf.app_flags & RIZZ_APP_FLAG_RESUME_ICONIFIED)) {
+            the__core.pause();
+        }
+        g_app.iconified = true;
         break;
     case RIZZ_APP_EVENTTYPE_RESUMED:
+        the__core.resume();
+        g_app.suspended = false;
+        break;
+    case RIZZ_APP_EVENTTYPE_RESTORED:
+        if (the__core.is_paused()) {
+            the__core.resume();
+        }
+        g_app.iconified = false;
+        break;
+    case RIZZ_APP_EVENTTYPE_MOVING:
+    case RIZZ_APP_EVENTTYPE_RESIZING:
+        if (!the__core.is_paused()) {
+            the__core.pause();
+        }
         break;
     case RIZZ_APP_EVENTTYPE_KEY_DOWN:
         g_app.keys_pressed[e->key_code] = true;

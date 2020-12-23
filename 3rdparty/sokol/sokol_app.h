@@ -652,6 +652,9 @@ typedef enum sapp_event_type {
     SAPP_EVENTTYPE_UPDATE_CURSOR,
     SAPP_EVENTTYPE_QUIT_REQUESTED,
     SAPP_EVENTTYPE_CLIPBOARD_PASTED,
+    SAPP_EVENTTYPE_RESIZING,
+    SAPP_EVENTTYPE_MOVING,
+    SAPP_EVENTTYPE_MOVED,
     _SAPP_EVENTTYPE_NUM,
     _SAPP_EVENTTYPE_FORCE_U32 = 0x7FFFFFFF
 } sapp_event_type;
@@ -4692,6 +4695,15 @@ _SOKOL_PRIVATE LRESULT CALLBACK _sapp_win32_wndproc(HWND hWnd, UINT uMsg, WPARAM
                 break;
             case WM_ERASEBKGND:
                 return 1;
+            case WM_SIZING:
+                _sapp_win32_app_event(SAPP_EVENTTYPE_RESIZING);
+                break;
+            case WM_MOVING:
+                _sapp_win32_app_event(SAPP_EVENTTYPE_MOVING);
+                break;
+            case WM_MOVE:
+                _sapp_win32_app_event(SAPP_EVENTTYPE_MOVED);
+                break;
             case WM_SIZE:
                 {
                     const bool iconified = wParam == SIZE_MINIMIZED;
@@ -4714,6 +4726,7 @@ _SOKOL_PRIVATE LRESULT CALLBACK _sapp_win32_wndproc(HWND hWnd, UINT uMsg, WPARAM
                     }
                 }
                 break;
+
             case WM_LBUTTONDOWN:
                 _sapp_win32_mouse_event(SAPP_EVENTTYPE_MOUSE_DOWN, SAPP_MOUSEBUTTON_LEFT);
                 break;

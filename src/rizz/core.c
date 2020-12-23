@@ -214,6 +214,8 @@ typedef struct rizz__core {
     rizz__show_debugger_deferred show_memory;
     rizz__show_debugger_deferred show_graphics;
     rizz__show_debugger_deferred show_log;
+
+    bool paused;
 } rizz__core;
 
 #define SORT_NAME log__sort_entries
@@ -1645,6 +1647,10 @@ void rizz__core_release()
 
 void rizz__core_frame()
 {
+    if (g_core.paused) {
+        return;
+    }
+
     rizz__profile_begin(Frame, 0);
     {
         static uint32_t gpu_frame_hash = 0;
@@ -2004,6 +2010,22 @@ static void rizz__show_log(bool* p_open)
     g_core.show_log.p_open = p_open;
 }
 
+static void rizz__pause(void)
+{
+    g_core.paused = true;
+}
+
+static void rizz__resume(void)
+{
+    g_core.last_tick = sx_tm_now();
+    g_core.paused = false;
+}
+
+static bool rizz__is_paused(void)
+{
+    return g_core.paused;
+}
+
 // Core API
 rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .tmp_alloc_push = rizz__core_tmp_alloc_push,
@@ -2019,6 +2041,9 @@ rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .fps = rizz__fps,
                             .fps_mean = rizz__fps_mean,
                             .frame_index = rizz__frame_index,
+                            .pause = rizz__pause,
+                            .resume = rizz__resume,
+                            .is_paused = rizz__is_paused,
                             .set_cache_dir = rizz__set_cache_dir,
                             .cache_dir = rizz__cache_dir,
                             .data_dir = rizz__data_dir,

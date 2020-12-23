@@ -74,6 +74,9 @@ typedef enum rizz_app_event_type {
     RIZZ_APP_EVENTTYPE_UPDATE_CURSOR,
     RIZZ_APP_EVENTTYPE_QUIT_REQUESTED,
     RIZZ_APP_EVENTTYPE_CLIPBOARD_PASTED,
+    RIZZ_APP_EVENTTYPE_RESIZING,
+    RIZZ_APP_EVENTTYPE_MOVING,
+    RIZZ_APP_EVENTTYPE_MOVED,
     _RIZZ_APP_EVENTTYPE_NUM,
     RIZZ_APP_EVENTTYPE_UPDATE_APIS,    // happens when a plugin updates it's API
     _RIZZ_APP_EVENTTYPE_FORCE_U32 = 0x7FFFFFF
@@ -510,7 +513,8 @@ enum rizz_app_flags_ {
     RIZZ_APP_FLAG_IOS_KEYBOARD_RESIZES_CANVAS = 0x40,
     RIZZ_APP_FLAG_USER_CURSOR = 0x80,           // manage cursor image in RIZZ_APP_EVENTTYPE_UPDATE_CURSOR event
     RIZZ_APP_FLAG_FORCE_GLES2 = 0x100,
-    RIZZ_APP_FLAG_CRASH_DUMP = 0x200            // creates crash dump on program exceptions
+    RIZZ_APP_FLAG_CRASH_DUMP = 0x200,           // creates crash dump on program exceptions
+    RIZZ_APP_FLAG_RESUME_ICONIFIED = 0x400      // do not pause the engine when it's iconified
 };
 typedef uint32_t rizz_app_flags;
 
@@ -713,6 +717,9 @@ typedef struct rizz_api_core {
     float (*fps)(void);
     float (*fps_mean)(void);
     int64_t (*frame_index)(void);
+    void (*pause)(void);
+    void (*resume)(void);
+    bool (*is_paused)(void);
 
     void (*set_cache_dir)(const char* path);
     const char* (*cache_dir)();
