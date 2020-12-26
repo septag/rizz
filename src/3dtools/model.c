@@ -38,13 +38,13 @@ typedef struct rizz_model_context
     rizz_model blank_model;
     rizz_model failed_model;
     rizz_model_geometry_layout default_layout;
-    rizz_material_data* materials;
-    sx_handle_pool* material_handles; 
+    rizz_material_lib* mtllib;
+    rizz_material_lib* default_mtllib;
 } rizz_model_context;
 
 RIZZ_STATE static rizz_model_context g_model;
 
-static rizz_material model__create_material_from_gltf(cgltf_material* gltf_mtl)
+static rizz_material model__create_material_from_gltf(cgltf_material* gltf_mtl, rizz_material_lib* mtllib)
 {
     rizz_material_alpha_mode alpha_mode;
     switch (gltf_mtl->alpha_mode) {
@@ -89,24 +89,10 @@ static rizz_material model__create_material_from_gltf(cgltf_material* gltf_mtl)
         .double_sided = gltf_mtl->double_sided,
         .unlit = gltf_mtl->unlit
     };
-    
-    sx_handle_t handle = sx_handle_new_and_grow(g_model.material_handles, g_model.alloc);
-    int index = sx_handle_index(handle);
-    if (index < sx_array_count(g_model.materials)) {
-        g_model.materials[index] = mtl;
-    } else {
-        sx_array_push(g_model.alloc, g_model.materials, mtl);
-    }
 
-    return (rizz_material) { .id = handle };
-}
+    return material__add(mtllib, &mtl);
+}   
 
-static void model__destroy_material(rizz_material mtl)
-{
-    sx_assert(mtl.id);
-    sx_assert(sx_handle_valid(g_model.material_handles, mtl.id));
-    sx_handle_del(g_model.material_handles, mtl.id);
-}
 
 static model__vertex_attribute model__convert_attribute(cgltf_attribute_type type, int index)
 {
@@ -457,6 +443,7 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
 
         model->num_nodes = (int)data->nodes_count;
         model->num_meshes = (int)data->meshes_count;
+        model->mtllib = g_model.mtllib;
 
         // create materials
         for (int i = 0; i < model->num_meshes; i++) {
@@ -465,7 +452,8 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
                 sx_assert (mesh->num_submeshes == (int)data->meshes[i].primitives_count);
                 cgltf_primitive* prim = &data->meshes[i].primitives[k];
                 if (prim->material) {
-                    tmp_meshes[i].submeshes[k].mtl = model__create_material_from_gltf(prim->material);
+                    tmp_meshes[i].submeshes[k].mtl = 
+                        model__create_material_from_gltf(prim->material, g_model.mtllib);
                 }
             }
         }
@@ -633,7 +621,7 @@ static void model__on_release(rizz_asset_obj obj, const sx_alloc* alloc)
         for (int k = 0; k < mesh->num_submeshes; k++) {
             rizz_model_submesh* submesh = &mesh->submeshes[k];
             if (submesh->mtl.id) {
-                model__destroy_material(submesh->mtl);
+                material__remove(model->mtllib, submesh->mtl);
             }
         }
     }
@@ -651,11 +639,11 @@ bool model__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx, 
 
     // default layout, this will be passed when no layout is set for loading models (matches rizz_prims3d_vertex)
     g_model.default_layout = (rizz_model_geometry_layout) {
-        .attrs[0] = { .semantic="POSITION", .offset=offsetof(rizz_prims3d_vertex, pos), .format=SG_VERTEXFORMAT_FLOAT3},
-        .attrs[1] = { .semantic="NORMAL", .offset=offsetof(rizz_prims3d_vertex, normal), .format=SG_VERTEXFORMAT_FLOAT3},
-        .attrs[2] = { .semantic="TEXCOORD", .offset=offsetof(rizz_prims3d_vertex, uv), .format=SG_VERTEXFORMAT_FLOAT2},
-        .attrs[3] = { .semantic="COLOR", .offset=offsetof(rizz_prims3d_vertex, color), .format=SG_VERTEXFORMAT_UBYTE4N},
-        .buffer_strides[0] = sizeof(rizz_prims3d_vertex)
+        .attrs[0] = { .semantic="POSITION", .offset=offsetof(rizz_3d_debug_vertex, pos), .format=SG_VERTEXFORMAT_FLOAT3},
+        .attrs[1] = { .semantic="NORMAL", .offset=offsetof(rizz_3d_debug_vertex, normal), .format=SG_VERTEXFORMAT_FLOAT3},
+        .attrs[2] = { .semantic="TEXCOORD", .offset=offsetof(rizz_3d_debug_vertex, uv), .format=SG_VERTEXFORMAT_FLOAT2},
+        .attrs[3] = { .semantic="COLOR", .offset=offsetof(rizz_3d_debug_vertex, color), .format=SG_VERTEXFORMAT_UBYTE4N},
+        .buffer_strides[0] = sizeof(rizz_3d_debug_vertex)
     };
 
     // blank_model
@@ -690,13 +678,13 @@ bool model__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx, 
         sx_memset(failed_model->meshes, 0x0, sizeof(rizz_model_mesh));
         rizz_model_mesh* mesh = failed_model->meshes;
 
-        rizz_prims3d_geometry geo;
-        if (prims3d__generate_box_geometry(alloc, &geo, sx_vec3splat(0.5f))) {
+        rizz_3d_debug_geometry geo;
+        if (debug3d__generate_box_geometry(alloc, &geo, sx_vec3splat(0.5f))) {
             mesh->num_vbuffs = 1;
             mesh->cpu.vbuffs[0] = geo.verts;
             mesh->cpu.ibuff = geo.indices;
             mesh->gpu.vbuffs[0] = the_gfx->make_buffer(&(sg_buffer_desc) {
-                .size = sizeof(rizz_prims3d_vertex)*geo.num_verts,
+                .size = sizeof(rizz_3d_debug_vertex)*geo.num_verts,
                 .type = SG_BUFFERTYPE_VERTEXBUFFER,
                 .content = geo.verts,
                 .label = "__failed_model_vbuff__"
@@ -732,11 +720,11 @@ bool model__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx, 
         (rizz_asset_obj) {.ptr = &g_model.failed_model}, 
         (rizz_asset_obj) {.ptr = &g_model.blank_model}, 0);
 
-    g_model.material_handles = sx_handle_create_pool(g_model.alloc, 100);
-    if (!g_model.material_handles) {
-        sx_out_of_memory();
+    g_model.default_mtllib = material__create_lib(g_model.alloc, 64);
+    if (!g_model.default_mtllib) {
         return false;
     }
+    g_model.mtllib = g_model.default_mtllib;
 
     return true;
 }
@@ -750,7 +738,7 @@ void model__release(void)
         sx_free(alloc, g_model.blank_model.nodes);
 
         sx_free(alloc, g_model.failed_model.nodes);
-        prims3d__free_geometry(&(rizz_prims3d_geometry) {
+        debug3d__free_geometry(&(rizz_3d_debug_geometry) {
             .verts = g_model.failed_model.meshes[0].cpu.vbuffs[0],
             .indices = g_model.failed_model.meshes[0].cpu.ibuff
         }, alloc);
@@ -760,10 +748,9 @@ void model__release(void)
         sx_free(alloc, g_model.failed_model.meshes);
     }
 
-    // TODO: destroy all remaining instances
+    material__destroy_lib(g_model.default_mtllib);
 
-    sx_array_free(g_model.alloc, g_model.materials);
-    sx_handle_destroy_pool(g_model.material_handles, g_model.alloc);
+    // TODO: destroy all remaining instances
 
     the_asset->unregister_asset_type("model");
 }
@@ -781,10 +768,8 @@ void model__set_imgui(rizz_api_imgui* imgui)
     the_imgui = imgui;
 }
 
-const rizz_material_data* model__get_material(rizz_material mtl) 
+void model__set_material_lib(rizz_material_lib* mtllib)
 {
-    sx_assert(mtl.id);
-    sx_assert(sx_handle_valid(g_model.material_handles, mtl.id));
-
-    return &g_model.materials[sx_handle_index(mtl.id)];
+    g_model.mtllib = mtllib ? mtllib : g_model.default_mtllib;
 }
+

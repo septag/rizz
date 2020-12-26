@@ -23,9 +23,8 @@ RIZZ_STATE static rizz_api_imgui* the_imgui;
 RIZZ_STATE static rizz_api_asset* the_asset;
 RIZZ_STATE static rizz_api_camera* the_camera;
 RIZZ_STATE static rizz_api_vfs* the_vfs;
-RIZZ_STATE static rizz_api_prims3d* the_prims;
+RIZZ_STATE static rizz_api_3d* the_3d;
 RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
-RIZZ_STATE static rizz_api_model* the_model;
 RIZZ_STATE static rizz_api_utility* the_utility;
 
 #ifndef EXAMPLES_ROOT
@@ -352,7 +351,7 @@ static void render(void)
     the_camera->view_mat(&g_draw3d.cam, &view);
     sx_mat4 viewproj = sx_mat4_mul(&proj, &view);
 
-    the_prims->grid_xyplane_cam(1.0f, 5.0f, 50.0f, &g_draw3d.cam, &viewproj);
+    the_3d->debug.grid_xyplane_cam(1.0f, 5.0f, 50.0f, &g_draw3d.cam, &viewproj);
 
     // draw cube spline
     sx_vec3 points[100];
@@ -367,10 +366,10 @@ static void render(void)
             },
             &points[i]);
     }
-    the_prims->draw_path(points, 100, &viewproj, SX_COLOR_YELLOW);
+    the_3d->debug.draw_path(points, 100, &viewproj, SX_COLOR_YELLOW);
 
     // model
-    const rizz_model* model = the_model->model_get(g_draw3d.cube_model);
+    const rizz_model* model = the_3d->model.get(g_draw3d.cube_model);
     draw3d_vertex_shader_uniforms vs_uniforms = { .viewproj_mat = viewproj };
     draw3d_fragment_shader_uniforms fs_uniforms = { .light_dir = sx_vec3_norm(g_draw3d.light_dir) };
     the_gfx->staged.apply_pipeline(g_draw3d.pip);
@@ -419,8 +418,7 @@ rizz_plugin_decl_main(draw3d, plugin, e)
         the_camera = (rizz_api_camera*)plugin->api->get_api(RIZZ_API_CAMERA, 0);
         the_imgui = (rizz_api_imgui*)plugin->api->get_api_byname("imgui", 0);
         the_imguix = (rizz_api_imgui_extra*)plugin->api->get_api_byname("imgui_extra", 0);
-        the_prims = (rizz_api_prims3d*)plugin->api->get_api_byname("prims3d", 0);
-        the_model = (rizz_api_model*)plugin->api->get_api_byname("model", 0);
+        the_3d = (rizz_api_3d*)plugin->api->get_api_byname("3dtools", 0);
         the_utility = (rizz_api_utility*)plugin->api->get_api_byname("utility", 0);
 
         init();

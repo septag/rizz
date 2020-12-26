@@ -24,7 +24,7 @@ RIZZ_STATE static rizz_api_asset* the_asset;
 RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
 RIZZ_STATE static rizz_api_camera* the_camera;
 RIZZ_STATE static rizz_api_vfs* the_vfs;
-RIZZ_STATE static rizz_api_sprite* the_sprite;
+RIZZ_STATE static rizz_api_2d* the_2d;
 
 typedef struct {
     rizz_gfx_stage stage;
@@ -105,30 +105,30 @@ static bool init()
                                        .mag_filter = SG_FILTER_LINEAR };
     g_as.atlas = the_asset->load("atlas", "/assets/textures/boy.json", &aparams,
                                  RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD, NULL, 0);
-    g_as.animclips[0] = the_sprite->animclip_create(&(rizz_sprite_animclip_desc){
+    g_as.animclips[0] = the_2d->sprite.animclip_create(&(rizz_sprite_animclip_desc){
         .atlas = g_as.atlas,
         .frames = k_idle_frames,
         .num_frames = sizeof(k_idle_frames) / sizeof(rizz_sprite_animclip_frame_desc),
         .fps = 8.0f });
-    g_as.animclips[1] = the_sprite->animclip_create(&(rizz_sprite_animclip_desc){
+    g_as.animclips[1] = the_2d->sprite.animclip_create(&(rizz_sprite_animclip_desc){
         .atlas = g_as.atlas,
         .frames = k_walk_frames,
         .num_frames = sizeof(k_walk_frames) / sizeof(rizz_sprite_animclip_frame_desc),
         .fps = 8.0f,
     });
-    g_as.animclips[2] = the_sprite->animclip_create(&(rizz_sprite_animclip_desc){
+    g_as.animclips[2] = the_2d->sprite.animclip_create(&(rizz_sprite_animclip_desc){
         .atlas = g_as.atlas,
         .frames = k_jumpstart_frames,
         .num_frames = sizeof(k_jumpstart_frames) / sizeof(rizz_sprite_animclip_frame_desc),
         .fps = 12.0f,
     });
-    g_as.animclips[3] = the_sprite->animclip_create(&(rizz_sprite_animclip_desc){
+    g_as.animclips[3] = the_2d->sprite.animclip_create(&(rizz_sprite_animclip_desc){
         .atlas = g_as.atlas,
         .frames = k_jumploop_frames,
         .num_frames = sizeof(k_jumploop_frames) / sizeof(rizz_sprite_animclip_frame_desc),
         .fps = 12.0f,
     });
-    g_as.animclips[4] = the_sprite->animclip_create(&(rizz_sprite_animclip_desc){
+    g_as.animclips[4] = the_2d->sprite.animclip_create(&(rizz_sprite_animclip_desc){
         .atlas = g_as.atlas,
         .frames = k_jumpend_frames,
         .num_frames = sizeof(k_jumpend_frames) / sizeof(rizz_sprite_animclip_frame_desc),
@@ -175,7 +175,7 @@ static bool init()
         { .state = "jump_end", .target_state = "idle" },
     };
 
-    g_as.animctrl = the_sprite->animctrl_create(&(rizz_sprite_animctrl_desc){
+    g_as.animctrl = the_2d->sprite.animctrl_create(&(rizz_sprite_animctrl_desc){
         .states = k_states,
         .start_state = "idle",
         .num_states = sizeof(k_states) / sizeof(rizz_sprite_animctrl_state_desc),
@@ -186,7 +186,7 @@ static bool init()
         .params[2] = { .name = "jump", .type = RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO },
         .params[3] = { .name = "land", .type = RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO } });
 
-    g_as.sprite = the_sprite->create(&(rizz_sprite_desc){ .name = "boy",
+    g_as.sprite = the_2d->sprite.create(&(rizz_sprite_desc){ .name = "boy",
                                                           .ctrl = g_as.animctrl,
                                                           .size = sx_vec2f(SPRITE_WIDTH, 0),
                                                           .color = sx_colorn(0xffffffff) });
@@ -196,18 +196,18 @@ static bool init()
 static void shutdown()
 {
     if (g_as.sprite.id)
-        the_sprite->destroy(g_as.sprite);
+        the_2d->sprite.destroy(g_as.sprite);
     if (g_as.atlas.id)
         the_asset->unload(g_as.atlas);
     for (int i = 0; i < 5; i++)
-        the_sprite->animclip_destroy(g_as.animclips[i]);
+        the_2d->sprite.animclip_destroy(g_as.animclips[i]);
     if (g_as.animctrl.id)
-        the_sprite->animctrl_destroy(g_as.animctrl);
+        the_2d->sprite.animctrl_destroy(g_as.animctrl);
 }
 
 static void update(float dt)
 {
-    the_sprite->animctrl_update(g_as.animctrl, dt);
+    the_2d->sprite.animctrl_update(g_as.animctrl, dt);
 }
 
 static void render()
@@ -225,7 +225,7 @@ static void render()
     sx_mat4 vp = sx_mat4_mul(&proj, &view);
 
     sx_mat3 mat = sx_mat3_ident();
-    the_sprite->draw(g_as.sprite, &vp, &mat, SX_COLOR_WHITE);
+    the_2d->sprite.draw(g_as.sprite, &vp, &mat, SX_COLOR_WHITE);
 
     the_gfx->staged.end_pass();
     the_gfx->staged.end();
@@ -242,7 +242,7 @@ static void render()
     the_imgui->End();
 
     if (show_debugger)
-        the_sprite->show_debugger(&show_debugger);
+        the_2d->sprite.show_debugger(&show_debugger);
 }
 
 rizz_plugin_decl_main(animsprite, plugin, e)
@@ -265,8 +265,7 @@ rizz_plugin_decl_main(animsprite, plugin, e)
 
         the_imgui = the_plugin->get_api_byname("imgui", 0);
         the_imguix = the_plugin->get_api_byname("imgui_extra", 0);
-        the_sprite = the_plugin->get_api_byname("sprite", 0);
-        sx_assertf(the_sprite, "sprite plugin is not loaded!");
+        the_2d = the_plugin->get_api_byname("2dtools", 0);
 
         init();
         break;
@@ -291,7 +290,7 @@ rizz_plugin_decl_event_handler(animsprite, e)
     case RIZZ_APP_EVENTTYPE_UPDATE_APIS:
         the_imgui = the_plugin->get_api_byname("imgui", 0);
         the_imguix = the_plugin->get_api_byname("imgui_extra", 0);
-        the_sprite = the_plugin->get_api_byname("sprite", 0);
+        the_2d = the_plugin->get_api_byname("2dtools", 0);
         break;
     default:
         break;

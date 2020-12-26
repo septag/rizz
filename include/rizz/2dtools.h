@@ -171,97 +171,6 @@ typedef struct rizz_sprite_animctrl_desc {
     int                                         num_transitions;
 } rizz_sprite_animctrl_desc;
 
-typedef struct rizz_api_sprite {
-    rizz_sprite (*create)(const rizz_sprite_desc* desc);
-    void (*destroy)(rizz_sprite spr);
-
-    // if clip = {0}, it uses the source sprite clip handle
-    rizz_sprite (*clone)(rizz_sprite spr, rizz_sprite_animclip clip);
-
-    // atlas
-    const rizz_atlas* (*atlas_get)(rizz_asset atlas_asset);
-
-    // property accessors
-    sx_vec2 (*size)(rizz_sprite spr);
-    sx_vec2 (*origin)(rizz_sprite spr);
-    sx_color (*color)(rizz_sprite spr);
-    sx_rect (*bounds)(rizz_sprite spr);
-    sx_rect (*draw_bounds)(rizz_sprite spr);
-    rizz_sprite_flip (*flip)(rizz_sprite spr);
-    const char* (*name)(rizz_sprite spr);
-
-    void (*set_size)(rizz_sprite spr, const sx_vec2 size);
-    void (*set_origin)(rizz_sprite spr, const sx_vec2 origin);
-    void (*set_color)(rizz_sprite spr, const sx_color color);
-    void (*set_flip)(rizz_sprite spr, rizz_sprite_flip flip);
-
-    // draw-data: low-level API to construct geometry data for drawing
-    rizz_sprite_drawdata* (*make_drawdata)(rizz_sprite spr, const sx_alloc* alloc);
-    rizz_sprite_drawdata* (*make_drawdata_batch)(const rizz_sprite* sprs, int num_sprites,
-                                                 const sx_alloc* alloc);
-    void (*free_drawdata)(rizz_sprite_drawdata* data, const sx_alloc* alloc);
-
-    // high-level draw calls, normal sprite drawing
-    // internally calls `make_drawdata` and draws with internal shader and buffers
-    // `tints` is optional and if it's null, then all sprites will be drawin with white tint
-    void (*draw)(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat, sx_color tint);
-    void (*draw_batch)(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp,
-                       const sx_mat3* mats, sx_color* tints);
-    void (*draw_wireframe_batch)(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp,
-                                 const sx_mat3* mats);                       
-    void (*draw_wireframe)(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat);
-
-    // draw with size, position and rotation instead of transform matrix
-    // internally calls `make_drawdata` and draws with internal shader and buffers
-    // `angles` is optional and if it's null, no rotation will be applied
-    // `scales` is optional and if it's null, all scales will be 1.0
-    // `tints` is optional and if it's null, then all sprites will be drawin with white tint
-    void (*draw_srt)(rizz_sprite spr, const sx_mat4* vp, sx_vec2 pos, float angle, sx_vec2 scale, 
-                     sx_color tint);
-    void (*draw_batch_srt)(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp, 
-                           const sx_vec2* poss, const float* angles, const sx_vec2* scales, 
-                           sx_color* tints);
-
-    // draw properties
-    bool (*resize_draw_limits)(int max_verts, int max_indices);
-    void (*set_draw_api)(rizz_api_gfx_draw* draw_api);
-
-    // anim-clip
-    rizz_sprite_animclip (*animclip_create)(const rizz_sprite_animclip_desc* desc);
-    void (*animclip_destroy)(rizz_sprite_animclip clip);
-    rizz_sprite_animclip (*animclip_clone)(rizz_sprite_animclip clip);
-    
-    void (*animclip_update)(rizz_sprite_animclip clip, float dt);
-    void (*animclip_update_batch)(const rizz_sprite_animclip* clips, int num_clips, float dt);
-
-    float (*animclip_fps)(rizz_sprite_animclip clip);
-    float (*animclip_len)(rizz_sprite_animclip clip);
-    rizz_sprite_flip (*animclip_flip)(rizz_sprite_animclip clip);
-    rizz_event_queue* (*animclip_events)(rizz_sprite_animclip clip);
-    void (*animclip_set_fps)(rizz_sprite_animclip clip, float fps);
-    void (*animclip_set_len)(rizz_sprite_animclip clip, float len); 
-    void (*animclip_set_flip)(rizz_sprite_animclip clip, rizz_sprite_flip flip);
-    void (*animclip_restart)(rizz_sprite_animclip clip);
-    
-    // anim-controller
-    rizz_sprite_animctrl (*animctrl_create)(const rizz_sprite_animctrl_desc* desc);
-    void (*animctrl_destroy)(rizz_sprite_animctrl ctrl);
-    void (*animctrl_update)(rizz_sprite_animctrl ctrl, float dt);
-    void (*animctrl_update_batch)(const rizz_sprite_animctrl* ctrls, int num_ctrls, float dt);
-
-    void (*animctrl_set_paramb)(rizz_sprite_animctrl ctrl, const char* name, bool b);
-    void (*animctrl_set_parami)(rizz_sprite_animctrl ctrl, const char* name, int i);
-    void (*animctrl_set_paramf)(rizz_sprite_animctrl ctrl, const char* name, float f);
-    bool (*animctrl_param_valueb)(rizz_sprite_animctrl ctrl, const char* name);
-    float (*animctrl_param_valuef)(rizz_sprite_animctrl ctrl, const char* name);
-    int (*animctrl_param_valuei)(rizz_sprite_animctrl ctrl, const char* name);
-    void (*animctrl_restart)(rizz_sprite_animctrl ctrl);
-    rizz_event_queue* (*animctrl_events)(rizz_sprite_animctrl ctrl);
-
-    // debugging
-    void (*show_debugger)(bool* p_open);
-} rizz_api_sprite;
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @font
 typedef struct rizz_font_load_params {
@@ -334,33 +243,128 @@ typedef struct rizz_font {
     sg_image img_atlas;
 } rizz_font;
 
-typedef struct rizz_api_font {
-    const rizz_font* (*font_get)(rizz_asset font_asset);
 
-    void (*draw)(const rizz_font* fnt, sx_vec2 pos, const char* text);
-    void (*drawf)(const rizz_font* fnt, sx_vec2 pos, const char* fmt, ...);
-    void (*draw_debug)(const rizz_font* fnt, sx_vec2 pos);
+typedef struct rizz_api_2d
+{
+    struct {
+        const rizz_font* (*get)(rizz_asset font_asset);
 
-    void (*push_state)(const rizz_font* fnt);
-    void (*pop_state)(const rizz_font* fnt);
+        void (*draw)(const rizz_font* fnt, sx_vec2 pos, const char* text);
+        void (*drawf)(const rizz_font* fnt, sx_vec2 pos, const char* fmt, ...);
+        void (*draw_debug)(const rizz_font* fnt, sx_vec2 pos);
 
-    void (*set_size)(const rizz_font* fnt, float size);
-    void (*set_color)(const rizz_font* fnt, sx_color color);
-    void (*set_align)(const rizz_font* fnt, rizz_font_align align_bits);
-    void (*set_spacing)(const rizz_font* fnt, float spacing);
-    void (*set_blur)(const rizz_font* fnt, float blur);
-    void (*set_scissor)(const rizz_font* fnt, int x, int y, int width, int height);
-    void (*set_viewproj_mat)(const rizz_font* fnt, const sx_mat4* vp);
+        void (*push_state)(const rizz_font* fnt);
+        void (*pop_state)(const rizz_font* fnt);
 
-    void (*clear_state)(const rizz_font* fnt);
-	void (*clear_atlas)(const rizz_font* fnt);
+        void (*set_size)(const rizz_font* fnt, float size);
+        void (*set_color)(const rizz_font* fnt, sx_color color);
+        void (*set_align)(const rizz_font* fnt, rizz_font_align align_bits);
+        void (*set_spacing)(const rizz_font* fnt, float spacing);
+        void (*set_blur)(const rizz_font* fnt, float blur);
+        void (*set_scissor)(const rizz_font* fnt, int x, int y, int width, int height);
+        void (*set_viewproj_mat)(const rizz_font* fnt, const sx_mat4* vp);
+
+        void (*clear_state)(const rizz_font* fnt);
+	    void (*clear_atlas)(const rizz_font* fnt);
     
-    rizz_font_bounds (*bounds)(const rizz_font* fnt, sx_vec2 pos, const char* text); 
-    rizz_font_line_bounds (*line_bounds)(const rizz_font* fnt, float y);
-    rizz_font_vert_metrics (*vert_metrics)(const rizz_font* fnt);
-    bool (*resize_draw_limits)(int max_verts);
-    void (*set_draw_api)(rizz_api_gfx_draw* draw_api);
+        rizz_font_bounds (*bounds)(const rizz_font* fnt, sx_vec2 pos, const char* text); 
+        rizz_font_line_bounds (*line_bounds)(const rizz_font* fnt, float y);
+        rizz_font_vert_metrics (*vert_metrics)(const rizz_font* fnt);
+        bool (*resize_draw_limits)(int max_verts);
+        void (*set_draw_api)(rizz_api_gfx_draw* draw_api);
 
-    rizz_font_iter (*iter_init)(const rizz_font* fnt, sx_vec2 pos, const char* text);
-    bool (*iter_next)(const rizz_font* fnt, rizz_font_iter* iter, rizz_font_quad* quad);
-} rizz_api_font;
+        rizz_font_iter (*iter_init)(const rizz_font* fnt, sx_vec2 pos, const char* text);
+        bool (*iter_next)(const rizz_font* fnt, rizz_font_iter* iter, rizz_font_quad* quad);
+    } font;
+
+    struct {
+        rizz_sprite (*create)(const rizz_sprite_desc* desc);
+        void (*destroy)(rizz_sprite spr);
+
+        // if clip = {0}, it uses the source sprite clip handle
+        rizz_sprite (*clone)(rizz_sprite spr, rizz_sprite_animclip clip);
+
+        // atlas
+        const rizz_atlas* (*atlas_get)(rizz_asset atlas_asset);
+
+        // property accessors
+        sx_vec2 (*size)(rizz_sprite spr);
+        sx_vec2 (*origin)(rizz_sprite spr);
+        sx_color (*color)(rizz_sprite spr);
+        sx_rect (*bounds)(rizz_sprite spr);
+        sx_rect (*draw_bounds)(rizz_sprite spr);
+        rizz_sprite_flip (*flip)(rizz_sprite spr);
+        const char* (*name)(rizz_sprite spr);
+
+        void (*set_size)(rizz_sprite spr, const sx_vec2 size);
+        void (*set_origin)(rizz_sprite spr, const sx_vec2 origin);
+        void (*set_color)(rizz_sprite spr, const sx_color color);
+        void (*set_flip)(rizz_sprite spr, rizz_sprite_flip flip);
+
+        // draw-data: low-level API to construct geometry data for drawing
+        rizz_sprite_drawdata* (*make_drawdata)(rizz_sprite spr, const sx_alloc* alloc);
+        rizz_sprite_drawdata* (*make_drawdata_batch)(const rizz_sprite* sprs, int num_sprites,
+                                                     const sx_alloc* alloc);
+        void (*free_drawdata)(rizz_sprite_drawdata* data, const sx_alloc* alloc);
+
+        // high-level draw calls, normal sprite drawing
+        // internally calls `make_drawdata` and draws with internal shader and buffers
+        // `tints` is optional and if it's null, then all sprites will be drawin with white tint
+        void (*draw)(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat, sx_color tint);
+        void (*draw_batch)(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp,
+                           const sx_mat3* mats, sx_color* tints);
+        void (*draw_wireframe_batch)(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp,
+                                     const sx_mat3* mats);                       
+        void (*draw_wireframe)(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat);
+
+        // draw with size, position and rotation instead of transform matrix
+        // internally calls `make_drawdata` and draws with internal shader and buffers
+        // `angles` is optional and if it's null, no rotation will be applied
+        // `scales` is optional and if it's null, all scales will be 1.0
+        // `tints` is optional and if it's null, then all sprites will be drawin with white tint
+        void (*draw_srt)(rizz_sprite spr, const sx_mat4* vp, sx_vec2 pos, float angle, sx_vec2 scale, 
+                         sx_color tint);
+        void (*draw_batch_srt)(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp, 
+                               const sx_vec2* poss, const float* angles, const sx_vec2* scales, 
+                               sx_color* tints);
+
+        // draw properties
+        bool (*resize_draw_limits)(int max_verts, int max_indices);
+        void (*set_draw_api)(rizz_api_gfx_draw* draw_api);
+
+        // anim-clip
+        rizz_sprite_animclip (*animclip_create)(const rizz_sprite_animclip_desc* desc);
+        void (*animclip_destroy)(rizz_sprite_animclip clip);
+        rizz_sprite_animclip (*animclip_clone)(rizz_sprite_animclip clip);
+    
+        void (*animclip_update)(rizz_sprite_animclip clip, float dt);
+        void (*animclip_update_batch)(const rizz_sprite_animclip* clips, int num_clips, float dt);
+
+        float (*animclip_fps)(rizz_sprite_animclip clip);
+        float (*animclip_len)(rizz_sprite_animclip clip);
+        rizz_sprite_flip (*animclip_flip)(rizz_sprite_animclip clip);
+        rizz_event_queue* (*animclip_events)(rizz_sprite_animclip clip);
+        void (*animclip_set_fps)(rizz_sprite_animclip clip, float fps);
+        void (*animclip_set_len)(rizz_sprite_animclip clip, float len); 
+        void (*animclip_set_flip)(rizz_sprite_animclip clip, rizz_sprite_flip flip);
+        void (*animclip_restart)(rizz_sprite_animclip clip);
+    
+        // anim-controller
+        rizz_sprite_animctrl (*animctrl_create)(const rizz_sprite_animctrl_desc* desc);
+        void (*animctrl_destroy)(rizz_sprite_animctrl ctrl);
+        void (*animctrl_update)(rizz_sprite_animctrl ctrl, float dt);
+        void (*animctrl_update_batch)(const rizz_sprite_animctrl* ctrls, int num_ctrls, float dt);
+
+        void (*animctrl_set_paramb)(rizz_sprite_animctrl ctrl, const char* name, bool b);
+        void (*animctrl_set_parami)(rizz_sprite_animctrl ctrl, const char* name, int i);
+        void (*animctrl_set_paramf)(rizz_sprite_animctrl ctrl, const char* name, float f);
+        bool (*animctrl_param_valueb)(rizz_sprite_animctrl ctrl, const char* name);
+        float (*animctrl_param_valuef)(rizz_sprite_animctrl ctrl, const char* name);
+        int (*animctrl_param_valuei)(rizz_sprite_animctrl ctrl, const char* name);
+        void (*animctrl_restart)(rizz_sprite_animctrl ctrl);
+        rizz_event_queue* (*animctrl_events)(rizz_sprite_animctrl ctrl);
+
+        // debugging
+        void (*show_debugger)(bool* p_open);
+    } sprite;
+} rizz_api_2d;

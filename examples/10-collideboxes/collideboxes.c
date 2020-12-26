@@ -21,7 +21,7 @@ RIZZ_STATE static rizz_api_app* the_app;
 RIZZ_STATE static rizz_api_camera* the_cam;
 RIZZ_STATE static rizz_api_imgui* the_imgui;
 RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
-RIZZ_STATE static rizz_api_prims3d* the_prims3d;
+RIZZ_STATE static rizz_api_3d* the_3d;
 RIZZ_STATE static rizz_api_plugin* the_plugin;
 RIZZ_STATE static rizz_api_coll* the_coll;
 
@@ -104,7 +104,7 @@ static bool init(void)
     g_coll.main_stage = the_gfx->stage_register("main", (rizz_gfx_stage){.id = 0});
     sx_assert(g_coll.main_stage.id);
 
-    the_prims3d->set_max_instances(2000);
+    the_3d->debug.set_max_instances(2000);
 
     // camera
     // projection: setup for perspective
@@ -284,7 +284,7 @@ static void render(void)
     sx_mat4 viewproj = sx_mat4_mul(&proj, &view);
 
     if (g_coll.show_grid) {
-        the_prims3d->grid_xyplane_cam(g_coll.cell_size, g_coll.cell_size*5.0f, 50.0f, &g_coll.cam.cam, &viewproj);
+        the_3d->debug.grid_xyplane_cam(g_coll.cell_size, g_coll.cell_size*5.0f, 50.0f, &g_coll.cam.cam, &viewproj);
     }
 
     sx_box boxes[NUM_SHAPES];
@@ -312,7 +312,7 @@ static void render(void)
     box->tx.rot = sx_mat3_rotate(-sx_torad(80.0f));
     box->tx = sx_tx3d_mul(&tx, &box->tx);
     
-    the_prims3d->draw_boxes(boxes, NUM_SHAPES, &viewproj, RIZZ_PRIMS3D_MAPTYPE_CHECKER, colors);
+    the_3d->debug.draw_boxes(boxes, NUM_SHAPES, &viewproj, RIZZ_3D_DEBUG_MAPTYPE_CHECKER, colors);
 
     the_gfx->staged.end_pass();
     the_gfx->staged.end();
@@ -334,7 +334,7 @@ rizz_plugin_decl_main(collideboxes, plugin, e)
         the_cam = (rizz_api_camera*)plugin->api->get_api(RIZZ_API_CAMERA, 0);
         the_imgui = (rizz_api_imgui*)plugin->api->get_api_byname("imgui", 0);
         the_imguix = (rizz_api_imgui_extra*)plugin->api->get_api_byname("imgui_extra", 0);
-        the_prims3d = (rizz_api_prims3d*)plugin->api->get_api_byname("prims3d", 0);
+        the_3d = (rizz_api_3d*)plugin->api->get_api_byname("3dtools", 0);
         the_coll = (rizz_api_coll*)plugin->api->get_api_byname("collision", 0);
 
         the_plugin = plugin->api;
@@ -408,7 +408,7 @@ rizz_plugin_decl_event_handler(collideboxes, e)
     case RIZZ_APP_EVENTTYPE_UPDATE_APIS:
         the_imgui = the_plugin->get_api_byname("imgui", 0);
         the_imguix = the_plugin->get_api_byname("imgui_extra", 0);
-        the_prims3d = (rizz_api_prims3d*)the_plugin->get_api_byname("prims3d", 0);
+        the_3d = (rizz_api_3d*)the_plugin->get_api_byname("3dtools", 0);
         break;
     default:
         break;

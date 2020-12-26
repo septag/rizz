@@ -22,8 +22,7 @@ RIZZ_STATE static rizz_api_imgui* the_imgui;
 RIZZ_STATE static rizz_api_asset* the_asset;
 RIZZ_STATE static rizz_api_camera* the_camera;
 RIZZ_STATE static rizz_api_vfs* the_vfs;
-RIZZ_STATE static rizz_api_sprite* the_sprite;
-RIZZ_STATE static rizz_api_font* the_font;
+RIZZ_STATE static rizz_api_2d* the_2d;
 
 typedef struct {
     sx_mat4 vp;
@@ -153,7 +152,7 @@ static bool init()
     for (int i = 0; i < NUM_SPRITES; i++) {
         char name[32];
         sx_snprintf(name, sizeof(name), "test/handicraft_%d.png", i + 1);
-        g_ds.sprites[i] = the_sprite->create(&(rizz_sprite_desc){ .name = name,
+        g_ds.sprites[i] = the_2d->sprite.create(&(rizz_sprite_desc){ .name = name,
                                                                   .atlas = g_ds.atlas,
                                                                   .size = sx_vec2f(SPRITE_WIDTH, 0),
                                                                   .color = sx_colorn(0xffffffff) });
@@ -166,7 +165,7 @@ static void shutdown()
 {
     for (int i = 0; i < NUM_SPRITES; i++) {
         if (g_ds.sprites[i].id) {
-            the_sprite->destroy(g_ds.sprites[i]);
+            the_2d->sprite.destroy(g_ds.sprites[i]);
         }
     }
     if (g_ds.vbuff.id)
@@ -195,7 +194,7 @@ static void draw_custom(const drawsprite_params* params)
 {
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
     rizz_sprite_drawdata* dd =
-        the_sprite->make_drawdata_batch(g_ds.sprites, NUM_SPRITES, tmp_alloc);
+        the_2d->sprite.make_drawdata_batch(g_ds.sprites, NUM_SPRITES, tmp_alloc);
 
     sg_bindings bindings = { .vertex_buffers[0] = g_ds.vbuff };
 
@@ -218,7 +217,7 @@ static void draw_custom(const drawsprite_params* params)
                 verts[v].transform = transform;
                 verts[v].color = dd->verts[v].color;
             }
-            start_x += sx_rect_width(the_sprite->bounds(g_ds.sprites[i])) * 0.8f;
+            start_x += sx_rect_width(the_2d->sprite.bounds(g_ds.sprites[i])) * 0.8f;
 
             if ((i + 1) % 3 == 0) {
                 start_y += 3.0f;
@@ -252,7 +251,7 @@ static void draw_custom(const drawsprite_params* params)
                 verts[vindex].bc = bcs[vindex % 3];
                 vindex++;
             }
-            start_x += sx_rect_width(the_sprite->bounds(g_ds.sprites[i])) * 0.8f;
+            start_x += sx_rect_width(the_2d->sprite.bounds(g_ds.sprites[i])) * 0.8f;
 
             if ((i + 1) % 3 == 0) {
                 start_y += 3.0f;
@@ -299,7 +298,7 @@ static void render()
     for (int i = 0; i < NUM_SPRITES; i++) {
         mats[i] = sx_mat3_translate(start_x, start_y);
 
-        start_x += sx_rect_width(the_sprite->bounds(g_ds.sprites[i])) * 0.8f;
+        start_x += sx_rect_width(the_2d->sprite.bounds(g_ds.sprites[i])) * 0.8f;
         if ((i + 1) % 3 == 0) {
             start_y += 3.0f;
             start_x = -3.0f;
@@ -307,35 +306,35 @@ static void render()
     }
 
     if (!g_ds.custom) {
-        the_sprite->draw_batch(g_ds.sprites, NUM_SPRITES, &vp, mats, NULL);
+        the_2d->sprite.draw_batch(g_ds.sprites, NUM_SPRITES, &vp, mats, NULL);
         if (g_ds.wireframe)
-            the_sprite->draw_wireframe_batch(g_ds.sprites, NUM_SPRITES, &vp, mats);
+            the_2d->sprite.draw_wireframe_batch(g_ds.sprites, NUM_SPRITES, &vp, mats);
     } else {
         draw_custom(&params);
     }
 
     // draw sample font
     {
-        const rizz_font* font = the_font->font_get(g_ds.font);
-        the_font->push_state(font);
+        const rizz_font* font = the_2d->font.get(g_ds.font);
+        the_2d->font.push_state(font);
         // note: setup ortho matrix in a way that the Y is reversed (top-left = origin)
         float w = (float)the_app->width();
         float h = (float)the_app->height();
         sx_mat4 vp = sx_mat4_ortho_offcenter(0, h, w, 0, -1.0f, 1.0f, 0, the_gfx->GL_family());
 
-        the_font->set_viewproj_mat(font, &vp);
-        the_font->set_size(font, 30.0f);
-        rizz_font_vert_metrics metrics = the_font->vert_metrics(font);
+        the_2d->font.set_viewproj_mat(font, &vp);
+        the_2d->font.set_size(font, 30.0f);
+        rizz_font_vert_metrics metrics = the_2d->font.vert_metrics(font);
 
         float y = metrics.lineh + 15.0f;
-        the_font->draw(font, sx_vec2f(15.0f, y), "DrawSprite Example");
+        the_2d->font.draw(font, sx_vec2f(15.0f, y), "DrawSprite Example");
 
-        the_font->push_state(font);
-        the_font->set_size(font, 16.0f);
-        the_font->draw(font, sx_vec2f(15.0f, y + metrics.lineh), "This text is drawn by font API");
-        the_font->pop_state(font);
+        the_2d->font.push_state(font);
+        the_2d->font.set_size(font, 16.0f);
+        the_2d->font.draw(font, sx_vec2f(15.0f, y + metrics.lineh), "This text is drawn by font API");
+        the_2d->font.pop_state(font);
 
-        the_font->pop_state(font);
+        the_2d->font.pop_state(font);
     }
 
     the_gfx->staged.end_pass();
@@ -355,7 +354,7 @@ static void render()
     the_imgui->End();
 
     if (show_debugger) {
-        the_sprite->show_debugger(&show_debugger);
+        the_2d->sprite.show_debugger(&show_debugger);
     }
 }
 
@@ -377,9 +376,7 @@ rizz_plugin_decl_main(drawsprite, plugin, e)
         the_camera = plugin->api->get_api(RIZZ_API_CAMERA, 0);
 
         the_imgui = plugin->api->get_api_byname("imgui", 0);
-        the_sprite = plugin->api->get_api_byname("sprite", 0);
-        the_font = plugin->api->get_api_byname("font", 0);
-        sx_assertf(the_sprite, "sprite plugin is not loaded!");
+        the_2d = plugin->api->get_api_byname("2dtools", 0);
 
         if (!init())
             return -1;

@@ -22,9 +22,8 @@ RIZZ_STATE static rizz_api_imgui* the_imgui;
 RIZZ_STATE static rizz_api_asset* the_asset;
 RIZZ_STATE static rizz_api_camera* the_camera;
 RIZZ_STATE static rizz_api_vfs* the_vfs;
-RIZZ_STATE static rizz_api_prims3d* the_prims;
+RIZZ_STATE static rizz_api_3d* the_3d;
 RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
-RIZZ_STATE static rizz_api_model* the_model;
 
 #define NUM_MODELS 3
 static const char* k_models[NUM_MODELS] = {
@@ -304,16 +303,16 @@ static void render(void)
     }
     
     if (g_draw3d.show_grid) {
-        the_prims->grid_xyplane_cam(1.0f, 5.0f, 50.0f, &g_draw3d.cam.cam, &viewproj);
+        the_3d->debug.grid_xyplane_cam(1.0f, 5.0f, 50.0f, &g_draw3d.cam.cam, &viewproj);
     }
 
     if (g_draw3d.show_debug_cubes) {
-        the_prims->draw_boxes(boxes, 100, &viewproj, RIZZ_PRIMS3D_MAPTYPE_CHECKER, tints);
+        the_3d->debug.draw_boxes(boxes, 100, &viewproj, RIZZ_3D_DEBUG_MAPTYPE_CHECKER, tints);
     }
 
     // model
 
-    const rizz_model* model = the_model->model_get(g_draw3d.models[g_draw3d.model_index]);
+    const rizz_model* model = the_3d->model.get(g_draw3d.models[g_draw3d.model_index]);
     draw3d_vertex_shader_uniforms vs_uniforms = { .viewproj_mat = viewproj };
     draw3d_fragment_shader_uniforms fs_uniforms = { .light_dir = sx_vec3_norm(g_draw3d.light_dir) };
     the_gfx->staged.apply_pipeline(g_draw3d.pip);
@@ -345,7 +344,7 @@ static void render(void)
             bind.index_buffer_offset = submesh->start_index * sizeof(uint16_t);
             if (submesh->mtl.id) {
                 fs_uniforms.color = sx_vec3fv(
-                    the_model->material_get(submesh->mtl)->pbr_metallic_roughness.base_color_factor.f);
+                    the_3d->material.get_data(model->mtllib, submesh->mtl)->pbr_metallic_roughness.base_color_factor.f);
             } else {
                 fs_uniforms.color = sx_vec3f(1.0f, 1.0f, 1.0f);
             }
@@ -358,7 +357,7 @@ static void render(void)
     }
 
     if (num_bounds > 0) {
-        the_prims->draw_aabbs(bounds, num_bounds, &viewproj, NULL);
+        the_3d->debug.draw_aabbs(bounds, num_bounds, &viewproj, NULL);
     }
 
     the_gfx->staged.end_pass();
@@ -389,8 +388,7 @@ rizz_plugin_decl_main(draw3d, plugin, e)
         the_camera = (rizz_api_camera*)plugin->api->get_api(RIZZ_API_CAMERA, 0);
         the_imgui = (rizz_api_imgui*)plugin->api->get_api_byname("imgui", 0);
         the_imguix = (rizz_api_imgui_extra*)plugin->api->get_api_byname("imgui_extra", 0);
-        the_prims = (rizz_api_prims3d*)plugin->api->get_api_byname("prims3d", 0);
-        the_model = (rizz_api_model*)plugin->api->get_api_byname("model", 0);
+        the_3d = (rizz_api_3d*)plugin->api->get_api_byname("3dtools", 0);
 
         init();
         break;
