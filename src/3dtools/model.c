@@ -3,6 +3,7 @@
 
 #include "rizz/rizz.h"
 #include "rizz/imgui.h"
+#include "rizz/json.h"
 
 #include "sx/allocator.h"
 #include "sx/math-vec.h"
@@ -11,6 +12,7 @@
 #include "sx/lin-alloc.h"
 #include "sx/handle.h"
 #include "sx/array.h"
+#include "sx/io.h"
 
 #define SX_MAX_BUFFER_FIELDS 128
 #include "sx/linear-buffer.h"
@@ -333,6 +335,33 @@ static void model__cgltf_free(void* user, void* ptr)
     sx_unused(ptr);
 }
 
+static cgltf_result model__cgltf_read(const struct cgltf_memory_options* memory_options,
+                                      const struct cgltf_file_options* file_options, const char* path,
+                                      cgltf_size* size, void** data)
+{
+    sx_unused(path);
+    sx_unused(memory_options);
+
+    sx_mem_block* mem = (sx_mem_block*)file_options->user_data;
+    *data = mem->data;
+    if (*size > (cgltf_size)mem->size) {
+        return cgltf_result_data_too_short;
+    }
+
+    sx_mem_addoffset(mem, mem->size);
+
+    return cgltf_result_success;
+}
+
+static void model__cgltf_release(const struct cgltf_memory_options* memory_options,
+                                 const struct cgltf_file_options* file_options, void* data)
+{
+    sx_unused(memory_options);
+    sx_unused(file_options);
+    sx_unused(data);
+}
+
+
 static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* params, const sx_mem_block* mem)
 {
     const sx_alloc* alloc = params->alloc ? params->alloc : g_model.alloc;
@@ -342,31 +371,41 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
 
     char ext[32];
     sx_os_path_ext(ext, sizeof(ext), params->path);
-    if (sx_strequalnocase(ext, ".glb")) {
-        // TODO: this method of allocating 4x size of the model as a temp memory is not effective (and not safe)
-        //       we can modify to use temp allocator for parsing json and another actual to put real data
-        sx_linalloc linalloc;
-        void* parse_buffer = sx_malloc(g_model.alloc, (size_t)mem->size*4);
-        if (!parse_buffer) {
-            sx_out_of_memory();
+
+    if (sx_strequalnocase(ext, ".gltf") || sx_strequalnocase(ext, ".glb")) {
+        int num_tmp_tokens = 10000, gltf_size = 0, bin_size = 0;
+        for (uint32_t i = 0; i < params->num_meta; i++) {
+            if (sx_strequal(params->metas[i].key, "num_tokens")) {
+                num_tmp_tokens = sx_toint(params->metas[i].value);
+            } else if (sx_strequal(params->metas[i].key, "gltf_size")) {
+                gltf_size = sx_toint(params->metas[i].value);
+            } else if (sx_strequal(params->metas[i].key, "bin_size")) {
+                bin_size = sx_toint(params->metas[i].value);
+            }
+        }
+
+        sx_linalloc_growable* linalloc = sx_linalloc_growable_create(g_model.alloc, 
+            num_tmp_tokens*sizeof(cj5_token) + bin_size + 4096);
+        if (!linalloc) {
+            sx_memory_fail();
             return (rizz_asset_load_data) { {0} };
         }
 
-        sx_linalloc_init(&linalloc, parse_buffer, (size_t)mem->size*4);
         cgltf_options options = {
-            .type = cgltf_file_type_glb,
+            .type = cgltf_file_type_invalid,
             .memory = {
                 .alloc = model__cgltf_alloc,
                 .free = model__cgltf_free,
-                .user_data = (void*)&linalloc.alloc
+                .user_data = (void*)&linalloc->alloc
             }
         };
         cgltf_data* data;
-        cgltf_result result = cgltf_parse(&options, mem->data, (size_t)mem->size, &data);
+        cgltf_result result = cgltf_parse(&options, mem->data, gltf_size, &data);
         if (result != cgltf_result_success) {
             rizz_log_warn("cannot parse GLTF file: %s", params->path);
             return (rizz_asset_load_data) { {0} };
         }
+        sx_mem_addoffset((sx_mem_block*)mem, gltf_size);
 
         if (data->nodes_count == 0) {
             rizz_log_warn("model '%s' doesn't have any nodes inside", params->path);
@@ -464,7 +503,7 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
         }
         sx_memcpy(model->meshes, tmp_meshes, sizeof(rizz_model_mesh)*data->meshes_count);
 
-        return (rizz_asset_load_data) { .obj.ptr = model, .user1 = data, .user2 = parse_buffer };
+        return (rizz_asset_load_data) { .obj.ptr = model, .user1 = data, .user2 = linalloc };
     }
 
     return (rizz_asset_load_data) { {0} };
@@ -481,20 +520,26 @@ static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
     rizz_model* model = data->obj.ptr;
     char ext[32];
     sx_os_path_ext(ext, sizeof(ext), params->path);
-    if (sx_strequalnocase(ext, ".glb")) {
+    if (sx_strequalnocase(ext, ".gltf") || sx_strequalnocase(ext, ".glb")) {
         const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
         cgltf_data* gltf = data->user1;
         cgltf_options options = {
-            .type = cgltf_file_type_glb,
+            .type = cgltf_file_type_invalid,
             .memory = {
                 .alloc = model__cgltf_alloc,
                 .free = model__cgltf_free,
                 .user_data = (void*)tmp_alloc
+            },
+            .file = {
+                .read = model__cgltf_read,
+                .release = model__cgltf_release,
+                .user_data = (void*)mem
             }
         };
-        cgltf_result result = cgltf_load_buffers(&options, gltf, NULL);
+        cgltf_result result = cgltf_load_buffers(&options, gltf, params->path);
         if (result != cgltf_result_success) {
+            the_core->tmp_alloc_pop();
             return false;
         }
 
@@ -592,7 +637,7 @@ static void model__on_finalize(rizz_asset_load_data* data, const rizz_asset_load
     rizz_model* model = data->obj.ptr;
 
     model__setup_gpu_buffers(model, lparams->vbuff_usage, lparams->ibuff_usage);
-    sx_free(g_model.alloc, data->user2);    // free parse_buffer (see on_prepare for allocation)
+    sx_linalloc_growable_destroy((sx_linalloc_growable*)data->user2);    // free parse_buffer (see on_prepare for allocation)
 }
 
 static void model__on_reload(rizz_asset handle, rizz_asset_obj prev_obj, const sx_alloc* alloc)
