@@ -43,6 +43,7 @@ bool model__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx, 
 void model__release(void);
 void model__set_imgui(rizz_api_imgui* imgui);
 const rizz_model* model__get(rizz_asset model_asset);
+void model__set_material_lib(rizz_material_lib* mtllib);
 
 rizz_material material__add(rizz_material_lib* lib, const rizz_material_data* mtldata);
 void material__remove(rizz_material_lib* lib, rizz_material mtl);

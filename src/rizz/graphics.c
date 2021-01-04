@@ -1790,8 +1790,7 @@ static sg_pipeline_desc* rizz__shader_bindto_pipeline(const rizz_shader* shd,
                                                       sg_pipeline_desc* desc,
                                                       const rizz_vertex_layout* vl)
 {
-    return rizz__shader_bindto_pipeline_sg(shd->shd, shd->info.inputs, shd->info.num_inputs, desc,
-                                           vl);
+    return rizz__shader_bindto_pipeline_sg(shd->shd, shd->info.inputs, shd->info.num_inputs, desc, vl);
 }
 
 static rizz__sgs_chunk rizz__sgs_get_iff_chunk(sx_mem_reader* reader, int64_t size, uint32_t fourcc)

@@ -32,11 +32,12 @@ typedef struct shader_permut
 {
     uint32_t bitset;
     rizz_asset aid;
+    const void* user;
 } shader_permut;
 
 typedef struct shader_data 
 {
-    uint32_t pipeline;
+    uint32_t stage;
     shader_permut* permuts;
 } shader_data;
 
@@ -131,15 +132,15 @@ const rizz_material_data* material_get_data(const rizz_material_lib* lib, rizz_m
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // shader
 static bool shader_load(rizz_shader_lib* lib, const char* sgs_filepath, const sx_alloc* alloc, 
-                        uint32_t pipeline, uint32_t permutations)
+                        uint32_t stage, uint32_t permutations, const void* user)
 {
     sx_assert(lib);
     sx_assert(sgs_filepath);
 
-    // search in shaders for the pipeline
+    // search in shaders for the stage
     int shader_idx = -1;
     for (int i = 0, c = sx_array_count(lib->shaders); i < c; i++) {
-        if (lib->shaders[i].pipeline == pipeline) {
+        if (lib->shaders[i].stage == stage) {
             shader_idx = i;
             break;
         }
@@ -152,7 +153,7 @@ static bool shader_load(rizz_shader_lib* lib, const char* sgs_filepath, const sx
 
     sx_assert(shader_idx != -1);
     shader_data* shader = &lib->shaders[shader_idx];
-    shader->pipeline = pipeline;
+    shader->stage = stage;
     
     // make sure no duplicate permutations exist
     for (int i = 0, c = sx_array_count(shader->permuts); i < c; i++) {
@@ -170,27 +171,34 @@ static bool shader_load(rizz_shader_lib* lib, const char* sgs_filepath, const sx
         return false;
     }
 
-    shader_permut permut = (shader_permut){ .bitset = permutations, .aid = shader_id };
+    shader_permut permut = (shader_permut){ 
+        .bitset = permutations, 
+        .aid = shader_id,
+        .user = user
+    };
     sx_array_push(lib->alloc, shader->permuts, permut);
 
     return true;
 }
 
-static rizz_asset shader_get(const rizz_shader_lib* lib, uint32_t pipeline, uint32_t permutations)
+static rizz_asset shader_get(const rizz_shader_lib* lib, uint32_t stage, uint32_t permutations, const void** puser)
 {
     sx_assert(lib);
     for (int i = 0, c = sx_array_count(lib->shaders); i < c; i++) {
         shader_data* shader = &lib->shaders[i];
-        if (shader->pipeline == pipeline) {
+        if (shader->stage == stage) {
             for (int k = 0, kc = sx_array_count(shader->permuts); k < kc; k++) {
                 if ((shader->permuts[k].bitset & permutations) == permutations) {
+                    if (puser) {
+                        *puser = shader->permuts[k].user;
+                    }
                     return shader->permuts[k].aid;
                 }
             }
         }
     }
 
-    sx_assert_alwaysf(0, "shader (pipeline: 0x%x, permutations: 0x%x) does not exist", pipeline, permutations);
+    sx_assert_alwaysf(0, "shader (stage: 0x%x, permutations: 0x%x) does not exist", stage, permutations);
     return (rizz_asset) {0};
 }
 
@@ -246,7 +254,8 @@ static rizz_api_3d the__3d = {
         .set_max_vertices = debug3d__set_max_vertices,
         .set_max_indices = debug3d__set_max_indices },
     .model = {
-        .get = model__get
+        .get = model__get,
+        .set_material_lib = model__set_material_lib
     },
     .material = {
         .create_lib = material__create_lib,

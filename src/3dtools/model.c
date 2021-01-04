@@ -46,7 +46,20 @@ typedef struct rizz_model_context
 
 RIZZ_STATE static rizz_model_context g_model;
 
-static rizz_material model__create_material_from_gltf(cgltf_material* gltf_mtl, rizz_material_lib* mtllib)
+static rizz_asset model__load_texture_from_gltf(cgltf_texture* gltf_tex, const char* filedir)
+{
+    sx_assert(gltf_tex);
+    char texture_path[RIZZ_MAX_PATH];
+    sx_strcat(sx_strcpy(texture_path, sizeof(texture_path), filedir), sizeof(texture_path), gltf_tex->image->uri);
+
+    // TODO: tex->sampler->mag_filter 
+    rizz_texture_load_params tparams = { 0 };
+    return the_asset->load("texture", texture_path, &tparams, 0, NULL, 0);
+
+}
+
+static rizz_material model__create_material_from_gltf(cgltf_material* gltf_mtl, rizz_material_lib* mtllib,
+                                                      const char* filedir)
 {
     rizz_material_alpha_mode alpha_mode;
     switch (gltf_mtl->alpha_mode) {
@@ -55,6 +68,10 @@ static rizz_material model__create_material_from_gltf(cgltf_material* gltf_mtl, 
     case cgltf_alpha_mode_blend:       alpha_mode = RIZZ_MATERIAL_ALPHAMODE_BLEND;      break;
     default:                           sx_assert(0); alpha_mode = RIZZ_MATERIAL_ALPHAMODE_OPAQUE; break;
     }
+
+    char _filedir[RIZZ_MAX_PATH];
+    sx_strcat(sx_strcpy(_filedir, sizeof(_filedir), filedir), sizeof(_filedir), "/textures/");
+
 
     rizz_material_data mtl = {
         .has_metal_roughness = gltf_mtl->has_pbr_metallic_roughness,
@@ -91,6 +108,18 @@ static rizz_material model__create_material_from_gltf(cgltf_material* gltf_mtl, 
         .double_sided = gltf_mtl->double_sided,
         .unlit = gltf_mtl->unlit
     };
+
+    if (gltf_mtl->has_pbr_metallic_roughness) {
+        cgltf_texture* tex = gltf_mtl->pbr_metallic_roughness.base_color_texture.texture;
+        if (tex) {
+            mtl.pbr_metallic_roughness.base_color_tex.tex_asset =  model__load_texture_from_gltf(tex, _filedir);
+        }
+
+        tex = gltf_mtl->normal_texture.texture;
+        if (tex) {
+            mtl.normal_tex.tex_asset = model__load_texture_from_gltf(tex, _filedir);
+        }
+    }
 
     return material__add(mtllib, &mtl);
 }   
@@ -370,10 +399,14 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
         &lparams->layout : &g_model.default_layout;
 
     char ext[32];
+    char filedir[RIZZ_MAX_PATH];
     sx_os_path_ext(ext, sizeof(ext), params->path);
+    sx_os_path_dirname(filedir, sizeof(filedir), params->path);
 
     if (sx_strequalnocase(ext, ".gltf") || sx_strequalnocase(ext, ".glb")) {
-        int num_tmp_tokens = 10000, gltf_size = 0, bin_size = 0;
+        int num_tmp_tokens = 10000;
+        int gltf_size = (int)mem->size;
+        int bin_size = 0;
         for (uint32_t i = 0; i < params->num_meta; i++) {
             if (sx_strequal(params->metas[i].key, "num_tokens")) {
                 num_tmp_tokens = sx_toint(params->metas[i].value);
@@ -492,7 +525,7 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
                 cgltf_primitive* prim = &data->meshes[i].primitives[k];
                 if (prim->material) {
                     tmp_meshes[i].submeshes[k].mtl = 
-                        model__create_material_from_gltf(prim->material, g_model.mtllib);
+                        model__create_material_from_gltf(prim->material, g_model.mtllib, filedir);
                 }
             }
         }

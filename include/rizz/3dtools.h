@@ -243,6 +243,7 @@ typedef struct rizz_api_3d
 
     struct {
         const rizz_model* (*get)(rizz_asset model_asset);
+        void (*set_material_lib)(rizz_material_lib* mtllib);
     } model;
 
     struct {
@@ -257,7 +258,7 @@ typedef struct rizz_api_3d
         void (*destroy_lib)(rizz_shader_lib* lib);
 
         bool (*load)(rizz_shader_lib* lib, const char* sgs_filepath, const sx_alloc* alloc, 
-                     uint32_t pipeline, uint32_t permutations);
-        rizz_asset (*get)(const rizz_shader_lib* lib, uint32_t pipeline, uint32_t permutations);
+                     uint32_t stage, uint32_t permutations, const void* user);
+        rizz_asset (*get)(const rizz_shader_lib* lib, uint32_t stage, uint32_t permutations, const void** puser);
     } shader;
 } rizz_api_3d;
