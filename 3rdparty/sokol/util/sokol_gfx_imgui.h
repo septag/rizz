@@ -2715,7 +2715,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_image_panel(sg_imgui_t* ctx, sg_image img) {
             the__imgui.Text("Render Target:     %s", desc->render_target ? "YES":"NO");
             the__imgui.Text("Width:             %d", desc->width);
             the__imgui.Text("Height:            %d", desc->height);
-            the__imgui.Text("Depth:             %d", desc->depth);
+            the__imgui.Text("Num Slices:        %d", desc->num_slices);
             the__imgui.Text("Num Mipmaps:       %d", desc->num_mipmaps);
             the__imgui.Text("Pixel Format:      %s", _sg_imgui_pixelformat_string(desc->pixel_format));
             the__imgui.Text("Sample Count:      %d", desc->sample_count);
@@ -2913,7 +2913,9 @@ _SOKOL_PRIVATE void _sg_imgui_draw_blend_state(const sg_blend_state* bs) {
     the__imgui.Text("Op Alpha:         %s", _sg_imgui_blendop_string(bs->op_alpha));
     the__imgui.Text("Color Write Mask: %s", _sg_imgui_colormask_string(bs->color_write_mask));
     the__imgui.Text("Attachment Count: %d", bs->color_attachment_count);
-    the__imgui.Text("Color Format:     %s", _sg_imgui_pixelformat_string(bs->color_format));
+    for (int i = 0; i < bs->color_attachment_count; i++) {
+        the__imgui.Text("Color Format[%d]: %s", _sg_imgui_pixelformat_string(bs->color_formats[i]));
+    }
     the__imgui.Text("Depth Format:     %s", _sg_imgui_pixelformat_string(bs->depth_format));
     the__imgui.Text("Blend Color:      %.3f %.3f %.3f %.3f", bs->blend_color[0], bs->blend_color[1], bs->blend_color[2], bs->blend_color[3]);
 }

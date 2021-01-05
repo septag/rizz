@@ -66,7 +66,7 @@ enum {
     The active 3D-API backend, use the function sg_query_backend()
     to get the currently active backend.
 
-    For returned value corresponds with the compile-time define to select
+    The returned value corresponds with the compile-time define to select
     a backend, with the only exception of SOKOL_GLES3: this may
     return SG_BACKEND_GLES2 if the backend has to fallback to GLES2 mode
     because GLES3 isn't supported.
@@ -220,6 +220,9 @@ typedef struct sg_pixelformat_info {
     bool msaa;          /* pixel format can be used as MSAA render target */
     bool depth;         /* pixel format is a depth format */
     bool uav;           /* pixel format can be used as image store (compute-shaders) */
+    #if defined(SOKOL_ZIG_BINDINGS)
+    uint32_t __pad[2];
+    #endif
 } sg_pixelformat_info;
 
 /*
@@ -227,14 +230,17 @@ typedef struct sg_pixelformat_info {
     returned by sg_query_features()
 */
 typedef struct sg_features {
-    bool instancing;
-    bool origin_top_left;
-    bool multiple_render_targets;
-    bool msaa_render_targets;
-    bool imagetype_3d;          /* creation of SG_IMAGETYPE_3D images is supported */
-    bool imagetype_array;       /* creation of SG_IMAGETYPE_ARRAY images is supported */
-    bool image_clamp_to_border; /* border color and clamp-to-border UV-wrap mode is supported */
-    bool compute_shaders;       /* compute-shader supported */
+    bool instancing;                /* hardware instancing supported */
+    bool origin_top_left;           /* framebuffer and texture origin is in top left corner */
+    bool multiple_render_targets;   /* offscreen render passes can have multiple render targets attached */
+    bool msaa_render_targets;       /* offscreen render passes support MSAA antialiasing */
+    bool imagetype_3d;              /* creation of SG_IMAGETYPE_3D images is supported */
+    bool imagetype_array;           /* creation of SG_IMAGETYPE_ARRAY images is supported */
+    bool image_clamp_to_border;     /* border color and clamp-to-border UV-wrap mode is supported */
+    bool compute_shaders;           /* compute-shaders supported */
+    #if defined(SOKOL_ZIG_BINDINGS)
+    uint32_t __pad[2];
+    #endif
 } sg_features;
 
 /*
@@ -244,7 +250,7 @@ typedef struct sg_limits {
     uint32_t max_image_size_2d;         /* max width/height of SG_IMAGETYPE_2D images */
     uint32_t max_image_size_cube;       /* max width/height of SG_IMAGETYPE_CUBE images */
     uint32_t max_image_size_3d;         /* max width/height/depth of SG_IMAGETYPE_3D images */
-    uint32_t max_image_size_array;      /* max width/height pf SG_IMAGETYPE_ARRAY images */
+    uint32_t max_image_size_array;      /* max width/height of SG_IMAGETYPE_ARRAY images */
     uint32_t max_image_array_layers;    /* max number of layers in SG_IMAGETYPE_ARRAY images */
     uint32_t max_vertex_attrs;          /* <= SG_MAX_VERTEX_ATTRIBUTES (only on some GLES2 impls) */
 } sg_limits;
@@ -298,13 +304,15 @@ typedef enum sg_resource_state {
     CPU needs to wait for the GPU when attempting to update
     a resource that might be currently accessed by the GPU.
 
-    Resource content is updated with the function sg_update_buffer() for
-    buffer objects, and sg_update_image() for image objects. Only
-    one update is allowed per frame and resource object. The
-    application must update all data required for rendering (this
-    means that the update data can be smaller than the resource size,
-    if only a part of the overall resource size is used for rendering,
-    you only need to make sure that the data that *is* used is valid).
+    Resource content is updated with the functions sg_update_buffer() or
+    sg_append_buffer() for buffer objects, and sg_update_image() for image
+    objects. For the sg_update_*() functions, only one update is allowed per
+    frame and resource object, while sg_append_buffer() can be called
+    multiple times per frame on the same buffer. The application must update
+    all data required for rendering (this means that the update data can be
+    smaller than the resource size, if only a part of the overall resource
+    size is used for rendering, you only need to make sure that the data that
+    *is* used is valid).
 
     The default usage is SG_USAGE_IMMUTABLE.
 */
@@ -763,12 +771,12 @@ typedef enum sg_blend_op {
     should be disabled.
 */
 typedef enum sg_color_mask {
-    _SG_COLORMASK_DEFAULT = 0,      /* value 0 reserved for default-init */
-    SG_COLORMASK_NONE = (0x10),     /* special value for 'all channels disabled */
-    SG_COLORMASK_R = (1<<0),
-    SG_COLORMASK_G = (1<<1),
-    SG_COLORMASK_B = (1<<2),
-    SG_COLORMASK_A = (1<<3),
+    _SG_COLORMASK_DEFAULT = 0,  /* value 0 reserved for default-init */
+    SG_COLORMASK_NONE = 0x10,   /* special value for 'all channels disabled */
+    SG_COLORMASK_R = 0x1,
+    SG_COLORMASK_G = 0x2,
+    SG_COLORMASK_B = 0x4,
+    SG_COLORMASK_A = 0x8,
     SG_COLORMASK_RGB = 0x7,
     SG_COLORMASK_RGBA = 0xF,
     _SG_COLORMASK_FORCE_U32 = 0x7FFFFFFF
@@ -988,7 +996,7 @@ typedef struct sg_image_content {
     .shader_write       false
     .width              0 (must be set to >0)
     .height             0 (must be set to >0)
-    .depth/.layers:     1
+    .num_slices         1 (3D textures: depth; array textures: number of layers)
     .num_mipmaps:       1
     .usage:             SG_USAGE_IMMUTABLE
     .pixel_format:      SG_PIXELFORMAT_RGBA8 for textures, or sg_desc.context.color_format for render targets
@@ -1033,6 +1041,17 @@ typedef struct sg_image_content {
     .gl_textures[SG_NUM_INFLIGHT_FRAMES]
     .mtl_textures[SG_NUM_INFLIGHT_FRAMES]
     .d3d11_texture
+    .d3d11_shader_resource_view
+
+    For GL, you can also specify the texture target or leave it empty
+    to use the default texture target for the image type (GL_TEXTURE_2D
+    for SG_IMAGETYPE_2D etc)
+
+    For D3D11, you can provide either a D3D11 texture, or a
+    shader-resource-view, or both. If only a texture is provided,
+    a matching shader-resource-view will be created. If only a
+    shader-resource-view is provided, the texture will be looked
+    up from the shader-resource-view.
 
     The same rules apply as for injecting native buffers
     (see sg_buffer_desc documentation for more details).
@@ -1044,10 +1063,7 @@ typedef struct sg_image_desc {
     bool shader_write;
     int width;
     int height;
-    union {
-        int depth;
-        int layers;
-    };
+    int num_slices;
     int num_mipmaps;
     sg_usage usage;
     sg_pixel_format pixel_format;
@@ -1065,10 +1081,12 @@ typedef struct sg_image_desc {
     const char* label;
     /* GL specific */
     uint32_t gl_textures[SG_NUM_INFLIGHT_FRAMES];
+    uint32_t gl_texture_target;
     /* Metal specific */
     const void* mtl_textures[SG_NUM_INFLIGHT_FRAMES];
     /* D3D11 specific */
     const void* d3d11_texture;
+    const void* d3d11_shader_resource_view;
     /* WebGPU specific */
     const void* wgpu_texture;
     uint32_t _end_canary;
@@ -1083,9 +1101,11 @@ typedef struct sg_image_desc {
     - reflection information for vertex attributes (vertex shader inputs):
         - vertex attribute name (required for GLES2, optional for GLES3 and GL)
         - a semantic name and index (required for D3D11)
-    - for each vertex- and fragment-shader-stage:
+    - for each shader-stage (vertex and fragment):
         - the shader source or bytecode
         - an optional entry function name
+        - an optional compile target (only for D3D11 when source is provided,
+          defaults are "vs_4_0" and "ps_4_0")
         - reflection info for each uniform block used by the shader stage:
             - the size of the uniform block in bytes
             - reflection info for each uniform block member (only required for GL backends):
@@ -1101,7 +1121,10 @@ typedef struct sg_image_desc {
     either shader source-code or byte-code can be provided.
 
     For D3D11, if source code is provided, the d3dcompiler_47.dll will be loaded
-    on demand. If this fails, shader creation will fail.
+    on demand. If this fails, shader creation will fail. When compiling HLSL
+    source code, you can provide an optional target string via
+    sg_shader_stage_desc.d3d11_target, the default target is "vs_4_0" for the
+    vertex shader stage and "ps_4_0" for the pixel shader stage.
 */
 typedef struct sg_shader_attr_desc {
     const char* name;           /* GLSL vertex attribute name (only required for GLES2) */
@@ -1131,6 +1154,7 @@ typedef struct sg_shader_stage_desc {
     const uint8_t* byte_code;
     int byte_code_size;
     const char* entry;
+    const char* d3d11_target;
     sg_shader_uniform_block_desc uniform_blocks[SG_MAX_SHADERSTAGE_UBS];
     sg_shader_image_desc images[SG_MAX_SHADERSTAGE_IMAGES];
 } sg_shader_stage_desc;
@@ -1261,7 +1285,7 @@ typedef struct sg_blend_state {
     sg_blend_op op_alpha;
     uint8_t color_write_mask;
     int color_attachment_count;
-    sg_pixel_format color_format;
+    sg_pixel_format color_formats[SG_MAX_COLOR_ATTACHMENTS];
     sg_pixel_format depth_format;
     float blend_color[4];
 } sg_blend_state;
@@ -1314,11 +1338,7 @@ typedef struct sg_pipeline_desc {
 typedef struct sg_attachment_desc {
     sg_image image;
     int mip_level;
-    union {
-        int face;
-        int layer;
-        int slice;
-    };
+    int slice;      /* cube texture: face; array texture: layer; 3D texture: slice */
 } sg_attachment_desc;
 
 typedef struct sg_pass_desc {
@@ -1372,11 +1392,21 @@ typedef struct sg_trace_hooks {
     void (*alloc_shader)(sg_shader result, void* user_data);
     void (*alloc_pipeline)(sg_pipeline result, void* user_data);
     void (*alloc_pass)(sg_pass result, void* user_data);
+    void (*dealloc_buffer)(sg_buffer buf_id, void* user_data);
+    void (*dealloc_image)(sg_image img_id, void* user_data);
+    void (*dealloc_shader)(sg_shader shd_id, void* user_data);
+    void (*dealloc_pipeline)(sg_pipeline pip_id, void* user_data);
+    void (*dealloc_pass)(sg_pass pass_id, void* user_data);
     void (*init_buffer)(sg_buffer buf_id, const sg_buffer_desc* desc, void* user_data);
     void (*init_image)(sg_image img_id, const sg_image_desc* desc, void* user_data);
     void (*init_shader)(sg_shader shd_id, const sg_shader_desc* desc, void* user_data);
     void (*init_pipeline)(sg_pipeline pip_id, const sg_pipeline_desc* desc, void* user_data);
     void (*init_pass)(sg_pass pass_id, const sg_pass_desc* desc, void* user_data);
+    void (*uninit_buffer)(sg_buffer buf_id, void* user_data);
+    void (*uninit_image)(sg_image img_id, void* user_data);
+    void (*uninit_shader)(sg_shader shd_id, void* user_data);
+    void (*uninit_pipeline)(sg_pipeline pip_id, void* user_data);
+    void (*uninit_pass)(sg_pass pass_id, void* user_data);
     void (*fail_buffer)(sg_buffer buf_id, void* user_data);
     void (*fail_image)(sg_image img_id, void* user_data);
     void (*fail_shader)(sg_shader shd_id, void* user_data);
@@ -1438,6 +1468,8 @@ typedef struct sg_image_info {
     uint32_t upd_frame_index;       /* frame index of last sg_update_image() */
     int num_slots;                  /* number of renaming-slots for dynamically updated images */
     int active_slot;                /* currently active write-slot for dynamically updated images */
+    int width;                      /* image width */
+    int height;                     /* image height */
 } sg_image_info;
 
 typedef struct sg_shader_info {
@@ -1458,6 +1490,11 @@ typedef struct sg_pass_info {
     The sg_desc struct contains configuration values for sokol_gfx,
     it is used as parameter to the sg_setup() call.
 
+    NOTE that all callback function pointers come in two versions, one without
+    a userdata pointer, and one with a userdata pointer. You would
+    either initialize one or the other depending on whether you pass data
+    to your callbacks.
+
     FIXME: explain the various configuration options
 
     The default configuration is:
@@ -1472,7 +1509,7 @@ typedef struct sg_pass_info {
     .uniform_buffer_size    4 MB (4*1024*1024)
     .staging_buffer_size    8 MB (8*1024*1024)
 
-    .context.color_format: default value depends on selected backend:
+    .context.color_formats[SG_MAX_COLOR_ATTACHMENTS]: default values depend on selected backend:
         all GL backends:    SG_PIXELFORMAT_RGBA8
         Metal and D3D11:    SG_PIXELFORMAT_BGRA8
         WGPU:               *no default* (must be queried from WGPU swapchain)
@@ -1496,30 +1533,40 @@ typedef struct sg_pass_info {
         .context.metal.device
             a pointer to the MTLDevice object
         .context.metal.renderpass_descriptor_cb
-            a C callback function to obtain the MTLRenderPassDescriptor for the
+        .context.metal_renderpass_descriptor_userdata_cb
+            A C callback function to obtain the MTLRenderPassDescriptor for the
             current frame when rendering to the default framebuffer, will be called
-            in sg_begin_default_pass()
+            in sg_begin_default_pass().
         .context.metal.drawable_cb
+        .context.metal.drawable_userdata_cb
             a C callback function to obtain a MTLDrawable for the current
             frame when rendering to the default framebuffer, will be called in
             sg_end_pass() of the default pass
+        .context.metal.user_data
+            optional user data pointer passed to the userdata versions of
+            callback functions
 
     D3D11 specific:
         .context.d3d11.device
             a pointer to the ID3D11Device object, this must have been created
             before sg_setup() is called
-        .context..d3d11.device_context
+        .context.d3d11.device_context
             a pointer to the ID3D11DeviceContext object
-        .context..d3d11.render_target_view_cb
+        .context.d3d11.render_target_view_cb
+        .context.d3d11.render_target_view_userdata_cb
             a C callback function to obtain a pointer to the current
             ID3D11RenderTargetView object of the default framebuffer,
             this function will be called in sg_begin_pass() when rendering
             to the default framebuffer
         .context.d3d11.depth_stencil_view_cb
+        .context.d3d11.depth_stencil_view_userdata_cb
             a C callback function to obtain a pointer to the current
             ID3D11DepthStencilView object of the default framebuffer,
             this function will be called in sg_begin_pass() when rendering
             to the default framebuffer
+        .context.metal.user_data
+            optional user data pointer passed to the userdata versions of
+            callback functions
 
     WebGPU specific:
         .context.wgpu.device
@@ -1527,14 +1574,20 @@ typedef struct sg_pass_info {
         .context.wgpu.render_format
             WGPUTextureFormat of the swap chain surface
         .context.wgpu.render_view_cb
+        .context.wgpu.render_view_userdata_cb
             callback to get the current WGPUTextureView of the swapchain's
             rendering attachment (may be an MSAA surface)
         .context.wgpu.resolve_view_cb
+        .context.wgpu.resolve_view_userdata_cb
             callback to get the current WGPUTextureView of the swapchain's
             MSAA-resolve-target surface, must return 0 if not MSAA rendering
         .context.wgpu.depth_stencil_view_cb
+        .context.wgpu.depth_stencil_view_userdata_cb
             callback to get current default-pass depth-stencil-surface WGPUTextureView
             the pixel format of the default WGPUTextureView must be WGPUTextureFormat_Depth24Plus8
+        .context.metal.user_data
+            optional user data pointer passed to the userdata versions of
+            callback functions
 
     When using sokol_gfx.h and sokol_app.h together, consider using the
     helper function sapp_sgcontext() in the sokol_glue.h header to
@@ -1546,24 +1599,34 @@ typedef struct sg_gl_context_desc {
     bool force_gles2;
 } sg_gl_context_desc;
 
-typedef struct sg_mtl_context_desc {
+typedef struct sg_metal_context_desc {
     const void* device;
     const void* (*renderpass_descriptor_cb)(void);
+    const void* (*renderpass_descriptor_userdata_cb)(void*);
     const void* (*drawable_cb)(void);
+    const void* (*drawable_userdata_cb)(void*);
+    void* user_data;
 } sg_metal_context_desc;
 
 typedef struct sg_d3d11_context_desc {
     const void* device;
     const void* device_context;
     const void* (*render_target_view_cb)(void);
+    const void* (*render_target_view_userdata_cb)(void*);
     const void* (*depth_stencil_view_cb)(void);
+    const void* (*depth_stencil_view_userdata_cb)(void*);
+    void* user_data;
 } sg_d3d11_context_desc;
 
 typedef struct sg_wgpu_context_desc {
     const void* device;                    /* WGPUDevice */
     const void* (*render_view_cb)(void);   /* returns WGPUTextureView */
+    const void* (*render_view_userdata_cb)(void*);
     const void* (*resolve_view_cb)(void);  /* returns WGPUTextureView */
+    const void* (*resolve_view_userdata_cb)(void*);
     const void* (*depth_stencil_view_cb)(void);    /* returns WGPUTextureView, must be WGPUTextureFormat_Depth24Plus8 */
+    const void* (*depth_stencil_view_userdata_cb)(void*);
+    void* user_data;
 } sg_wgpu_context_desc;
 
 typedef struct sg_context_desc {

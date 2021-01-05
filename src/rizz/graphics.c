@@ -327,8 +327,7 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
         if (a_desc->format == SG_VERTEXFORMAT_INVALID) {
             break;
         }
-        SOKOL_ASSERT((a_desc->buffer_index >= 0) &&
-                     (a_desc->buffer_index < SG_MAX_SHADERSTAGE_BUFFERS));
+        SOKOL_ASSERT((a_desc->buffer_index >= 0) && (a_desc->buffer_index < SG_MAX_SHADERSTAGE_BUFFERS));
         vtx_desc.attributes[attr_index].format = _sg_mtl_vertex_format(a_desc->format);
         vtx_desc.attributes[attr_index].offset = a_desc->offset;
         vtx_desc.attributes[attr_index].bufferIndex = a_desc->buffer_index + SG_MAX_SHADERSTAGE_UBS;
@@ -363,24 +362,18 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
 
     const int att_count = desc->blend.color_attachment_count;
     for (int i = 0; i < att_count; i++) {
-        rp_desc.colorAttachments[i].pixelFormat = _sg_mtl_pixel_format(desc->blend.color_format);
-        rp_desc.colorAttachments[i].writeMask =
-            _sg_mtl_color_write_mask((sg_color_mask)desc->blend.color_write_mask);
+        rp_desc.colorAttachments[i].pixelFormat = _sg_mtl_pixel_format(desc->blend.color_formats[i]);
+        rp_desc.colorAttachments[i].writeMask = _sg_mtl_color_write_mask((sg_color_mask)desc->blend.color_write_mask);
         rp_desc.colorAttachments[i].blendingEnabled = desc->blend.enabled;
         rp_desc.colorAttachments[i].alphaBlendOperation = _sg_mtl_blend_op(desc->blend.op_alpha);
         rp_desc.colorAttachments[i].rgbBlendOperation = _sg_mtl_blend_op(desc->blend.op_rgb);
-        rp_desc.colorAttachments[i].destinationAlphaBlendFactor =
-            _sg_mtl_blend_factor(desc->blend.dst_factor_alpha);
-        rp_desc.colorAttachments[i].destinationRGBBlendFactor =
-            _sg_mtl_blend_factor(desc->blend.dst_factor_rgb);
-        rp_desc.colorAttachments[i].sourceAlphaBlendFactor =
-            _sg_mtl_blend_factor(desc->blend.src_factor_alpha);
-        rp_desc.colorAttachments[i].sourceRGBBlendFactor =
-            _sg_mtl_blend_factor(desc->blend.src_factor_rgb);
+        rp_desc.colorAttachments[i].destinationAlphaBlendFactor = _sg_mtl_blend_factor(desc->blend.dst_factor_alpha);
+        rp_desc.colorAttachments[i].destinationRGBBlendFactor = _sg_mtl_blend_factor(desc->blend.dst_factor_rgb);
+        rp_desc.colorAttachments[i].sourceAlphaBlendFactor = _sg_mtl_blend_factor(desc->blend.src_factor_alpha);
+        rp_desc.colorAttachments[i].sourceRGBBlendFactor = _sg_mtl_blend_factor(desc->blend.src_factor_rgb);
     }
     NSError* err = NULL;
-    id<MTLRenderPipelineState> mtl_rps =
-        [_sg_mtl_device newRenderPipelineStateWithDescriptor:rp_desc error:&err];
+    id<MTLRenderPipelineState> mtl_rps = [_sg_mtl_device newRenderPipelineStateWithDescriptor:rp_desc error:&err];
     if (nil == mtl_rps) {
         SOKOL_ASSERT(err);
         SOKOL_LOG([err.localizedDescription UTF8String]);
@@ -694,7 +687,7 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
         .type = tex->info.type,
         .width = tex->info.width,
         .height = tex->info.height,
-        .layers = tex->info.layers,
+        .num_slices = tex->info.layers,
         .num_mipmaps = sx_max(1, tex->info.mips - tparams->first_mip),
         .pixel_format = tex->info.format,
         .min_filter = tparams->min_filter,
@@ -2088,7 +2081,7 @@ static void rizz__trace_make_image(const sg_image_desc* desc, sg_image result, v
     int bytesize = _sg_is_valid_rendertarget_depth_format(desc->pixel_format)
                         ? 4
                         : _sg_pixelformat_bytesize(desc->pixel_format);
-    int pixels = desc->width * desc->height * desc->layers;
+    int pixels = desc->width * desc->height * desc->num_slices;
     int64_t size = (int64_t)pixels * bytesize;
 
     if (desc->render_target && _sg_is_valid_rendertarget_color_format(desc->pixel_format) &&
@@ -2171,7 +2164,7 @@ static void rizz__trace_destroy_image(sg_image img_id, void* user_data)
             int bytesize = _sg_is_valid_rendertarget_depth_format(img->cmn.pixel_format)
                             ? 4
                             : _sg_pixelformat_bytesize(img->cmn.pixel_format);
-            int pixels = img->cmn.width * img->cmn.height * img->cmn.depth;
+            int pixels = img->cmn.width * img->cmn.height * img->cmn.num_slices;
             int64_t size = (int64_t)pixels * bytesize;
             g_gfx.trace.t.render_target_size -= size;
         }
