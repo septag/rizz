@@ -588,39 +588,17 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
         // clang-format off
         basisut_transcoder_texture_format basis_fmt;
         switch (tparams->fmt) {
-        case SG_PIXELFORMAT_ETC2_RGB8:
-            basis_fmt = cTFETC1;
-            break;
-        case SG_PIXELFORMAT_ETC2_RGBA8:
-            basis_fmt = cTFETC2;
-            break;
-        case SG_PIXELFORMAT_ETC2_RG11:
-            basis_fmt = cTFETC2_EAC_RG11;
-            break;
-        case SG_PIXELFORMAT_BC1_RGBA:
-            basis_fmt = cTFBC1;
-            break;
-        case SG_PIXELFORMAT_BC3_RGBA:
-            basis_fmt = cTFBC3;
-            break;
-        case SG_PIXELFORMAT_BC4_R:
-            basis_fmt = cTFBC4;
-            break;
-        case SG_PIXELFORMAT_BC5_RG:
-            basis_fmt = cTFBC5;
-            break;
-        case SG_PIXELFORMAT_BC7_RGBA:
-            basis_fmt = cTFBC7_M5;
-            break;
-        case SG_PIXELFORMAT_PVRTC_RGBA_4BPP:
-            basis_fmt = cTFPVRTC1_4_RGBA;
-            break;
-        case SG_PIXELFORMAT_PVRTC_RGB_4BPP:
-            basis_fmt = cTFPVRTC1_4_RGB;
-            break;
-        case SG_PIXELFORMAT_RGBA8:
-            basis_fmt = cTFRGBA32;
-            break;
+        case SG_PIXELFORMAT_ETC2_RGB8:  basis_fmt = cTFETC1; break;
+        case SG_PIXELFORMAT_ETC2_RGBA8: basis_fmt = cTFETC2; break;
+        case SG_PIXELFORMAT_ETC2_RG11:  basis_fmt = cTFETC2_EAC_RG11; break;
+        case SG_PIXELFORMAT_BC1_RGBA:   basis_fmt = cTFBC1; break;
+        case SG_PIXELFORMAT_BC3_RGBA:   basis_fmt = cTFBC3; break;
+        case SG_PIXELFORMAT_BC4_R:      basis_fmt = cTFBC4; break;
+        case SG_PIXELFORMAT_BC5_RG:     basis_fmt = cTFBC5; break;
+        case SG_PIXELFORMAT_BC7_RGBA:   basis_fmt = cTFBC7_M5;  break;
+        case SG_PIXELFORMAT_PVRTC_RGBA_4BPP:    basis_fmt = cTFPVRTC1_4_RGBA;   break;
+        case SG_PIXELFORMAT_PVRTC_RGB_4BPP:     basis_fmt = cTFPVRTC1_4_RGB;    break;
+        case SG_PIXELFORMAT_RGBA8:              basis_fmt = cTFRGBA32;          break;
         default:
             rizz__log_warn(
                 "parsing texture '%s' failed. transcoding of this format is not supported");
@@ -635,8 +613,7 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
         int num_mips = tex->info.mips;
         int num_images = tex->info.layers;
 
-        size_t total_sz =
-            sizeof(sg_image_desc) + basisut_transcoder_bytesize() + sizeof(basisut_transcode_data);
+        size_t total_sz = sizeof(sg_image_desc) + basisut_transcoder_bytesize() + sizeof(basisut_transcode_data);
         int mip_size[SG_MAX_MIPMAPS];
 
         // calculate the buffer sizes needed for holding all the output pixels
@@ -695,7 +672,8 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
         .wrap_u = tparams->wrap_u,
         .wrap_v = tparams->wrap_v,
         .wrap_w = tparams->wrap_w,
-        .max_anisotropy = (uint32_t)tparams->aniso
+        .max_anisotropy = (uint32_t)tparams->aniso,
+        .srgb = tparams->srgb
     };
 
     // see if we have metadata, and parse it and override the texture desc
@@ -1578,9 +1556,17 @@ static sg_shader_desc* rizz__shader_setup_desc(sg_shader_desc* desc,
         sg_shader_stage_desc* stage_desc = NULL;
         // clang-format off
         switch (stage->refl->stage) {
-        case RIZZ_SHADER_STAGE_VS:   stage_desc = &desc->vs;             break;
-        case RIZZ_SHADER_STAGE_FS:   stage_desc = &desc->fs;             break;
-        default:                     sx_assertf(0, "not implemented");   break;
+        case RIZZ_SHADER_STAGE_VS:   
+            stage_desc = &desc->vs;
+            stage_desc->d3d11_target = "vs_5_0";
+            break;
+        case RIZZ_SHADER_STAGE_FS:   
+            stage_desc = &desc->fs;
+            stage_desc->d3d11_target = "ps_5_0";
+            break;
+        default:
+            sx_assertf(0, "not implemented");   
+            break;
         }
         // clang-format on
 
@@ -1645,8 +1631,13 @@ static sg_shader_desc* rizz__shader_setup_desc_cs(sg_shader_desc* desc,
         sg_shader_stage_desc* stage_desc = NULL;
         // clang-format off
         switch (stage->refl->stage) {
-        case RIZZ_SHADER_STAGE_CS:   stage_desc = &desc->cs;             break;
-        default:                     sx_assertf(0, "not implemented");   break;
+        case RIZZ_SHADER_STAGE_CS:   
+            stage_desc = &desc->cs;
+            stage_desc->d3d11_target = "cs_5_0";
+            break;
+        default:                     
+            sx_assertf(0, "not implemented");
+            break;
         }
         // clang-format on
 
@@ -1883,8 +1874,7 @@ static bool rizz__shader_on_load(rizz_asset_load_data* data, const rizz_asset_lo
     return true;
 }
 
-static void rizz__shader_on_finalize(rizz_asset_load_data* data,
-                                     const rizz_asset_load_params* params, const sx_mem_block* mem)
+static void rizz__shader_on_finalize(rizz_asset_load_data* data, const rizz_asset_load_params* params, const sx_mem_block* mem)
 {
     sx_unused(params);
 

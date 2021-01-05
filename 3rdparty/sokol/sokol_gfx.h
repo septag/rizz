@@ -814,6 +814,7 @@ typedef struct sg_features {
     bool imagetype_array;           /* creation of SG_IMAGETYPE_ARRAY images is supported */
     bool image_clamp_to_border;     /* border color and clamp-to-border UV-wrap mode is supported */
     bool compute_shaders;           /* compute-shaders supported */
+    bool image_srgb;                /* supports certain SRGB texture views */
     #if defined(SOKOL_ZIG_BINDINGS)
     uint32_t __pad[2];
     #endif
@@ -1637,6 +1638,7 @@ typedef struct sg_image_desc {
     sg_image_type type;
     bool render_target;
     bool shader_write;
+    bool srgb;
     int width;
     int height;
     int num_slices;
@@ -2480,14 +2482,29 @@ inline void sg_init_pass(sg_pass pass_id, const sg_pass_desc& desc) { return sg_
     #ifndef GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT
     #define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
     #endif
+    #ifndef GL_COMPRESSED_RGB_S3TC_DXT1_EXT 
+    #define GL_COMPRESSED_RGB_S3TC_DXT1_EXT 0x83F0
+    #endif
+    #ifndef GL_COMPRESSED_SRGB_S3TC_DXT1_EXT
+    #define GL_COMPRESSED_SRGB_S3TC_DXT1_EXT 0x8C4C
+    #endif
     #ifndef GL_COMPRESSED_RGBA_S3TC_DXT1_EXT
     #define GL_COMPRESSED_RGBA_S3TC_DXT1_EXT 0x83F1
+    #endif
+    #ifndef GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT
+    #define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT 0x8C4D
     #endif
     #ifndef GL_COMPRESSED_RGBA_S3TC_DXT3_EXT
     #define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 0x83F2
     #endif
+    #ifndef GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT
+    #define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT 0x8C4E
+    #endif
     #ifndef GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
     #define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
+    #endif
+    #ifndef GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT
+    #define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT 0x8C4F
     #endif
     #ifndef GL_COMPRESSED_RED_RGTC1
     #define GL_COMPRESSED_RED_RGTC1 0x8DBB
@@ -2557,6 +2574,9 @@ inline void sg_init_pass(sg_pass pass_id, const sg_pass_desc& desc) { return sg_
     #endif
     #ifndef GL_COLOR_ATTACHMENT0
     #define COLOR_ATTACHMENT0 0x8CE0
+    #endif
+    #ifndef GL_SRGB8_ALPHA8_EXT
+    #define GL_SRGB8_ALPHA8_EXT 0x8C43
     #endif
 
 
@@ -5183,6 +5203,7 @@ _SOKOL_PRIVATE void _sg_gl_init_caps_glcore33(void) {
     _sg.features.imagetype_array = true;
     _sg.features.image_clamp_to_border = true;
     _sg.features.compute_shaders = false;
+    _sg.features.image_srgb = true;
 
     /* scan extensions */
     bool has_s3tc = false;  /* BC1..BC3 */
@@ -5314,6 +5335,9 @@ _SOKOL_PRIVATE void _sg_gl_init_caps_gles3(void) {
             else if (strstr(ext, "_texture_filter_anisotropic")) {
                 _sg.gl.ext_anisotropic = true;
             }
+            else if (strstr(ext, "_texture_sRGB")) {
+                _sg.gl.image_srgb = true;
+            }
         }
     }
 
@@ -5359,6 +5383,7 @@ _SOKOL_PRIVATE void _sg_gl_init_caps_gles2(void) {
     bool has_float_blend = false;
     bool has_instancing = false;
     bool has_mrt = false;
+    bool has_srgb = false;
     const char* ext = (const char*) glGetString(GL_EXTENSIONS);
     if (ext) {
         has_s3tc = strstr(ext, "_texture_compression_s3tc") || strstr(ext, "_compressed_texture_s3tc");
@@ -5377,6 +5402,7 @@ _SOKOL_PRIVATE void _sg_gl_init_caps_gles2(void) {
         */
         has_instancing = strstr(ext, "_instanced_arrays");
         has_mrt = strstr(ext, "_draw_buffers");
+        has_srgb = strstr(ext, "_texture_sRGB");
         _sg.gl.ext_anisotropic = strstr(ext, "ext_anisotropic");
     }
 
@@ -5390,6 +5416,7 @@ _SOKOL_PRIVATE void _sg_gl_init_caps_gles2(void) {
     _sg.features.imagetype_array = false;
     _sg.features.image_clamp_to_border = false;
     _sg.features.compute_shaders = false;
+    _sg.features.image_srgb = has_srgb;
 
     /* limits */
     _sg_gl_init_limits();
@@ -5830,7 +5857,17 @@ _SOKOL_PRIVATE sg_resource_state _sg_gl_create_image(_sg_image_t* img, const sg_
     else {
         /* regular color texture */
         img->gl.target = _sg_gl_texture_target(img->cmn.type);
-        const GLenum gl_internal_format = _sg_gl_teximage_internal_format(img->cmn.pixel_format);
+        GLenum gl_internal_format = _sg_gl_teximage_internal_format(img->cmn.pixel_format);
+        if (desc->srgb && _sg.features.image_srgb) {
+            switch (gl_internal_format) {
+            case GL_RGBA8:  gl_internal_format = GL_SRGB8_ALPHA8_EXT; break;
+            case GL_COMPRESSED_RGBA_S3TC_DXT1_EXT: gl_internal_format = GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT; break;
+            case GL_COMPRESSED_RGBA_S3TC_DXT3_EXT: gl_internal_format = GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT; break;
+            case GL_COMPRESSED_RGBA_S3TC_DXT5_EXT: gl_internal_format = GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT; break;
+            case GL_COMPRESSED_RGBA_BPTC_UNORM_ARB:gl_internal_format = GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM_ARB; break;
+            default: break;
+            }
+        }
 
         /* if this is a MSAA render target, need to create a separate render buffer */
         #if !defined(SOKOL_GLES2)
@@ -7797,6 +7834,7 @@ _SOKOL_PRIVATE void _sg_d3d11_init_caps(void) {
     _sg.features.imagetype_array = true;
     _sg.features.image_clamp_to_border = true;
     _sg.features.compute_shaders = true;
+    _sg.features.image_srgb = true;
 
     _sg.limits.max_image_size_2d = 16 * 1024;
     _sg.limits.max_image_size_cube = 16 * 1024;
@@ -8124,6 +8162,17 @@ _SOKOL_PRIVATE sg_resource_state _sg_d3d11_create_image(_sg_image_t* img, const 
                 D3D11_SHADER_RESOURCE_VIEW_DESC d3d11_srv_desc;
                 memset(&d3d11_srv_desc, 0, sizeof(d3d11_srv_desc));
                 d3d11_srv_desc.Format = img->d3d11.format;
+                if (desc->srgb) {
+                    switch (img->d3d11.format) {
+                    case DXGI_FORMAT_R8G8B8A8_UNORM:   d3d11_srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;    break;
+                    case DXGI_FORMAT_BC1_UNORM:        d3d11_srv_desc.Format = DXGI_FORMAT_BC1_UNORM_SRGB;         break;
+                    case DXGI_FORMAT_BC2_UNORM:        d3d11_srv_desc.Format = DXGI_FORMAT_BC2_UNORM_SRGB;         break;
+                    case DXGI_FORMAT_BC3_UNORM:        d3d11_srv_desc.Format = DXGI_FORMAT_BC3_UNORM_SRGB;         break;
+                    case DXGI_FORMAT_B8G8R8A8_UNORM:   d3d11_srv_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;    break;
+                    case DXGI_FORMAT_BC7_UNORM:        d3d11_srv_desc.Format = DXGI_FORMAT_BC7_UNORM_SRGB;         break;
+                    default:                           break;
+                    }
+                }
                 switch (img->cmn.type) {
                     case SG_IMAGETYPE_2D:
                         d3d11_srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
@@ -9681,6 +9730,7 @@ _SOKOL_PRIVATE void _sg_mtl_init_caps(void) {
         _sg.features.image_clamp_to_border = false;
     #endif
     _sg.features.compute_shaders = false;
+    _sg.features.image_srgb = true;
 
     #if defined(_SG_TARGET_MACOS)
         _sg.limits.max_image_size_2d = 16 * 1024;
@@ -10077,6 +10127,17 @@ _SOKOL_PRIVATE sg_resource_state _sg_mtl_create_image(_sg_image_t* img, const sg
     if (!_sg_mtl_init_texdesc_common(mtl_desc, img)) {
         _SG_OBJC_RELEASE(mtl_desc);
         return SG_RESOURCESTATE_FAILED;
+    }
+    if (desc->srgb) {
+        switch (mtl_desc.pixelFormat) {
+        case MTLPixelFormatRGBA8Unorm:      mtl_desc.pixelFormat = MTLPixelFormatRGBA8Unorm_sRGB; break;
+        case MTLPixelFormatBGRA8Unorm:      mtl_desc.pixelFormat = MTLPixelFormatBGRA8Unorm_sRGB; break;
+        case MTLPixelFormatBC1_RGBA:        mtl_desc.pixelFormat = MTLPixelFormatBC1_RGBA;  break;
+        case MTLPixelFormatBC2_RGBA:        mtl_desc.pixelFormat = MTLPixelFormatBC2_RGBA_sRGB; break;
+        case MTLPixelFormatBC3_RGBA:        mtl_desc.pixelFormat = MTLPixelFormatBC3_RGBA_sRGB; break;
+        case MTLPixelFormatBC7_RGBAUnorm:   mtl_desc.pixelFormat = MTLPixelFormatBC7_RGBAUnorm_sRGB; break;
+        default:                            break;
+        }
     }
 
     /* special case depth-stencil-buffer? */
@@ -11195,6 +11256,8 @@ _SOKOL_PRIVATE void _sg_wgpu_init_caps(void) {
     _sg.features.imagetype_3d = true;
     _sg.features.imagetype_array = true;
     _sg.features.image_clamp_to_border = false;
+    _sg.features.compute_shaders = false;
+    _sg.features.image_srgb = true;
 
     /* FIXME: max images size??? */
     _sg.limits.max_image_size_2d = 8 * 1024;
@@ -13683,6 +13746,20 @@ _SOKOL_PRIVATE bool _sg_validate_buffer_desc(const sg_buffer_desc* desc) {
     #endif
 }
 
+_SOKOL_PRIVATE bool _sg_validate_srgb(sg_pixel_format fmt) {
+    switch (fmt) {
+    case SG_PIXELFORMAT_BGRA8:
+    case SG_PIXELFORMAT_RGBA8:
+    case SG_PIXELFORMAT_BC1_RGBA:   
+    case SG_PIXELFORMAT_BC2_RGBA:
+    case SG_PIXELFORMAT_BC3_RGBA:
+    case SG_PIXELFORMAT_BC7_RGBA:
+        return true;
+    default:
+        return false;
+    }
+}
+
 _SOKOL_PRIVATE bool _sg_validate_image_desc(const sg_image_desc* desc) {
     #if !defined(SOKOL_DEBUG)
         _SOKOL_UNUSED(desc);
@@ -13715,11 +13792,17 @@ _SOKOL_PRIVATE bool _sg_validate_image_desc(const sg_image_desc* desc) {
             #endif
             SOKOL_VALIDATE(usage == SG_USAGE_IMMUTABLE, _SG_VALIDATE_IMAGEDESC_RT_IMMUTABLE);
             SOKOL_VALIDATE(desc->content.subimage[0][0].ptr==0, _SG_VALIDATE_IMAGEDESC_RT_NO_CONTENT);
+            if (desc->srgb) {
+                SOKOL_VALIDATE(_sg_validate_srgb(fmt), _SG_VALIDATE_IMAGEDESC_RT_PIXELFORMAT);
+            }
         }
         else {
             SOKOL_VALIDATE(desc->sample_count <= 1, _SG_VALIDATE_IMAGEDESC_MSAA_BUT_NO_RT);
             const bool valid_nonrt_fmt = !_sg_is_valid_rendertarget_depth_format(fmt);
             SOKOL_VALIDATE(valid_nonrt_fmt, _SG_VALIDATE_IMAGEDESC_NONRT_PIXELFORMAT);
+            if (desc->srgb) {
+                SOKOL_VALIDATE(_sg_validate_srgb(fmt), _SG_VALIDATE_IMAGEDESC_NONRT_PIXELFORMAT);
+            }
             /* FIXME: should use the same "expected size" computation as in _sg_validate_update_image() here */
             if (!injected && (usage == SG_USAGE_IMMUTABLE)) {
                 const int num_faces = desc->type == SG_IMAGETYPE_CUBE ? 6:1;
@@ -14289,6 +14372,9 @@ _SOKOL_PRIVATE sg_shader_desc _sg_shader_desc_defaults(const sg_shader_desc* des
         }
         if (def.fs.source) {
             def.fs.d3d11_target = _sg_def(def.fs.d3d11_target, "ps_4_0");
+        }
+        if (def.cs.source) {
+            def.cs.d3d11_target = _sg_def(def.cs.d3d11_target, "cs_4_0");
         }
     #endif
     for (int stage_index = 0; stage_index < SG_NUM_SHADER_STAGES; stage_index++) {

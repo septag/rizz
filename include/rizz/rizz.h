@@ -944,6 +944,7 @@ typedef struct rizz_texture_load_params {
     sg_wrap wrap_w;
     sg_pixel_format fmt;    // request image format. only valid for basis files
     int aniso;
+    bool srgb;
 } rizz_texture_load_params;
 
 // texture metadata
