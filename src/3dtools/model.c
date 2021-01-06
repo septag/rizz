@@ -46,16 +46,66 @@ typedef struct rizz_model_context
 
 RIZZ_STATE static rizz_model_context g_model;
 
+typedef enum {
+    GLTF_FILTER_NEAREST = 9728,
+    GLTF_FILTER_LINEAR = 9729,
+    GLTF_FILTER_NEAREST_MIPMAP_NEAREST = 9984,
+    GLTF_FILTER_LINEAR_MIPMAP_NEAREST = 9985,
+    GLTF_FILTER_NEAREST_MIPMAP_LINEAR = 9986,
+    GLTF_FILTER_LINEAR_MIPMAP_LINEAR = 9987
+} model__gltf_filter;
+
+typedef enum {
+    GLTF_WRAP_CLAMP_TO_EDGE = 33071,
+    GLTF_WRAP_MIRRORED_REPEAT = 33648,
+    GLTF_WRAP_REPEAT = 10497
+} model__gltf_wrap;
+
+static inline sg_filter model__gltf_get_filter(model__gltf_filter filter)
+{
+    switch (filter) {
+    case GLTF_FILTER_NEAREST:   return SG_FILTER_NEAREST;
+    case GLTF_FILTER_LINEAR:    return SG_FILTER_LINEAR;
+    case GLTF_FILTER_NEAREST_MIPMAP_NEAREST:    return SG_FILTER_NEAREST_MIPMAP_NEAREST;
+    case GLTF_FILTER_LINEAR_MIPMAP_NEAREST:     return SG_FILTER_LINEAR_MIPMAP_NEAREST;
+    case GLTF_FILTER_NEAREST_MIPMAP_LINEAR:     return SG_FILTER_NEAREST_MIPMAP_LINEAR;
+    case GLTF_FILTER_LINEAR_MIPMAP_LINEAR:      return SG_FILTER_LINEAR_MIPMAP_LINEAR;
+    }
+}
+
+static inline sg_wrap model__gltf_get_wrap(model__gltf_wrap wrap)
+{
+    switch (wrap) {
+    case GLTF_WRAP_CLAMP_TO_EDGE:   return SG_WRAP_CLAMP_TO_EDGE;
+    case GLTF_WRAP_MIRRORED_REPEAT: return SG_WRAP_MIRRORED_REPEAT;
+    case GLTF_WRAP_REPEAT:          return SG_WRAP_REPEAT;
+    default:                        return SG_WRAP_REPEAT;
+    }
+}
+
 static rizz_asset model__load_texture_from_gltf(cgltf_texture* gltf_tex, const char* filedir)
 {
     sx_assert(gltf_tex);
     char texture_path[RIZZ_MAX_PATH];
-    sx_strcat(sx_strcpy(texture_path, sizeof(texture_path), filedir), sizeof(texture_path), gltf_tex->image->uri);
+    {
+        char* dir = sx_strcpy(texture_path, sizeof(texture_path), filedir);
+        if (*(dir - 1) != '/') {
+            dir[0] = '/';
+            dir[1] = '\0';
+            ++dir;
+        }
+        sx_strcat(dir, sizeof(texture_path), gltf_tex->image->uri);
+    }
 
-    // TODO: tex->sampler->mag_filter 
+
     rizz_texture_load_params tparams = { 0 };
+    if (gltf_tex->sampler) {
+         tparams.min_filter = model__gltf_get_filter(gltf_tex->sampler->min_filter);
+         tparams.mag_filter = model__gltf_get_filter(gltf_tex->sampler->mag_filter);
+         tparams.wrap_u = model__gltf_get_wrap(gltf_tex->sampler->wrap_s);
+         tparams.wrap_v = model__gltf_get_wrap(gltf_tex->sampler->wrap_t);         
+    }
     return the_asset->load("texture", texture_path, &tparams, 0, NULL, 0);
-
 }
 
 static rizz_material model__create_material_from_gltf(cgltf_material* gltf_mtl, rizz_material_lib* mtllib,
@@ -68,10 +118,6 @@ static rizz_material model__create_material_from_gltf(cgltf_material* gltf_mtl, 
     case cgltf_alpha_mode_blend:       alpha_mode = RIZZ_MATERIAL_ALPHAMODE_BLEND;      break;
     default:                           sx_assert(0); alpha_mode = RIZZ_MATERIAL_ALPHAMODE_OPAQUE; break;
     }
-
-    char _filedir[RIZZ_MAX_PATH];
-    sx_strcat(sx_strcpy(_filedir, sizeof(_filedir), filedir), sizeof(_filedir), "/textures/");
-
 
     rizz_material_data mtl = {
         .has_metal_roughness = gltf_mtl->has_pbr_metallic_roughness,
@@ -112,12 +158,12 @@ static rizz_material model__create_material_from_gltf(cgltf_material* gltf_mtl, 
     if (gltf_mtl->has_pbr_metallic_roughness) {
         cgltf_texture* tex = gltf_mtl->pbr_metallic_roughness.base_color_texture.texture;
         if (tex) {
-            mtl.pbr_metallic_roughness.base_color_tex.tex_asset =  model__load_texture_from_gltf(tex, _filedir);
+            mtl.pbr_metallic_roughness.base_color_tex.tex_asset =  model__load_texture_from_gltf(tex, filedir);
         }
 
         tex = gltf_mtl->normal_texture.texture;
         if (tex) {
-            mtl.normal_tex.tex_asset = model__load_texture_from_gltf(tex, _filedir);
+            mtl.normal_tex.tex_asset = model__load_texture_from_gltf(tex, filedir);
         }
     }
 

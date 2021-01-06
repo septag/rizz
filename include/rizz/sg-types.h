@@ -1061,6 +1061,7 @@ typedef struct sg_image_desc {
     sg_image_type type;
     bool render_target;
     bool shader_write;
+    bool srgb;
     int width;
     int height;
     int num_slices;

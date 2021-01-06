@@ -2728,6 +2728,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_image_panel(sg_imgui_t* ctx, sg_image img) {
             the__imgui.Text("Max Anisotropy:    %d", desc->max_anisotropy);
             the__imgui.Text("Min LOD:           %.3f", desc->min_lod);
             the__imgui.Text("Max LOD:           %.3f", desc->max_lod);
+            the__imgui.Text("SRGB:              %s", desc->srgb ? "YES":"NO");
             if (desc->usage != SG_USAGE_IMMUTABLE) {
                 the__imgui.Separator();
                 the__imgui.Text("Num Slots:     %d", info.num_slots);
