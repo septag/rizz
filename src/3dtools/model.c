@@ -70,6 +70,7 @@ static inline sg_filter model__gltf_get_filter(model__gltf_filter filter)
     case GLTF_FILTER_LINEAR_MIPMAP_NEAREST:     return SG_FILTER_LINEAR_MIPMAP_NEAREST;
     case GLTF_FILTER_NEAREST_MIPMAP_LINEAR:     return SG_FILTER_NEAREST_MIPMAP_LINEAR;
     case GLTF_FILTER_LINEAR_MIPMAP_LINEAR:      return SG_FILTER_LINEAR_MIPMAP_LINEAR;
+    default:                                    return SG_FILTER_LINEAR;
     }
 }
 
