@@ -8066,7 +8066,8 @@ _SOKOL_PRIVATE sg_resource_state _sg_d3d11_create_image(_sg_image_t* img, const 
 
     /* special case depth-stencil buffer? */
     if (_sg_is_valid_rendertarget_depth_format(img->cmn.pixel_format)) {
-        /* create only a depth-texture */
+        bool has_stencil = _sg_is_depth_stencil_format(desc->pixel_format);
+
         SOKOL_ASSERT(!injected);
         if (img->d3d11.format == DXGI_FORMAT_UNKNOWN) {
             SOKOL_LOG("trying to create a D3D11 depth-texture with unsupported pixel format\n");
@@ -8078,13 +8079,47 @@ _SOKOL_PRIVATE sg_resource_state _sg_d3d11_create_image(_sg_image_t* img, const 
         d3d11_desc.Height = img->cmn.height;
         d3d11_desc.MipLevels = 1;
         d3d11_desc.ArraySize = 1;
-        d3d11_desc.Format = img->d3d11.format;
+        d3d11_desc.Format = has_stencil ? DXGI_FORMAT_R32G8X24_TYPELESS : DXGI_FORMAT_R32_TYPELESS;
         d3d11_desc.Usage = D3D11_USAGE_DEFAULT;
-        d3d11_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+        d3d11_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL|D3D11_BIND_SHADER_RESOURCE;
         d3d11_desc.SampleDesc.Count = img->cmn.sample_count;
         d3d11_desc.SampleDesc.Quality = msaa ? D3D11_STANDARD_MULTISAMPLE_PATTERN : 0;
         hr = _sg_d3d11_CreateTexture2D(_sg.d3d11.dev, &d3d11_desc, NULL, &img->d3d11.texds);
         SOKOL_ASSERT(SUCCEEDED(hr) && img->d3d11.texds);
+
+        /* first check for injected texture and/or resource view */
+        if (injected) {
+            img->d3d11.tex2d = (ID3D11Texture2D*) desc->d3d11_texture;
+            img->d3d11.srv = (ID3D11ShaderResourceView*) desc->d3d11_shader_resource_view;
+            if (img->d3d11.tex2d) {
+                _sg_d3d11_AddRef(img->d3d11.tex2d);
+            }
+            else {
+                /* if only a shader-resource-view was provided, but no texture, lookup
+                    the texture from the shader-resource-view, this also bumps the refcount
+                */
+                SOKOL_ASSERT(img->d3d11.srv);
+                _sg_d3d11_GetResource((ID3D11View*)img->d3d11.srv, (ID3D11Resource**)&img->d3d11.tex2d);
+                SOKOL_ASSERT(img->d3d11.tex2d);
+            }
+            if (img->d3d11.srv) {
+                _sg_d3d11_AddRef(img->d3d11.srv);
+            }
+        }
+
+        /* ...and similar, if not injected, create shader-resource-view */
+        if (0 == img->d3d11.srv) {
+            D3D11_SHADER_RESOURCE_VIEW_DESC d3d11_srv_desc;
+            memset(&d3d11_srv_desc, 0, sizeof(d3d11_srv_desc));
+
+            d3d11_srv_desc.Format = has_stencil ? DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS : DXGI_FORMAT_R32_FLOAT;
+            d3d11_srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+            d3d11_srv_desc.Texture2D.MipLevels = 1;
+
+            hr = _sg_d3d11_CreateShaderResourceView(_sg.d3d11.dev, (ID3D11Resource*)img->d3d11.texds, 
+                                                    &d3d11_srv_desc, &img->d3d11.srv);
+            SOKOL_ASSERT(SUCCEEDED(hr) && img->d3d11.srv);
+        }
     }
     else {
         /* create (or inject) color texture and shader-resource-view */
@@ -8173,6 +8208,7 @@ _SOKOL_PRIVATE sg_resource_state _sg_d3d11_create_image(_sg_image_t* img, const 
                     default:                           break;
                     }
                 }
+
                 switch (img->cmn.type) {
                     case SG_IMAGETYPE_2D:
                         d3d11_srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
@@ -8282,35 +8318,36 @@ _SOKOL_PRIVATE sg_resource_state _sg_d3d11_create_image(_sg_image_t* img, const 
             hr = _sg_d3d11_CreateTexture2D(_sg.d3d11.dev, &d3d11_tex_desc, NULL, &img->d3d11.texmsaa);
             SOKOL_ASSERT(SUCCEEDED(hr) && img->d3d11.texmsaa);
         }
-
-        /* sampler state object, note D3D11 implements an internal shared-pool for sampler objects */
-        D3D11_SAMPLER_DESC d3d11_smp_desc;
-        memset(&d3d11_smp_desc, 0, sizeof(d3d11_smp_desc));
-        d3d11_smp_desc.Filter = _sg_d3d11_filter(img->cmn.min_filter, img->cmn.mag_filter, img->cmn.max_anisotropy);
-        d3d11_smp_desc.AddressU = _sg_d3d11_address_mode(img->cmn.wrap_u);
-        d3d11_smp_desc.AddressV = _sg_d3d11_address_mode(img->cmn.wrap_v);
-        d3d11_smp_desc.AddressW = _sg_d3d11_address_mode(img->cmn.wrap_w);
-        switch (img->cmn.border_color) {
-            case SG_BORDERCOLOR_TRANSPARENT_BLACK:
-                /* all 0.0f */
-                break;
-            case SG_BORDERCOLOR_OPAQUE_WHITE:
-                for (int i = 0; i < 4; i++) {
-                    d3d11_smp_desc.BorderColor[i] = 1.0f;
-                }
-                break;
-            default:
-                /* opaque black */
-                d3d11_smp_desc.BorderColor[3] = 1.0f;
-                break;
-        }
-        d3d11_smp_desc.MaxAnisotropy = img->cmn.max_anisotropy;
-        d3d11_smp_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-        d3d11_smp_desc.MinLOD = desc->min_lod;
-        d3d11_smp_desc.MaxLOD = desc->max_lod;
-        hr = _sg_d3d11_CreateSamplerState(_sg.d3d11.dev, &d3d11_smp_desc, &img->d3d11.smp);
-        SOKOL_ASSERT(SUCCEEDED(hr) && img->d3d11.smp);
     }
+
+    /* sampler state object, note D3D11 implements an internal shared-pool for sampler objects */
+    D3D11_SAMPLER_DESC d3d11_smp_desc;
+    memset(&d3d11_smp_desc, 0, sizeof(d3d11_smp_desc));
+    d3d11_smp_desc.Filter = _sg_d3d11_filter(img->cmn.min_filter, img->cmn.mag_filter, img->cmn.max_anisotropy);
+    d3d11_smp_desc.AddressU = _sg_d3d11_address_mode(img->cmn.wrap_u);
+    d3d11_smp_desc.AddressV = _sg_d3d11_address_mode(img->cmn.wrap_v);
+    d3d11_smp_desc.AddressW = _sg_d3d11_address_mode(img->cmn.wrap_w);
+    switch (img->cmn.border_color) {
+        case SG_BORDERCOLOR_TRANSPARENT_BLACK:
+            /* all 0.0f */
+            break;
+        case SG_BORDERCOLOR_OPAQUE_WHITE:
+            for (int i = 0; i < 4; i++) {
+                d3d11_smp_desc.BorderColor[i] = 1.0f;
+            }
+            break;
+        default:
+            /* opaque black */
+            d3d11_smp_desc.BorderColor[3] = 1.0f;
+            break;
+    }
+    d3d11_smp_desc.MaxAnisotropy = img->cmn.max_anisotropy;
+    d3d11_smp_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    d3d11_smp_desc.MinLOD = desc->min_lod;
+    d3d11_smp_desc.MaxLOD = desc->max_lod;
+    hr = _sg_d3d11_CreateSamplerState(_sg.d3d11.dev, &d3d11_smp_desc, &img->d3d11.smp);
+    SOKOL_ASSERT(SUCCEEDED(hr) && img->d3d11.smp);
+
     return SG_RESOURCESTATE_VALID;
 }
 
@@ -8742,11 +8779,13 @@ _SOKOL_PRIVATE sg_resource_state _sg_d3d11_create_pass(_sg_pass_t* pass, _sg_ima
         SOKOL_ASSERT(_sg_is_valid_rendertarget_depth_format(att_img->cmn.pixel_format));
         SOKOL_ASSERT(0 == pass->d3d11.ds_att.image);
         pass->d3d11.ds_att.image = att_img;
+        
+        bool has_stencil = _sg_is_depth_stencil_format(att_img->cmn.pixel_format);
 
         /* create D3D11 depth-stencil-view */
         D3D11_DEPTH_STENCIL_VIEW_DESC d3d11_dsv_desc;
         memset(&d3d11_dsv_desc, 0, sizeof(d3d11_dsv_desc));
-        d3d11_dsv_desc.Format = att_img->d3d11.format;
+        d3d11_dsv_desc.Format = has_stencil ? DXGI_FORMAT_D32_FLOAT_S8X24_UINT : DXGI_FORMAT_D32_FLOAT;
         const bool is_msaa = att_img->cmn.sample_count > 1;
         if (is_msaa) {
             d3d11_dsv_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS;
@@ -15427,7 +15466,7 @@ SOKOL_API_IMPL void sg_apply_bindings(const sg_bindings* bindings) {
     for (int i = 0; i < SG_MAX_SHADERSTAGE_BUFFERS; i++, num_fs_bufs++) {
         if (bindings->fs_buffers[i].id) {
             fs_bufs[i] = _sg_lookup_buffer(&_sg.pools, bindings->fs_buffers[i].id);
-            SOKOL_ASSERT(vs_bufs[i]);
+            SOKOL_ASSERT(fs_bufs[i]);
             _sg.next_draw_valid &= (SG_RESOURCESTATE_VALID == fs_bufs[i]->slot.state);
         }
         else {

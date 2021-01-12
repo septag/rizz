@@ -61,7 +61,7 @@ typedef enum {
     GLTF_WRAP_REPEAT = 10497
 } model__gltf_wrap;
 
-static inline sg_filter model__gltf_get_filter(model__gltf_filter filter)
+SX_INLINE sg_filter model__gltf_get_filter(model__gltf_filter filter)
 {
     switch (filter) {
     case GLTF_FILTER_NEAREST:   return SG_FILTER_NEAREST;
@@ -74,7 +74,7 @@ static inline sg_filter model__gltf_get_filter(model__gltf_filter filter)
     }
 }
 
-static inline sg_wrap model__gltf_get_wrap(model__gltf_wrap wrap)
+SX_INLINE sg_wrap model__gltf_get_wrap(model__gltf_wrap wrap)
 {
     switch (wrap) {
     case GLTF_WRAP_CLAMP_TO_EDGE:   return SG_WRAP_CLAMP_TO_EDGE;

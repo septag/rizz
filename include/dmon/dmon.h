@@ -449,7 +449,7 @@ _DMON_PRIVATE void dmon__win32_process_events(void)
             // remove duplicate modifies on a single file
             for (int j = i + 1; j < c; j++) {
                 dmon__win32_event* check_ev = &_dmon.events[j];
-                if (check_ev->action == FILE_ACTION_MODIFIED &&
+                if (check_ev->action == FILE_ACTION_MODIFIED && ev->action == check_ev->action &&
                     strcmp(ev->filepath, check_ev->filepath) == 0) {
                     check_ev->skip = true;
                 }

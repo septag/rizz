@@ -87,6 +87,7 @@ function(rizz__add_example proj_name)
 		set_target_properties(${proj_name} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:${proj_name}>/")
 		set_target_properties(${proj_name} PROPERTIES VS_DEBUGGER_COMMAND "rizz.exe")
 		set_target_properties(${proj_name} PROPERTIES VS_DEBUGGER_COMMAND_ARGUMENTS "--run ${proj_name}.dll")
+        set_target_properties(${proj_name} PROPERTIES LINK_FLAGS "/INCREMENTAL:NO")
 	ENDIF()
 
     # compile default shaders
@@ -175,6 +176,7 @@ function(rizz_add_executable proj_name source_files)
 
     if (WIN32)
         set_target_properties(${proj_name} PROPERTIES WIN32_EXECUTABLE TRUE)
+        set_target_properties(${proj_name} PROPERTIES LINK_FLAGS "/INCREMENTAL:NO")
     endif()
 endfunction()
 
@@ -343,6 +345,9 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 foreach (3rdparty_project ${3rdparty_projects}) 
     add_subdirectory(3rdparty/${3rdparty_project})
     set_target_properties(${3rdparty_project} PROPERTIES FOLDER 3rdparty)
+    if (MSVC)
+        set_target_properties(${3rdparty_project} PROPERTIES LINK_FLAGS "/INCREMENTAL:NO")
+    endif()
 endforeach()
 
 foreach (native_project ${native_projects})
@@ -362,6 +367,7 @@ foreach (native_project ${native_projects})
                 /wd4204  # nonstandard extension used: non-constant aggregate initializer
                 ) 
         endif()
+        set_target_properties(${native_project} PROPERTIES LINK_FLAGS "/INCREMENTAL:NO")
     else()
         target_compile_options(${native_project} PRIVATE 
             -Wextra 

@@ -82,10 +82,11 @@ static const sx_alloc*      g_gfx_alloc = NULL;
 
 // this is just a redirection in order to skip including "rizz.h"
 static void rizz__gfx_log_error(const char* source_file, int line, const char* str);
+static const char* rizz__gfx_get_cur_stage_name(void);
 
 #define SOKOL_MALLOC(s)             sx_malloc(g_gfx_alloc, s)
 #define SOKOL_FREE(p)               sx_free(g_gfx_alloc, p)
-#define SOKOL_ASSERT(c)             sx_assert(c)
+#define SOKOL_ASSERT(c)             sx_assertf(c, "At stage: %s", rizz__gfx_get_cur_stage_name())
 #define SOKOL_LOG(s)                rizz__gfx_log_error(__FILE__, __LINE__, s)
 
 SX_PRAGMA_DIAGNOSTIC_PUSH()
@@ -265,6 +266,8 @@ typedef struct rizz__gfx {
     sg_pass* destroy_passes;
     sg_image* destroy_images;
 
+    char cur_stage_name[32];
+
     rizz__trace_gfx trace;
     bool enable_profile;
     bool record_make_commands;
@@ -288,6 +291,15 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 
 static rizz__gfx g_gfx;
 
+static const char* rizz__gfx_get_cur_stage_name(void)
+{
+    if (g_gfx.cur_stage_name[0]) {
+        return g_gfx.cur_stage_name;
+    } else {
+        return "[unset]";
+    }
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @sokol_gfx
 #if defined(SOKOL_D3D11)
@@ -296,7 +308,7 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
                                             const sg_pipeline_desc* desc)
 {
     SOKOL_ASSERT(shd->slot.state == SG_RESOURCESTATE_VALID);
-    SOKOL_ASSERT(shd->d3d11.vs_blob && shd->d3d11.vs_blob_length > 0);
+    SOKOL_ASSERT(shd->d3d11.cs || (shd->d3d11.vs_blob && shd->d3d11.vs_blob_length > 0));
     sx_unused(desc);
     sx_unused(info);
 
@@ -2490,8 +2502,7 @@ static void rizz__cb_begin_profile_sample(const char* name, uint32_t* hash_cache
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assertf(cb->running_stage.id,
-               "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     int offset = 0;
@@ -2578,6 +2589,7 @@ static uint8_t* rizz__cb_run_begin_stage(uint8_t* buff)
     const char* name = (const char*)buff;
     buff += 32;    // TODO: match this with stage::name
 
+    sx_strcpy(g_gfx.cur_stage_name, sizeof(g_gfx.cur_stage_name), name);
     sg_push_debug_group(name);
     return buff;
 }
@@ -2586,8 +2598,7 @@ static void rizz__cb_record_end_stage()
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assertf(cb->running_stage.id,
-              "draw related calls must come between begin_stage..end_stage");
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
     sx_assert(cb->cmd_idx < UINT16_MAX);
 
     rizz__gfx_cmdbuffer_ref ref = { .key =
@@ -2602,6 +2613,7 @@ static void rizz__cb_record_end_stage()
 
 static uint8_t* rizz__cb_run_end_stage(uint8_t* buff)
 {
+    g_gfx.cur_stage_name[0] = '\0';
     sg_pop_debug_group();
     return buff;
 }
