@@ -901,6 +901,7 @@ typedef struct imgui__context {
     sg_pipeline pip;
     sg_bindings bind;
     sg_image font_tex;
+    rizz_gfx_stage stage;
     bool mouse_btn_down[RIZZ_APP_MAX_MOUSEBUTTONS];
     bool mouse_btn_up[RIZZ_APP_MAX_MOUSEBUTTONS];
     float mouse_wheel_h;
@@ -1157,6 +1158,8 @@ static bool imgui__init(void)
     apply_theme();
     the_core->tmp_alloc_pop();
 
+    g_imgui.stage = the_gfx->stage_register("imgui", (rizz_gfx_stage) {0});
+
     return true;
 }
 
@@ -1397,13 +1400,16 @@ static void imgui__render(void)
     igRender();
 
     // Draw imgui primitives
-    the_gfx->imm.begin_default_pass(
-        &(sg_pass_action){ .colors[0] = { .action = SG_ACTION_LOAD },
-                           .depth = { .action = SG_ACTION_DONTCARE },
-                           .stencil = { .action = SG_ACTION_DONTCARE } },
-        the_app->width(), the_app->height());
-    imgui__draw(the__imgui.GetDrawData());
-    the_gfx->imm.end_pass();
+    if (the_gfx->imm.begin(g_imgui.stage)) {
+        the_gfx->imm.begin_default_pass(
+            &(sg_pass_action){ .colors[0] = { .action = SG_ACTION_LOAD },
+                               .depth = { .action = SG_ACTION_DONTCARE },
+                               .stencil = { .action = SG_ACTION_DONTCARE } },
+            the_app->width(), the_app->height());
+        imgui__draw(the__imgui.GetDrawData());
+        the_gfx->imm.end_pass();
+        the_gfx->imm.end();
+    }
 }
 
 static ImDrawList* imgui__begin_fullscreen_draw(const char* name)

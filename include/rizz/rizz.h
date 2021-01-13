@@ -1072,7 +1072,6 @@ typedef struct rizz_api_gfx_draw {
     void (*draw)(int base_element, int num_elements, int num_instances);
     void (*dispatch)(int thread_group_x, int thread_group_y, int thread_group_z);
     void (*end_pass)();
-
     void (*update_buffer)(sg_buffer buf, const void* data_ptr, int data_size);
     int (*append_buffer)(sg_buffer buf, const void* data_ptr, int data_size);
     void (*update_image)(sg_image img, const sg_image_content* data);
@@ -1080,7 +1079,63 @@ typedef struct rizz_api_gfx_draw {
     // profile
     void (*begin_profile_sample)(const char* name, uint32_t* hash_cache);
     void (*end_profile_sample)();
+
+    // debug version of calls (see macros below)
+    void (*begin_default_pass_d)(const sg_pass_action* pass_action, int width, int height, const char* file, uint32_t line);
+    void (*begin_pass_d)(sg_pass pass, const sg_pass_action* pass_action, const char* file, uint32_t line);
+    void (*apply_viewport_d)(int x, int y, int width, int height, bool origin_top_left, const char* file, uint32_t line);
+    void (*apply_scissor_rect_d)(int x, int y, int width, int height, bool origin_top_left, const char* file, uint32_t line);
+    void (*apply_pipeline_d)(sg_pipeline pip, const char* file, uint32_t line);
+    void (*apply_bindings_d)(const sg_bindings* bind, const char* file, uint32_t line);
+    void (*apply_uniforms_d)(sg_shader_stage stage, int ub_index, const void* data, int num_bytes, const char* file, uint32_t line);
+    void (*draw_d)(int base_element, int num_elements, int num_instances, const char* file, uint32_t line);
+    void (*dispatch_d)(int thread_group_x, int thread_group_y, int thread_group_z, const char* file, uint32_t line);
+    void (*end_pass_d)(const char* file, uint32_t line);
+    void (*update_buffer_d)(sg_buffer buf, const void* data_ptr, int data_size, const char* file, uint32_t line);
+    int (*append_buffer_d)(sg_buffer buf, const void* data_ptr, int data_size, const char* file, uint32_t line);
+    void (*update_image_d)(sg_image img, const sg_image_content* data, const char* file, uint32_t line);
 } rizz_api_gfx_draw;
+
+#define rizz_gfx_begin(_stage) \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.begin(_stage)
+#define rizz_gfx_end() \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.end()
+#define rizz_gfx_begin_default_pass(_pass_action, _width, _height) \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.begin_default_pass_d(_pass_action, _width, _height, __FILE__, __LINE__)
+#define rizz_gfx_begin_pass(_pass, _pass_action) \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.begin_pass_d(_pass, _pass_action, __FILE__, __LINE__)
+#define rizz_gfx_apply_viewport(_x, _y, _width, _height, _origin_top_left) \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.apply_viewport_d(_x, _y, _width, _height, _origin_top_left, __FILE__, __LINE__)
+#define rizz_gfx_apply_scissor_rect(_x, _y, _width, _height, _origin_top_left) \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.apply_scissor_rect_d(_x, _y, _width, _height, _origin_top_left, __FILE__, __LINE__)
+#define rizz_gfx_apply_pipeline(_pip) \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.apply_pipeline_d(_pip, __FILE__, __LINE__)
+#define rizz_gfx_apply_bindings(_bindings) \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.apply_bindings_d(_bindings, __FILE__, __LINE__)
+#define rizz_gfx_apply_uniforms(_stage, _ub_index, _data, _bytes) \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.apply_uniforms_d(_stage, _ub_index, _data, _bytes, __FILE__, __LINE__)
+#define rizz_gfx_draw(_base_element, _num_elements, _num_instances) \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.draw_d(_base_element, _num_elements, _num_instances, __FILE__, __LINE__)
+#define rizz_gfx_dispatch(_thread_group_x, _thread_group_y, _thread_group_z) \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.dispatch_d(_thread_group_x, _thread_group_y, _thread_group_z, __FILE__, __LINE__)
+#define rizz_gfx_end_pass() \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.end_pass_d(__FILE__, __LINE__)
+#define rizz_gfx_update_buffer(_buf, _data, _size) \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.update_buffer_d(_buf, _data, _size, __FILE__, __LINE__)
+#define rizz_gfx_append_buffer(_buf, _data, _size) \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.append_buffer_d(_buf, _data_, _size, __FILE__, __LINE__)
+#define rizz_gfx_update_image(_img, _data, _size) \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.update_image_d(_img, _data, _size, __FILE__, __LINE__)
+
+// using these macros are preferred to draw_api->begin_profile_sample() and draw_api->end_profile_sample()
+// because They provide cache variables for name hashing and also somewhat emulates C++ RAII
+#define rizz_gfx_profile_begin(_name)                \
+    static uint32_t rmt_gpu_sample_hash_##_name = 0; \
+    uint32_t rmt_gpu_sample_raii_##_name;            \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.begin_profile_sample(#_name, &rmt_gpu_sample_hash_##_name)
+#define rizz_gfx_profile_end(_name)    \
+    (void)rmt_gpu_sample_raii_##_name; \
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.end_profile_sample();
 
 typedef struct rizz_api_gfx {
     rizz_api_gfx_draw imm;       // immediate draw API
@@ -1210,16 +1265,6 @@ typedef struct rizz_api_gfx {
     // info
     const rizz_gfx_trace_info* (*trace_info)();
 } rizz_api_gfx;
-
-// using these macros are preferred to draw_api->begin_profile_sample() and draw_api->end_profile_sample()
-// because They provide cache variables for name hashing and also somewhat emulates C++ RAII
-#define rizz_gfx_profile_begin(_draw_api, _name)        \
-    static uint32_t rmt_gpu_sample_hash_##_name = 0; \
-    uint32_t rmt_gpu_sample_raii_##_name;            \
-    (_draw_api)->begin_profile_sample(#_name, &rmt_gpu_sample_hash_##_name)
-#define rizz_gfx_profile_end(_draw_api, _name)    \
-    (void)rmt_gpu_sample_raii_##_name; \
-    (_draw_api)->end_profile_sample();
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @plugin

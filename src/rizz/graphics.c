@@ -50,6 +50,10 @@ static const sx_alloc*      g_gfx_alloc = NULL;
     RMT_OPTIONAL(RMT_USE_D3D11, (g_gfx.enable_profile ? _rmt_BeginD3D11Sample(_name, _hash) : 0))
 #   define rmt__end_gpu_sample()                \
     RMT_OPTIONAL(RMT_USE_D3D11, (g_gfx.enable_profile ? _rmt_EndD3D11Sample() : 0))
+    SX_PRAGMA_DIAGNOSTIC_PUSH()
+    SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(5105)
+#   include <d3d11_2.h>
+    SX_PRAGMA_DIAGNOSTIC_POP()
 #elif RIZZ_GRAPHICS_API_METAL==1
 #   define SOKOL_METAL
 // disable profiling on metal, because it has some limitations. For example we can't micro-profile commands
@@ -82,12 +86,12 @@ static const sx_alloc*      g_gfx_alloc = NULL;
 
 // this is just a redirection in order to skip including "rizz.h"
 static void rizz__gfx_log_error(const char* source_file, int line, const char* str);
-static const char* rizz__gfx_get_cur_stage_name(void);
+static void rizz__gfx_assert_last_error(void);
 
 #define SOKOL_MALLOC(s)             sx_malloc(g_gfx_alloc, s)
 #define SOKOL_FREE(p)               sx_free(g_gfx_alloc, p)
-#define SOKOL_ASSERT(c)             sx_assertf(c, "At stage: %s", rizz__gfx_get_cur_stage_name())
 #define SOKOL_LOG(s)                rizz__gfx_log_error(__FILE__, __LINE__, s)
+#define SOKOL_ASSERT(c)             if (!(c)) rizz__gfx_assert_last_error()
 
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
@@ -247,17 +251,29 @@ typedef struct rizz__trace_gfx {
     rizz_gfx_perframe_trace_info* active_trace;
 } rizz__trace_gfx;
 
+typedef struct rizz__gfx_source_loc {
+    const char* file;
+    uint32_t line;
+#if SX_ARCH_64BIT
+    uint32_t _reserved;
+#endif
+} rizz__gfx_source_loc;
+
 typedef struct rizz__gfx {
     rizz__gfx_stage* stages;                    // sx_array
     rizz__gfx_cmdbuffer* cmd_buffers_feed;      // commands that are queued (sx_array)
     rizz__gfx_cmdbuffer* cmd_buffers_render;    // commands that are being rendered (sx_array)
     sx_lock_t stage_lk;
     rizz__gfx_texture_mgr tex_mgr;
-#ifdef SOKOL_METAL
-    rizz__pip_mtl* pips;    // sx_array: keep track of pipelines for shader hot-reloads
-#else
-    sg_pipeline* pips;
-#endif
+    #ifdef SOKOL_METAL
+        rizz__pip_mtl* pips;    // sx_array: keep track of pipelines for shader hot-reloads
+    #else
+        sg_pipeline* pips;
+    #endif
+    #ifdef SOKOL_D3D11
+        ID3D11DeviceContext2* d3d11_ctx;
+        bool                  d3d11_has_marker;
+    #endif
     rizz__gfx_stream_buffer* stream_buffs;    // sx_array: streaming buffers for append_buffers
 
     sg_buffer* destroy_buffers;
@@ -269,6 +285,7 @@ typedef struct rizz__gfx {
     char cur_stage_name[32];
 
     rizz__trace_gfx trace;
+    rizz__gfx_source_loc cur_source_loc;
     bool enable_profile;
     bool record_make_commands;
 } rizz__gfx;
@@ -291,18 +308,43 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 
 static rizz__gfx g_gfx;
 
-static const char* rizz__gfx_get_cur_stage_name(void)
+static void rizz__gfx_assert_last_error(void)
 {
+    const char* stage;
     if (g_gfx.cur_stage_name[0]) {
-        return g_gfx.cur_stage_name;
+        stage = g_gfx.cur_stage_name;
     } else {
-        return "[unset]";
+        stage = "[unset]";
     }
+
+    static char msg[512];
+    if (g_gfx.cur_source_loc.file) {
+        the__core.print_error(0, g_gfx.cur_source_loc.file, g_gfx.cur_source_loc.line, "Stage = '%s'", stage);
+    } else {
+        rizz__log_error("Stage = '%s'", stage);
+    }
+
+    sx_assert_always(0);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @sokol_gfx
 #if defined(SOKOL_D3D11)
+_SOKOL_PRIVATE bool _sapp_win32_utf8_to_wide(const char* src, wchar_t* dst, int dst_num_bytes)
+{
+    SOKOL_ASSERT(src && dst && (dst_num_bytes > 1));
+    memset(dst, 0, dst_num_bytes);
+    const int dst_chars = dst_num_bytes / sizeof(wchar_t);
+    const int dst_needed = MultiByteToWideChar(CP_UTF8, 0, src, -1, 0, 0);
+    if ((dst_needed > 0) && (dst_needed < dst_chars)) {
+        MultiByteToWideChar(CP_UTF8, 0, src, -1, dst, dst_chars);
+        return true;
+    } else {
+        /* input string doesn't fit into destination buffer */
+        return false;
+    }
+}
+
 _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shader_id,
                                             _sg_shader_t* shd, const rizz_shader_info* info,
                                             const sg_pipeline_desc* desc)
@@ -2411,6 +2453,15 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
         } 
     }
 
+    #ifdef SOKOL_D3D11
+        HRESULT hr = _sg.d3d11.ctx->lpVtbl->QueryInterface(_sg.d3d11.ctx, &IID_ID3D11DeviceContext2, &g_gfx.d3d11_ctx);
+        if (SUCCEEDED(hr)) {
+            g_gfx.d3d11_has_marker = g_gfx.d3d11_ctx->lpVtbl->IsAnnotationEnabled(g_gfx.d3d11_ctx) ? true : false;
+        } else {
+            rizz__log_warn("D3D11: feature version 11_2 is not supported");
+        }
+    #endif
+
     return true;
 }
 
@@ -2455,6 +2506,11 @@ void rizz__gfx_release()
         }
     }
 
+    #ifdef SOKOL_D3D11
+        if (g_gfx.d3d11_ctx) {
+            g_gfx.d3d11_ctx->lpVtbl->Release(g_gfx.d3d11_ctx);
+        }
+    #endif
     sg_shutdown();
 }
 
@@ -2486,8 +2542,19 @@ static bool rizz__gfx_GLES_family()
     return backend == SG_BACKEND_GLES2 || backend == SG_BACKEND_GLES3;
 }
 
-static inline uint8_t* rizz__cb_alloc_params_buff(rizz__gfx_cmdbuffer* cb, int size, int* offset)
+SX_INLINE uint8_t* rizz__cb_alloc_params_buff(rizz__gfx_cmdbuffer* cb, int size, int* offset,
+                                              const char* file, uint32_t line)
 {
+    #if !RIZZ_FINAL
+        static_assert(sizeof(rizz__gfx_source_loc)%SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT == 0, 
+                      "un-aligned rizz__gfx_source_loc size");
+        size += sizeof(rizz__gfx_source_loc);
+    #endif
+
+    if (size == 0) {
+        return NULL;
+    }
+
     uint8_t* ptr = sx_array_add(cb->alloc, cb->params_buff,
                                 sx_align_mask(size, SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT - 1));
     if (!ptr) {
@@ -2495,7 +2562,25 @@ static inline uint8_t* rizz__cb_alloc_params_buff(rizz__gfx_cmdbuffer* cb, int s
         return NULL;
     }
     *offset = (int)(intptr_t)(ptr - cb->params_buff);
+
+    #if !RIZZ_FINAL
+        *((rizz__gfx_source_loc*)ptr) = (rizz__gfx_source_loc){ .file = file, .line = line };
+        ptr += sizeof(rizz__gfx_source_loc);
+    #endif    
+
     return ptr;
+}
+
+SX_INLINE void rizz__cb_save_source_loc(uint8_t** pbuff)
+{
+    sx_assert(*pbuff);
+
+    #if !RIZZ_FINAL
+        g_gfx.cur_source_loc = *((rizz__gfx_source_loc*)*pbuff);
+        (*pbuff) += sizeof(rizz__gfx_source_loc);
+    #else
+        sx_unused(pbuff);
+    #endif
 }
 
 static void rizz__cb_begin_profile_sample(const char* name, uint32_t* hash_cache)
@@ -2503,11 +2588,11 @@ static void rizz__cb_begin_profile_sample(const char* name, uint32_t* hash_cache
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
     sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
 
     int offset = 0;
-    uint8_t* buff = rizz__cb_alloc_params_buff(cb, 32 + sizeof(uint32_t*), &offset);
-    sx_assert(buff);
+    uint8_t* buff = rizz__cb_alloc_params_buff(cb, 32 + sizeof(uint32_t*), &offset, NULL, 0);
+    sx_assert_alwaysf(buff, "out of memory");
 
     rizz__gfx_cmdbuffer_ref ref = { .key =
                                         (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
@@ -2525,6 +2610,8 @@ static void rizz__cb_begin_profile_sample(const char* name, uint32_t* hash_cache
 
 static uint8_t* rizz__cb_run_begin_profile_sample(uint8_t* buff)
 {
+    rizz__cb_save_source_loc(&buff);
+
     const char* name = (const char*)buff;
     sx_unused(name);
     buff += 32;
@@ -2535,13 +2622,12 @@ static uint8_t* rizz__cb_run_begin_profile_sample(uint8_t* buff)
     return buff;
 }
 
-static void rizz__cb_end_profile_sample()
+static void rizz__cb_end_profile_sample(void)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assertf(cb->running_stage.id,
-               "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
 
     rizz__gfx_cmdbuffer_ref ref = { .key =
                                         (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
@@ -2567,10 +2653,10 @@ static void rizz__cb_record_begin_stage(const char* name, int name_sz)
 
     sx_assertf(cb->running_stage.id,
               "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
 
     int offset = 0;
-    uint8_t* buff = rizz__cb_alloc_params_buff(cb, name_sz, &offset);
+    uint8_t* buff = rizz__cb_alloc_params_buff(cb, name_sz, &offset, NULL, 0);
 
     rizz__gfx_cmdbuffer_ref ref = { .key =
                                         (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
@@ -2586,11 +2672,21 @@ static void rizz__cb_record_begin_stage(const char* name, int name_sz)
 
 static uint8_t* rizz__cb_run_begin_stage(uint8_t* buff)
 {
+    rizz__cb_save_source_loc(&buff);
     const char* name = (const char*)buff;
     buff += 32;    // TODO: match this with stage::name
 
     sx_strcpy(g_gfx.cur_stage_name, sizeof(g_gfx.cur_stage_name), name);
     sg_push_debug_group(name);
+    
+    #ifdef SOKOL_D3D11
+        if (g_gfx.d3d11_has_marker) {
+            ID3D11DeviceContext2* ctx = g_gfx.d3d11_ctx;
+            wchar_t wname[64];
+            _sapp_win32_utf8_to_wide(name, wname, sizeof(wname));
+            ctx->lpVtbl->BeginEventInt(ctx, wname, 0);
+        }
+    #endif
     return buff;
 }
 
@@ -2599,7 +2695,7 @@ static void rizz__cb_record_end_stage()
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
     sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
 
     rizz__gfx_cmdbuffer_ref ref = { .key =
                                         (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
@@ -2615,6 +2711,13 @@ static uint8_t* rizz__cb_run_end_stage(uint8_t* buff)
 {
     g_gfx.cur_stage_name[0] = '\0';
     sg_pop_debug_group();
+    
+    #ifdef SOKOL_D3D11
+        if (g_gfx.d3d11_has_marker) {
+            ID3D11DeviceContext2* ctx = g_gfx.d3d11_ctx;
+            ctx->lpVtbl->EndEvent(ctx);
+        }
+    #endif
     return buff;
 }
 
@@ -2662,18 +2765,17 @@ static void rizz__cb_end_stage()
     cb->running_stage = (rizz_gfx_stage){ 0 };
 }
 
-
-static void rizz__cb_begin_default_pass(const sg_pass_action* pass_action, int width, int height)
+static void rizz__cb_begin_default_pass_d(const sg_pass_action* pass_action, int width, int height, 
+                                          const char* file, uint32_t line) 
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
     sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
 
     int offset = 0;
-    uint8_t* buff =
-        rizz__cb_alloc_params_buff(cb, sizeof(sg_pass_action) + sizeof(int) * 2, &offset);
-    sx_assert(buff);
+    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(sg_pass_action) + sizeof(int) * 2, &offset, file, line);
+    sx_assert_alwaysf(buff, "out of memory");
 
     rizz__gfx_cmdbuffer_ref ref = { .key =
                                         (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
@@ -2691,8 +2793,15 @@ static void rizz__cb_begin_default_pass(const sg_pass_action* pass_action, int w
     *((int*)buff) = height;
 }
 
+static void rizz__cb_begin_default_pass(const sg_pass_action* pass_action, int width, int height)
+{
+    rizz__cb_begin_default_pass_d(pass_action, width, height, NULL, 0);
+}
+
 static uint8_t* rizz__cb_run_begin_default_pass(uint8_t* buff)
 {
+    rizz__cb_save_source_loc(&buff);
+
     sg_pass_action* pass_action = (sg_pass_action*)buff;
     buff += sizeof(sg_pass_action);
     int width = *((int*)buff);
@@ -2703,17 +2812,16 @@ static uint8_t* rizz__cb_run_begin_default_pass(uint8_t* buff)
     return buff;
 }
 
-static void rizz__cb_begin_pass(sg_pass pass, const sg_pass_action* pass_action)
+static void rizz__cb_begin_pass_d(sg_pass pass, const sg_pass_action* pass_action, const char* file, uint32_t line)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
     sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
 
     int offset = 0;
-    uint8_t* buff =
-        rizz__cb_alloc_params_buff(cb, sizeof(sg_pass_action) + sizeof(sg_pass), &offset);
-    sx_assert(buff);
+    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(sg_pass_action) + sizeof(sg_pass), &offset, file, line);
+    sx_assert_alwaysf(buff, "out of memory");
 
     rizz__gfx_cmdbuffer_ref ref = { .cmdbuffer_idx = cb->index,
                                     .cmd = GFX_COMMAND_BEGIN_PASS,
@@ -2732,8 +2840,15 @@ static void rizz__cb_begin_pass(sg_pass pass, const sg_pass_action* pass_action)
     _pass->cmn.used_frame = the__core.frame_index();
 }
 
+static void rizz__cb_begin_pass(sg_pass pass, const sg_pass_action* pass_action)
+{
+    rizz__cb_begin_pass_d(pass, pass_action, NULL, 0);
+}
+
 static uint8_t* rizz__cb_run_begin_pass(uint8_t* buff)
 {
+    rizz__cb_save_source_loc(&buff);
+
     sg_pass_action* pass_action = (sg_pass_action*)buff;
     buff += sizeof(sg_pass_action);
     sg_pass pass = *((sg_pass*)buff);
@@ -2742,16 +2857,16 @@ static uint8_t* rizz__cb_run_begin_pass(uint8_t* buff)
     return buff;
 }
 
-static void rizz__cb_apply_viewport(int x, int y, int width, int height, bool origin_top_left)
+static void rizz__cb_apply_viewport_d(int x, int y, int width, int height, bool origin_top_left, const char* file, uint32_t line)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
     sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
 
     int offset = 0;
-    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(int) * 4 + sizeof(bool), &offset);
-    sx_assert(buff);
+    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(int) * 4 + sizeof(bool), &offset, file, line);
+    sx_assert_alwaysf(buff, "out of memory");
 
     rizz__gfx_cmdbuffer_ref ref = { .cmdbuffer_idx = cb->index,
                                     .cmd = GFX_COMMAND_APPLY_VIEWPORT,
@@ -2773,8 +2888,15 @@ static void rizz__cb_apply_viewport(int x, int y, int width, int height, bool or
     *((bool*)buff) = origin_top_left;
 }
 
+static void rizz__cb_apply_viewport(int x, int y, int width, int height, bool origin_top_left)
+{
+    rizz__cb_apply_viewport_d(x, y, width, height, origin_top_left, NULL, 0);
+}
+
 static uint8_t* rizz__cb_run_apply_viewport(uint8_t* buff)
 {
+    rizz__cb_save_source_loc(&buff);
+
     int x = *((int*)buff);
     buff += sizeof(int);
     int y = *((int*)buff);
@@ -2790,16 +2912,18 @@ static uint8_t* rizz__cb_run_apply_viewport(uint8_t* buff)
     return buff;
 }
 
-static void rizz__cb_apply_scissor_rect(int x, int y, int width, int height, bool origin_top_left)
+static void rizz__cb_apply_scissor_rect_d(int x, int y, int width, int height, bool origin_top_left, 
+                                          const char* file, uint32_t line)
 {
+
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
     sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
 
     int offset = 0;
-    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(int) * 4 + sizeof(bool), &offset);
-    sx_assert(buff);
+    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(int) * 4 + sizeof(bool), &offset, file, line);
+    sx_assert_alwaysf(buff, "out of memory");
 
     rizz__gfx_cmdbuffer_ref ref = { .key =
                                         (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
@@ -2821,8 +2945,15 @@ static void rizz__cb_apply_scissor_rect(int x, int y, int width, int height, boo
     *((bool*)buff) = origin_top_left;
 }
 
+static void rizz__cb_apply_scissor_rect(int x, int y, int width, int height, bool origin_top_left)
+{
+    rizz__cb_apply_scissor_rect_d(x, y, width, height, origin_top_left, NULL, 0);
+}
+
 static uint8_t* rizz__cb_run_apply_scissor_rect(uint8_t* buff)
 {
+    rizz__cb_save_source_loc(&buff);
+
     int x = *((int*)buff);
     buff += sizeof(int);
     int y = *((int*)buff);
@@ -2838,19 +2969,18 @@ static uint8_t* rizz__cb_run_apply_scissor_rect(uint8_t* buff)
     return buff;
 }
 
-static void rizz__cb_apply_pipeline(sg_pipeline pip)
+static void rizz__cb_apply_pipeline_d(sg_pipeline pip, const char* file, uint32_t line)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
     sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
 
     int offset = 0;
-    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(sg_pipeline), &offset);
-    sx_assert(buff);
+    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(sg_pipeline), &offset, file, line);
+    sx_assert_alwaysf(buff, "out of memory");
 
-    rizz__gfx_cmdbuffer_ref ref = { .key =
-                                        (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
+    rizz__gfx_cmdbuffer_ref ref = { .key = (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
                                     .cmdbuffer_idx = cb->index,
                                     .cmd = GFX_COMMAND_APPLY_PIPELINE,
                                     .params_offset = offset };
@@ -2864,8 +2994,15 @@ static void rizz__cb_apply_pipeline(sg_pipeline pip)
     _pip->cmn.used_frame = _pip->shader->cmn.used_frame = the__core.frame_index();
 }
 
+static void rizz__cb_apply_pipeline(sg_pipeline pip)
+{
+    rizz__cb_apply_pipeline_d(pip, NULL, 0);
+}
+
 static uint8_t* rizz__cb_run_apply_pipeline(uint8_t* buff)
 {
+    rizz__cb_save_source_loc(&buff);
+
     sg_pipeline pip_id = *((sg_pipeline*)buff);
     sg_apply_pipeline(pip_id);
     buff += sizeof(sg_pipeline);
@@ -2873,19 +3010,18 @@ static uint8_t* rizz__cb_run_apply_pipeline(uint8_t* buff)
     return buff;
 }
 
-static void rizz__cb_apply_bindings(const sg_bindings* bind)
+static void rizz__cb_apply_bindings_d(const sg_bindings* bind, const char* file, uint32_t line)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
     sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
 
     int offset = 0;
-    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(sg_bindings), &offset);
-    sx_assert(buff);
+    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(sg_bindings), &offset, file, line);
+    sx_assert_alwaysf(buff, "out of memory");
 
-    rizz__gfx_cmdbuffer_ref ref = { .key =
-                                        (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
+    rizz__gfx_cmdbuffer_ref ref = { .key = (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
                                     .cmdbuffer_idx = cb->index,
                                     .cmd = GFX_COMMAND_APPLY_BINDINGS,
                                     .params_offset = offset };
@@ -2984,8 +3120,15 @@ static void rizz__cb_apply_bindings(const sg_bindings* bind)
     }
 }
 
+static void rizz__cb_apply_bindings(const sg_bindings* bind)
+{
+    rizz__cb_apply_bindings_d(bind, NULL, 0);
+}
+
 static uint8_t* rizz__cb_run_apply_bindings(uint8_t* buff)
 {
+    rizz__cb_save_source_loc(&buff);
+
     const sg_bindings* bindings = (const sg_bindings*)buff;
     sg_apply_bindings(bindings);
     buff += sizeof(sg_bindings);
@@ -2993,21 +3136,20 @@ static uint8_t* rizz__cb_run_apply_bindings(uint8_t* buff)
     return buff;
 }
 
-static void rizz__cb_apply_uniforms(sg_shader_stage stage, int ub_index, const void* data,
-                                    int num_bytes)
+static void rizz__cb_apply_uniforms_d(sg_shader_stage stage, int ub_index, const void* data, 
+                                      int num_bytes, const char* file, uint32_t line)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
     sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
 
     int offset = 0;
-    uint8_t* buff = rizz__cb_alloc_params_buff(
-        cb, sizeof(sg_shader_stage) + sizeof(int) * 2 + num_bytes, &offset);
-    sx_assert(buff);
+    uint8_t* buff = 
+        rizz__cb_alloc_params_buff(cb, sizeof(sg_shader_stage) + sizeof(int) * 2 + num_bytes, &offset, file, line);
+    sx_assert_alwaysf(buff, "out of memory");
 
-    rizz__gfx_cmdbuffer_ref ref = { .key =
-                                        (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
+    rizz__gfx_cmdbuffer_ref ref = { .key = (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
                                     .cmdbuffer_idx = cb->index,
                                     .cmd = GFX_COMMAND_APPLY_UNIFORMS,
                                     .params_offset = offset };
@@ -3024,8 +3166,15 @@ static void rizz__cb_apply_uniforms(sg_shader_stage stage, int ub_index, const v
     sx_memcpy(buff, data, num_bytes);
 }
 
+static void rizz__cb_apply_uniforms(sg_shader_stage stage, int ub_index, const void* data, int num_bytes)
+{
+    rizz__cb_apply_uniforms_d(stage, ub_index, data, num_bytes, NULL, 0);
+}
+
 static uint8_t* rizz__cb_run_apply_uniforms(uint8_t* buff)
 {
+    rizz__cb_save_source_loc(&buff);
+
     sg_shader_stage stage = *((sg_shader_stage*)buff);
     buff += sizeof(sg_shader_stage);
     int ub_index = *((int*)buff);
@@ -3037,19 +3186,18 @@ static uint8_t* rizz__cb_run_apply_uniforms(uint8_t* buff)
     return buff;
 }
 
-static void rizz__cb_draw(int base_element, int num_elements, int num_instances)
+static void rizz__cb_draw_d(int base_element, int num_elements, int num_instances, const char* file, uint32_t line)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
     sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
 
     int offset = 0;
-    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(int) * 3, &offset);
-    sx_assert(buff);
+    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(int) * 3, &offset, file, line);
+    sx_assert_alwaysf(buff, "out of memory");
 
-    rizz__gfx_cmdbuffer_ref ref = { .key =
-                                        (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
+    rizz__gfx_cmdbuffer_ref ref = { .key = (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
                                     .cmdbuffer_idx = cb->index,
                                     .cmd = GFX_COMMAND_DRAW,
                                     .params_offset = offset };
@@ -3064,8 +3212,15 @@ static void rizz__cb_draw(int base_element, int num_elements, int num_instances)
     *((int*)buff) = num_instances;
 }
 
+static void rizz__cb_draw(int base_element, int num_elements, int num_instances)
+{
+    rizz__cb_draw_d(base_element, num_elements, num_instances, NULL, 0);
+}
+
 static uint8_t* rizz__cb_run_draw(uint8_t* buff)
 {
+    rizz__cb_save_source_loc(&buff);
+
     int base_element = *((int*)buff);
     buff += sizeof(int);
     int num_elements = *((int*)buff);
@@ -3076,19 +3231,18 @@ static uint8_t* rizz__cb_run_draw(uint8_t* buff)
     return buff;
 }
 
-static void rizz__cb_dispatch(int thread_group_x, int thread_group_y, int thread_group_z)
+static void rizz__cb_dispatch_d(int thread_group_x, int thread_group_y, int thread_group_z, const char* file, uint32_t line)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
     sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
 
     int offset = 0;
-    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(int) * 3, &offset);
-    sx_assert(buff);
+    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(int) * 3, &offset, file, line);
+    sx_assert_alwaysf(buff, "out of memory");
 
-    rizz__gfx_cmdbuffer_ref ref = { .key =
-                                        (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
+    rizz__gfx_cmdbuffer_ref ref = { .key = (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
                                     .cmdbuffer_idx = cb->index,
                                     .cmd = GFX_COMMAND_DISPATCH,
                                     .params_offset = offset };
@@ -3103,8 +3257,15 @@ static void rizz__cb_dispatch(int thread_group_x, int thread_group_y, int thread
     *((int*)buff) = thread_group_z;
 }
 
+static void rizz__cb_dispatch(int thread_group_x, int thread_group_y, int thread_group_z)
+{
+    rizz__cb_dispatch_d(thread_group_x, thread_group_y, thread_group_z, NULL, 0);
+}
+
 static uint8_t* rizz__cb_run_dispatch(uint8_t* buff)
 {
+    rizz__cb_save_source_loc(&buff);
+
     int thread_group_x = *((int*)buff);
     buff += sizeof(int);
     int thread_group_y = *((int*)buff);
@@ -3116,15 +3277,20 @@ static uint8_t* rizz__cb_run_dispatch(uint8_t* buff)
 }
 
 
-static void rizz__cb_end_pass()
+static void rizz__cb_end_pass_d(const char* file, uint32_t line)
 {
+    sx_unused(file);
+    sx_unused(line);
+
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    int offset = 0;
+    rizz__cb_alloc_params_buff(cb, 0, &offset, file, line);
 
-    rizz__gfx_cmdbuffer_ref ref = { .key =
-                                        (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
+    sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
+
+    rizz__gfx_cmdbuffer_ref ref = { .key = (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
                                     .cmdbuffer_idx = cb->index,
                                     .cmd = GFX_COMMAND_END_PASS,
                                     .params_offset = sx_array_count(cb->params_buff) };
@@ -3133,26 +3299,31 @@ static void rizz__cb_end_pass()
     ++cb->cmd_idx;
 }
 
+static void rizz__cb_end_pass(void)
+{
+    rizz__cb_end_pass_d(NULL, 0);
+}
+
 static uint8_t* rizz__cb_run_end_pass(uint8_t* buff)
 {
+    rizz__cb_save_source_loc(&buff);
+
     sg_end_pass();
     return buff;
 }
 
-static void rizz__cb_update_buffer(sg_buffer buf, const void* data_ptr, int data_size)
+static void rizz__cb_update_buffer_d(sg_buffer buf, const void* data_ptr, int data_size, const char* file, uint32_t line)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
     sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
 
     int offset = 0;
-    uint8_t* buff =
-        rizz__cb_alloc_params_buff(cb, sizeof(sg_buffer) + data_size + sizeof(int), &offset);
-    sx_assert(buff);
+    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(sg_buffer) + data_size + sizeof(int), &offset, file, line);
+    sx_assert_alwaysf(buff, "out of memory");
 
-    rizz__gfx_cmdbuffer_ref ref = { .key =
-                                        (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
+    rizz__gfx_cmdbuffer_ref ref = { .key = (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
                                     .cmdbuffer_idx = cb->index,
                                     .cmd = GFX_COMMAND_UPDATE_BUFFER,
                                     .params_offset = offset };
@@ -3170,8 +3341,15 @@ static void rizz__cb_update_buffer(sg_buffer buf, const void* data_ptr, int data
     _buff->cmn.used_frame = the__core.frame_index();
 }
 
+static void rizz__cb_update_buffer(sg_buffer buf, const void* data_ptr, int data_size)
+{
+    rizz__cb_update_buffer_d(buf, data_ptr, data_size, NULL, 0);
+}
+
 static uint8_t* rizz__cb_run_update_buffer(uint8_t* buff)
 {
+    rizz__cb_save_source_loc(&buff);
+
     sg_buffer buf = *((sg_buffer*)buff);
     buff += sizeof(sg_buffer);
     int data_size = *((int*)buff);
@@ -3182,7 +3360,7 @@ static uint8_t* rizz__cb_run_update_buffer(uint8_t* buff)
     return buff;
 }
 
-static int rizz__cb_append_buffer(sg_buffer buf, const void* data_ptr, int data_size)
+static int rizz__cb_append_buffer_d(sg_buffer buf, const void* data_ptr, int data_size, const char* file, uint32_t line)
 {
     // search for stream-buffer
     int index = -1;
@@ -3201,12 +3379,11 @@ static int rizz__cb_append_buffer(sg_buffer buf, const void* data_ptr, int data_
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
     sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
 
     int offset = 0;
-    uint8_t* buff =
-        rizz__cb_alloc_params_buff(cb, data_size + sizeof(int) * 3 + sizeof(sg_buffer), &offset);
-    sx_assert(buff);
+    uint8_t* buff = rizz__cb_alloc_params_buff(cb, data_size + sizeof(int) * 3 + sizeof(sg_buffer), &offset, file, line);
+    sx_assert_alwaysf(buff, "out of memory");
 
     rizz__gfx_cmdbuffer_ref ref = { .key =
                                         (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
@@ -3233,8 +3410,15 @@ static int rizz__cb_append_buffer(sg_buffer buf, const void* data_ptr, int data_
     return stream_offset;
 }
 
+static int rizz__cb_append_buffer(sg_buffer buf, const void* data_ptr, int data_size)
+{
+    return rizz__cb_append_buffer_d(buf, data_ptr, data_size, NULL, 0);
+}
+
 static uint8_t* rizz__cb_run_append_buffer(uint8_t* buff)
 {
+    rizz__cb_save_source_loc(&buff);
+
     int stream_index = *((int*)buff);
     buff += sizeof(int);
     sg_buffer buf = *((sg_buffer*)buff);
@@ -3255,12 +3439,12 @@ static uint8_t* rizz__cb_run_append_buffer(uint8_t* buff)
     return buff;
 }
 
-static void rizz__cb_update_image(sg_image img, const sg_image_content* data)
+static void rizz__cb_update_image_d(sg_image img, const sg_image_content* data, const char* file, uint32_t line)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
     sx_assertf(cb->running_stage.id, "draw related calls must come between begin_stage..end_stage");
-    sx_assert(cb->cmd_idx < UINT16_MAX);
+    sx_assert_alwaysf(cb->cmd_idx < UINT16_MAX, "exceeded maximum number of graphics calls");
 
     int image_size = 0;
     for (int face = 0; face < SG_CUBEFACE_NUM; face++) {
@@ -3270,9 +3454,8 @@ static void rizz__cb_update_image(sg_image img, const sg_image_content* data)
     }
 
     int offset = 0;
-    uint8_t* buff =
-        rizz__cb_alloc_params_buff(cb, sizeof(sg_image) + sizeof(sg_image_content), &offset);
-    sx_assert(buff);
+    uint8_t* buff = rizz__cb_alloc_params_buff(cb, sizeof(sg_image) + sizeof(sg_image_content), &offset, file, line);
+    sx_assert_alwaysf(buff, "out of memory");
 
     rizz__gfx_cmdbuffer_ref ref = { .key =
                                         (((uint32_t)cb->stage_order << 16) | (uint32_t)cb->cmd_idx),
@@ -3307,8 +3490,15 @@ static void rizz__cb_update_image(sg_image img, const sg_image_content* data)
     _img->cmn.used_frame = the__core.frame_index();
 }
 
+static void rizz__cb_update_image(sg_image img, const sg_image_content* data)
+{
+    rizz__cb_update_image_d(img, data, NULL, 0);
+}
+
 static uint8_t* rizz__cb_run_update_image(uint8_t* buff)
 {
+    rizz__cb_save_source_loc(&buff);
+
     sg_image img_id = *((sg_image*)buff);
     buff += sizeof(sg_image);
     sg_image_content data = *((sg_image_content*)buff);
@@ -3691,13 +3881,30 @@ static bool rizz__imm_begin_stage(rizz_gfx_stage stage)
 
     char prof_name[64];
     sx_snprintf(prof_name, sizeof(prof_name), "Stage: %s", stage_name);
-    rizz__cb_begin_profile_sample(prof_name, NULL);
+    rmt__begin_gpu_sample(prof_name, NULL);
+
+    #ifdef SOKOL_D3D11
+        if (g_gfx.d3d11_has_marker) {
+            ID3D11DeviceContext2* ctx = g_gfx.d3d11_ctx;
+            wchar_t wname[64];
+            _sapp_win32_utf8_to_wide(stage_name, wname, sizeof(wname));
+            ctx->lpVtbl->BeginEventInt(ctx, wname, 0);
+        }
+    #endif
+
     return true;
 }
 
 static void rizz__imm_end_stage() 
 {
-    rizz__cb_end_profile_sample();
+    rmt__end_gpu_sample();
+
+    #ifdef SOKOL_D3D11
+        if (g_gfx.d3d11_has_marker) {
+            ID3D11DeviceContext2* ctx = g_gfx.d3d11_ctx;
+            ctx->lpVtbl->EndEvent(ctx);
+        }
+    #endif
 }
 
 void rizz__gfx_log_error(const char* source_file, int line, const char* str)
@@ -3724,7 +3931,8 @@ rizz_api_gfx the__gfx = {
              .dispatch              = sg_dispatch,
              .end_pass              = sg_end_pass,
              .begin_profile_sample  = rizz__begin_profile_sample,
-             .end_profile_sample    = rizz__end_profile_sample },
+             .end_profile_sample    = rizz__end_profile_sample, 
+        },
     .staged = { .begin                = rizz__cb_begin_stage,
                 .end                  = rizz__cb_end_stage,
                 .begin_default_pass   = rizz__cb_begin_default_pass,
@@ -3741,7 +3949,21 @@ rizz_api_gfx the__gfx = {
                 .append_buffer        = rizz__cb_append_buffer,
                 .update_image         = rizz__cb_update_image,
                 .begin_profile_sample = rizz__cb_begin_profile_sample,
-                .end_profile_sample   = rizz__cb_end_profile_sample },
+                .end_profile_sample   = rizz__cb_end_profile_sample,
+                .begin_default_pass_d = rizz__cb_begin_default_pass_d,
+                .begin_pass_d         = rizz__cb_begin_pass_d,
+                .apply_viewport_d     = rizz__cb_apply_viewport_d,
+                .apply_scissor_rect_d = rizz__cb_apply_scissor_rect_d,
+                .apply_pipeline_d     = rizz__cb_apply_pipeline_d,
+                .apply_bindings_d     = rizz__cb_apply_bindings_d,
+                .apply_uniforms_d     = rizz__cb_apply_uniforms_d,
+                .draw_d               = rizz__cb_draw_d,
+                .dispatch_d           = rizz__cb_dispatch_d,
+                .end_pass_d           = rizz__cb_end_pass_d,
+                .update_buffer_d      = rizz__cb_update_buffer_d,
+                .append_buffer_d      = rizz__cb_append_buffer_d,
+                .update_image_d       = rizz__cb_update_image_d,
+        },
     .backend                    = rizz__gfx_backend,
     .GL_family                  = rizz__gfx_GL_family,
     .GLES_family                = rizz__gfx_GLES_family,
