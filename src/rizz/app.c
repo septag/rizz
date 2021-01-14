@@ -131,6 +131,7 @@ static long WINAPI rizz__app_generate_crash_dump(EXCEPTION_POINTERS* except)
         g_app.crash_cb(except, g_app.crash_user_data);
     }
 
+    #if !RIZZ_FINAL
     if (g_app.conf.app_flags & RIZZ_APP_FLAG_CRASH_DUMP) {
         MINIDUMP_EXCEPTION_INFORMATION einfo = { 0 };
         HANDLE dump_handle;
@@ -142,14 +143,21 @@ static long WINAPI rizz__app_generate_crash_dump(EXCEPTION_POINTERS* except)
         char filename[128];
         sx_strcat(sx_strcpy(filename, sizeof(filename), g_app.conf.app_name), sizeof(filename), "_crash.dmp");
         dump_handle = CreateFile(filename, GENERIC_READ | GENERIC_WRITE, 
-                                 FILE_SHARE_WRITE | FILE_SHARE_READ, 0, CREATE_ALWAYS, 0, 0);
+                                    FILE_SHARE_WRITE | FILE_SHARE_READ, 0, CREATE_ALWAYS, 0, 0);
         MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), dump_handle, MiniDumpNormal, 
-                          &einfo, NULL, NULL);
+                            &einfo, NULL, NULL);
 
-        char msg[256];
-        sx_snprintf(msg, sizeof(msg), "Program exception: Crash dump created '%s'", filename);
-        rizz__app_message_box(msg);
-    }
+        rizz__log_error("Crash: dump created '%s'", filename);
+    } 
+    #endif
+
+    char msg[256];
+    sx_snprintf(
+        msg, sizeof(msg), "Program exception: (Version: %d.%d-%s) Code: 0x%x, Address: 0x%p",
+        the__core.version().major, the__core.version().minor, the__core.version().git,
+        except->ExceptionRecord->ExceptionCode, except->ExceptionRecord->ExceptionAddress);
+    rizz__log_error(msg);
+    rizz__app_message_box(msg);
 
     return EXCEPTION_EXECUTE_HANDLER;
 }

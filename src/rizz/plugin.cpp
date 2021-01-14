@@ -329,8 +329,6 @@ bool rizz__plugin_init_plugins()
 
     g_plugin.loaded = true;
     return true;
-
-    return true;
 }
 
 void rizz__plugin_update(float dt)

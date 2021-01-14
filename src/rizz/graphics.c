@@ -2549,6 +2549,9 @@ SX_INLINE uint8_t* rizz__cb_alloc_params_buff(rizz__gfx_cmdbuffer* cb, int size,
         static_assert(sizeof(rizz__gfx_source_loc)%SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT == 0, 
                       "un-aligned rizz__gfx_source_loc size");
         size += sizeof(rizz__gfx_source_loc);
+    #else
+        sx_unused(file);
+        sx_unused(line);
     #endif
 
     if (size == 0) {

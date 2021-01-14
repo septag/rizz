@@ -211,6 +211,7 @@ if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
     message(STATUS "Build version: ${version}")
 endif()
 
+macro(rizz_set_compile_flags_current_dir)
 if (MSVC)
     rizz__remove_compile_options(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" "/EHsc /GR")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /GR-")
@@ -269,6 +270,9 @@ if (CLANG_ENABLE_PROFILER)
         endif()
     endif()
 endif()
+endmacro()
+
+rizz_set_compile_flags_current_dir()
 
 # clang-cl complains about returning structs from c-extern return type, which is valid, but we don't need them now
 if (CLANG_CL)
