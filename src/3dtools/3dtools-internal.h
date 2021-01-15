@@ -17,13 +17,19 @@ void debug3d__draw_sphere(sx_vec3 center, float radius, const sx_mat4* viewproj_
                           rizz_3d_debug_map_type map_type, sx_color tint);
 void debug3d__draw_spheres(const sx_vec3* centers, const float* radiuss, int count, 
                            const sx_mat4* viewproj_mat, rizz_3d_debug_map_type map_type, 
-                           const sx_color* tints);                     
+                           const sx_color* tints);
+void debug3d__draw_cones(const float* radiuss, const float* depths, const sx_tx3d* txs, int count, 
+                         const sx_mat4* viewproj_mat, const sx_color* tints);
+void debug3d__draw_cone(float radius, float depth, const sx_tx3d* tx, const sx_mat4* viewproj_mat, 
+                        sx_color tint);
+
 bool debug3d__generate_box_geometry(const sx_alloc* alloc, rizz_3d_debug_geometry* geo, sx_vec3 extents);
 bool debug3d__generate_sphere_geometry(const sx_alloc* alloc, rizz_3d_debug_geometry* geo,
                                        float radius, int num_segments, int num_rings);
+bool debug3d__generate_cone_geometry(const sx_alloc* alloc, rizz_3d_debug_geometry* geo,
+                                     int num_segments, float radius1, float radius2, float depth);
 void debug3d__free_geometry(rizz_3d_debug_geometry* geo, const sx_alloc* alloc);
-
-void prims3d__grid_xzplane(float spacing, float spacing_bold, const sx_mat4* vp, const sx_vec3 frustum[8]);
+void debug3d__grid_xzplane(float spacing, float spacing_bold, const sx_mat4* vp, const sx_vec3 frustum[8]);
 void debug3d__grid_xyplane(float spacing, float spacing_bold, const sx_mat4* vp, const sx_vec3 frustum[8]);
 void debug3d__grid_xyplane_cam(float spacing, float spacing_bold, float dist, const rizz_camera* cam, 
                                const sx_mat4* viewproj_mat);

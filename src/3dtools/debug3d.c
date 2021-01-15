@@ -52,6 +52,7 @@ typedef struct debug3d__context {
     sg_buffer instance_buff;
     debug3d__shape unit_box;
     debug3d__shape unit_sphere;
+    debug3d__shape unit_cone;
     rizz_texture checker_tex;
     int64_t updated_stats_frame;
     int max_instances;
@@ -210,37 +211,58 @@ bool debug3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
     }
 
     // unit shapes 
-    rizz_3d_debug_geometry unit_box;
-    bool r = debug3d__generate_box_geometry(tmp_alloc, &unit_box, sx_vec3splat(0.5f));
-    sx_unused(r);   sx_assert(r);
-    g_debug3d.unit_box.vb = the_gfx->make_buffer(&(sg_buffer_desc) {
-        .size = unit_box.num_verts * sizeof(rizz_3d_debug_vertex),
-        .type = SG_BUFFERTYPE_VERTEXBUFFER,
-        .content = unit_box.verts
-    });
-    g_debug3d.unit_box.ib = the_gfx->make_buffer(&(sg_buffer_desc) {
-        .size = unit_box.num_indices * sizeof(uint16_t),
-        .type = SG_BUFFERTYPE_INDEXBUFFER,
-        .content = unit_box.indices
-    });
-    g_debug3d.unit_box.num_verts = unit_box.num_verts;
-    g_debug3d.unit_box.num_indices = unit_box.num_indices;
+    {
+        rizz_3d_debug_geometry unit_box;
+        bool r = debug3d__generate_box_geometry(tmp_alloc, &unit_box, sx_vec3splat(0.5f));
+        sx_unused(r);   sx_assert(r);
+        g_debug3d.unit_box.vb = the_gfx->make_buffer(&(sg_buffer_desc) {
+            .size = unit_box.num_verts * sizeof(rizz_3d_debug_vertex),
+            .type = SG_BUFFERTYPE_VERTEXBUFFER,
+            .content = unit_box.verts
+        });
+        g_debug3d.unit_box.ib = the_gfx->make_buffer(&(sg_buffer_desc) {
+            .size = unit_box.num_indices * sizeof(uint16_t),
+            .type = SG_BUFFERTYPE_INDEXBUFFER,
+            .content = unit_box.indices
+        });
+        g_debug3d.unit_box.num_verts = unit_box.num_verts;
+        g_debug3d.unit_box.num_indices = unit_box.num_indices;
+    }
+    
+    {
+        rizz_3d_debug_geometry unit_sphere;
+        bool r = debug3d__generate_sphere_geometry(tmp_alloc, &unit_sphere, 1.0f, 20, 10);
+        sx_unused(r);   sx_assert(r);
+        g_debug3d.unit_sphere.vb = the_gfx->make_buffer(&(sg_buffer_desc) {
+            .size = unit_sphere.num_verts * sizeof(rizz_3d_debug_vertex),
+            .type = SG_BUFFERTYPE_VERTEXBUFFER,
+            .content = unit_sphere.verts
+        });
+        g_debug3d.unit_sphere.ib = the_gfx->make_buffer(&(sg_buffer_desc) {
+            .size = unit_sphere.num_indices * sizeof(uint16_t),
+            .type = SG_BUFFERTYPE_INDEXBUFFER,
+            .content = unit_sphere.indices
+        });
+        g_debug3d.unit_sphere.num_verts = unit_sphere.num_verts;
+        g_debug3d.unit_sphere.num_indices = unit_sphere.num_indices;
+    }
 
-    rizz_3d_debug_geometry unit_sphere;
-    r = debug3d__generate_sphere_geometry(tmp_alloc, &unit_sphere, 1.0f, 20, 10);
-    sx_unused(r);   sx_assert(r);
-    g_debug3d.unit_sphere.vb = the_gfx->make_buffer(&(sg_buffer_desc) {
-        .size = unit_sphere.num_verts * sizeof(rizz_3d_debug_vertex),
-        .type = SG_BUFFERTYPE_VERTEXBUFFER,
-        .content = unit_sphere.verts
-    });
-    g_debug3d.unit_sphere.ib = the_gfx->make_buffer(&(sg_buffer_desc) {
-        .size = unit_sphere.num_indices * sizeof(uint16_t),
-        .type = SG_BUFFERTYPE_INDEXBUFFER,
-        .content = unit_sphere.indices
-    });
-    g_debug3d.unit_sphere.num_verts = unit_sphere.num_verts;
-    g_debug3d.unit_sphere.num_indices = unit_sphere.num_indices;
+    {
+        rizz_3d_debug_geometry unit_cone;
+        bool r = debug3d__generate_cone_geometry(tmp_alloc, &unit_cone, 20, 0, 1.0f, 1.0f);
+        sx_unused(r);
+        sx_assert(r);
+        g_debug3d.unit_cone.vb = the_gfx->make_buffer(
+            &(sg_buffer_desc){ .size = unit_cone.num_verts * sizeof(rizz_3d_debug_vertex),
+                               .type = SG_BUFFERTYPE_VERTEXBUFFER,
+                               .content = unit_cone.verts });
+        g_debug3d.unit_cone.ib = the_gfx->make_buffer(
+            &(sg_buffer_desc){ .size = unit_cone.num_indices * sizeof(uint16_t),
+                               .type = SG_BUFFERTYPE_INDEXBUFFER,
+                               .content = unit_cone.indices });
+        g_debug3d.unit_cone.num_verts = unit_cone.num_verts;
+        g_debug3d.unit_cone.num_indices = unit_cone.num_indices;
+    }
 
     // checker texture 
     sx_color checker_colors[] = {
@@ -275,6 +297,8 @@ static void prims3d__destroy_shape(debug3d__shape* shape)
 void debug3d__release(void)
 {
     prims3d__destroy_shape(&g_debug3d.unit_box);
+    prims3d__destroy_shape(&g_debug3d.unit_sphere);
+    prims3d__destroy_shape(&g_debug3d.unit_cone);
 
     the_gfx->destroy_image(g_debug3d.checker_tex.img);
     the_gfx->destroy_pipeline(g_debug3d.pip_solid);
@@ -414,13 +438,11 @@ void debug3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
         .viewproj_mat = *viewproj_mat
     };
 
-    // clang-format off
     sg_image map = {0};
     switch (map_type) {
     case RIZZ_3D_DEBUG_MAPTYPE_WHITE:        map = the_gfx->texture_white(); break;
     case RIZZ_3D_DEBUG_MAPTYPE_CHECKER:      map = g_debug3d.checker_tex.img; break;
     }
-    // clang-format on
 
     rizz_temp_alloc_begin(tmp_alloc);
 
@@ -494,6 +516,132 @@ void debug3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
     rizz_temp_alloc_end(tmp_alloc);
 }
 
+bool debug3d__generate_cone_geometry(const sx_alloc* alloc, rizz_3d_debug_geometry* geo,
+                                     int num_segments, float radius1, float radius2, float depth)
+{
+    sx_assert(depth > 0);
+
+    num_segments = sx_max(num_segments, 4);
+    if (num_segments % 2 != 0) {
+        ++num_segments; // make it even
+    }
+
+    sx_assertf(radius1 > 0 || radius2 > 0, "at least one radius must be more non-zero");
+    bool pointy_1 = sx_equal(radius1, 0, 0.00001f);
+    bool pointy_2 = sx_equal(radius2, 0, 0.00001f);
+    bool pointy = pointy_1 || pointy_2;
+
+    int const num_verts = pointy ? (num_segments + 1) : num_segments*2;
+    int const num_indices = pointy ? num_segments*3 : num_segments*6;
+    sx_assert(num_verts < UINT16_MAX);
+
+    size_t total_sz = num_verts*sizeof(rizz_3d_debug_vertex) + num_indices*sizeof(uint16_t);
+    uint8_t* buff = sx_malloc(alloc, total_sz);
+    if (!buff) {
+        sx_out_of_memory();
+        return false;
+    }
+
+    geo->verts = (rizz_3d_debug_vertex*)buff;
+    buff += num_verts*sizeof(rizz_3d_debug_vertex);
+    geo->indices = (uint16_t*)buff;
+    geo->num_verts = num_verts;
+    geo->num_indices = num_indices;
+
+    rizz_3d_debug_vertex* verts = geo->verts;
+    uint16_t* indices = geo->indices;
+    float hdepth = depth * 0.5f;
+
+    if (pointy) {
+        float end_z = pointy_1 ? 0 : depth;
+        float cap_z = pointy_1 ? depth : 0;
+        float radius = pointy_1 ? radius2 : radius1;
+        float theta = 0;
+        float delta_theta = SX_PI2 / (float)num_segments;
+
+        verts[0].pos = sx_vec3f(0, 0, end_z);
+        verts[0].uv = sx_vec2f(0, 1.0f);
+        uint16_t vindex = 1;
+
+        for (uint16_t seg = 0; seg < num_segments; seg++) {
+            float x = radius * sx_cos(theta);
+            float y = radius * sx_sin(theta);
+            theta += delta_theta;
+
+            verts[vindex].pos = sx_vec3f(x, y, cap_z);
+            verts[vindex].uv = sx_vec2f(sx_cos(theta) * 0.5f + 0.5f, 0);
+            ++vindex;
+        }
+        sx_assert(vindex == (uint16_t)num_verts);
+
+        {   // indices
+            uint16_t num_faces = (uint16_t)num_indices/3;
+            uint16_t v = 1;
+            for (uint16_t i = 0; i < (uint16_t)num_faces; i++) {
+                uint16_t iindex = i*3;
+                indices[iindex] = 0;
+                indices[iindex + 1] = v;
+                indices[iindex + 2] = (v + 1) < num_verts ? (v + 1) : ((v + 1)%num_verts + 1);
+                v++;
+            }
+
+            if (pointy_1) {
+                for (uint16_t i = 0; i < (uint16_t)num_faces; i++) {
+                    uint16_t iindex = i*3;
+                    sx_swap(indices[iindex], indices[iindex+2], uint16_t);
+                }
+            }
+        }
+    } else {
+        float theta = 0;
+        float delta_theta = SX_PI2 / (float)num_segments;
+        uint16_t vindex = 0;
+        
+        uint16_t v1 = 0;
+        for (uint16_t seg = 0; seg < (uint16_t)num_segments; seg++) {
+            float x = radius1 * sx_cos(theta);
+            float y = radius1 * sx_sin(theta);
+            theta += delta_theta;
+
+            verts[vindex].pos = sx_vec3f(x, y, hdepth);
+            verts[vindex].uv = sx_vec2f(sx_cos(theta) * 0.5f + 0.5f, 0);
+            ++vindex;
+        }
+
+        uint16_t v2 = vindex;
+        uint16_t v2_start = v2;
+        for (uint16_t seg = 0; seg < (uint16_t)num_segments; seg++) {
+            float x = radius2 * sx_cos(theta);
+            float y = radius2 * sx_sin(theta);
+            theta += delta_theta;
+
+            verts[vindex].pos = sx_vec3f(x, y, -hdepth);
+            verts[vindex].uv = sx_vec2f(sx_cos(theta) * 0.5f + 0.5f, 1.0f);
+            ++vindex;
+        }
+
+        // indices
+        uint16_t num_quads = (uint16_t)num_indices / 6;
+        for (uint16_t i = 0; i < num_quads; i++) {
+            uint16_t iindex = i * 6;
+
+            indices[iindex] = v1;
+            indices[iindex + 1] = v2;
+            indices[iindex + 2] = (v2 + 1) < num_verts ? (v2 + 1) : ((v2 + 1)%num_verts);
+
+            indices[iindex + 3] = v1;
+            indices[iindex + 4] = (v2 + 1) < num_verts ? (v2 + 1) : ((v2 + 1)%num_verts);
+            indices[iindex + 5] = (v1 + 1) < v2 ? (v1 + 1) : ((v1 + 1)%v2_start);
+
+            v1++;
+            v2++;
+        }
+    }
+
+    return true;
+}
+
+
 // TODO: normals are not correct, fix them
 bool debug3d__generate_sphere_geometry(const sx_alloc* alloc, rizz_3d_debug_geometry* geo,
                                        float radius, int num_segments, int num_rings)
@@ -549,8 +697,7 @@ bool debug3d__generate_sphere_geometry(const sx_alloc* alloc, rizz_3d_debug_geom
         for (int seg = 0; seg < num_segments; seg++) {
             float x = seg_r*sx_cos(theta);
             float y = seg_r*sx_sin(theta);
-            theta += delta_theta;
-            
+            theta += delta_theta;            
             
             verts[vindex].pos = sx_vec3f(x, y, z);
             verts[vindex].uv = sx_vec2f(sx_cos(theta)*0.5f+0.5f, sx_cos(phi)*0.5f + 0.5f);
@@ -825,7 +972,7 @@ void debug3d__draw_aabbs(const sx_aabb* aabbs, int num_aabbs, const sx_mat4* vie
     rizz_temp_alloc_end(tmp_alloc);
 }
 
-void prims3d__grid_xzplane(float spacing, float spacing_bold, const sx_mat4* vp, const sx_vec3 frustum[8])
+void debug3d__grid_xzplane(float spacing, float spacing_bold, const sx_mat4* vp, const sx_vec3 frustum[8])
 {
     static const sx_color color = { { 170, 170, 170, 255 } };
     static const sx_color bold_color = { { 255, 255, 255, 255 } };
@@ -1144,3 +1291,92 @@ void debug3d__draw_line(const sx_vec3 p0, const sx_vec3 p1, const sx_mat4* viewp
 {
     debug3d__draw_lines(1, &(rizz_3d_debug_line){ .p0 = p0, .p1 = p1}, viewproj_mat, &color);
 }
+
+void debug3d__draw_cones(const float* radiuss, const float* depths, const sx_tx3d* txs, int count, 
+                         const sx_mat4* viewproj_mat, const sx_color* tints)
+{
+    rizz_api_gfx_draw* draw_api = g_debug3d.draw_api;
+
+    debug3d__uniforms uniforms = {
+        .viewproj_mat = *viewproj_mat
+    };
+
+    rizz_temp_alloc_begin(tmp_alloc);
+
+    debug3d__reset_stats();
+    sx_assert_always((g_debug3d.num_instances + count) <= g_debug3d.max_instances);
+    debug3d__instance* instances = sx_malloc(tmp_alloc, sizeof(debug3d__instance)*count);
+    if (!instances) {
+        sx_out_of_memory();
+        return;
+    }
+
+    bool alpha_blend = false;
+
+    for (int i = 0; i < count; i++) {
+        const sx_tx3d* tx = &txs[i];
+        float radius = radiuss[i];
+        float depth = depths[i];
+
+        debug3d__instance* instance = &instances[i];
+        instance->tx1 = sx_vec4f(tx->pos.x, tx->pos.y, tx->pos.z, tx->rot.m11);
+        instance->tx2 = sx_vec4f(tx->rot.m21, tx->rot.m31, tx->rot.m12, tx->rot.m22);
+        instance->tx3 = sx_vec4f(tx->rot.m23, tx->rot.m13, tx->rot.m23, tx->rot.m33);
+        instance->scale = sx_vec3f(radius, radius, depth);
+        if (tints) {
+            instance->color = tints[i];
+            alpha_blend = alpha_blend || tints[i].a < 255;
+        }
+        else {
+            instance->color = SX_COLOR_WHITE;
+        }
+    }
+
+    // in alpha-blend mode (transparent boxes), sort the boxes from back-to-front
+    if (alpha_blend) {
+        debug3d__instance_depth* sort_items = sx_malloc(tmp_alloc, sizeof(debug3d__instance_depth)*count);
+        if (!sort_items) {
+            sx_out_of_memory();
+            return;
+        }
+        for (int i = 0; i < count; i++) {
+            sort_items[i].index = i;
+            sort_items[i].z = sx_mat4_mul_vec3(viewproj_mat, txs[i].pos).z;
+        }
+
+        debug3d__instance_tim_sort(sort_items, count);
+
+        debug3d__instance* sorted = sx_malloc(tmp_alloc, sizeof(debug3d__instance)*count);
+        if (!sorted) {
+            sx_out_of_memory();
+            return;
+        }
+        for (int i = 0; i < count; i++) {
+            sorted[i] = instances[sort_items[i].index];
+        }
+        instances = sorted;
+    }
+
+    int inst_offset = draw_api->append_buffer(g_debug3d.instance_buff, instances,
+                                              sizeof(debug3d__instance) * count);
+    g_debug3d.num_instances += count;
+
+    draw_api->apply_pipeline(!alpha_blend ? g_debug3d.pip_solid : g_debug3d.pip_alphablend);
+    draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, &uniforms, sizeof(uniforms));
+    draw_api->apply_bindings(&(sg_bindings) {
+        .vertex_buffers[0] = g_debug3d.unit_cone.vb,
+        .vertex_buffers[1] = g_debug3d.instance_buff,
+        .vertex_buffer_offsets[1] = inst_offset,
+        .index_buffer = g_debug3d.unit_cone.ib,
+        .fs_images[0] = the_gfx->texture_white()
+    });
+    draw_api->draw(0, g_debug3d.unit_cone.num_indices, count);
+
+    rizz_temp_alloc_end(tmp_alloc);
+}
+
+void debug3d__draw_cone(float radius, float depth, const sx_tx3d* tx, const sx_mat4* viewproj_mat, sx_color tint)
+{
+    debug3d__draw_cones(&radius, &depth, tx, 1, viewproj_mat, &tint);
+}
+
