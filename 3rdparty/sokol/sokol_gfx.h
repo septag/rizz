@@ -15342,7 +15342,7 @@ SOKOL_API_IMPL void sg_begin_pass(sg_pass pass_id, const sg_pass_action* pass_ac
         _sg_resolve_default_pass_action(pass_action, &pa);
         const _sg_image_t* img = _sg_pass_color_image(pass, 0);
         if (!img) {
-            img = _sg_d3d11_pass_ds_image(pass);
+            img = _sg_pass_ds_image(pass);
         }
         SOKOL_ASSERT(img);
         const int w = img->cmn.width;
