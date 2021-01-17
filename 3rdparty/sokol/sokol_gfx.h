@@ -1804,7 +1804,7 @@ typedef struct sg_shader_desc {
         .dst_factor_alpha:      SG_BLENDFACTOR_ZERO
         .op_alpha:              SG_BLENDOP_ADD
         .color_write_mask:      SG_COLORMASK_RGBA
-        .color_attachment_count 1
+        .color_attachment_count 0
         .color_format           SG_PIXELFORMAT_RGBA8
         .depth_format           SG_PIXELFORMAT_DEPTHSTENCIL
         .blend_color:           { 0.0f, 0.0f, 0.0f, 0.0f }
@@ -8712,12 +8712,15 @@ _SOKOL_PRIVATE void _sg_d3d11_destroy_pipeline(_sg_pipeline_t* pip) {
 
 _SOKOL_PRIVATE sg_resource_state _sg_d3d11_create_pass(_sg_pass_t* pass, _sg_image_t** att_images, const sg_pass_desc* desc) {
     SOKOL_ASSERT(pass && desc);
-    SOKOL_ASSERT(att_images && att_images[0]);
+    SOKOL_ASSERT(att_images);
     SOKOL_ASSERT(_sg.d3d11.dev);
 
     _sg_pass_common_init(&pass->cmn, desc);
 
     for (int i = 0; i < pass->cmn.num_color_atts; i++) {
+        if (!att_images[i]) 
+            continue;
+
         const sg_attachment_desc* att_desc = &desc->color_attachments[i];
         _SOKOL_UNUSED(att_desc);
         SOKOL_ASSERT(att_desc->image.id != SG_INVALID_ID);
@@ -13959,6 +13962,7 @@ _SOKOL_PRIVATE bool _sg_validate_shader_desc(const sg_shader_desc* desc) {
                     uniform_blocks_continuous = false;
                 }
             }
+
             bool images_continuous = true;
             for (int img_index = 0; img_index < SG_MAX_SHADERSTAGE_IMAGES; img_index++) {
                 const sg_shader_image_desc* img_desc = &stage_desc->images[img_index];
@@ -14037,7 +14041,7 @@ _SOKOL_PRIVATE bool _sg_validate_pass_desc(const sg_pass_desc* desc) {
         for (int att_index = 0; att_index < SG_MAX_COLOR_ATTACHMENTS; att_index++) {
             const sg_attachment_desc* att = &desc->color_attachments[att_index];
             if (att->image.id == SG_INVALID_ID) {
-                SOKOL_VALIDATE(att_index > 0, _SG_VALIDATE_PASSDESC_NO_COLOR_ATTS);
+                SOKOL_VALIDATE(att_index > 0 || desc->depth_stencil_attachment.image.id, _SG_VALIDATE_PASSDESC_NO_COLOR_ATTS);
                 atts_cont = false;
                 continue;
             }
@@ -14088,9 +14092,11 @@ _SOKOL_PRIVATE bool _sg_validate_pass_desc(const sg_pass_desc* desc) {
                 SOKOL_VALIDATE(att->slice < img->cmn.num_slices, _SG_VALIDATE_PASSDESC_SLICE);
             }
             SOKOL_VALIDATE(img->cmn.render_target, _SG_VALIDATE_PASSDESC_IMAGE_NO_RT);
-            SOKOL_VALIDATE(width == img->cmn.width >> att->mip_level, _SG_VALIDATE_PASSDESC_IMAGE_SIZES);
-            SOKOL_VALIDATE(height == img->cmn.height >> att->mip_level, _SG_VALIDATE_PASSDESC_IMAGE_SIZES);
-            SOKOL_VALIDATE(sample_count == img->cmn.sample_count, _SG_VALIDATE_PASSDESC_IMAGE_SAMPLE_COUNTS);
+            if (color_fmt != SG_PIXELFORMAT_NONE) {
+                SOKOL_VALIDATE(width == img->cmn.width >> att->mip_level, _SG_VALIDATE_PASSDESC_IMAGE_SIZES);
+                SOKOL_VALIDATE(height == img->cmn.height >> att->mip_level, _SG_VALIDATE_PASSDESC_IMAGE_SIZES);
+                SOKOL_VALIDATE(sample_count == img->cmn.sample_count, _SG_VALIDATE_PASSDESC_IMAGE_SAMPLE_COUNTS);
+            }
             SOKOL_VALIDATE(_sg_is_valid_rendertarget_depth_format(img->cmn.pixel_format), _SG_VALIDATE_PASSDESC_DEPTH_INV_PIXELFORMAT);
         }
         return SOKOL_VALIDATE_END();
@@ -14473,6 +14479,10 @@ _SOKOL_PRIVATE sg_pipeline_desc _sg_pipeline_desc_defaults(const sg_pipeline_des
     def.blend.color_attachment_count = _sg_def(def.blend.color_attachment_count, 1);
     for (int i = 0; i < def.blend.color_attachment_count; i++) {
         def.blend.color_formats[i] = _sg_def(def.blend.color_formats[i], _sg.desc.context.color_format);
+    }
+
+    if (def.blend.color_attachment_count == 1 && def.blend.color_formats[0] == SG_PIXELFORMAT_NONE) {
+        def.blend.color_attachment_count = 0;
     }
     def.blend.depth_format = _sg_def(def.blend.depth_format, _sg.desc.context.depth_format);
 
@@ -15331,6 +15341,9 @@ SOKOL_API_IMPL void sg_begin_pass(sg_pass pass_id, const sg_pass_action* pass_ac
         sg_pass_action pa;
         _sg_resolve_default_pass_action(pass_action, &pa);
         const _sg_image_t* img = _sg_pass_color_image(pass, 0);
+        if (!img) {
+            img = _sg_d3d11_pass_ds_image(pass);
+        }
         SOKOL_ASSERT(img);
         const int w = img->cmn.width;
         const int h = img->cmn.height;

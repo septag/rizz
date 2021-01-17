@@ -759,6 +759,9 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
         else if (sx_strequal(params->metas[i].key, "aniso")) {
             desc->max_anisotropy = sx_toint(params->metas[i].value);
         }
+        else if (sx_strequal(params->metas[i].key, "srgb")) {
+            desc->srgb = sx_tobool(params->metas[i].value);
+        }
     }
 
     char ext[32];
@@ -2994,6 +2997,7 @@ static void rizz__cb_apply_pipeline_d(sg_pipeline pip, const char* file, uint32_
     *((sg_pipeline*)buff) = pip;
 
     _sg_pipeline_t* _pip = _sg_lookup_pipeline(&_sg.pools, pip.id);
+    sx_assert(_pip);
     _pip->cmn.used_frame = _pip->shader->cmn.used_frame = the__core.frame_index();
 }
 
