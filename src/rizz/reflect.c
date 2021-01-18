@@ -712,12 +712,15 @@ typedef struct refl__write_json_context {
     int _array_count;
 } refl__write_json_context;
 
+
+#define JSON_STACK_COUNT 32
 typedef struct refl__read_json_context {
     rizz_refl_context* rctx;
     rizz_json* json;
     int cur_token;
-    int last_token;
     int struct_array_parent;
+    int token_stack[JSON_STACK_COUNT];
+    int token_stack_idx;
 } refl__read_json_context;
 
 SX_INLINE void refl__writef(sx_mem_writer* writer, const char* fmt, ...)
@@ -1043,7 +1046,7 @@ static void refl__serialize_json_struct_end(void* user, const void* meta, bool l
 }
 
 static void refl__serialize_json_enum(const char* name, int value, const char* value_name, void* user,
-                                   const void* meta, bool last_in_parent)
+                                      const void* meta, bool last_in_parent)
 {
     sx_unused(value);
     sx_unused(meta);
@@ -1205,7 +1208,10 @@ static void refl__deserialize_json_struct_begin(const char* name, const char* ty
 
     refl__read_json_context* jctx = user;
     cj5_result* r = &jctx->json->result;
-    jctx->last_token = jctx->cur_token;
+
+    sx_assert_alwaysf(jctx->token_stack_idx < JSON_STACK_COUNT, 
+                      "Maximum stack for json serilize context reached");
+    jctx->token_stack[jctx->token_stack_idx++] = jctx->cur_token;
     jctx->cur_token = cj5_seek(r, jctx->cur_token, name);
     if (count > 1) {
         jctx->struct_array_parent = jctx->cur_token;
@@ -1230,12 +1236,14 @@ static void refl__deserialize_json_struct_end(void* user, const void* meta, bool
     refl__read_json_context* jctx = user;
     sx_assert(jctx->cur_token != -1);
     
-    jctx->cur_token = jctx->last_token;
+    sx_assert_alwaysf(jctx->token_stack_idx > 0, "Token stack overflow: Possible invalid json");
+
+    jctx->cur_token = jctx->token_stack[--jctx->token_stack_idx];
     jctx->struct_array_parent = -1;
-    jctx->last_token = -1;
 }
 
-static void refl__deserialize_json_enum(const char* name, int* out_value, void* user, const void* meta, bool last_in_parent)
+static void refl__deserialize_json_enum(const char* name, int* out_value, void* user, const void* meta, 
+                                        bool last_in_parent)
 {
     sx_unused(meta);
     sx_unused(last_in_parent);
@@ -1245,7 +1253,6 @@ static void refl__deserialize_json_enum(const char* name, int* out_value, void* 
     char str[64];
     *out_value = refl__get_enum(jctx->rctx, cj5_seekget_string(r, jctx->cur_token, name, str, sizeof(str), ""), 0);
 }
-
 
 static bool rizz__refl_deserialize_json(rizz_refl_context* ctx, const char* type_name, void* data, 
                                         rizz_json* json, int root_token_id)

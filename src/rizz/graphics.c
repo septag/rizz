@@ -4023,10 +4023,10 @@ rizz_api_gfx the__gfx = {
     .query_pipeline_info        = sg_query_pipeline_info,
     .query_pass_info            = sg_query_pass_info,
     .query_features             = sg_query_features,
+    .query_shader_defaults      = sg_query_shader_defaults,
     .query_limits               = sg_query_limits,
     .query_pixelformat          = sg_query_pixelformat,
     .internal_state             = rizz__internal_state,
-
     .stage_register             = rizz__stage_register,
     .stage_enable               = rizz__stage_enable,
     .stage_disable              = rizz__stage_disable,

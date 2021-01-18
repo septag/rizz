@@ -238,6 +238,7 @@ typedef struct sg_features {
     bool imagetype_array;           /* creation of SG_IMAGETYPE_ARRAY images is supported */
     bool image_clamp_to_border;     /* border color and clamp-to-border UV-wrap mode is supported */
     bool compute_shaders;           /* compute-shaders supported */
+    bool image_srgb;                /* supports certain SRGB texture views */
     #if defined(SOKOL_ZIG_BINDINGS)
     uint32_t __pad[2];
     #endif
