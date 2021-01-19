@@ -1,8 +1,13 @@
 language: sh
-os:
-  - linux
-  - osx
-  - windows
+
+matrix:
+  include:
+    - os:linux
+
+    - os:windows
+
+    - os: osx
+      osx_image:xcode10.14
 
 addons:
   apt:
@@ -26,6 +31,7 @@ script:
   - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then PATH=$PATH:/c/Program\ Files/CMake/bin; fi
   - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then cmake .. -G "Visual Studio 15 2017 Win64"; fi
   - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then cmake --build . --config Release --target ALL_BUILD -- -verbosity:m; fi
+  - if [[ "$TRAVIS_OS_NAME" != "linux" ]]; then cmake .. -DCMAKE_BUILD_TYPE=Release; fi
 
 branches:
   only:
