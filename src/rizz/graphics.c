@@ -402,9 +402,9 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
     MTLRenderPipelineDescriptor* rp_desc = [[MTLRenderPipelineDescriptor alloc] init];
     rp_desc.vertexDescriptor = vtx_desc;
     SOKOL_ASSERT(shd->mtl.stage[SG_SHADERSTAGE_VS].mtl_func != _SG_MTL_INVALID_SLOT_INDEX);
-    rp_desc.vertexFunction = _sg_mtl_idpool[shd->mtl.stage[SG_SHADERSTAGE_VS].mtl_func];
+    rp_desc.vertexFunction = _sg_mtl_id(shd->mtl.stage[SG_SHADERSTAGE_VS].mtl_func);
     SOKOL_ASSERT(shd->mtl.stage[SG_SHADERSTAGE_FS].mtl_func != _SG_MTL_INVALID_SLOT_INDEX);
-    rp_desc.fragmentFunction = _sg_mtl_idpool[shd->mtl.stage[SG_SHADERSTAGE_FS].mtl_func];
+    rp_desc.fragmentFunction = _sg_mtl_id(shd->mtl.stage[SG_SHADERSTAGE_FS].mtl_func);
     rp_desc.sampleCount = desc->rasterizer.sample_count;
     rp_desc.alphaToCoverageEnabled = desc->rasterizer.alpha_to_coverage_enabled;
     rp_desc.alphaToOneEnabled = NO;
@@ -427,7 +427,8 @@ _SOKOL_PRIVATE void _sg_set_pipeline_shader(_sg_pipeline_t* pip, sg_shader shade
         rp_desc.colorAttachments[i].sourceRGBBlendFactor = _sg_mtl_blend_factor(desc->blend.src_factor_rgb);
     }
     NSError* err = NULL;
-    id<MTLRenderPipelineState> mtl_rps = [_sg_mtl_device newRenderPipelineStateWithDescriptor:rp_desc error:&err];
+    id<MTLRenderPipelineState> mtl_rps = [_sg.mtl.device newRenderPipelineStateWithDescriptor:rp_desc error:&err];
+    _SG_OBJC_RELEASE(rp_desc);
     if (nil == mtl_rps) {
         SOKOL_ASSERT(err);
         SOKOL_LOG([err.localizedDescription UTF8String]);
