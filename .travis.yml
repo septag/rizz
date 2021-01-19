@@ -1,14 +1,13 @@
 language: sh
 
-matrix:
-  include:
-    - os:linux
+os:
+    - linux
+    - windows
+    - osx
 
-    - os:windows
-
-    - os: osx
-      osx_image:xcode11.2.1
-
+osx_image:
+    - xcode11.2
+    
 addons:
   apt:
     packages:
