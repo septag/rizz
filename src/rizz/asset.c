@@ -944,7 +944,10 @@ static rizz_asset rizz__asset_load_from_mem(const char* name, const char* path_a
 
 static void rizz__asset_unload(rizz_asset asset)
 {
-    sx_assert(asset.id);
+    if (asset.id == 0) {
+        return;
+    }
+
     sx_assert_always(sx_handle_valid(g_asset.asset_handles, asset.id));
     sx_assertf(the__core.job_thread_index() == 0, "must call this function in the main thread");
 
