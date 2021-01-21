@@ -264,6 +264,10 @@ typedef struct rizz_api_3d
 
         bool (*load)(rizz_shader_lib* lib, const char* sgs_filepath, const sx_alloc* alloc, 
                      uint32_t stage, uint32_t permutations, const void* user);
-        rizz_asset (*get)(const rizz_shader_lib* lib, uint32_t stage, uint32_t permutations, const void** puser);
+        bool (*load_with_pipeline)(rizz_shader_lib* lib, const char* sgs_filepath, 
+                                   sg_pipeline_desc* pip_desc, const rizz_vertex_layout* vlayout,
+                                   const sx_alloc* alloc, uint32_t stage, uint32_t permutations, const void* user);
+        sg_pipeline (*get_pipeline)(const rizz_shader_lib* lib, uint32_t stage, uint32_t permutations, const void** puser);
+        rizz_asset (*get_shader)(const rizz_shader_lib* lib, uint32_t stage, uint32_t permutations, const void** puser);
     } shader;
 } rizz_api_3d;

@@ -3558,10 +3558,9 @@ static void rizz__gfx_validate_stage_deps()
         if (_stage->state == STAGE_STATE_DONE && _stage->parent.id) {
             rizz__gfx_stage* _parent = &g_gfx.stages[rizz_to_index(_stage->parent.id)];
             if (_parent->state != STAGE_STATE_DONE) {
-                rizz__log_error(
+                sx_assertf(0,
                     "trying to execute stage '%s' that depends on '%s', but '%s' is not rendered",
                     _stage->name, _parent->name, _parent->name);
-                sx_assert(0);
             }
         }
     }
@@ -3682,11 +3681,6 @@ static rizz_gfx_stage rizz__stage_register(const char* name, rizz_gfx_stage pare
 
     rizz_gfx_stage stage = { .id = rizz_to_id(sx_array_count(g_gfx.stages)) };
 
-    // add to dependency graph
-    if (parent_stage.id) {
-        rizz__stage_add_child(parent_stage, stage);
-    }
-
     // dependency order
     // higher 6 bits: depth
     // lower 10 bits: Id
@@ -3702,6 +3696,11 @@ static rizz_gfx_stage rizz__stage_register(const char* name, rizz_gfx_stage pare
     _stage.order = ((depth << STAGE_ORDER_DEPTH_BITS) & STAGE_ORDER_DEPTH_MASK) |
                    (uint16_t)(rizz_to_index(stage.id) & STAGE_ORDER_ID_MASK);
     sx_array_push(g_gfx_alloc, g_gfx.stages, _stage);
+
+    // add to dependency graph
+    if (parent_stage.id) {
+        rizz__stage_add_child(parent_stage, stage);
+    }
 
     return stage;
 }
