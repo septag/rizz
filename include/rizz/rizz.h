@@ -14,6 +14,11 @@
 #include "sx/platform.h"
 #include "sx/timer.h"
 
+#define RIZZ_INCLUDE_SG_TYPES
+#   include "sg-types.h"
+#undef RIZZ_INCLUDE_SG_TYPES
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @types
 #ifdef __cplusplus
@@ -557,6 +562,11 @@ typedef struct rizz_config {
     int window_height;
     int multisample_count;
     int swap_interval;
+    int texture_first_mip;          
+    sg_filter texture_filter_min;   // default = SG_FILTER_LINEAR_MIP_LINEAR
+    sg_filter texture_filter_mag;   // default = SG_FILTER_LINEAR
+    int texture_aniso;              
+
     const char* html5_canvas_name;
     rizz_app_event_cb* event_cb;
 
@@ -817,11 +827,7 @@ typedef struct rizz_api_core {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @graphics
 // _sg-types.h is copy/pasted from sokol_gfx.h, all the types are equal between these two files
-#define RIZZ_INCLUDE_SG_TYPES
-#include "sg-types.h"
-#undef RIZZ_INCLUDE_SG_TYPES
 
-// clang-format off
 #define _rizz_concat_path_3(s1, s2, s3) sx_stringize(s1/s2/s3)
 #define _rizz_shader_path_lang(_basepath, _lang, _filename) \
     _rizz_concat_path_3(_basepath, _lang, _filename)
@@ -1261,6 +1267,8 @@ typedef struct rizz_api_gfx {
     sg_image (*texture_checker)();
     rizz_texture (*texture_create_checker)(int checker_size, int size, const sx_color colors[2]);
     const rizz_texture* (*texture_get)(rizz_asset texture_asset);
+    void (*texture_set_default_quality)(sg_filter min_filter, sg_filter mag_filter, int aniso, int first_mip);
+    void (*texture_default_quality)(sg_filter* min_filter, sg_filter* mag_filter, int* aniso, int* first_mip);
 
     // info
     const rizz_gfx_trace_info* (*trace_info)();

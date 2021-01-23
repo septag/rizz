@@ -159,6 +159,10 @@ typedef struct rizz__gfx_texture_mgr {
     rizz_texture white_tex;
     rizz_texture black_tex;
     rizz_texture checker_tex;
+    sg_filter    default_min_filter;
+    sg_filter    default_mag_filter;
+    int          default_aniso;
+    int          default_first_mip;
 } rizz__gfx_texture_mgr;
 
 typedef enum rizz__gfx_command {
@@ -286,6 +290,7 @@ typedef struct rizz__gfx {
 
     rizz__trace_gfx trace;
     rizz__gfx_source_loc cur_source_loc;
+
     bool enable_profile;
     bool record_make_commands;
 } rizz__gfx;
@@ -714,20 +719,38 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
     rizz_texture* tex = data->obj.ptr;
     sg_image_desc* desc = data->user1;
 
+    int first_mip = tparams->first_mip ? tparams->first_mip : g_gfx.tex_mgr.default_first_mip;
+    if (first_mip >= tex->info.mips) {
+        first_mip = tex->info.mips - 1;
+    }
+    int num_mips = tex->info.mips - first_mip;
+
+    {   // fix width/height/mips of the texture
+        int w = tex->info.width;
+        int h = tex->info.height;
+        for (int i = 0; i < first_mip; i++) {
+            w >>= 1;
+            h >>= 1;
+        }
+        tex->info.mips = num_mips;
+        tex->info.width = w;
+        tex->info.height = h;
+    }
+
     sx_assert(desc);
     *desc = (sg_image_desc) {
         .type = tex->info.type,
         .width = tex->info.width,
         .height = tex->info.height,
         .num_slices = tex->info.layers,
-        .num_mipmaps = sx_max(1, tex->info.mips - tparams->first_mip),
+        .num_mipmaps = num_mips, 
         .pixel_format = tex->info.format,
-        .min_filter = tparams->min_filter,
-        .mag_filter = tparams->mag_filter,
+        .min_filter = tparams->min_filter != 0 ? tparams->min_filter : g_gfx.tex_mgr.default_min_filter,
+        .mag_filter = tparams->mag_filter != 0 ? tparams->mag_filter : g_gfx.tex_mgr.default_mag_filter,
         .wrap_u = tparams->wrap_u,
         .wrap_v = tparams->wrap_v,
         .wrap_w = tparams->wrap_w,
-        .max_anisotropy = (uint32_t)tparams->aniso,
+        .max_anisotropy = tparams->aniso ? (uint32_t)tparams->aniso : (uint32_t)g_gfx.tex_mgr.default_aniso,
         .srgb = tparams->srgb
     };
 
@@ -780,7 +803,6 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
                 (basisut_transcode_data*)(transcoder_obj_buffer + basisut_transcoder_bytesize());
             uint8_t* transcode_buff = (uint8_t*)(transcode_data + 1);
 
-            int num_mips = tex->info.mips;
             int num_images = tex->info.type == SG_IMAGETYPE_2D ? 1 : tex->info.layers;
             int bytes_per_block =
                 basisut_format_is_uncompressed(transcode_data->fmt)
@@ -788,8 +810,8 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
                     : (int)basisut_get_bytes_per_block(transcode_data->fmt);
 
             for (int i = 0; i < num_images; i++) {
-                for (int mip = tparams->first_mip; mip < num_mips; mip++) {
-                    int dst_mip = mip - tparams->first_mip;
+                for (int mip = first_mip; mip < num_mips; mip++) {
+                    int dst_mip = mip - first_mip;
                     int mip_size = transcode_data->mip_size[dst_mip];
                     bool r = basisut_transcode_image_level(
                         trans, mem->data, (uint32_t)mem->size, 0, mip, transcode_buff,
@@ -813,8 +835,8 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
 
             switch (tex->info.type) {
             case SG_IMAGETYPE_2D: {
-                for (int mip = tparams->first_mip; mip < tc.num_mips; mip++) {
-                    int dst_mip = mip - tparams->first_mip;
+                for (int mip = first_mip; mip < tc.num_mips; mip++) {
+                    int dst_mip = mip - first_mip;
                     ddsktx_sub_data sub_data;
                     ddsktx_get_sub(&tc, &sub_data, mem->data, (int)mem->size, 0, 0, mip);
                     desc->content.subimage[0][dst_mip].ptr = sub_data.buff;
@@ -823,8 +845,8 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
             } break;
             case SG_IMAGETYPE_CUBE: {
                 for (int face = 0; face < DDSKTX_CUBE_FACE_COUNT; face++) {
-                    for (int mip = tparams->first_mip; mip < tc.num_mips; mip++) {
-                        int dst_mip = mip - tparams->first_mip;
+                    for (int mip = first_mip; mip < tc.num_mips; mip++) {
+                        int dst_mip = mip - first_mip;
                         ddsktx_sub_data sub_data;
                         ddsktx_get_sub(&tc, &sub_data, mem->data, (int)mem->size, 0, face, mip);
                         desc->content.subimage[face][dst_mip].ptr = sub_data.buff;
@@ -834,8 +856,8 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
             } break;
             case SG_IMAGETYPE_3D: {
                 for (int depth = 0; depth < tc.depth; depth++) {
-                    for (int mip = tparams->first_mip; mip < tc.num_mips; mip++) {
-                        int dst_mip = mip - tparams->first_mip;
+                    for (int mip = first_mip; mip < tc.num_mips; mip++) {
+                        int dst_mip = mip - first_mip;
                         ddsktx_sub_data sub_data;
                         ddsktx_get_sub(&tc, &sub_data, mem->data, (int)mem->size, 0, depth, mip);
                         desc->content.subimage[depth][dst_mip].ptr = sub_data.buff;
@@ -845,8 +867,8 @@ static bool rizz__texture_on_load(rizz_asset_load_data* data, const rizz_asset_l
             } break;
             case SG_IMAGETYPE_ARRAY: {
                 for (int array = 0; array < tc.num_layers; array++) {
-                    for (int mip = tparams->first_mip; mip < tc.num_mips; mip++) {
-                        int dst_mip = mip - tparams->first_mip;
+                    for (int mip = first_mip; mip < tc.num_mips; mip++) {
+                        int dst_mip = mip - first_mip;
                         ddsktx_sub_data sub_data;
                         ddsktx_get_sub(&tc, &sub_data, mem->data, (int)mem->size, array, 0, mip);
                         desc->content.subimage[array][dst_mip].ptr = sub_data.buff;
@@ -1078,6 +1100,26 @@ static const rizz_texture* rizz__texture_get(rizz_asset texture_asset)
     sx_assert_always(sx_strequal(the__asset.type_name(texture_asset), "texture") && "asset handle is not a texture");
 #endif
     return (const rizz_texture*)the__asset.obj(texture_asset).ptr;
+}
+
+static void rizz__texture_set_default_quality(sg_filter min_filter, sg_filter mag_filter, int aniso, int first_mip)
+{
+    g_gfx.tex_mgr.default_min_filter = min_filter;
+    g_gfx.tex_mgr.default_mag_filter = mag_filter;
+    g_gfx.tex_mgr.default_aniso = aniso;
+    g_gfx.tex_mgr.default_first_mip = first_mip;
+}
+
+static void rizz__texture_default_quality(sg_filter* min_filter, sg_filter* mag_filter, int* aniso, int* first_mip)
+{
+    if (min_filter)
+        *min_filter = g_gfx.tex_mgr.default_min_filter;
+    if (mag_filter) 
+        *mag_filter = g_gfx.tex_mgr.default_mag_filter;
+    if (aniso)
+        *aniso = g_gfx.tex_mgr.default_aniso;
+    if (first_mip)
+        *first_mip = g_gfx.tex_mgr.default_first_mip;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2126,14 +2168,14 @@ static void rizz__trace_make_image(const sg_image_desc* desc, sg_image result, v
         sx_mem_write(&g_gfx.trace.make_cmds_writer, desc, sizeof(sg_image_desc));
     }
 
-    int bytesize = _sg_is_valid_rendertarget_depth_format(desc->pixel_format)
-                        ? 4
-                        : _sg_pixelformat_bytesize(desc->pixel_format);
+    int bytesize = _sg_is_valid_rendertarget_depth_format(desc->pixel_format) ? 4 :
+        _sg_pixelformat_bytesize(desc->pixel_format);
     int pixels = desc->width * desc->height * desc->num_slices;
     int64_t size = (int64_t)pixels * bytesize;
 
-    if (desc->render_target && _sg_is_valid_rendertarget_color_format(desc->pixel_format) &&
-        _sg_is_valid_rendertarget_depth_format(desc->pixel_format)) {
+    if (desc->render_target && 
+        (_sg_is_valid_rendertarget_color_format(desc->pixel_format) || _sg_is_valid_rendertarget_depth_format(desc->pixel_format))) 
+    {
         sx_assert(desc->num_mipmaps == 1);
 
         g_gfx.trace.t.render_target_size += size;
@@ -2466,6 +2508,14 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
         }
     #endif
 
+    {   // config
+        const rizz_config* conf = the__app.config();
+        g_gfx.tex_mgr.default_min_filter = conf->texture_filter_min;
+        g_gfx.tex_mgr.default_mag_filter = conf->texture_filter_mag;
+        g_gfx.tex_mgr.default_aniso = conf->texture_aniso;
+        g_gfx.tex_mgr.default_first_mip = conf->texture_first_mip;
+    }
+
     return true;
 }
 
@@ -2526,6 +2576,7 @@ void rizz__gfx_update()
 void rizz__gfx_commit_gpu()
 {
     sg_commit();
+    g_gfx.cur_source_loc = (rizz__gfx_source_loc){ 0 };
 }
 
 static rizz_gfx_backend rizz__gfx_backend(void)
@@ -4044,6 +4095,8 @@ rizz_api_gfx the__gfx = {
     .texture_checker            = rizz__texture_checker,
     .texture_create_checker     = rizz__texture_create_checker,
     .texture_get                = rizz__texture_get,
-    .trace_info                 = rizz__trace_info
+    .texture_set_default_quality= rizz__texture_set_default_quality,
+    .texture_default_quality    = rizz__texture_default_quality,
+    .trace_info                 = rizz__trace_info,
 };
 // clang-format on

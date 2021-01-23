@@ -260,6 +260,26 @@ static rizz_log_level rizz__app_convert_log_level(const char* value)
     }
 }
 
+static sg_filter rizz__app_convert_sg_filter(const char* value)
+{
+    if (sx_strequalnocase(value, "NEAREST"))    {
+        return SG_FILTER_NEAREST;
+    } else if (sx_strequalnocase(value, "LINEAR")) {
+        return SG_FILTER_LINEAR;
+    } else if (sx_strequalnocase(value, "NEAREST_MIPMAP_NEAREST")) {
+        return SG_FILTER_NEAREST_MIPMAP_NEAREST;
+    } else if (sx_strequalnocase(value, "NEAREST_MIPMAP_LINEAR")) {
+        return SG_FILTER_NEAREST_MIPMAP_LINEAR;
+    } else if (sx_strequalnocase(value, "LINEAR_MIPMAP_NEAREST")) {
+        return SG_FILTER_LINEAR_MIPMAP_NEAREST;
+    } else if (sx_strequalnocase(value, "LINEAR_MIPMAP_LINEAR")) {
+        return SG_FILTER_LINEAR_MIPMAP_LINEAR;
+    } else {
+        return 0;
+    }
+
+}
+
 static void rizz__app_load_ini(const char* filename, rizz_config* conf)
 {
     sx_unused(filename);
@@ -311,6 +331,18 @@ static void rizz__app_load_ini(const char* filename, rizz_config* conf)
                 id = sx_ini_find_property(ini, rizz_id, "swap_interval", 0);
                 if (id != -1)
                     conf->swap_interval = sx_toint(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "texture_first_mip", 0);
+                if (id != -1) 
+                    conf->texture_first_mip = sx_toint(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "texture_aniso", 0);
+                if (id != -1) 
+                    conf->texture_aniso = sx_toint(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "texture_filter_min", 0);
+                if (id != -1) 
+                    conf->texture_filter_min = rizz__app_convert_sg_filter(sx_ini_property_value(ini, rizz_id, id));
+                id = sx_ini_find_property(ini, rizz_id, "texture_filter_mag", 0);
+                if (id != -1) 
+                    conf->texture_filter_mag = rizz__app_convert_sg_filter(sx_ini_property_value(ini, rizz_id, id));
                 id = sx_ini_find_property(ini, rizz_id, "job_num_threads", 0);
                 if (id != -1) 
                     conf->job_num_threads = sx_toint(sx_ini_property_value(ini, rizz_id, id));
@@ -650,6 +682,7 @@ sapp_desc sokol_main(int argc, char* argv[])
         { "cwd", 'c', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'c', "Change current directory after initialization", 0x0 },
         { "dump-unused-assets", 'U', SX_CMDLINE_OPTYPE_FLAG_SET, &dump_unused_assets, 1, "Dump unused assets into `unused-assets.json`", 0x0 },
         { "crash-dump", 'd', SX_CMDLINE_OPTYPE_FLAG_SET, &crash_dump, 1, "Create crash dump file on program exceptions", 0x0 },
+        { "first-mip", 'M', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'M', "Set the first mip of textures. Higher values lower texture sizes (default=0)", 0x0 },
         { "help", 'h', SX_CMDLINE_OPTYPE_FLAG_SET, &show_help, 1, "Show this help message", 0x0 },
         SX_CMDLINE_OPT_END
     };
@@ -660,6 +693,7 @@ sapp_desc sokol_main(int argc, char* argv[])
     const char* game_filepath = NULL;
     const char* cwd = NULL;
     char errmsg[512];
+    int first_mip = 0;
 
     while ((opt = sx_cmdline_next(cmdline, NULL, &arg)) != -1) {
         switch (opt) {
@@ -677,6 +711,9 @@ sapp_desc sokol_main(int argc, char* argv[])
             break;
         case 'c':
             cwd = arg;
+            break;
+        case 'M':
+            first_mip = sx_toint(arg);
             break;
         default:
             break;
@@ -740,6 +777,9 @@ sapp_desc sokol_main(int argc, char* argv[])
                          .window_height = 600,
                          .multisample_count = 1,
                          .swap_interval = 1,
+                         .texture_filter_min = SG_FILTER_LINEAR_MIPMAP_LINEAR,
+                         .texture_filter_mag = SG_FILTER_LINEAR,
+                         .texture_first_mip = first_mip,
                          .job_num_threads = -1,    // defaults to num_cores-1
                          .job_max_fibers = 64,
                          .job_stack_size = 1024,
