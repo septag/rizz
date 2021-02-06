@@ -84,7 +84,7 @@ SX_INLINE sg_wrap model__gltf_get_wrap(model__gltf_wrap wrap)
     }
 }
 
-static rizz_asset model__load_texture_from_gltf(cgltf_texture* gltf_tex, const char* filedir)
+static rizz_asset model__load_texture_from_gltf(cgltf_texture* gltf_tex, const char* filedir, bool srgb)
 {
     sx_assert(gltf_tex);
     char texture_path[RIZZ_MAX_PATH];
@@ -99,7 +99,7 @@ static rizz_asset model__load_texture_from_gltf(cgltf_texture* gltf_tex, const c
     }
 
 
-    rizz_texture_load_params tparams = { 0 };
+    rizz_texture_load_params tparams = { .srgb = srgb };
     if (gltf_tex->sampler) {
          tparams.min_filter = model__gltf_get_filter(gltf_tex->sampler->min_filter);
          tparams.mag_filter = model__gltf_get_filter(gltf_tex->sampler->mag_filter);
@@ -159,12 +159,17 @@ static rizz_material model__create_material_from_gltf(cgltf_material* gltf_mtl, 
     if (gltf_mtl->has_pbr_metallic_roughness) {
         cgltf_texture* tex = gltf_mtl->pbr_metallic_roughness.base_color_texture.texture;
         if (tex) {
-            mtl.pbr_metallic_roughness.base_color_tex.tex_asset =  model__load_texture_from_gltf(tex, filedir);
+            mtl.pbr_metallic_roughness.base_color_tex.tex_asset =  model__load_texture_from_gltf(tex, filedir, true);
+        }
+
+        tex = gltf_mtl->pbr_metallic_roughness.metallic_roughness_texture.texture;
+        if (tex) {
+            mtl.pbr_metallic_roughness.metallic_roughness_tex.tex_asset = model__load_texture_from_gltf(tex, filedir, false);
         }
 
         tex = gltf_mtl->normal_texture.texture;
         if (tex) {
-            mtl.normal_tex.tex_asset = model__load_texture_from_gltf(tex, filedir);
+            mtl.normal_tex.tex_asset = model__load_texture_from_gltf(tex, filedir, false);
         }
     }
 
@@ -227,7 +232,7 @@ static int model__get_stride(sg_vertex_format fmt)
     }
 }
 
-static void model__map_attributes_to_buffer(rizz_model_mesh* mesh, 
+static bool model__map_attributes_to_buffer(rizz_model_mesh* mesh, 
                                             const rizz_model_geometry_layout* vertex_layout, 
                                             cgltf_attribute* srcatt, int start_vertex)
 {
@@ -253,10 +258,140 @@ static void model__map_attributes_to_buffer(rizz_model_mesh* mesh,
                           stride);
             }
 
-            break;
+            return true;
         }
         ++attr;
     }
+
+    return false;
+}
+
+static bool model__layout_has_tangents(const rizz_model_geometry_layout* vertex_layout)
+{
+    const rizz_vertex_attr* attr = &vertex_layout->attrs[0];
+    while (attr->semantic) {
+        if (sx_strequal(attr->semantic, "TANGENT")) {
+            return true;
+        }
+        ++attr;
+    }
+    return false;
+}
+
+static bool model__gltf_has_tangents(const cgltf_primitive* prim)
+{
+    for (int i = 0; i < prim->attributes_count; i++) {
+        if (prim->attributes[i].type == cgltf_attribute_type_tangent) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static uint8_t* model__layout_get_attr(rizz_model_mesh* mesh, const rizz_model_geometry_layout* vertex_layout, 
+                                       const char* semantic, int semantic_idx, int* pvertex_stride)
+{
+    const rizz_vertex_attr* attr = &vertex_layout->attrs[0];
+    
+    while (attr->semantic) {
+        if (sx_strequal(attr->semantic, semantic) && attr->semantic_idx == semantic_idx) {
+            *pvertex_stride = vertex_layout->buffer_strides[attr->buffer_index];
+            uint8_t* dst_buff = (uint8_t*)mesh->cpu.vbuffs[attr->buffer_index];
+            return dst_buff + attr->offset;
+        }
+        ++attr;
+    }
+
+    return NULL;
+}
+
+static void model__calculate_tangents(rizz_model_mesh* mesh, const rizz_model_geometry_layout* vertex_layout)
+{
+    sg_index_type index_type = mesh->index_type;
+    void* ibuff = mesh->cpu.ibuff;
+
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_vec3* tan1 = sx_calloc(tmp_alloc, sizeof(sx_vec3)*2*mesh->num_vertices);
+    if (!tan1) {
+        sx_out_of_memory();
+        return;
+    }
+    sx_vec3* tan2 = tan1 + mesh->num_vertices;
+
+    for (int i = 0, num_indices = mesh->num_indices; i < num_indices; i+=3) {
+        uint32_t i1, i2, i3;
+        if (index_type == SG_INDEXTYPE_UINT16) {
+            uint16_t* indices = (uint16_t*)ibuff;
+            i1 = indices[i];
+            i2 = indices[i+1];
+            i3 = indices[i+2];
+        } else {
+            uint32_t* indices = (uint32_t*)ibuff;
+            i1 = indices[i];
+            i2 = indices[i+1];
+            i3 = indices[i+2];
+        }
+
+        int pos_stride, uv_stride;
+        uint8_t* pos_ptr = model__layout_get_attr(mesh, vertex_layout, "POSITION", 0, &pos_stride);
+        uint8_t* uv_ptr = model__layout_get_attr(mesh, vertex_layout, "TEXCOORD", 0, &uv_stride);
+
+        sx_vec3 v1 = *((sx_vec3*)(pos_ptr + pos_stride*i1));
+        sx_vec3 v2 = *((sx_vec3*)(pos_ptr + pos_stride*i2));
+        sx_vec3 v3 = *((sx_vec3*)(pos_ptr + pos_stride*i3));
+
+        sx_vec2 w1 = *((sx_vec2*)(uv_ptr + uv_stride*i1));
+        sx_vec2 w2 = *((sx_vec2*)(uv_ptr + uv_stride*i2));
+        sx_vec2 w3 = *((sx_vec2*)(uv_ptr + uv_stride*i3));
+
+        float x1 = v2.x - v1.x;
+        float x2 = v3.x - v1.x;
+        float y1 = v2.y - v1.y;
+        float y2 = v3.y - v1.y;
+        float z1 = v2.z - v1.z;
+        float z2 = v3.z - v1.z;
+
+        float s1 = w2.x - w1.x;
+        float s2 = w3.x - w1.x;
+        float t1 = w2.y - w1.y;
+        float t2 = w3.y - w1.y;
+
+        float r = 1.0f / (s1 * t2 - s2 * t1);
+        if (!sx_isinf(r)) {
+            sx_vec3 sdir = sx_vec3f((t2 * x1 - t1 * x2)*r, (t2 * y1 - t1 * y2)*r, (t2 * z1 - t1 * z2)*r);
+            sx_vec3 tdir = sx_vec3f((s1 * x2 - s2 * x1)*r, (s1 * y2 - s2 * y1)*r, (s1 * z2 - s2 * z1)*r);
+
+            tan1[i1] = sx_vec3_add(tan1[i1], sdir);
+            tan1[i2] = sx_vec3_add(tan1[i2], sdir);
+            tan1[i3] = sx_vec3_add(tan1[i3], sdir);
+            tan2[i1] = sx_vec3_add(tan2[i1], tdir);
+            tan2[i2] = sx_vec3_add(tan2[i2], tdir);
+            tan2[i3] = sx_vec3_add(tan2[i3], tdir);
+        }
+    }
+
+    for (int i = 0, num_verts = mesh->num_vertices; i < num_verts; i++) {
+        int normal_stride, tangent_stride, bitangent_stride;
+        uint8_t* normal_ptr = model__layout_get_attr(mesh, vertex_layout, "NORMAL", 0, &normal_stride);
+        uint8_t* tangent_ptr = model__layout_get_attr(mesh, vertex_layout, "TANGENT", 0, &tangent_stride);
+        uint8_t* bitangent_ptr = model__layout_get_attr(mesh, vertex_layout, "BINORMAL", 0, &bitangent_stride);
+
+        sx_vec3 n = *((sx_vec3*)(normal_ptr + normal_stride*i));
+        sx_vec3 t = tan1[i];
+        
+        if (sx_vec3_dot(t, t) != 0) {
+            sx_vec3 tangent = sx_vec3_norm(sx_vec3_sub(t, sx_vec3_mulf(n, sx_vec3_dot(n, t))));
+            *((sx_vec3*)(tangent_ptr + tangent_stride*i)) = tangent;
+        
+            // (Dot(Cross(n, t), tan2[a]) < 0.0F) ? -1.0F : 1.0F;
+            float handedness = (sx_vec3_dot(sx_vec3_cross(n, t), tan2[i]) < 0.0f) ? -1.0f : 1.0f;
+
+            *((sx_vec3*)(bitangent_ptr + bitangent_stride*i)) = sx_vec3_mulf(sx_vec3_cross(n, tangent), -handedness);
+        }
+    }
+
+    the_core->tmp_alloc_pop();
 }
 
 static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometry_layout* vertex_layout, 
@@ -269,11 +404,14 @@ static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometr
     // map source index buffer to our data
     int start_index = 0;
     int start_vertex = 0;
+    bool calc_tangents = false;
+    bool layout_has_tangents = model__layout_has_tangents(vertex_layout);
+
     for (int i = 0; i < (int)srcmesh->primitives_count; i++) {
         cgltf_primitive* srcprim = &srcmesh->primitives[i];
-        
 
         // vertices
+        // go through gltf vertex attributes and find them in the vertex layout, then we can map the data to the buffers
         int count = 0;
         for (cgltf_size k = 0; k < srcprim->attributes_count; k++) {
             cgltf_attribute* srcatt = &srcprim->attributes[k];
@@ -283,6 +421,12 @@ static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometr
             }
             sx_assert(count == (int)srcatt->data->count);
         }
+
+        // in some instances, we may need tangents in the layout, but they wouldn't be present in
+        // the gltf data so in that case, we have to calculate them manually
+        if (layout_has_tangents && !model__gltf_has_tangents(srcprim)) {
+            calc_tangents = true;
+        } 
 
         // indices
         cgltf_accessor* srcindices = srcprim->indices;
@@ -330,6 +474,10 @@ static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometr
         submesh->num_indices = (int)srcprim->indices->count;
         start_index += (int)srcprim->indices->count;
         start_vertex += count;
+    }
+
+    if (calc_tangents) {
+        model__calculate_tangents(mesh, vertex_layout);
     }
 }
 

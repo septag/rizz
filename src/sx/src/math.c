@@ -784,11 +784,21 @@ void sx_color_HSVtoRGB(float _rgb[3], const float _hsv[3])
     _rgb[2] = vv * sx_lerp(1.0f, sx_saturate(pz - 1.0f), ss);
 }
 
-sx_vec4 sx_color_vec4_linear(sx_color c)
+// https://en.wikipedia.org/wiki/SRGB#Specification_of_the_transformation
+sx_vec4 sx_color_vec4_tolinear(sx_vec4 c)
 {
-    float rcp = 1.0f / 255.0f;
-    return sx_vec4f(sx_sqrt((float)c.r * rcp), sx_sqrt((float)c.g * rcp), 
-                    sx_sqrt((float)c.b * rcp), (float)c.a * rcp);
+    for (int i = 0; i < 3; i++) {
+        c.f[i] = c.f[i] < 0.04045f ? c.f[i]/12.92f : sx_pow((c.f[i] + 0.055f)/1.055f, 2.4f);
+    }
+    return c;
+}
+
+sx_vec4 sx_color_vec4_tosrgb(sx_vec4 cf) 
+{
+    for (int i = 0; i < 3; i++) {
+        cf.f[i] = cf.f[i] <= 0.0031308 ? (12.92f*cf.f[i]) : 1.055f*sx_pow(cf.f[i], 0.416666f) - 0.055f;
+    }
+    return cf;
 }
 
 sx_mat3 sx_mat3_mul(const sx_mat3* _a, const sx_mat3* _b)

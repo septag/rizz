@@ -8113,8 +8113,10 @@ _SOKOL_PRIVATE sg_resource_state _sg_d3d11_create_image(_sg_image_t* img, const 
             memset(&d3d11_srv_desc, 0, sizeof(d3d11_srv_desc));
 
             d3d11_srv_desc.Format = has_stencil ? DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS : DXGI_FORMAT_R32_FLOAT;
-            d3d11_srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-            d3d11_srv_desc.Texture2D.MipLevels = 1;
+            d3d11_srv_desc.ViewDimension = desc->sample_count > 1 ? D3D11_SRV_DIMENSION_TEXTURE2DMS : D3D11_SRV_DIMENSION_TEXTURE2D;
+            if (desc->sample_count == 1)  {
+                d3d11_srv_desc.Texture2D.MipLevels = 1;
+            }
 
             hr = _sg_d3d11_CreateShaderResourceView(_sg.d3d11.dev, (ID3D11Resource*)img->d3d11.texds, 
                                                     &d3d11_srv_desc, &img->d3d11.srv);
@@ -8166,6 +8168,18 @@ _SOKOL_PRIVATE sg_resource_state _sg_d3d11_create_image(_sg_image_t* img, const 
                     case SG_IMAGETYPE_CUBE:     d3d11_tex_desc.ArraySize = 6; break;
                     default:                    d3d11_tex_desc.ArraySize = 1; break;
                 }
+                if (desc->srgb) {
+                    switch (img->d3d11.format) {
+                    case DXGI_FORMAT_R8G8B8A8_UNORM:   img->d3d11.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;    break;
+                    case DXGI_FORMAT_BC1_UNORM:        img->d3d11.format = DXGI_FORMAT_BC1_UNORM_SRGB;         break;
+                    case DXGI_FORMAT_BC2_UNORM:        img->d3d11.format = DXGI_FORMAT_BC2_UNORM_SRGB;         break;
+                    case DXGI_FORMAT_BC3_UNORM:        img->d3d11.format = DXGI_FORMAT_BC3_UNORM_SRGB;         break;
+                    case DXGI_FORMAT_B8G8R8A8_UNORM:   img->d3d11.format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;    break;
+                    case DXGI_FORMAT_BC7_UNORM:        img->d3d11.format = DXGI_FORMAT_BC7_UNORM_SRGB;         break;
+                    default:                           break;
+                    }
+                }
+
                 d3d11_tex_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
                 d3d11_tex_desc.Format = img->d3d11.format;
                 if (img->cmn.render_target) {
@@ -8197,17 +8211,6 @@ _SOKOL_PRIVATE sg_resource_state _sg_d3d11_create_image(_sg_image_t* img, const 
                 D3D11_SHADER_RESOURCE_VIEW_DESC d3d11_srv_desc;
                 memset(&d3d11_srv_desc, 0, sizeof(d3d11_srv_desc));
                 d3d11_srv_desc.Format = img->d3d11.format;
-                if (desc->srgb) {
-                    switch (img->d3d11.format) {
-                    case DXGI_FORMAT_R8G8B8A8_UNORM:   d3d11_srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;    break;
-                    case DXGI_FORMAT_BC1_UNORM:        d3d11_srv_desc.Format = DXGI_FORMAT_BC1_UNORM_SRGB;         break;
-                    case DXGI_FORMAT_BC2_UNORM:        d3d11_srv_desc.Format = DXGI_FORMAT_BC2_UNORM_SRGB;         break;
-                    case DXGI_FORMAT_BC3_UNORM:        d3d11_srv_desc.Format = DXGI_FORMAT_BC3_UNORM_SRGB;         break;
-                    case DXGI_FORMAT_B8G8R8A8_UNORM:   d3d11_srv_desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;    break;
-                    case DXGI_FORMAT_BC7_UNORM:        d3d11_srv_desc.Format = DXGI_FORMAT_BC7_UNORM_SRGB;         break;
-                    default:                           break;
-                    }
-                }
 
                 switch (img->cmn.type) {
                     case SG_IMAGETYPE_2D:
