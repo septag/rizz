@@ -42,6 +42,14 @@ typedef struct rizz_coll_rayhit_t {
     float t;        // 0..len
 } rizz_coll_rayhit;
 
+typedef struct rizz_coll_entity_data_t {
+    sx_box               box;
+    rizz_coll_shape_poly poly;
+    sx_aabb              aabb;
+    uint32_t             mask;
+    bool                 is_static;
+} rizz_coll_entity_data;
+
 // debugging (activated with STRIKE_DEBUG_COLLISION=1)
 typedef enum rizz_coll_debug_collision_mode_t {
     RIZZ_COLL_DEBUGCOLLISION_MODE_COLLISIONS = 0,
@@ -88,7 +96,10 @@ typedef struct rizz_api_coll {
                           float heatmap_limit);
 
     int (*num_cells)(rizz_coll_context* ctx, int* num_cells_x, int* num_cells_y);
-    sx_rect (*cell_rect)(rizz_coll_context* ctx, int cell_idx);    
+    sx_rect (*cell_rect)(rizz_coll_context* ctx, int cell_idx);
+
+    bool (*get_entity_data)(rizz_coll_context* ctx, uint64_t ent, rizz_coll_entity_data* outdata);
+
 } rizz_api_coll;
 
 SX_INLINE rizz_coll_ray rizz_coll_ray_set(sx_vec3 origin, sx_vec3 dir, float len)

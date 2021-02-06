@@ -280,7 +280,7 @@ static bool model__layout_has_tangents(const rizz_model_geometry_layout* vertex_
 
 static bool model__gltf_has_tangents(const cgltf_primitive* prim)
 {
-    for (int i = 0; i < prim->attributes_count; i++) {
+    for (cgltf_size i = 0; i < prim->attributes_count; i++) {
         if (prim->attributes[i].type == cgltf_attribute_type_tangent) {
             return true;
         }
@@ -333,7 +333,7 @@ static void model__calculate_tangents(rizz_model_mesh* mesh, const rizz_model_ge
             i3 = indices[i+2];
         }
 
-        int pos_stride, uv_stride;
+        int pos_stride = 0, uv_stride = 0;
         uint8_t* pos_ptr = model__layout_get_attr(mesh, vertex_layout, "POSITION", 0, &pos_stride);
         uint8_t* uv_ptr = model__layout_get_attr(mesh, vertex_layout, "TEXCOORD", 0, &uv_stride);
 
@@ -372,7 +372,7 @@ static void model__calculate_tangents(rizz_model_mesh* mesh, const rizz_model_ge
     }
 
     for (int i = 0, num_verts = mesh->num_vertices; i < num_verts; i++) {
-        int normal_stride, tangent_stride, bitangent_stride;
+        int normal_stride = 0, tangent_stride = 0, bitangent_stride = 0;
         uint8_t* normal_ptr = model__layout_get_attr(mesh, vertex_layout, "NORMAL", 0, &normal_stride);
         uint8_t* tangent_ptr = model__layout_get_attr(mesh, vertex_layout, "TANGENT", 0, &tangent_stride);
         uint8_t* bitangent_ptr = model__layout_get_attr(mesh, vertex_layout, "BINORMAL", 0, &bitangent_stride);

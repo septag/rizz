@@ -70,7 +70,7 @@ typedef struct rizz_coll_context_t {
     sx_handle_pool* handles;                // handle pool for arrays below
     coll_entity_mask_pair* ent_mask_pairs;  // sx_array
     sx_aabb* aabbs;                         // sx_array
-    rizz_coll_shape_poly* polys;                 // sx_array
+    rizz_coll_shape_poly* polys;            // sx_array
     sx_box* boxes;                          // sx_array: .e.x == .e.y == .e.z == 0 if static/poly only
     sx_aabb* transformed_aabbs;             // sx_array
     sx_box* transformed_boxes;              // sx_array
@@ -1031,6 +1031,26 @@ static sx_rect coll_cell_rect(rizz_coll_context* ctx, int cell_idx)
     return sx_rectce(ctx->cells[cell_idx].center, sx_vec2splat(ctx->grid_cell_size*0.5f));
 }
 
+static bool coll_get_entity_data(rizz_coll_context* ctx, uint64_t ent, rizz_coll_entity_data* outdata)
+{
+    sx_handle_t handle = (sx_handle_t)sx_hashtbl_find_get(ctx->ent_tbl, sx_hash_u64_to_u32(ent), 0);
+    if (handle) {
+        sx_assert(sx_handle_valid(ctx->handles, handle));
+
+        int index = sx_handle_index(handle);
+        sx_vec3 e = ctx->boxes[index].e;
+        outdata->box = ctx->transformed_boxes[index];
+        outdata->aabb = ctx->transformed_aabbs[index];
+        outdata->is_static = (e.x + e.y + e.z) < 0.00001f;
+        outdata->poly = ctx->polys[index];
+        outdata->mask = ctx->ent_mask_pairs[index].mask;
+
+        return true;
+    } else {
+        return false;
+    }
+}
+
 #if STRIKE_DEBUG_COLLISION
 static void coll__box_to_verts(const sx_box* box, sx_vec3 verts[4])
 {
@@ -1277,7 +1297,8 @@ static rizz_api_coll the__coll = {
     .debug_collisions = coll_debug_collisions,
     .debug_raycast = coll_debug_raycast,
     .num_cells = coll_num_cells,
-    .cell_rect = coll_cell_rect
+    .cell_rect = coll_cell_rect,
+    .get_entity_data = coll_get_entity_data
 };
 
 rizz_plugin_decl_main(collision, plugin, e)
