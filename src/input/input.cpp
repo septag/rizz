@@ -320,6 +320,38 @@ static bool input__get_bool_previous(rizz_input_userkey key)
     return g_input.mapper->GetBoolPrevious((UserButtonId)key);
 }
 
+static bool input__get_bool_raw(rizz_input_device device, int device_key)
+{
+    InputDevice* input_device = g_input.mgr->GetDevice((DeviceId)rizz_to_index(device.id));
+    sx_assert(input_device);
+    return input_device->GetBool((DeviceButtonId)device_key);
+}
+
+static bool input__get_bool_pressed_raw(rizz_input_device device, int device_key)
+{
+    InputDevice* input_device = g_input.mgr->GetDevice((DeviceId)rizz_to_index(device.id));
+    sx_assert(input_device);
+    bool prev = input_device->GetBoolPrevious((DeviceButtonId)device_key);
+    bool curr = input_device->GetBool((DeviceButtonId)device_key);
+    return !prev && curr;
+}
+
+static bool input__get_bool_released_raw(rizz_input_device device, int device_key)
+{
+    InputDevice* input_device = g_input.mgr->GetDevice((DeviceId)rizz_to_index(device.id));
+    sx_assert(input_device);
+    bool prev = input_device->GetBoolPrevious((DeviceButtonId)device_key);
+    bool curr = input_device->GetBool((DeviceButtonId)device_key);
+    return prev && !curr;
+}
+
+static bool input__get_bool_previous_raw(rizz_input_device device, int device_key)
+{
+    InputDevice* input_device = g_input.mgr->GetDevice((DeviceId)rizz_to_index(device.id));
+    sx_assert(input_device);
+    return input_device->GetBoolPrevious((DeviceButtonId)device_key);
+}
+
 static float input__get_float(rizz_input_userkey key)
 {
     sx_assert(g_input.mapper);
@@ -336,6 +368,27 @@ static float input__get_float_delta(rizz_input_userkey key)
 {
     sx_assert(g_input.mapper);
     return g_input.mapper->GetFloatDelta((UserButtonId)key);
+}
+
+static float input__get_float_raw(rizz_input_device device, int device_key)
+{
+    InputDevice* input_device = g_input.mgr->GetDevice((DeviceId)rizz_to_index(device.id));
+    sx_assert(input_device);
+    return input_device->GetFloat((DeviceButtonId)device_key);
+}
+
+static float input__get_float_previous_raw(rizz_input_device device, int device_key)
+{
+    InputDevice* input_device = g_input.mgr->GetDevice((DeviceId)rizz_to_index(device.id));
+    sx_assert(input_device);
+    return input_device->GetFloatPrevious((DeviceButtonId)device_key);
+}
+
+static float input__get_float_delta_raw(rizz_input_device device, int device_key)
+{
+    InputDevice* input_device = g_input.mgr->GetDevice((DeviceId)rizz_to_index(device.id));
+    sx_assert(input_device);
+    return input_device->GetFloat((DeviceButtonId)device_key) - input_device->GetFloatPrevious((DeviceButtonId)device_key);
 }
 
 static void input__clear_mappings()
@@ -552,15 +605,31 @@ static void input__unregister_listener(rizz_input_listener listener_id)
     }
 }
 
-static rizz_api_input the__input = { input__create_device,      input__map_bool,
-                                     input__map_float,          input__unmap,
-                                     input__clear_mappings,     input__device_avail,
-                                     input__get_bool,           input__get_bool_pressed,
-                                     input__get_bool_released,  input__get_bool_previous,
-                                     input__get_float,          input__get_float_previous,
-                                     input__get_float_delta,    input__set_dead_zone,
-                                     input__set_userkey_policy, input__show_debugger,
-                                     input__register_listener,  input__unregister_listener };
+static rizz_api_input the__input = { input__create_device,
+                                     input__map_bool,
+                                     input__map_float,
+                                     input__unmap,
+                                     input__clear_mappings,
+                                     input__device_avail,
+                                     input__get_bool,
+                                     input__get_bool_pressed,
+                                     input__get_bool_released,
+                                     input__get_bool_previous,
+                                     input__get_bool_raw,
+                                     input__get_bool_pressed_raw,
+                                     input__get_bool_released_raw,
+                                     input__get_bool_previous_raw,
+                                     input__get_float,
+                                     input__get_float_previous,
+                                     input__get_float_delta,
+                                     input__get_float_raw,
+                                     input__get_float_previous_raw,
+                                     input__get_float_delta_raw,
+                                     input__set_dead_zone,
+                                     input__set_userkey_policy,
+                                     input__show_debugger,
+                                     input__register_listener,
+                                     input__unregister_listener };
 
 rizz_plugin_decl_main(input, plugin, e)
 {

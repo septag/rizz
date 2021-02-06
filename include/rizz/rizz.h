@@ -1129,7 +1129,7 @@ typedef struct rizz_api_gfx_draw {
 #define rizz_gfx_update_buffer(_buf, _data, _size) \
     (RIZZ_GRAPHICS_API_VARNAME)->staged.update_buffer_d(_buf, _data, _size, __FILE__, __LINE__)
 #define rizz_gfx_append_buffer(_buf, _data, _size) \
-    (RIZZ_GRAPHICS_API_VARNAME)->staged.append_buffer_d(_buf, _data_, _size, __FILE__, __LINE__)
+    (RIZZ_GRAPHICS_API_VARNAME)->staged.append_buffer_d(_buf, _data, _size, __FILE__, __LINE__)
 #define rizz_gfx_update_image(_img, _data, _size) \
     (RIZZ_GRAPHICS_API_VARNAME)->staged.update_image_d(_img, _data, _size, __FILE__, __LINE__)
 

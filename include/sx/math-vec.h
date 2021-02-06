@@ -129,6 +129,7 @@ SX_FORCE_INLINE sx_vec3 sx_quat_mulXYZ(sx_quat _qa, sx_quat _qb);
 SX_FORCE_INLINE sx_quat sx_quat_mul(sx_quat p, sx_quat q);
 SX_FORCE_INLINE sx_quat sx_quat_inv(sx_quat _quat);
 SX_FORCE_INLINE float   sx_quat_dot(sx_quat _a, sx_quat _b);
+SX_FORCE_INLINE float   sx_quat_angle(sx_quat _a, sx_quat _b);
 SX_FORCE_INLINE sx_quat sx_quat_norm(sx_quat _quat);
 SX_FORCE_INLINE sx_quat sx_quat_rotateaxis(sx_vec3 _axis, float _angle);
 SX_FORCE_INLINE sx_quat sx_quat_rotateX(float _ax);
@@ -205,6 +206,11 @@ SX_FORCE_INLINE sx_quat sx_quat_inv(sx_quat _quat)
 SX_FORCE_INLINE float sx_quat_dot(sx_quat _a, sx_quat _b)
 {
     return _a.x * _b.x + _a.y * _b.y + _a.z * _b.z + _a.w * _b.w;
+}
+
+SX_FORCE_INLINE float sx_quat_angle(sx_quat _a, sx_quat _b)
+{
+    return sx_acos(sx_min(sx_abs(sx_quat_dot(_a, _b)), 1.0f)) * 2.0f;
 }
 
 SX_FORCE_INLINE sx_quat sx_quat_norm(sx_quat _quat)

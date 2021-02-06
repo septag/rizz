@@ -405,9 +405,18 @@ typedef struct rizz_api_input {
     bool (*get_bool_released)(rizz_input_userkey key);
     bool (*get_bool_previous)(rizz_input_userkey key);
 
+    bool (*get_bool_raw)(rizz_input_device device, int device_key);
+    bool (*get_bool_pressed_raw)(rizz_input_device device, int device_key);
+    bool (*get_bool_released_raw)(rizz_input_device device, int device_key);
+    bool (*get_bool_previous_raw)(rizz_input_device device, int device_key);
+
     float (*get_float)(rizz_input_userkey key);
     float (*get_float_previous)(rizz_input_userkey key);
     float (*get_float_delta)(rizz_input_userkey key);
+
+    float (*get_float_raw)(rizz_input_device device, int device_key);
+    float (*get_float_previous_raw)(rizz_input_device device, int device_key);
+    float (*get_float_delta_raw)(rizz_input_device device, int device_key);
 
     void (*set_dead_zone)(rizz_input_userkey key, float zone);
     void (*set_userkey_policy)(rizz_input_userkey key, rizz_input_userkey_policy policy);
