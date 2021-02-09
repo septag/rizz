@@ -473,7 +473,7 @@ static bool refl__serialize_internal(rizz_refl_context* ctx, const char* type_na
                 if (rinfo.flags & RIZZ_REFL_FLAG_IS_ARRAY) {
 
                     if (var_type != RIZZ_REFL_VARIANTTYPE_CHAR) {
-                        const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
+                        rizz__temp_alloc_begin(tmp_alloc);
                         rizz_refl_variant* vars = sx_malloc(tmp_alloc, rinfo.array_size*sizeof(rizz_refl_variant));
                         sx_assert_always(vars);
                         sx_memset(vars, 0x0,  rinfo.array_size*sizeof(rizz_refl_variant));
@@ -485,7 +485,7 @@ static bool refl__serialize_internal(rizz_refl_context* ctx, const char* type_na
                         }
 
                         callbacks->on_builtin_array(rinfo.name, vars, rinfo.array_size, user, rinfo.meta, last_one);
-                        the__core.tmp_alloc_pop();
+                        rizz__temp_alloc_end(tmp_alloc);
                     } else {
                         rizz_refl_variant var = { .type = RIZZ_REFL_VARIANTTYPE_CSTRING, .str = (const char*)value };
                         callbacks->on_builtin(rinfo.name, var, user, rinfo.meta, last_one);

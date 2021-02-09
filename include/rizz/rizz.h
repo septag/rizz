@@ -486,6 +486,16 @@ typedef struct rizz_camera_fps {
     float yaw;
 } rizz_camera_fps;
 
+typedef enum rizz_camera_view_plane {
+    RIZZ_CAMERA_VIEWPLANE_LEFT = 0,
+    RIZZ_CAMERA_VIEWPLANE_RIGHT, 
+    RIZZ_CAMERA_VIEWPLANE_TOP,
+    RIZZ_CAMERA_VIEWPLANE_BOTTOM,
+    RIZZ_CAMERA_VIEWPLANE_NEAR,
+    RIZZ_CAMERA_VIEWPLANE_FAR,
+    _RIZZ_CAMERA_VIEWPLANE_COUNT
+} rizz_camera_view_plane;
+
 typedef struct rizz_api_camera {
     void (*init)(rizz_camera* cam, float fov_deg, sx_rect viewport, float fnear, float ffar);
     void (*lookat)(rizz_camera* cam, sx_vec3 pos, sx_vec3 target, sx_vec3 up);
@@ -495,6 +505,7 @@ typedef struct rizz_api_camera {
     void (*view_mat)(const rizz_camera* cam, sx_mat4* view);
     void (*calc_frustum_points)(const rizz_camera* cam, sx_vec3 frustum[8]);
     void (*calc_frustum_points_range)(const rizz_camera* cam, sx_vec3 frustum[8], float fnear, float ffar);
+    void (*calc_frustum_planes)(sx_plane frustum[_RIZZ_CAMERA_VIEWPLANE_COUNT], const sx_mat4* viewproj_mat);
     void (*fps_init)(rizz_camera_fps* cam, float fov_deg, sx_rect viewport, float fnear, float ffar);
     void (*fps_lookat)(rizz_camera_fps* cam, sx_vec3 pos, sx_vec3 target, sx_vec3 up);
     void (*fps_pitch)(rizz_camera_fps* cam, float pitch);
@@ -703,6 +714,7 @@ typedef struct rizz_api_core {
     //          Note:  Not recommended to use another allocator with arbitary source within push/pop block
     const sx_alloc* (*tmp_alloc_push)(void);
     void (*tmp_alloc_pop)(void);
+    const sx_alloc* (*tmp_alloc_push_trace)(const char* file, uint32_t line);
 
     // TLS functions are used for setting TLS variables to worker threads by an external source
     // register: use name to identify the variable (Id). (not thread-safe)
@@ -735,6 +747,10 @@ typedef struct rizz_api_core {
     const char* (*cache_dir)();
     const char* (*data_dir)();
 
+    const char* (*str_alloc)(uint32_t* phandle, const char* fmt, ...);
+    void        (*str_free)(uint32_t handle);
+    const char* (*str_cstr)(uint32_t handle);
+
     // jobs
     sx_job_t (*job_dispatch)(int count,
                              void (*callback)(int start, int end, int thrd_index, void* user),
@@ -750,18 +766,15 @@ typedef struct rizz_api_core {
     void (*coro_yield)(void* pfrom, int nframes);
 
     void (*register_log_backend)(const char* name,
-                                 void (*log_cb)(const rizz_log_entry* entry, void* user),
-                                 void* user);
+                                 void (*log_cb)(const rizz_log_entry* entry, void* user), void* user);
     void (*unregister_log_backend)(const char* name);
 
     // use rizz_log_xxxx macros instead of these
     void (*print_info)(uint32_t channels, const char* source_file, int line, const char* fmt, ...);
     void (*print_debug)(uint32_t channels, const char* source_file, int line, const char* fmt, ...);
-    void (*print_verbose)(uint32_t channels, const char* source_file, int line, const char* fmt,
-                          ...);
+    void (*print_verbose)(uint32_t channels, const char* source_file, int line, const char* fmt, ...);
     void (*print_error)(uint32_t channels, const char* source_file, int line, const char* fmt, ...);
-    void (*print_warning)(uint32_t channels, const char* source_file, int line, const char* fmt,
-                          ...);
+    void (*print_warning)(uint32_t channels, const char* source_file, int line, const char* fmt, ...);
     void (*set_log_level)(rizz_log_level level);
 
     void (*begin_profile_sample)(const char* name, rizz_profile_flags flags, uint32_t* hash_cache);
@@ -817,9 +830,10 @@ typedef struct rizz_api_core {
 
 // using these macros are preferred to the_core->tmp_alloc_push() and the_core->tmp_alloc_pop()
 // They somewhat emulates C++ RAII and throws 'unused variable' warning when _end is not called
+// Also traces the origin of the calls for better error checking
 #define rizz_temp_alloc_begin(_name) \
         uint32_t _temp_alloc_raii_##_name; \
-        const sx_alloc* _name = (RIZZ_CORE_API_VARNAME)->tmp_alloc_push()
+        const sx_alloc* _name = (RIZZ_CORE_API_VARNAME)->tmp_alloc_push_trace(__FILE__, __LINE__)
 #define rizz_temp_alloc_end(_name) \
         (void)_temp_alloc_raii_##_name; \
         (RIZZ_CORE_API_VARNAME)->tmp_alloc_pop()
@@ -922,6 +936,7 @@ typedef struct rizz_shader_refl {
 typedef struct rizz_shader_info {
     rizz_shader_refl_input inputs[SG_MAX_VERTEX_ATTRIBUTES];
     int num_inputs;
+    uint32_t name_hdl;
 } rizz_shader_info;
 
 typedef struct rizz_vertex_attr {
@@ -955,6 +970,7 @@ typedef struct rizz_texture_load_params {
 
 // texture metadata
 typedef struct rizz_texture_info {
+    uint32_t name_hdl;      // get name with the_core->str_cstr();
     sg_image_type type;
     sg_pixel_format format;
     int mem_size_bytes;
@@ -1192,6 +1208,10 @@ typedef struct rizz_api_gfx {
     sg_pipeline (*alloc_pipeline)(void);
     sg_pass (*alloc_pass)(void);
 
+    const char* (*str_alloc)(uint32_t* phandle, const char* fmt, ...);
+    void (*rizz__str_free)(uint32_t handle);
+    const char* (*rizz__str_cstr)(uint32_t handle);
+
     // init/fail objects
     void (*init_buffer)(sg_buffer buf_id, const sg_buffer_desc* desc);
     void (*init_image)(sg_image img_id, const sg_image_desc* desc);
@@ -1247,7 +1267,7 @@ typedef struct rizz_api_gfx {
     sg_shader_desc* (*shader_setup_desc)(sg_shader_desc* desc, const rizz_shader_refl* vs_refl,
                                          const void* vs, int vs_size,
                                          const rizz_shader_refl* fs_refl, const void* fs,
-                                         int fs_size);
+                                         int fs_size, uint32_t* name_hdl);
     rizz_shader (*shader_make_with_data)(const sx_alloc* alloc, uint32_t vs_data_size,
                                          const uint32_t* vs_data, uint32_t vs_refl_size,
                                          const uint32_t* vs_refl_json, uint32_t fs_data_size,

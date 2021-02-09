@@ -71,7 +71,8 @@ static int fons__create_fn(void* user_ptr, int width, int height)
                                                               .min_filter = SG_FILTER_LINEAR,
                                                               .mag_filter = SG_FILTER_LINEAR,
                                                               .usage = SG_USAGE_DYNAMIC,
-                                                              .pixel_format = SG_PIXELFORMAT_R8 });
+                                                              .pixel_format = SG_PIXELFORMAT_R8,
+                                                              .label = fons->name});
 
     if (!fons->f.img_atlas.id) {
         return 0;
@@ -114,7 +115,7 @@ static void fons__draw_fn(void* user_ptr, const float* poss, const float* tcoord
     font__fons* fons = user_ptr;
     rizz_api_gfx_draw* draw_api = g_font.draw_api;
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
 
     rizz_font_vertex* verts = sx_malloc(tmp_alloc, sizeof(rizz_font_vertex) * nverts);
     sx_assert(verts);
@@ -160,7 +161,7 @@ static void fons__draw_fn(void* user_ptr, const float* poss, const float* tcoord
     draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, state->mat, sizeof(state->mat));
     draw_api->draw(0, nverts, 1);
 
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
 }
 
 static void fons__delete_fn(void* user_ptr)
@@ -360,7 +361,7 @@ bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx, r
     g_font.draw_api = &the_gfx->staged;
 
     // gfx objects
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
     rizz_shader shader = the_gfx->shader_make_with_data(
         tmp_alloc, k_font_vs_size, k_font_vs_data, k_font_vs_refl_size, k_font_vs_refl_data,
         k_font_fs_size, k_font_fs_data, k_font_fs_refl_size, k_font_fs_refl_data);
@@ -372,12 +373,13 @@ bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx, r
                             .rasterizer = { .cull_mode = SG_CULLMODE_BACK },
                             .blend = { .enabled = true,
                                        .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
-                                       .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA } };
+                                       .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA },
+                            .label = "rizz_font" };
 
     g_font.pip = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader, &pip_desc, &k_font_vertex_layout));
 
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
 
     if (!font__resize_draw_limits(MAX_VERTICES)) {
         return false;

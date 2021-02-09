@@ -465,7 +465,7 @@ static rizz_coll_pair* coll_detect(rizz_coll_context* ctx, const sx_alloc* alloc
     int const num_cells_x = ctx->num_cells_x;
     rizz_coll_pair* pairs = NULL;
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
     sx_array_reserve(alloc, pairs, 50);
 
     #if STRIKE_DEBUG_COLLISION
@@ -562,7 +562,7 @@ static rizz_coll_pair* coll_detect(rizz_coll_context* ctx, const sx_alloc* alloc
     } // foreach (upadted_entity_handles)
 
     sx_array_clear(ctx->updated_ent_handles);
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
 
     return pairs;
 }
@@ -625,7 +625,7 @@ static uint64_t* coll_query_sphere(rizz_coll_context* ctx, sx_vec3 center, float
     sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(aabb.vmin));
     sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(aabb.vmax));
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
 
     // broad-phase
     sx_handle_t* candidates = NULL;
@@ -682,7 +682,7 @@ static uint64_t* coll_query_sphere(rizz_coll_context* ctx, sx_vec3 center, float
         sx_array_push(alloc, ents, test_entmask.entity);
     } // foreach (candidate)
 
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
     return ents;
 }
 
@@ -697,7 +697,7 @@ static uint64_t* coll_query_poly(rizz_coll_context* ctx, const rizz_coll_shape_p
     sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(rect.vmin));
     sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(rect.vmax));
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
 
     // broad-phase
     sx_handle_t* candidates = NULL;
@@ -752,7 +752,7 @@ static uint64_t* coll_query_poly(rizz_coll_context* ctx, const rizz_coll_shape_p
         sx_array_push(alloc, ents, test_entmask.entity);
     } // foreach (candidate)
 
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
     return ents;
 }
 
@@ -901,7 +901,7 @@ static rizz_coll_rayhit* coll_query_ray(rizz_coll_context* ctx, rizz_coll_ray ra
     // broadphase: Bresenham AA line drawing
     int* candidate_cells = NULL;
     rizz_coll_rayhit* hits = NULL;
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
     sx_array_reserve(alloc, hits, 50);
 
     int x0 = p0.x, y0 = p0.y, x1 = p1.x, y1 = p1.y;
@@ -1010,7 +1010,7 @@ static rizz_coll_rayhit* coll_query_ray(rizz_coll_context* ctx, rizz_coll_ray ra
         coll__sort_rayhit_tim_sort(hits, hit_count);
     }
 
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
     return hits;
 }
 

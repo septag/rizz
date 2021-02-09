@@ -595,9 +595,8 @@ static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, 
                 the__core.alloc(RIZZ_MEMID_CORE), rizz__asset_on_read, NULL);
         } else {
             // Blocking load (+ reloads)
-            asset =
-                rizz__asset_add(path, params, amgr->failed_obj, name_hash, obj_alloc, flags, tags,
-                                (flags & RIZZ_ASSET_LOAD_FLAG_RELOAD) ? asset : (rizz_asset){ 0 });
+            asset = rizz__asset_add(path, params, amgr->failed_obj, name_hash, obj_alloc, flags, tags,
+                                    (flags & RIZZ_ASSET_LOAD_FLAG_RELOAD) ? asset : (rizz_asset){ 0 });
 
             sx_mem_block* mem = the__vfs.read(
                 real_path,
@@ -874,9 +873,8 @@ static rizz_asset rizz__asset_load_from_mem(const char* name, const char* path_a
         } else {
             // Blocking load (+ reloads)
             // Add asset entry
-            asset =
-                rizz__asset_add(path_alias, params, amgr->failed_obj, name_hash, alloc, flags, tags,
-                                (flags & RIZZ_ASSET_LOAD_FLAG_RELOAD) ? asset : (rizz_asset){ 0 });
+            asset = rizz__asset_add(path_alias, params, amgr->failed_obj, name_hash, alloc, flags, tags,
+                                    (flags & RIZZ_ASSET_LOAD_FLAG_RELOAD) ? asset : (rizz_asset){ 0 });
             rizz__asset* a = &g_asset.assets[sx_handle_index(asset.id)];
 
             if (!res) {

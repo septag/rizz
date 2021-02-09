@@ -37,9 +37,10 @@ static void rizz__cam_lookat(rizz_camera* cam, sx_vec3 pos, sx_vec3 target, sx_v
     cam->up = sx_vec3_cross(cam->right, cam->forward);
     cam->pos = pos;
 
-    sx_mat4 m = sx_mat4v(sx_vec4f(cam->right.x, cam->right.y, cam->right.z, 0),
-                         sx_vec4f(-cam->up.x, -cam->up.y, -cam->up.z, 0),
-                         sx_vec4f(cam->forward.x, cam->forward.y, cam->forward.z, 0), SX_VEC4_ZERO);
+    sx_mat4 m = sx_mat4v(sx_vec4f(cam->right.x,     cam->right.y,       cam->right.z,   0),
+                         sx_vec4f(-cam->up.x,      -cam->up.y,         -cam->up.z,      0),
+                         sx_vec4f(cam->forward.x,   cam->forward.y,     cam->forward.z, 0), 
+                         sx_vec4f(0,                0,                  0,              1.0f));
     cam->quat = sx_mat4_quat(&m);
 }
 
@@ -67,10 +68,10 @@ static void rizz__cam_view_mat(const rizz_camera* cam, sx_mat4* view)
     sx_vec3 xaxis = cam->right;    // sx_vec3_norm(sx_vec3_cross(zaxis, up));
     sx_vec3 yaxis = cam->up;       // sx_vec3_cross(xaxis, zaxis);
 
-    *view = sx_mat4f(xaxis.x, xaxis.y, xaxis.z, -sx_vec3_dot(xaxis, cam->pos), 
-                     yaxis.x, yaxis.y, yaxis.z, -sx_vec3_dot(yaxis, cam->pos), 
-                     -zaxis.x, -zaxis.y, -zaxis.z, sx_vec3_dot(zaxis, cam->pos), 
-                     0.0f, 0.0f, 0.0f, 1.0f);
+    *view = sx_mat4f(xaxis.x,   xaxis.y,    xaxis.z,    -sx_vec3_dot(xaxis, cam->pos), 
+                     yaxis.x,   yaxis.y,    yaxis.z,    -sx_vec3_dot(yaxis, cam->pos), 
+                     -zaxis.x, -zaxis.y,    -zaxis.z,   sx_vec3_dot(zaxis, cam->pos), 
+                     0.0f,      0.0f,       0.0f,       1.0f);
 }
 
 static void rizz__calc_frustum_points_range(const rizz_camera* cam, sx_vec3 frustum[8], float fnear, float ffar)
@@ -116,6 +117,24 @@ static void rizz__calc_frustum_points_range(const rizz_camera* cam, sx_vec3 frus
 static void rizz__calc_frustum_points(const rizz_camera* cam, sx_vec3 frustum[8])
 {
     rizz__calc_frustum_points_range(cam, frustum, cam->fnear, cam->ffar);
+}
+
+static void rizz__calc_frustum_planes(sx_plane frustum[_RIZZ_CAMERA_VIEWPLANE_COUNT], const sx_mat4* viewproj_mat)
+{
+    sx_mat4 vp = *viewproj_mat;
+    frustum[0] = sx_planef(vp.m14 + vp.m11, vp.m24 + vp.m21, vp.m34 + vp.m31, vp.m44 + vp.m41);
+    frustum[1] = sx_planef(vp.m14 - vp.m11, vp.m24 - vp.m21, vp.m34 - vp.m31, vp.m44 - vp.m41);
+    frustum[2] = sx_planef(vp.m14 - vp.m12, vp.m24 - vp.m22, vp.m34 - vp.m32, vp.m44 - vp.m42);
+    frustum[3] = sx_planef(vp.m14 + vp.m12, vp.m24 + vp.m22, vp.m34 + vp.m32, vp.m44 + vp.m42);
+    frustum[4] = sx_planef(vp.m13, vp.m23, vp.m33, vp.m43);
+    frustum[5] = sx_planef(vp.m14 - vp.m13, vp.m24 - vp.m23, vp.m34 - vp.m33, vp.m44 - vp.m43);
+
+    // normalize
+    for (int i = 0; i < _RIZZ_CAMERA_VIEWPLANE_COUNT; i++) {
+        sx_vec4 p = sx_vec4fv(frustum[i].f);
+        sx_vec3 n = sx_vec3fv(p.f);
+        frustum[i] = sx_planefv(sx_vec4_mulf(p, sx_rsqrt(sx_vec3_dot(n, n))).f);
+    }
 }
 
 static void rizz__cam_fps_init(rizz_camera_fps* cam, float fov_deg, const sx_rect viewport, float fnear, float ffar)
@@ -183,6 +202,7 @@ rizz_api_camera the__camera = { .init = rizz__cam_init,
                                 .view_mat = rizz__cam_view_mat,
                                 .calc_frustum_points = rizz__calc_frustum_points,
                                 .calc_frustum_points_range = rizz__calc_frustum_points_range,
+                                .calc_frustum_planes = rizz__calc_frustum_planes,
                                 .fps_init = rizz__cam_fps_init,
                                 .fps_lookat = rizz__cam_fps_lookat,
                                 .fps_pitch = rizz__cam_fps_pitch,

@@ -420,8 +420,8 @@ static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_param
         src->sample_rate = wav.sampleRate;
         float* samples = sx_align_ptr(buff, 0, 16);
         float* wav_samples = NULL;
+        rizz_temp_alloc_begin(tmp_alloc);
         if (wav.channels > 1) {
-            const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
             wav_samples =
                 sx_malloc(tmp_alloc, sizeof(float) * (size_t)wav.totalPCMFrameCount * wav.channels);
             if (!wav_samples) {
@@ -451,8 +451,8 @@ static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_param
                 samples[i] = sum * channels_rcp;
             }
 
-            the_core->tmp_alloc_pop();
         }
+        rizz_temp_alloc_end(tmp_alloc);
 
         drwav_uninit(&wav);
         src->samples = samples;
@@ -460,7 +460,7 @@ static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_param
         // TODO: possible bug with tmp_alloc or vorbis. I saw some random crashes, until I put
         //       the tmp_buff = sx_malloc right next to vorbis_buff
         int vorbis_err;
-        const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+        rizz_temp_alloc_begin(tmp_alloc);
         int vorbis_buffer_size = *((int*)buff);
         buff += sizeof(int);
 
@@ -496,7 +496,7 @@ static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_param
         src->samples = samples;
 
         stb_vorbis_close(vorbis);
-        the_core->tmp_alloc_pop();
+        rizz_temp_alloc_end(tmp_alloc);
     }
 
     return true;
@@ -950,7 +950,7 @@ static void snd__mix(float* dst, int dst_num_frames, int dst_num_channels, int d
     int num_garbage = 0;
     sx_assert(g_snd.num_plays <= RIZZ_SND_DEVICE_MAX_LANES);
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
     for (int i = 0, c = g_snd.num_plays; i < c; i++) {
         rizz_snd_instance insthandle = g_snd.playlist[i];
         sx_assert_always(sx_handle_valid(g_snd.instance_handles, insthandle.id));
@@ -1010,7 +1010,7 @@ static void snd__mix(float* dst, int dst_num_frames, int dst_num_channels, int d
 
         frames_written = sx_max(frames_written, num_frames);
     }
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
 
     // A very naive clipping
     int samples_written = frames_written * dst_num_channels;
@@ -1081,7 +1081,7 @@ static void snd__update(float dt)
 
     frames_remain = frames_needed != 0 ? sx_min(frames_remain, frames_needed) : frames_remain;
     if (frames_remain) {
-        const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+        rizz_temp_alloc_begin(tmp_alloc);
 
         float* frames = sx_malloc(tmp_alloc, sizeof(float) * frames_remain * device_channels);
         if (!frames) {
@@ -1092,14 +1092,14 @@ static void snd__update(float dt)
         snd__mix(frames, frames_remain, device_channels, device_sample_rate);
         snd__ringbuffer_produce(&g_snd.mixer_buffer, frames, frames_remain * device_channels);
 
-        the_core->tmp_alloc_pop();
+        rizz_temp_alloc_end(tmp_alloc);
     }
 }
 
 static void snd__plot_samples_rms(const char* label, const float* samples, int num_samples,
                                   int channel, int num_channels, int height, float scale)
 {
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
 
     sx_vec2 region;
     the_imgui->GetContentRegionAvail(&region);
@@ -1140,13 +1140,13 @@ static void snd__plot_samples_rms(const char* label, const float* samples, int n
 
     the_imgui->PlotHistogramFloatPtr(label, values, num_values, 0, NULL, 0, 1.0f,
                                      sx_vec2f((float)width, (float)height), sizeof(float));
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
 }
 
 static void snd__plot_samples_wav(const char* label, const float* samples, int num_samples,
                                   int height)
 {
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
     sx_assert(num_samples > 0);
 
     sx_vec2 region;
@@ -1189,7 +1189,7 @@ static void snd__plot_samples_wav(const char* label, const float* samples, int n
 
     the_imgui->PlotLinesFloatPtr(label, values, num_values * 2, 0, NULL, -1.0f, 1.0f,
                          sx_vec2f((float)width, (float)height), sizeof(float));
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
 }
 
 static void snd__show_mixer_tab_contents()
@@ -1201,7 +1201,7 @@ static void snd__show_mixer_tab_contents()
 
     // plot samples
     static float plot_scale = 1.0f;
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
     int num_channels = saudio_channels();
     int num_samples = RIZZ_SND_DEVICE_BUFFER_FRAMES * num_channels;
     float* samples = sx_malloc(tmp_alloc, sizeof(float) * num_samples);
@@ -1289,7 +1289,7 @@ static void snd__show_mixer_tab_contents()
         the_imgui->Columns(1, NULL, false);
     }
 
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
 }
 
 static float snd__source_duration(rizz_snd_source srchandle)

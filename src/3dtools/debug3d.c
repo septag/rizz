@@ -136,7 +136,8 @@ bool debug3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
                             .depth_stencil = {
                                 .depth_compare_func = SG_COMPAREFUNC_LESS_EQUAL,
                                 .depth_write_enabled = true
-                            } };
+                            },
+                            .label = "debug3d_solid"};
     sg_pipeline_desc pip_desc_alphablend = 
         (sg_pipeline_desc){ .layout.buffers[0].stride = sizeof(rizz_3d_debug_vertex),
                             .layout.buffers[1].stride = sizeof(debug3d__instance),
@@ -150,14 +151,16 @@ bool debug3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
                             },
                             .depth_stencil = {
                                 .depth_compare_func = SG_COMPAREFUNC_LESS_EQUAL,
-                            } };                            
+                            },
+                            .label = "debug3d_alphablend" };
     sg_pipeline_desc pip_desc_wire = 
         (sg_pipeline_desc) { .layout.buffers[0].stride = sizeof(rizz_3d_debug_vertex),
                              .shader = shader_wire.shd,
                              .index_type = SG_INDEXTYPE_NONE,
                              .primitive_type = SG_PRIMITIVETYPE_LINES,
                              .depth_stencil = { .depth_compare_func = SG_COMPAREFUNC_LESS_EQUAL,
-                                                .depth_write_enabled = true } };    
+                                                .depth_write_enabled = true },
+                             .label = "debug3d_wire" };    
     sg_pipeline pip_solid = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader_solid, &pip_desc_solid, &k_prims3d_vertex_layout_inst));
     sg_pipeline pip_solid_box = the_gfx->make_pipeline(
@@ -751,7 +754,7 @@ bool debug3d__generate_sphere_geometry(const sx_alloc* alloc, rizz_3d_debug_geom
     }
 
     // normals
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
     sx_vec3* face_normals = sx_malloc(tmp_alloc, sizeof(sx_vec3)*(num_indices/3));
     sx_assert_always(face_normals);
 
@@ -803,7 +806,7 @@ bool debug3d__generate_sphere_geometry(const sx_alloc* alloc, rizz_3d_debug_geom
         verts[i].normal = normal;
     }
 
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
 
     sx_assert(iindex == num_indices);
     return true;

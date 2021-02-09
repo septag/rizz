@@ -124,7 +124,7 @@ static bool init()
 
     uint16_t indices[] = { 0, 2, 1, 2, 0, 3 };
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
 
     // buffers
     g_nbody.vbuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
@@ -205,7 +205,7 @@ static bool init()
 
     g_nbody.camera_orbit = -SX_PIHALF;
 
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
 
     g_nbody.simulation_speed = 0.1f;
     g_nbody.damping = 1.0f;

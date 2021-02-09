@@ -192,7 +192,7 @@ static void update(float dt) {}
 // As an example, we modify vertices and use custom shader with the draw-data
 static void draw_custom(const drawsprite_params* params)
 {
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
     rizz_sprite_drawdata* dd =
         the_2d->sprite.make_drawdata_batch(g_ds.sprites, NUM_SPRITES, tmp_alloc);
 
@@ -270,7 +270,7 @@ static void draw_custom(const drawsprite_params* params)
     the_gfx->staged.apply_uniforms(SG_SHADERSTAGE_VS, 0, params, sizeof(*params));
 
     the_gfx->staged.draw(0, dd->num_indices, 1);
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
 }
 
 static void render()

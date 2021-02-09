@@ -71,7 +71,7 @@ static bool astar__findpath(const rizz_astar_world* world, const rizz_astar_agen
 {
 #define GRID_ITEM(_loc) (&calcgrid[(_loc).x + (_loc).y * world->width])
     const uint8_t openv = 1, closev = 2;
-    const sx_alloc* talloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(talloc);
 
     loc sloc, eloc;
     gridcoord(world, start, &sloc);
@@ -184,10 +184,10 @@ static bool astar__findpath(const rizz_astar_world* world, const rizz_astar_agen
     }
 
 fail:
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(talloc);
     return false;
 succeed:
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(talloc);
     return true;
 
 #undef GRID_ITEM

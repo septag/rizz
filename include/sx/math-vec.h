@@ -122,9 +122,9 @@ SX_FORCE_INLINE sx_mat3 sx_mat3_scale(float sx, float sy);
 SX_FORCE_INLINE sx_mat3 sx_mat3_SRT(float sx, float sy, float angle, float tx, float ty);
 SX_API          sx_mat3 sx_mat3_inv(const sx_mat3* _a);
 SX_API          sx_mat3 sx_mat3_mul(const sx_mat3* _a, const sx_mat3* _b);
+
 SX_API          sx_mat3 sx_quat_mat3(sx_quat quat);
 SX_API          sx_mat4 sx_quat_mat4(sx_quat quat);
-
 SX_FORCE_INLINE sx_vec3 sx_quat_mulXYZ(sx_quat _qa, sx_quat _qb);
 SX_FORCE_INLINE sx_quat sx_quat_mul(sx_quat p, sx_quat q);
 SX_FORCE_INLINE sx_quat sx_quat_inv(sx_quat _quat);

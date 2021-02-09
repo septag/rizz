@@ -379,12 +379,10 @@ sx_mat4 sx_mat4_view_lookat(sx_vec3 eye, sx_vec3 target, sx_vec3 up)
     sx_vec3 xaxis = sx_vec3_norm(sx_vec3_cross(zaxis, up));
     sx_vec3 yaxis = sx_vec3_cross(xaxis, zaxis);
 
-    // clang-format off
     return sx_mat4f(xaxis.x,    xaxis.y,    xaxis.z,    -sx_vec3_dot(xaxis, eye), 
                     yaxis.x,    yaxis.y,    yaxis.z,    -sx_vec3_dot(yaxis, eye), 
                     -zaxis.x,   -zaxis.y,   -zaxis.z,    sx_vec3_dot(zaxis, eye),
                     0,          0,          0,           1.0f);
-    // clang-format on
 }
 
 sx_mat4 sx_mat4_view_lookatLH(sx_vec3 eye, sx_vec3 target, sx_vec3 up)

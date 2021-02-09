@@ -603,7 +603,7 @@ rizz_sprite_animctrl sprite__animctrl_create(const rizz_sprite_animctrl_desc* de
     sx_assert(desc->num_transitions > 0);
 
     const sx_alloc* alloc = desc->alloc ? desc->alloc : g_spr.alloc;
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
 
     sx_handle_t handle = sx_handle_new_and_grow(g_spr.animctrl_handles, g_spr.alloc);
     sx_assert(handle);
@@ -626,7 +626,7 @@ rizz_sprite_animctrl sprite__animctrl_create(const rizz_sprite_animctrl_desc* de
                    sizeof(sprite__animctrl_transition) * num_transitions;
     uint8_t* buff = sx_malloc(alloc, total_sz);
     if (!buff) {
-        the_core->tmp_alloc_pop();
+        rizz_temp_alloc_end(tmp_alloc);
         sx_out_of_memory();
         return (rizz_sprite_animctrl){ 0 };
     }
@@ -709,7 +709,7 @@ rizz_sprite_animctrl sprite__animctrl_create(const rizz_sprite_animctrl_desc* de
 
     sx_array_push_byindex(g_spr.alloc, g_spr.animctrls, ctrl, sx_handle_index(handle));
 
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
     return (rizz_sprite_animctrl){ handle };
 }
 
@@ -841,7 +841,7 @@ static void sprite__animctrl_trigger_transition(sprite__animctrl* ctrl, int tran
 
 void sprite__animctrl_update_batch(const rizz_sprite_animctrl* handles, int num_ctrls, float dt)
 {
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
     rizz_sprite_animclip* clips = sx_malloc(tmp_alloc, sizeof(rizz_sprite_animclip) * num_ctrls);
     sprite__animctrl** ctrls = sx_malloc(tmp_alloc, sizeof(sprite__animctrl*) * num_ctrls);
     sx_assert(clips && ctrls);
@@ -889,7 +889,7 @@ void sprite__animctrl_update_batch(const rizz_sprite_animctrl* handles, int num_
         }
     }
 
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
 }
 
 void sprite__animctrl_update(rizz_sprite_animctrl handle, float dt)
@@ -1301,7 +1301,7 @@ bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx)
         return false;
     }
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
 
     rizz_shader shader = the_gfx->shader_make_with_data(
         tmp_alloc, k_sprite_vs_size, k_sprite_vs_data, k_sprite_vs_refl_size, k_sprite_vs_refl_data,
@@ -1315,7 +1315,8 @@ bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx)
                             .rasterizer = { .cull_mode = SG_CULLMODE_BACK },
                             .blend = { .enabled = true,
                                        .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
-                                       .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA } };
+                                       .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA },
+                            .label = "sprite" };
 
     g_spr.drawctx.pip = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader, &pip_desc, &k_sprite_vertex_layout));
@@ -1327,10 +1328,11 @@ bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx)
         k_sprite_wire_fs_refl_size, k_sprite_wire_fs_refl_data);
     g_spr.drawctx.shader_wire = shader_wire.shd;
     pip_desc.index_type = SG_INDEXTYPE_NONE;
+    pip_desc.label = "sprite_wire";
     g_spr.drawctx.pip_wire = the_gfx->make_pipeline(
         the_gfx->shader_bindto_pipeline(&shader_wire, &pip_desc, &k_sprite_wire_vertex_layout));
 
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
     return true;
 }
 
@@ -1646,7 +1648,7 @@ rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs, int n
         return NULL;
     }
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
 
     sprite__sort_key* keys = sx_malloc(tmp_alloc, sizeof(sprite__sort_key) * num_sprites);
     sx_assert(keys);
@@ -1786,7 +1788,7 @@ rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs, int n
     dd->num_batches = num_batches;
     dd->num_sprites = num_sprites;
 
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
     return dd;
 }
 
@@ -1801,7 +1803,7 @@ void sprite__drawdata_free(rizz_sprite_drawdata* data, const sx_alloc* alloc) {
 void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp, 
                         const sx_mat3* mats, sx_color* tints) {
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
 
     rizz_sprite_drawdata* dd =
         sprite__drawdata_make_batch(sprs, num_sprites, tmp_alloc);
@@ -1815,7 +1817,7 @@ void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4*
         tints = sx_malloc(tmp_alloc, sizeof(sx_color)*num_sprites);
         if (!tints) {
             sx_memory_fail();
-            the_core->tmp_alloc_pop();
+            rizz_temp_alloc_end(tmp_alloc);
             return;
         }
         for (int i = 0; i < num_sprites; i++) {
@@ -1879,7 +1881,7 @@ void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4*
     }
     sx_free(tmp_alloc, dd);
 
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
 }
 
 void sprite__draw(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat, sx_color tint) {
@@ -1892,11 +1894,11 @@ void sprite__draw_batch_srt(const rizz_sprite* sprs, int num_sprites, const sx_m
 {
     sx_assert(poss);
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
 
     sx_mat3* mats = (sx_mat3*)sx_malloc(tmp_alloc, sizeof(sx_mat3)*num_sprites);
     if (!mats) {
-        the_core->tmp_alloc_pop();
+        rizz_temp_alloc_end(tmp_alloc);
         sx_memory_fail();
         return;
     }
@@ -1930,7 +1932,7 @@ void sprite__draw_batch_srt(const rizz_sprite* sprs, int num_sprites, const sx_m
     sprite__draw_batch(sprs, num_sprites, vp, mats, tints);
 
     sx_free(tmp_alloc, mats);
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
 }
 
 void sprite__draw_srt(rizz_sprite spr, const sx_mat4* vp, sx_vec2 pos, float angle, sx_vec2 scale, 
@@ -1941,7 +1943,7 @@ void sprite__draw_srt(rizz_sprite spr, const sx_mat4* vp, sx_vec2 pos, float ang
 
 void sprite__draw_wireframe_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp, 
                                          const sx_mat3* mats) {
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
 
     rizz_sprite_drawdata* dd =
         sprite__drawdata_make_batch(sprs, num_sprites, tmp_alloc);
@@ -2001,7 +2003,7 @@ void sprite__draw_wireframe_batch(const rizz_sprite* sprs, int num_sprites, cons
         g_spr.draw_api->draw(batch->index_start, batch->index_count, 1);
     }    
 
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
 }
 
 void sprite__draw_wireframe(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat)

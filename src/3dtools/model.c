@@ -311,7 +311,7 @@ static void model__calculate_tangents(rizz_model_mesh* mesh, const rizz_model_ge
     sg_index_type index_type = mesh->index_type;
     void* ibuff = mesh->cpu.ibuff;
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_temp_alloc_begin(tmp_alloc);
     sx_vec3* tan1 = sx_calloc(tmp_alloc, sizeof(sx_vec3)*2*mesh->num_vertices);
     if (!tan1) {
         sx_out_of_memory();
@@ -391,7 +391,7 @@ static void model__calculate_tangents(rizz_model_mesh* mesh, const rizz_model_ge
         }
     }
 
-    the_core->tmp_alloc_pop();
+    rizz_temp_alloc_end(tmp_alloc);
 }
 
 static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometry_layout* vertex_layout, 
@@ -749,7 +749,7 @@ static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
     char ext[32];
     sx_os_path_ext(ext, sizeof(ext), params->path);
     if (sx_strequalnocase(ext, ".gltf") || sx_strequalnocase(ext, ".glb")) {
-        const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+        rizz_temp_alloc_begin(tmp_alloc);
 
         cgltf_data* gltf = data->user1;
         cgltf_options options = {
@@ -767,7 +767,7 @@ static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
         };
         cgltf_result result = cgltf_load_buffers(&options, gltf, params->path);
         if (result != cgltf_result_success) {
-            the_core->tmp_alloc_pop();
+            rizz_temp_alloc_end(tmp_alloc);
             return false;
         }
 
@@ -850,7 +850,7 @@ static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
 
         sx_memcpy(&model->layout, layout, sizeof(rizz_model_geometry_layout));
 
-        the_core->tmp_alloc_pop();
+        rizz_temp_alloc_end(tmp_alloc);
     }   // if glb
 
     return true;

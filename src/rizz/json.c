@@ -66,7 +66,7 @@ static bool rizz__json_on_load(rizz_asset_load_data* data, const rizz_asset_load
         }
     }
 
-    const sx_alloc* tmp_alloc = the__core.tmp_alloc_push();
+    rizz__temp_alloc_begin(tmp_alloc);
     
     cj5_token* tmp_tokens = sx_malloc(tmp_alloc, sizeof(cj5_token)*num_tmp_tokens);
     sx_assert_always(tmp_tokens);
@@ -105,7 +105,7 @@ static bool rizz__json_on_load(rizz_asset_load_data* data, const rizz_asset_load
     json->j.user = jparams->user;
     sx_mem_addref(json->source_mem);
 
-    the__core.tmp_alloc_pop();
+    rizz__temp_alloc_end(tmp_alloc);
     return true;
 }
 
