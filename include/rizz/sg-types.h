@@ -1079,6 +1079,7 @@ typedef struct sg_image_desc {
     uint32_t max_anisotropy;
     float min_lod;
     float max_lod;
+    sg_compare_func compare_func;
     sg_image_content content;
     const char* label;
     /* GL specific */

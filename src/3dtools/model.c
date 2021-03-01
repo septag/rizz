@@ -481,20 +481,21 @@ static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometr
     }
 }
 
-static bool model__setup_gpu_buffers(rizz_model* model, sg_usage vbuff_usage, sg_usage ibuff_usage) 
+static bool model__setup_gpu_buffers(rizz_model* model, sg_usage vbuff_usage, sg_usage ibuff_usage, const char* name) 
 {
     rizz_model_geometry_layout* layout = &model->layout;
     for (int i = 0; i < model->num_meshes; i++) {
         rizz_model_mesh* mesh = &model->meshes[i];
 
         if (vbuff_usage != _SG_USAGE_DEFAULT) {
-        int buffer_index = 0;
+            int buffer_index = 0;
             while (layout->buffer_strides[buffer_index]) {
                 mesh->gpu.vbuffs[buffer_index] = the_gfx->make_buffer(&(sg_buffer_desc) {
                     .size = layout->buffer_strides[buffer_index]*mesh->num_vertices,
                     .type = SG_BUFFERTYPE_VERTEXBUFFER,
                     .usage = vbuff_usage,
-                    .content = mesh->cpu.vbuffs[buffer_index]
+                    .content = mesh->cpu.vbuffs[buffer_index],
+                    .label = the_core->str_alloc(&mesh->gpu._vbuff_name_hdls[buffer_index], "model_vbuff_%s", name)
                 });
                 if (!mesh->gpu.vbuffs[buffer_index].id) {
                     return false;
@@ -509,7 +510,8 @@ static bool model__setup_gpu_buffers(rizz_model* model, sg_usage vbuff_usage, sg
                     sizeof(uint16_t) : sizeof(uint32_t)) * mesh->num_indices,
                 .type = SG_BUFFERTYPE_INDEXBUFFER,
                 .usage = ibuff_usage,
-                .content = mesh->cpu.ibuff
+                .content = mesh->cpu.ibuff,
+                .label = the_core->str_alloc(&mesh->gpu._ibuff_name_hdl, "model_ibuff_%s", name)
             });
         }
 
@@ -864,7 +866,9 @@ static void model__on_finalize(rizz_asset_load_data* data, const rizz_asset_load
     const rizz_model_load_params* lparams = params->params;
     rizz_model* model = data->obj.ptr;
 
-    model__setup_gpu_buffers(model, lparams->vbuff_usage, lparams->ibuff_usage);
+    char basename[64];
+    model__setup_gpu_buffers(model, lparams->vbuff_usage, lparams->ibuff_usage, 
+                             sx_os_path_basename(basename, sizeof(basename), params->path));
     sx_linalloc_growable_destroy((sx_linalloc_growable*)data->user2);    // free parse_buffer (see on_prepare for allocation)
 }
 
@@ -888,8 +892,14 @@ static void model__on_release(rizz_asset_obj obj, const sx_alloc* alloc)
         rizz_model_mesh* mesh = &model->meshes[i];
         for (int k = 0; k < mesh->num_vbuffs; k++) {
             the_gfx->destroy_buffer(mesh->gpu.vbuffs[k]);
+            if (mesh->gpu._vbuff_name_hdls[k])
+                the_core->str_free(mesh->gpu._vbuff_name_hdls[k]);
         }
+
         the_gfx->destroy_buffer(mesh->gpu.ibuff);
+
+        if (mesh->gpu._ibuff_name_hdl)
+            the_core->str_free(mesh->gpu._ibuff_name_hdl);
 
         for (int k = 0; k < mesh->num_submeshes; k++) {
             rizz_model_submesh* submesh = &mesh->submeshes[k];
@@ -960,13 +970,13 @@ bool model__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx, 
                 .size = sizeof(rizz_3d_debug_vertex)*geo.num_verts,
                 .type = SG_BUFFERTYPE_VERTEXBUFFER,
                 .content = geo.verts,
-                .label = "__failed_model_vbuff__"
+                .label = "model_failed_vbuff"
             });
             mesh->gpu.ibuff = the_gfx->make_buffer(&(sg_buffer_desc) {
                 .size = sizeof(uint16_t)*geo.num_indices,
                 .type = SG_BUFFERTYPE_INDEXBUFFER,
                 .content = geo.indices,
-                .label = "__failed_model_ibuff__"
+                .label = "model_failed_ibuff"
             });
             mesh->num_vertices = geo.num_verts;
             mesh->num_indices = geo.num_indices;

@@ -958,11 +958,13 @@ static bool imgui__resize_buffers(int max_verts, int max_indices)
     g_imgui.bind.vertex_buffers[0] =
         the_gfx->make_buffer(&(sg_buffer_desc){ .type = SG_BUFFERTYPE_VERTEXBUFFER,
                                                 .usage = SG_USAGE_STREAM,
-                                                .size = sizeof(ImDrawVert) * max_verts });
+                                                .size = sizeof(ImDrawVert) * max_verts,
+                                                .label = "imgui_vbuff" });
     g_imgui.bind.index_buffer =
         the_gfx->make_buffer(&(sg_buffer_desc){ .type = SG_BUFFERTYPE_INDEXBUFFER,
                                                 .usage = SG_USAGE_STREAM,
-                                                .size = sizeof(uint16_t) * max_indices });
+                                                .size = sizeof(uint16_t) * max_indices,
+                                                .label = "imgui_ibuff" });
     if (!g_imgui.bind.vertex_buffers[0].id || !g_imgui.bind.index_buffer.id) {
         return false;
     }

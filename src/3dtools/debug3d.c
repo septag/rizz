@@ -199,15 +199,18 @@ bool debug3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
     g_debug3d.dyn_vbuff = the_gfx->make_buffer(&(sg_buffer_desc){
         .type = SG_BUFFERTYPE_VERTEXBUFFER,
         .usage = SG_USAGE_STREAM,
-        .size = sizeof(rizz_3d_debug_vertex) * MAX_DYN_VERTICES });
+        .size = sizeof(rizz_3d_debug_vertex) * MAX_DYN_VERTICES,
+        .label = "debug3d_vbuffer" });
     g_debug3d.dyn_ibuff = the_gfx->make_buffer(&(sg_buffer_desc){
         .type = SG_BUFFERTYPE_INDEXBUFFER,
         .usage = SG_USAGE_STREAM,
-        .size = sizeof(rizz_3d_debug_vertex) * MAX_DYN_INDICES });
+        .size = sizeof(rizz_3d_debug_vertex) * MAX_DYN_INDICES,
+        .label = "debug3d_ibuffer"});
     g_debug3d.instance_buff = the_gfx->make_buffer(&(sg_buffer_desc) {
         .size = sizeof(debug3d__instance) * MAX_INSTANCES,
         .type = SG_BUFFERTYPE_VERTEXBUFFER,
         .usage = SG_USAGE_STREAM,
+        .label = "debug3d_instbuffer"
     });
     if (g_debug3d.dyn_vbuff.id == 0 || g_debug3d.dyn_ibuff.id == 0 || g_debug3d.instance_buff.id == 0) {
         return false;
@@ -221,12 +224,14 @@ bool debug3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
         g_debug3d.unit_box.vb = the_gfx->make_buffer(&(sg_buffer_desc) {
             .size = unit_box.num_verts * sizeof(rizz_3d_debug_vertex),
             .type = SG_BUFFERTYPE_VERTEXBUFFER,
-            .content = unit_box.verts
+            .content = unit_box.verts,
+            .label = "debug3d_boxshape_vbuff"
         });
         g_debug3d.unit_box.ib = the_gfx->make_buffer(&(sg_buffer_desc) {
             .size = unit_box.num_indices * sizeof(uint16_t),
             .type = SG_BUFFERTYPE_INDEXBUFFER,
-            .content = unit_box.indices
+            .content = unit_box.indices,
+            .label = "debug3d_boxshape_ibuff"
         });
         g_debug3d.unit_box.num_verts = unit_box.num_verts;
         g_debug3d.unit_box.num_indices = unit_box.num_indices;
@@ -239,12 +244,14 @@ bool debug3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
         g_debug3d.unit_sphere.vb = the_gfx->make_buffer(&(sg_buffer_desc) {
             .size = unit_sphere.num_verts * sizeof(rizz_3d_debug_vertex),
             .type = SG_BUFFERTYPE_VERTEXBUFFER,
-            .content = unit_sphere.verts
+            .content = unit_sphere.verts,
+            .label = "debug3d_sphereshape_vbuff"
         });
         g_debug3d.unit_sphere.ib = the_gfx->make_buffer(&(sg_buffer_desc) {
             .size = unit_sphere.num_indices * sizeof(uint16_t),
             .type = SG_BUFFERTYPE_INDEXBUFFER,
-            .content = unit_sphere.indices
+            .content = unit_sphere.indices,
+            .label = "debug3d_sphereshape_ibuff"
         });
         g_debug3d.unit_sphere.num_verts = unit_sphere.num_verts;
         g_debug3d.unit_sphere.num_indices = unit_sphere.num_indices;
@@ -258,11 +265,13 @@ bool debug3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
         g_debug3d.unit_cone.vb = the_gfx->make_buffer(
             &(sg_buffer_desc){ .size = unit_cone.num_verts * sizeof(rizz_3d_debug_vertex),
                                .type = SG_BUFFERTYPE_VERTEXBUFFER,
-                               .content = unit_cone.verts });
+                               .content = unit_cone.verts,
+                               .label = "debug3d_coneshape_vbuff" });
         g_debug3d.unit_cone.ib = the_gfx->make_buffer(
             &(sg_buffer_desc){ .size = unit_cone.num_indices * sizeof(uint16_t),
                                .type = SG_BUFFERTYPE_INDEXBUFFER,
-                               .content = unit_cone.indices });
+                               .content = unit_cone.indices,
+                               .label = "debug3d_coneshape_ibuff" });
         g_debug3d.unit_cone.num_verts = unit_cone.num_verts;
         g_debug3d.unit_cone.num_indices = unit_cone.num_indices;
     }
@@ -1182,6 +1191,7 @@ void debug3d__set_max_instances(int max_instances)
         .size = sizeof(debug3d__instance) * max_instances,
         .type = SG_BUFFERTYPE_VERTEXBUFFER,
         .usage = SG_USAGE_STREAM,
+        .label = "debug3d_instbuff"
     });
 
     sx_assert_always(g_debug3d.instance_buff.id);
@@ -1199,7 +1209,8 @@ void debug3d__set_max_vertices(int max_verts)
     g_debug3d.dyn_vbuff = the_gfx->make_buffer(&(sg_buffer_desc){
         .type = SG_BUFFERTYPE_VERTEXBUFFER,
         .usage = SG_USAGE_STREAM,
-        .size = sizeof(rizz_3d_debug_vertex) * max_verts });
+        .size = sizeof(rizz_3d_debug_vertex) * max_verts,
+        .label = "debug3d_vbuff" });
 
     sx_assert_always(g_debug3d.instance_buff.id);
     g_debug3d.max_verts = max_verts;
@@ -1216,7 +1227,8 @@ void debug3d__set_max_indices(int max_indices)
     g_debug3d.dyn_ibuff = the_gfx->make_buffer(&(sg_buffer_desc){
         .type = SG_BUFFERTYPE_INDEXBUFFER,
         .usage = SG_USAGE_STREAM,
-        .size = sizeof(rizz_3d_debug_vertex) * max_indices });
+        .size = sizeof(rizz_3d_debug_vertex) * max_indices,
+        .label = "debug3d_ibuff" });
 
     sx_assert_always(g_debug3d.dyn_ibuff.id);
     g_debug3d.max_indices = max_indices;
@@ -1268,12 +1280,13 @@ void debug3d__draw_lines(int num_lines, const rizz_3d_debug_line* lines, const s
 
     for (int i = 0; i < num_lines; i++) {
         sx_color c = colors ? colors[i] : sx_colorn(0xffffffff);
+        int index = i*2;
 
-        verts[0].pos = lines[i].p0;
-        verts[0].color = c;
+        verts[index].pos = lines[i].p0;
+        verts[index].color = c;
 
-        verts[1].pos = lines[i].p1;
-        verts[1].color = c;
+        verts[index+1].pos = lines[i].p1;
+        verts[index+1].color = c;
     }
 
     int offset = draw_api->append_buffer(g_debug3d.dyn_vbuff, verts, data_size);
@@ -1382,4 +1395,93 @@ void debug3d__draw_cone(float radius, float depth, const sx_tx3d* tx, const sx_m
 {
     debug3d__draw_cones(&radius, &depth, tx, 1, viewproj_mat, &tint);
 }
+
+void debug3d__draw_axis(const sx_mat4* mat, const sx_mat4* viewproj_mat, float scale)
+{
+    if (scale <= 0) {
+        scale = 1.0f;
+    }
+
+    sx_vec3 xaxis = sx_vec3fv(mat->fc1);
+    sx_vec3 yaxis = sx_vec3fv(mat->fc2);
+    sx_vec3 zaxis = sx_vec3fv(mat->fc3);
+    sx_vec3 p = sx_vec3fv(mat->fc4);
+    rizz_3d_debug_line lines[3] = {
+        {
+            .p0 = p,
+            .p1 = sx_vec3_add(p, sx_vec3_mulf(xaxis, scale))
+        },
+        {
+            .p0 = p,
+            .p1 = sx_vec3_add(p, sx_vec3_mulf(yaxis, scale))
+        },
+        {
+            .p0 = p,
+            .p1 = sx_vec3_add(p, sx_vec3_mulf(zaxis, scale))
+        }
+    };
+    sx_color colors[3] = {
+        sx_color4u(255, 0, 0, 255),
+        sx_color4u(0, 255, 0, 255),
+        sx_color4u(0, 0, 255, 255)
+    };
+
+    debug3d__draw_lines(3, lines, viewproj_mat, colors);
+}
+
+void debug3d__draw_camera(const rizz_camera* cam, const sx_mat4* viewproj_mat)
+{
+    sx_assert(cam);
+
+    sx_mat4 cam_mat = sx_mat4v(sx_vec4v3(cam->right, 0), 
+                               sx_vec4v3(cam->up, 0), 
+                               sx_vec4v3(cam->forward, 0), 
+                               sx_vec4v3(cam->pos, 1.0f));
+    debug3d__draw_axis(&cam_mat, viewproj_mat, 0.5f);
+
+    sx_vec3 frustum_pts[8];
+    the_camera->calc_frustum_points(cam, frustum_pts);
+
+    sx_vec3 near_plane[5] = {
+        frustum_pts[0],
+        frustum_pts[1],
+        frustum_pts[2],
+        frustum_pts[3],
+        frustum_pts[0],
+    };
+
+    sx_vec3 far_plane[5] = {
+        frustum_pts[4],
+        frustum_pts[5],
+        frustum_pts[6],
+        frustum_pts[7],
+        frustum_pts[4],
+    };
+
+    debug3d__draw_path(near_plane, 5, viewproj_mat, SX_COLOR_WHITE);
+    debug3d__draw_path(far_plane, 5, viewproj_mat, SX_COLOR_WHITE);
+
+    sx_plane _p = sx_plane3p(frustum_pts[0], frustum_pts[1], frustum_pts[2]);
+    sx_unused(_p);
+    
+    rizz_3d_debug_line lines1[4] = { { .p0 = frustum_pts[0], .p1 = frustum_pts[4] },
+                                     { .p0 = frustum_pts[1], .p1 = frustum_pts[7] },
+                                     { .p0 = frustum_pts[2], .p1 = frustum_pts[6] },
+                                     { .p0 = frustum_pts[3], .p1 = frustum_pts[5] } };
+    debug3d__draw_lines(4, lines1, viewproj_mat, NULL);
+    
+    rizz_3d_debug_line lines2[4] = { { .p0 = cam->pos, .p1 = frustum_pts[0] },
+                                     { .p0 = cam->pos, .p1 = frustum_pts[1] },
+                                     { .p0 = cam->pos, .p1 = frustum_pts[2] },
+                                     { .p0 = cam->pos, .p1 = frustum_pts[3] } };
+    const sx_color colors2[] = {
+        sx_color4u(100, 100, 100, 255),
+        sx_color4u(100, 100, 100, 255),
+        sx_color4u(100, 100, 100, 255),
+        sx_color4u(100, 100, 100, 255)
+    };
+    debug3d__draw_lines(4, lines2, viewproj_mat, colors2);
+
+}
+
 

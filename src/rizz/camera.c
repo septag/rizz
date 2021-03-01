@@ -110,8 +110,8 @@ static void rizz__calc_frustum_points_range(const rizz_camera* cam, sx_vec3 frus
     // far quad (normal inwards)
     frustum[4] = sx_vec3_sub(center_far, sx_vec3_add(xfar_scaled, yfar_scaled));
     frustum[5] = sx_vec3_sub(center_far, sx_vec3_sub(xfar_scaled, yfar_scaled));
-    frustum[6] = sx_vec3_add(center_far, sx_vec3_sub(xfar_scaled, yfar_scaled));
-    frustum[7] = sx_vec3_add(center_far, sx_vec3_add(xfar_scaled, yfar_scaled));
+    frustum[6] = sx_vec3_add(center_far, sx_vec3_add(xfar_scaled, yfar_scaled));
+    frustum[7] = sx_vec3_add(center_far, sx_vec3_sub(xfar_scaled, yfar_scaled));
 }
 
 static void rizz__calc_frustum_points(const rizz_camera* cam, sx_vec3 frustum[8])

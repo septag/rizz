@@ -2728,6 +2728,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_image_panel(sg_imgui_t* ctx, sg_image img) {
             the__imgui.Text("Max Anisotropy:    %d", desc->max_anisotropy);
             the__imgui.Text("Min LOD:           %.3f", desc->min_lod);
             the__imgui.Text("Max LOD:           %.3f", desc->max_lod);
+            the__imgui.Text("Comparison Func:   %s", _sg_imgui_comparefunc_string(desc->compare_func));
             the__imgui.Text("SRGB:              %s", desc->srgb ? "YES":"NO");
             if (desc->usage != SG_USAGE_IMMUTABLE) {
                 the__imgui.Separator();
@@ -2915,7 +2916,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_blend_state(const sg_blend_state* bs) {
     the__imgui.Text("Color Write Mask: %s", _sg_imgui_colormask_string(bs->color_write_mask));
     the__imgui.Text("Attachment Count: %d", bs->color_attachment_count);
     for (int i = 0; i < bs->color_attachment_count; i++) {
-        the__imgui.Text("Color Format[%d]: %s", _sg_imgui_pixelformat_string(bs->color_formats[i]));
+        the__imgui.Text("Color Format[%d]: %s", i + 1, _sg_imgui_pixelformat_string(bs->color_formats[i]));
     }
     the__imgui.Text("Depth Format:     %s", _sg_imgui_pixelformat_string(bs->depth_format));
     the__imgui.Text("Blend Color:      %.3f %.3f %.3f %.3f", bs->blend_color[0], bs->blend_color[1], bs->blend_color[2], bs->blend_color[3]);

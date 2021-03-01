@@ -174,6 +174,9 @@ typedef struct rizz_model_mesh {
     struct gpu_t {
         sg_buffer vbuffs[SG_MAX_SHADERSTAGE_BUFFERS];
         sg_buffer ibuff;
+
+        uint32_t  _vbuff_name_hdls[SG_MAX_SHADERSTAGE_BUFFERS];
+        uint32_t  _ibuff_name_hdl;
     } gpu;
 } rizz_model_mesh;
 
@@ -239,6 +242,8 @@ typedef struct rizz_api_3d
 
         void (*draw_line)(const sx_vec3 p0, const sx_vec3 p1, const sx_mat4* viewproj_mat, const sx_color color);
         void (*draw_lines)(int num_lines, const rizz_3d_debug_line* lines, const sx_mat4* viewproj_mat, const sx_color* colors);
+        void (*draw_axis)(const sx_mat4* mat, const sx_mat4* viewproj_mat, float scale);
+        void (*draw_camera)(const rizz_camera* cam, const sx_mat4* viewproj_mat);
 
         void (*set_draw_api)(rizz_api_gfx_draw* draw_api);
         void (*set_max_instances)(int max_instances);

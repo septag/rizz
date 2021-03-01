@@ -224,6 +224,10 @@ static rizz_asset_load_data font__fons_on_prepare(const rizz_asset_load_params* 
     fons->f.img_atlas.id = 0;
     fons->ignore_dpiscale = fparams->ignore_dpiscale;
 
+    char name[64];
+    sx_os_path_basename(name, sizeof(name), params->path);
+    sx_strcpy(fons->name, sizeof(fons->name), name);
+
     fons->ctx = fonsCreateInternal(&(FONSparams){ .width = atlas_width,
                                                   .height = atlas_height,
                                                   .flags = FONS_ZERO_TOPLEFT,
@@ -327,10 +331,12 @@ bool font__resize_draw_limits(int max_verts)
         return true;
     }
 
-    g_font.vbuff =
-        the_gfx->make_buffer(&(sg_buffer_desc){ .size = sizeof(rizz_sprite_vertex) * max_verts,
-                                                .usage = SG_USAGE_STREAM,
-                                                .type = SG_BUFFERTYPE_VERTEXBUFFER });
+    g_font.vbuff = the_gfx->make_buffer(&(sg_buffer_desc)
+        { .size = sizeof(rizz_sprite_vertex) * max_verts,
+          .usage = SG_USAGE_STREAM,
+          .type = SG_BUFFERTYPE_VERTEXBUFFER,
+          .label = "font_vbuff"
+    });
 
     return g_font.vbuff.id;
 }

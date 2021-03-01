@@ -20,8 +20,7 @@ void debug3d__draw_spheres(const sx_vec3* centers, const float* radiuss, int cou
                            const sx_color* tints);
 void debug3d__draw_cones(const float* radiuss, const float* depths, const sx_tx3d* txs, int count, 
                          const sx_mat4* viewproj_mat, const sx_color* tints);
-void debug3d__draw_cone(float radius, float depth, const sx_tx3d* tx, const sx_mat4* viewproj_mat, 
-                        sx_color tint);
+void debug3d__draw_cone(float radius, float depth, const sx_tx3d* tx, const sx_mat4* viewproj_mat, sx_color tint);
 
 bool debug3d__generate_box_geometry(const sx_alloc* alloc, rizz_3d_debug_geometry* geo, sx_vec3 extents);
 bool debug3d__generate_sphere_geometry(const sx_alloc* alloc, rizz_3d_debug_geometry* geo,
@@ -40,6 +39,9 @@ void debug3d__draw_aabbs(const sx_aabb* aabbs, int num_aabbs, const sx_mat4* vie
 void debug3d__draw_path(const sx_vec3* points, int num_points, const sx_mat4* viewproj_mat, const sx_color color);
 void debug3d__draw_line(const sx_vec3 p0, const sx_vec3 p1, const sx_mat4* viewproj_mat, const sx_color color);
 void debug3d__draw_lines(int num_lines, const rizz_3d_debug_line* lines, const sx_mat4* viewproj_mat, const sx_color* colors);
+void debug3d__draw_axis(const sx_mat4* mat, const sx_mat4* viewproj_mat, float scale);
+void debug3d__draw_camera(const rizz_camera* cam, const sx_mat4* viewproj_mat);
+
 void debug3d__set_draw_api(rizz_api_gfx_draw* draw_api);
 void debug3d__set_max_instances(int max_instances);
 void debug3d__set_max_vertices(int max_verts);

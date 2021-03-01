@@ -1241,17 +1241,19 @@ bool sprite__resize_draw_limits(int max_verts, int max_indices)
         return true;
     }
 
-    dc->vbuff[0] =
-        the_gfx->make_buffer(&(sg_buffer_desc){ .size = sizeof(rizz_sprite_vertex) * max_verts,
-                                                .usage = SG_USAGE_STREAM,
-                                                .type = SG_BUFFERTYPE_VERTEXBUFFER });
+    dc->vbuff[0] = the_gfx->make_buffer(&(sg_buffer_desc){ .size = sizeof(rizz_sprite_vertex) * max_verts,
+                                                           .usage = SG_USAGE_STREAM,
+                                                           .type = SG_BUFFERTYPE_VERTEXBUFFER,
+                                                           .label = "sprite_vbuffer1" });
     dc->vbuff[1] = the_gfx->make_buffer(
         &(sg_buffer_desc){ .size = sizeof(sprite__vertex_transform) * max_verts,
                            .usage = SG_USAGE_STREAM,
-                           .type = SG_BUFFERTYPE_VERTEXBUFFER });
+                           .type = SG_BUFFERTYPE_VERTEXBUFFER,
+                           .label = "sprite_vbuffer2" });
     dc->ibuff = the_gfx->make_buffer(&(sg_buffer_desc){ .size = sizeof(uint16_t) * max_indices,
                                                         .usage = SG_USAGE_STREAM,
-                                                        .type = SG_BUFFERTYPE_INDEXBUFFER });
+                                                        .type = SG_BUFFERTYPE_INDEXBUFFER,
+                                                        .label = "sprite_ibuffer" });
 
     return dc->vbuff[0].id && dc->vbuff[1].id && dc->ibuff.id;
 }
