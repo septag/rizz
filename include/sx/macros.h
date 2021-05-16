@@ -186,7 +186,7 @@
     !_sx_var(_i_);                 \
     (_sx_var(_i_) += 1), end)      
 
-#define sx_scope(end)  for (       \
+#define sx_scope(end) for (        \
     int _sx_var(_i_) = 0;          \
     !_sx_var(_i_);                 \
     (_sx_var(_i_) += 1), end)
