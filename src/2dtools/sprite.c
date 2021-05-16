@@ -603,113 +603,114 @@ rizz_sprite_animctrl sprite__animctrl_create(const rizz_sprite_animctrl_desc* de
     sx_assert(desc->num_transitions > 0);
 
     const sx_alloc* alloc = desc->alloc ? desc->alloc : g_spr.alloc;
-    rizz_temp_alloc_begin(tmp_alloc);
-
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
     sx_handle_t handle = sx_handle_new_and_grow(g_spr.animctrl_handles, g_spr.alloc);
     sx_assert(handle);
 
-    uint32_t* hashes = sx_malloc(tmp_alloc, sizeof(uint32_t) * num_states);
-    sx_assert(hashes);
-    for (int i = 0; i < num_states; i++)
-        hashes[i] = sx_hash_fnv32_str(desc->states[i].name);
+    sx_scope(the_core->tmp_alloc_pop()) {
 
-    // each element is count of transitions for each state
-    int* transition_counts = sx_malloc(tmp_alloc, sizeof(int) * num_states);
-    sx_assert(transition_counts);
-    sx_memset(transition_counts, 0x0, sizeof(int) * num_states);
+        uint32_t* hashes = sx_malloc(tmp_alloc, sizeof(uint32_t) * num_states);
+        sx_assert(hashes);
+        for (int i = 0; i < num_states; i++)
+            hashes[i] = sx_hash_fnv32_str(desc->states[i].name);
 
-    // each element is index to states array
-    int* transition_map = sx_malloc(tmp_alloc, sizeof(int) * num_transitions);
-    sx_assert(transition_map);
+        // each element is count of transitions for each state
+        int* transition_counts = sx_malloc(tmp_alloc, sizeof(int) * num_states);
+        sx_assert(transition_counts);
+        sx_memset(transition_counts, 0x0, sizeof(int) * num_states);
 
-    int total_sz = sizeof(sprite__animctrl_state) * num_states +
-                   sizeof(sprite__animctrl_transition) * num_transitions;
-    uint8_t* buff = sx_malloc(alloc, total_sz);
-    if (!buff) {
-        rizz_temp_alloc_end(tmp_alloc);
-        sx_out_of_memory();
-        return (rizz_sprite_animctrl){ 0 };
-    }
-    void* _buff = buff;
+        // each element is index to states array
+        int* transition_map = sx_malloc(tmp_alloc, sizeof(int) * num_transitions);
+        sx_assert(transition_map);
 
-    // populate remap and count arrays
-    for (int i = 0; i < num_transitions; i++) {
-        sx_assert(desc->transitions[i].state);
-        sx_assert(desc->transitions[i].target_state);
+        int total_sz = sizeof(sprite__animctrl_state) * num_states +
+                       sizeof(sprite__animctrl_transition) * num_transitions;
+        uint8_t* buff = sx_malloc(alloc, total_sz);
+        if (!buff) {
+            the_core->tmp_alloc_pop();
+            sx_out_of_memory();
+            return (rizz_sprite_animctrl){ 0 };
+        }
+        void* _buff = buff;
 
-        int state_id = sprite__animctrl_find_state(desc->transitions[i].state, hashes, num_states);
-        transition_map[i] = state_id;
-        ++transition_counts[state_id];
-    }
+        // populate remap and count arrays
+        for (int i = 0; i < num_transitions; i++) {
+            sx_assert(desc->transitions[i].state);
+            sx_assert(desc->transitions[i].target_state);
 
-    // allocate states
-    sprite__animctrl_state** states =
-        sx_malloc(tmp_alloc, sizeof(sprite__animctrl_state) * num_states);
-    sx_assert(states);
+            int state_id = sprite__animctrl_find_state(desc->transitions[i].state, hashes, num_states);
+            transition_map[i] = state_id;
+            ++transition_counts[state_id];
+        }
 
-    for (int i = 0; i < num_states; i++) {
-        sprite__animctrl_state* state = (sprite__animctrl_state*)buff;
-        states[i] = state;
+        // allocate states
+        sprite__animctrl_state** states =
+            sx_malloc(tmp_alloc, sizeof(sprite__animctrl_state) * num_states);
+        sx_assert(states);
 
-        sx_strcpy(state->name, sizeof(state->name), desc->states[i].name);
-        state->clip = desc->states[i].clip;
-        sx_assert_always(sx_handle_valid(g_spr.animclip_handles, state->clip.id));
-        state->num_transitions = transition_counts[i];
+        for (int i = 0; i < num_states; i++) {
+            sprite__animctrl_state* state = (sprite__animctrl_state*)buff;
+            states[i] = state;
 
-        buff += sizeof(sprite__animctrl_state);
+            sx_strcpy(state->name, sizeof(state->name), desc->states[i].name);
+            state->clip = desc->states[i].clip;
+            sx_assert_always(sx_handle_valid(g_spr.animclip_handles, state->clip.id));
+            state->num_transitions = transition_counts[i];
 
-        // transition array for each state
-        sprite__animctrl_transition* transitions = (sprite__animctrl_transition*)buff;
-        state->transitions = transitions;
+            buff += sizeof(sprite__animctrl_state);
 
-        for (int t = 0, tidx = 0; t < num_transitions; t++) {
-            if (transition_map[t] == i) {
-                const char* param_name = desc->transitions[t].trigger.param_name;
-                // save index instead of pointer, later we will resolve it to valid pointers
-                transitions[tidx].target = (void*)(intptr_t)sprite__animctrl_find_state(
-                    desc->transitions[t].target_state, hashes, num_states);
-                transitions[tidx].trigger = (sprite__animctrl_trigger){
-                    .param_id = param_name
-                                    ? sprite__animctrl_find_param_indesc(param_name, desc->params)
-                                    : ANIMCTRL_PARAM_ID_END,
-                    .func = desc->transitions[t].trigger.func,
-                    .value.i = desc->transitions[t].trigger.value.i
-                };
-                transitions[tidx].trigger_event = desc->transitions[t].trigger_event;
-                transitions[tidx].event = desc->transitions[t].event;
-                tidx++;
+            // transition array for each state
+            sprite__animctrl_transition* transitions = (sprite__animctrl_transition*)buff;
+            state->transitions = transitions;
+
+            for (int t = 0, tidx = 0; t < num_transitions; t++) {
+                if (transition_map[t] == i) {
+                    const char* param_name = desc->transitions[t].trigger.param_name;
+                    // save index instead of pointer, later we will resolve it to valid pointers
+                    transitions[tidx].target = (void*)(intptr_t)sprite__animctrl_find_state(
+                        desc->transitions[t].target_state, hashes, num_states);
+                    transitions[tidx].trigger = (sprite__animctrl_trigger){
+                        .param_id = param_name
+                                        ? sprite__animctrl_find_param_indesc(param_name, desc->params)
+                                        : ANIMCTRL_PARAM_ID_END,
+                        .func = desc->transitions[t].trigger.func,
+                        .value.i = desc->transitions[t].trigger.value.i
+                    };
+                    transitions[tidx].trigger_event = desc->transitions[t].trigger_event;
+                    transitions[tidx].event = desc->transitions[t].event;
+                    tidx++;
+                }
+            }
+            buff += transition_counts[i] * sizeof(sprite__animctrl_transition);
+        }
+
+        // resolve pointers to states inside transitions
+        for (int i = 0; i < num_states; i++) {
+            sprite__animctrl_state* state = states[i];
+            for (int t = 0; t < state->num_transitions; t++) {
+                state->transitions[t].target = states[(intptr_t)(void*)state->transitions[t].target];
             }
         }
-        buff += transition_counts[i] * sizeof(sprite__animctrl_transition);
-    }
 
-    // resolve pointers to states inside transitions
-    for (int i = 0; i < num_states; i++) {
-        sprite__animctrl_state* state = states[i];
-        for (int t = 0; t < state->num_transitions; t++) {
-            state->transitions[t].target = states[(intptr_t)(void*)state->transitions[t].target];
+        //
+        sprite__animctrl ctrl = (sprite__animctrl){
+            .alloc = alloc,
+            .start_state = states[sprite__animctrl_find_state(desc->start_state, hashes, num_states)],
+            .buff = _buff
+        };
+
+        ctrl.state = ctrl.start_state;
+        int param_idx = 0;
+        for (const rizz_sprite_animctrl_param_desc* p = &desc->params[0]; p->name; ++p, ++param_idx) {
+            sx_strcpy(ctrl.params[param_idx].name, sizeof(ctrl.params[param_idx].name), p->name);
+            ctrl.params[param_idx].name_hash = sx_hash_fnv32_str(p->name);
+            ctrl.params[param_idx].type = p->type;
+            ctrl.params[param_idx].value.i = 0;
         }
-    }
 
-    //
-    sprite__animctrl ctrl = (sprite__animctrl){
-        .alloc = alloc,
-        .start_state = states[sprite__animctrl_find_state(desc->start_state, hashes, num_states)],
-        .buff = _buff
-    };
+        sx_array_push_byindex(g_spr.alloc, g_spr.animctrls, ctrl, sx_handle_index(handle));
+    } // scope
 
-    ctrl.state = ctrl.start_state;
-    int param_idx = 0;
-    for (const rizz_sprite_animctrl_param_desc* p = &desc->params[0]; p->name; ++p, ++param_idx) {
-        sx_strcpy(ctrl.params[param_idx].name, sizeof(ctrl.params[param_idx].name), p->name);
-        ctrl.params[param_idx].name_hash = sx_hash_fnv32_str(p->name);
-        ctrl.params[param_idx].type = p->type;
-        ctrl.params[param_idx].value.i = 0;
-    }
-
-    sx_array_push_byindex(g_spr.alloc, g_spr.animctrls, ctrl, sx_handle_index(handle));
-
-    rizz_temp_alloc_end(tmp_alloc);
     return (rizz_sprite_animctrl){ handle };
 }
 
@@ -841,55 +842,56 @@ static void sprite__animctrl_trigger_transition(sprite__animctrl* ctrl, int tran
 
 void sprite__animctrl_update_batch(const rizz_sprite_animctrl* handles, int num_ctrls, float dt)
 {
-    rizz_temp_alloc_begin(tmp_alloc);
-    rizz_sprite_animclip* clips = sx_malloc(tmp_alloc, sizeof(rizz_sprite_animclip) * num_ctrls);
-    sprite__animctrl** ctrls = sx_malloc(tmp_alloc, sizeof(sprite__animctrl*) * num_ctrls);
-    sx_assert(clips && ctrls);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_scope(the_core->tmp_alloc_pop()) {
 
-    for (int i = 0; i < num_ctrls; i++) {
-        sx_assert_always(sx_handle_valid(g_spr.animctrl_handles, handles[i].id));
-        sprite__animctrl* ctrl = &g_spr.animctrls[sx_handle_index(handles[i].id)];
+        rizz_sprite_animclip* clips = sx_malloc(tmp_alloc, sizeof(rizz_sprite_animclip) * num_ctrls);
+        sprite__animctrl** ctrls = sx_malloc(tmp_alloc, sizeof(sprite__animctrl*) * num_ctrls);
+        sx_assert(clips && ctrls);
 
-        ctrls[i] = ctrl;
-        clips[i] = ctrl->state->clip;
-    }
+        for (int i = 0; i < num_ctrls; i++) {
+            sx_assert_always(sx_handle_valid(g_spr.animctrl_handles, handles[i].id));
+            sprite__animctrl* ctrl = &g_spr.animctrls[sx_handle_index(handles[i].id)];
 
-    // update clips
-    sprite__animclip_update_batch(clips, num_ctrls, dt);
-
-    // check on_end events on clips
-    for (int i = 0; i < num_ctrls; i++) {
-        sprite__animctrl* ctrl = ctrls[i];
-        sprite__animctrl_state* state = ctrl->state;
-
-        // check parameterized transitions
-        for (int t = 0, c = state->num_transitions; t < c; t++) {
-            sprite__animctrl_transition* transition = &state->transitions[t];
-            if (transition->trigger.param_id != ANIMCTRL_PARAM_ID_END) {
-                bool r = k_compare_funcs[transition->trigger.func](
-                    (sprite__animctrl_value){ .i = transition->trigger.value.i },
-                    &ctrl->params[transition->trigger.param_id]);
-                if (r) {
-                    sprite__animctrl_trigger_transition(ctrl, t);
-                    break;
-                }
-            } else {
-                sx_assert(sx_handle_valid(g_spr.animclip_handles, state->clip.id));
-                sprite__animclip* clip = &g_spr.animclips[sx_handle_index(state->clip.id)];
-                if (clip->end_triggered) {
-                    sprite__animctrl_trigger_transition(ctrl, t);
-                    break;
-                }
-            }
-        }    // foreach: transition
-
-        for (sprite__animctrl_param* p = &ctrl->params[0]; p->name_hash; ++p) {
-            if (p->type == RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO && p->value.b)
-                p->value.b = false;
+            ctrls[i] = ctrl;
+            clips[i] = ctrl->state->clip;
         }
-    }
 
-    rizz_temp_alloc_end(tmp_alloc);
+        // update clips
+        sprite__animclip_update_batch(clips, num_ctrls, dt);
+
+        // check on_end events on clips
+        for (int i = 0; i < num_ctrls; i++) {
+            sprite__animctrl* ctrl = ctrls[i];
+            sprite__animctrl_state* state = ctrl->state;
+
+            // check parameterized transitions
+            for (int t = 0, c = state->num_transitions; t < c; t++) {
+                sprite__animctrl_transition* transition = &state->transitions[t];
+                if (transition->trigger.param_id != ANIMCTRL_PARAM_ID_END) {
+                    bool r = k_compare_funcs[transition->trigger.func](
+                        (sprite__animctrl_value){ .i = transition->trigger.value.i },
+                        &ctrl->params[transition->trigger.param_id]);
+                    if (r) {
+                        sprite__animctrl_trigger_transition(ctrl, t);
+                        break;
+                    }
+                } else {
+                    sx_assert(sx_handle_valid(g_spr.animclip_handles, state->clip.id));
+                    sprite__animclip* clip = &g_spr.animclips[sx_handle_index(state->clip.id)];
+                    if (clip->end_triggered) {
+                        sprite__animctrl_trigger_transition(ctrl, t);
+                        break;
+                    }
+                }
+            }    // foreach: transition
+
+            for (sprite__animctrl_param* p = &ctrl->params[0]; p->name_hash; ++p) {
+                if (p->type == RIZZ_SPRITE_PARAMTYPE_BOOL_AUTO && p->value.b)
+                    p->value.b = false;
+            }
+        }
+    } // scope
 }
 
 void sprite__animctrl_update(rizz_sprite_animctrl handle, float dt)
@@ -1303,38 +1305,38 @@ bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx)
         return false;
     }
 
-    rizz_temp_alloc_begin(tmp_alloc);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_scope(the_core->tmp_alloc_pop()) {
+        rizz_shader shader = the_gfx->shader_make_with_data(
+            tmp_alloc, k_sprite_vs_size, k_sprite_vs_data, k_sprite_vs_refl_size, k_sprite_vs_refl_data,
+            k_sprite_fs_size, k_sprite_fs_data, k_sprite_fs_refl_size, k_sprite_fs_refl_data);
+        g_spr.drawctx.shader = shader.shd;
 
-    rizz_shader shader = the_gfx->shader_make_with_data(
-        tmp_alloc, k_sprite_vs_size, k_sprite_vs_data, k_sprite_vs_refl_size, k_sprite_vs_refl_data,
-        k_sprite_fs_size, k_sprite_fs_data, k_sprite_fs_refl_size, k_sprite_fs_refl_data);
-    g_spr.drawctx.shader = shader.shd;
+        sg_pipeline_desc pip_desc =
+            (sg_pipeline_desc){ .layout.buffers[0].stride = sizeof(rizz_sprite_vertex),
+                                .layout.buffers[1].stride = sizeof(sprite__vertex_transform),
+                                .index_type = SG_INDEXTYPE_UINT16,
+                                .rasterizer = { .cull_mode = SG_CULLMODE_BACK },
+                                .blend = { .enabled = true,
+                                           .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
+                                           .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA },
+                                .label = "sprite" };
 
-    sg_pipeline_desc pip_desc =
-        (sg_pipeline_desc){ .layout.buffers[0].stride = sizeof(rizz_sprite_vertex),
-                            .layout.buffers[1].stride = sizeof(sprite__vertex_transform),
-                            .index_type = SG_INDEXTYPE_UINT16,
-                            .rasterizer = { .cull_mode = SG_CULLMODE_BACK },
-                            .blend = { .enabled = true,
-                                       .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
-                                       .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA },
-                            .label = "sprite" };
+        g_spr.drawctx.pip = the_gfx->make_pipeline(
+            the_gfx->shader_bindto_pipeline(&shader, &pip_desc, &k_sprite_vertex_layout));
 
-    g_spr.drawctx.pip = the_gfx->make_pipeline(
-        the_gfx->shader_bindto_pipeline(&shader, &pip_desc, &k_sprite_vertex_layout));
+        // wireframe pipeline
+        rizz_shader shader_wire = the_gfx->shader_make_with_data(
+            tmp_alloc, k_sprite_wire_vs_size, k_sprite_wire_vs_data, k_sprite_wire_vs_refl_size,
+            k_sprite_wire_vs_refl_data, k_sprite_wire_fs_size, k_sprite_wire_fs_data,
+            k_sprite_wire_fs_refl_size, k_sprite_wire_fs_refl_data);
+        g_spr.drawctx.shader_wire = shader_wire.shd;
+        pip_desc.index_type = SG_INDEXTYPE_NONE;
+        pip_desc.label = "sprite_wire";
+        g_spr.drawctx.pip_wire = the_gfx->make_pipeline(
+            the_gfx->shader_bindto_pipeline(&shader_wire, &pip_desc, &k_sprite_wire_vertex_layout));
+    } // scope
 
-    // wireframe pipeline
-    rizz_shader shader_wire = the_gfx->shader_make_with_data(
-        tmp_alloc, k_sprite_wire_vs_size, k_sprite_wire_vs_data, k_sprite_wire_vs_refl_size,
-        k_sprite_wire_vs_refl_data, k_sprite_wire_fs_size, k_sprite_wire_fs_data,
-        k_sprite_wire_fs_refl_size, k_sprite_wire_fs_refl_data);
-    g_spr.drawctx.shader_wire = shader_wire.shd;
-    pip_desc.index_type = SG_INDEXTYPE_NONE;
-    pip_desc.label = "sprite_wire";
-    g_spr.drawctx.pip_wire = the_gfx->make_pipeline(
-        the_gfx->shader_bindto_pipeline(&shader_wire, &pip_desc, &k_sprite_wire_vertex_layout));
-
-    rizz_temp_alloc_end(tmp_alloc);
     return true;
 }
 
@@ -1650,147 +1652,148 @@ rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs, int n
         return NULL;
     }
 
-    rizz_temp_alloc_begin(tmp_alloc);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_scope(the_core->tmp_alloc_pop()) {
 
-    sprite__sort_key* keys = sx_malloc(tmp_alloc, sizeof(sprite__sort_key) * num_sprites);
-    sx_assert(keys);
+        sprite__sort_key* keys = sx_malloc(tmp_alloc, sizeof(sprite__sort_key) * num_sprites);
+        sx_assert(keys);
 
-    for (int i = 0; i < num_sprites; i++) {
-        sx_assert_always(sx_handle_valid(g_spr.sprite_handles, sprs[i].id));
+        for (int i = 0; i < num_sprites; i++) {
+            sx_assert_always(sx_handle_valid(g_spr.sprite_handles, sprs[i].id));
 
-        int index = sx_handle_index(sprs[i].id);
-        sprite__data* spr = &g_spr.sprites[index];
+            int index = sx_handle_index(sprs[i].id);
+            sprite__data* spr = &g_spr.sprites[index];
 
-        keys[i].key = ((uint64_t)spr->texture.id << 32) | (uint64_t)index;
-        keys[i].orig_index = i;
-    }
-
-    // sort sprites:
-    //      high-bits (32): texture handle. main batching
-    //      low-bits  (32): sprite index. cache coherence
-    if (num_sprites > 1) {
-        sprite__sort_tim_sort(keys, num_sprites);
-    }
-
-    memset(dd, 0x0, sizeof(rizz_sprite_drawdata));
-    uint8_t* buff = (uint8_t*)(dd + 1);
-    dd->sprites = (rizz_sprite_drawsprite*)buff;
-    buff += sizeof(rizz_sprite_drawsprite) * num_sprites;
-    dd->batches = (rizz_sprite_drawbatch*)buff;
-    buff += sizeof(rizz_sprite_drawbatch) * num_sprites;
-    dd->verts = (rizz_sprite_vertex*)buff;
-    buff += sizeof(rizz_sprite_vertex) * num_verts;
-    dd->indices = (uint16_t*)buff;
-    dd->num_batches = 0;
-    dd->num_verts = num_verts;
-    dd->num_indices = num_indices;
-
-    // fill buffers and batch
-    rizz_sprite_vertex* verts = dd->verts;
-    uint16_t* indices = dd->indices;
-    int index_idx = 0;
-    int vertex_idx = 0;
-    uint32_t last_batch_key = 0;
-    int num_batches = 0;
-
-    for (int i = 0; i < num_sprites; i++) {
-        int index = (int)(keys[i].key & 0xffffffff);
-        const sprite__data* spr = &g_spr.sprites[index];
-        sx_color color = spr->color;
-        int index_start = index_idx;
-        int vertex_start = vertex_idx;
-        sx_assert(vertex_start <= UINT16_MAX);
-
-        // there are two types of sprites :
-        //  - atlas sprites
-        //  - single texture sprites
-        if (spr->atlas.id && spr->atlas_sprite_id >= 0) {
-            // extract sprite rectangle and uv from atlas
-            const atlas__data* atlas = (atlas__data*)the_asset->obj(spr->atlas).ptr;
-            const atlas__sprite* aspr = &atlas->sprites[spr->atlas_sprite_id];
-            sx_vec2 size = sprite__calc_size(spr->size, aspr->base_size, spr->flip);
-            sx_vec2 origin = spr->origin;
-
-            const rizz_sprite_vertex* src_verts = &atlas->vertices[aspr->vb_index];
-            const uint16_t* src_indices = &atlas->indices[aspr->ib_index];
-            rizz_sprite_vertex* dst_verts = &verts[vertex_idx];
-            uint16_t* dst_indices = &indices[index_idx];
-
-            for (int ii = 0, c = aspr->num_verts; ii < c; ii++) {
-                dst_verts[ii].pos = sx_vec2_mul(sx_vec2_sub(src_verts[ii].pos, origin), size);
-                dst_verts[ii].uv = src_verts[ii].uv;
-                dst_verts[ii].color = color;
-            }
-
-            for (int ii = 0, c = aspr->num_indices; ii < c; ii += 3) {
-                dst_indices[ii] = src_indices[ii] + (uint16_t)vertex_start;
-                dst_indices[ii + 1] = src_indices[ii + 1] + (uint16_t)vertex_start;
-                dst_indices[ii + 2] = src_indices[ii + 2] + (uint16_t)vertex_start;
-            }
-
-            vertex_idx += aspr->num_verts;
-            index_idx += aspr->num_indices;
-        } else {
-            // normal texture sprite: there is no atalas. sprite takes the whole texture
-            rizz_texture* tex = (rizz_texture*)the_asset->obj(spr->texture).ptr;
-            sx_assert(tex);
-            sx_vec2 base_size = sx_vec2f((float)tex->info.width, (float)tex->info.height);
-            sx_vec2 size = sprite__calc_size(spr->size, base_size, spr->flip);
-            sx_vec2 origin = spr->origin;
-            sx_rect rect = sx_rectf(-0.5f, -0.5f, 0.5f, 0.5f);
-
-            verts[0].pos = sx_vec2_mul(sx_vec2_sub(sx_rect_corner(&rect, 0), origin), size);
-            verts[0].uv = sx_vec2f(0.0f, 1.0f);
-            verts[0].color = color;
-            verts[1].pos = sx_vec2_mul(sx_vec2_sub(sx_rect_corner(&rect, 1), origin), size);
-            verts[1].uv = sx_vec2f(1.0f, 1.0f);
-            verts[2].color = color;
-            verts[2].pos = sx_vec2_mul(sx_vec2_sub(sx_rect_corner(&rect, 2), origin), size);
-            verts[2].uv = sx_vec2f(0.0f, 0.0f);
-            verts[2].color = color;
-            verts[3].pos = sx_vec2_mul(sx_vec2_sub(sx_rect_corner(&rect, 3), origin), size);
-            verts[3].uv = sx_vec2f(1.0f, 0.0f);
-            verts[3].color = color;
-
-            // clang-format off
-            uint16_t v = (uint16_t)vertex_start;
-            indices[3] = v;         indices[4] = v + 2;     indices[5] = v + 1;
-            indices[0] = v + 1;     indices[1] = v + 2;     indices[2] = v + 3;
-            // clang-format on            
-
-            vertex_idx += 4;
-            index_idx += 6;
+            keys[i].key = ((uint64_t)spr->texture.id << 32) | (uint64_t)index;
+            keys[i].orig_index = i;
         }
 
-        // batch by texture
-        uint32_t key = spr->texture.id;
-        if (last_batch_key != key) {
-            rizz_sprite_drawbatch* batch = &dd->batches[num_batches++];
-            batch->texture = spr->texture;
-            batch->index_start = index_start;
-            batch->index_count = index_idx - index_start;
-            last_batch_key = key;
-        } else {
-            sx_assert(num_batches > 0);
-            rizz_sprite_drawbatch* batch = &dd->batches[num_batches-1];
-            batch->index_count += (index_idx - index_start);
+        // sort sprites:
+        //      high-bits (32): texture handle. main batching
+        //      low-bits  (32): sprite index. cache coherence
+        if (num_sprites > 1) {
+            sprite__sort_tim_sort(keys, num_sprites);
         }
 
-        dd->sprites[i] = (rizz_sprite_drawsprite) {
-            .index = keys[i].orig_index,
-            .start_vertex = vertex_start,
-            .start_index = index_start,
-            .num_verts = vertex_idx - vertex_start,
-            .num_indices = index_idx - index_start
-        };        
-    }
+        memset(dd, 0x0, sizeof(rizz_sprite_drawdata));
+        uint8_t* buff = (uint8_t*)(dd + 1);
+        dd->sprites = (rizz_sprite_drawsprite*)buff;
+        buff += sizeof(rizz_sprite_drawsprite) * num_sprites;
+        dd->batches = (rizz_sprite_drawbatch*)buff;
+        buff += sizeof(rizz_sprite_drawbatch) * num_sprites;
+        dd->verts = (rizz_sprite_vertex*)buff;
+        buff += sizeof(rizz_sprite_vertex) * num_verts;
+        dd->indices = (uint16_t*)buff;
+        dd->num_batches = 0;
+        dd->num_verts = num_verts;
+        dd->num_indices = num_indices;
 
-    dd->num_indices = num_indices;
-    dd->num_verts = num_verts;
-    dd->num_batches = num_batches;
-    dd->num_sprites = num_sprites;
+        // fill buffers and batch
+        rizz_sprite_vertex* verts = dd->verts;
+        uint16_t* indices = dd->indices;
+        int index_idx = 0;
+        int vertex_idx = 0;
+        uint32_t last_batch_key = 0;
+        int num_batches = 0;
 
-    rizz_temp_alloc_end(tmp_alloc);
+        for (int i = 0; i < num_sprites; i++) {
+            int index = (int)(keys[i].key & 0xffffffff);
+            const sprite__data* spr = &g_spr.sprites[index];
+            sx_color color = spr->color;
+            int index_start = index_idx;
+            int vertex_start = vertex_idx;
+            sx_assert(vertex_start <= UINT16_MAX);
+
+            // there are two types of sprites :
+            //  - atlas sprites
+            //  - single texture sprites
+            if (spr->atlas.id && spr->atlas_sprite_id >= 0) {
+                // extract sprite rectangle and uv from atlas
+                const atlas__data* atlas = (atlas__data*)the_asset->obj(spr->atlas).ptr;
+                const atlas__sprite* aspr = &atlas->sprites[spr->atlas_sprite_id];
+                sx_vec2 size = sprite__calc_size(spr->size, aspr->base_size, spr->flip);
+                sx_vec2 origin = spr->origin;
+
+                const rizz_sprite_vertex* src_verts = &atlas->vertices[aspr->vb_index];
+                const uint16_t* src_indices = &atlas->indices[aspr->ib_index];
+                rizz_sprite_vertex* dst_verts = &verts[vertex_idx];
+                uint16_t* dst_indices = &indices[index_idx];
+
+                for (int ii = 0, c = aspr->num_verts; ii < c; ii++) {
+                    dst_verts[ii].pos = sx_vec2_mul(sx_vec2_sub(src_verts[ii].pos, origin), size);
+                    dst_verts[ii].uv = src_verts[ii].uv;
+                    dst_verts[ii].color = color;
+                }
+
+                for (int ii = 0, c = aspr->num_indices; ii < c; ii += 3) {
+                    dst_indices[ii] = src_indices[ii] + (uint16_t)vertex_start;
+                    dst_indices[ii + 1] = src_indices[ii + 1] + (uint16_t)vertex_start;
+                    dst_indices[ii + 2] = src_indices[ii + 2] + (uint16_t)vertex_start;
+                }
+
+                vertex_idx += aspr->num_verts;
+                index_idx += aspr->num_indices;
+            } else {
+                // normal texture sprite: there is no atalas. sprite takes the whole texture
+                rizz_texture* tex = (rizz_texture*)the_asset->obj(spr->texture).ptr;
+                sx_assert(tex);
+                sx_vec2 base_size = sx_vec2f((float)tex->info.width, (float)tex->info.height);
+                sx_vec2 size = sprite__calc_size(spr->size, base_size, spr->flip);
+                sx_vec2 origin = spr->origin;
+                sx_rect rect = sx_rectf(-0.5f, -0.5f, 0.5f, 0.5f);
+
+                verts[0].pos = sx_vec2_mul(sx_vec2_sub(sx_rect_corner(&rect, 0), origin), size);
+                verts[0].uv = sx_vec2f(0.0f, 1.0f);
+                verts[0].color = color;
+                verts[1].pos = sx_vec2_mul(sx_vec2_sub(sx_rect_corner(&rect, 1), origin), size);
+                verts[1].uv = sx_vec2f(1.0f, 1.0f);
+                verts[2].color = color;
+                verts[2].pos = sx_vec2_mul(sx_vec2_sub(sx_rect_corner(&rect, 2), origin), size);
+                verts[2].uv = sx_vec2f(0.0f, 0.0f);
+                verts[2].color = color;
+                verts[3].pos = sx_vec2_mul(sx_vec2_sub(sx_rect_corner(&rect, 3), origin), size);
+                verts[3].uv = sx_vec2f(1.0f, 0.0f);
+                verts[3].color = color;
+
+                // clang-format off
+                uint16_t v = (uint16_t)vertex_start;
+                indices[3] = v;         indices[4] = v + 2;     indices[5] = v + 1;
+                indices[0] = v + 1;     indices[1] = v + 2;     indices[2] = v + 3;
+                // clang-format on            
+
+                vertex_idx += 4;
+                index_idx += 6;
+            }
+
+            // batch by texture
+            uint32_t key = spr->texture.id;
+            if (last_batch_key != key) {
+                rizz_sprite_drawbatch* batch = &dd->batches[num_batches++];
+                batch->texture = spr->texture;
+                batch->index_start = index_start;
+                batch->index_count = index_idx - index_start;
+                last_batch_key = key;
+            } else {
+                sx_assert(num_batches > 0);
+                rizz_sprite_drawbatch* batch = &dd->batches[num_batches-1];
+                batch->index_count += (index_idx - index_start);
+            }
+
+            dd->sprites[i] = (rizz_sprite_drawsprite) {
+                .index = keys[i].orig_index,
+                .start_vertex = vertex_start,
+                .start_index = index_start,
+                .num_verts = vertex_idx - vertex_start,
+                .num_indices = index_idx - index_start
+            };        
+        }
+
+        dd->num_indices = num_indices;
+        dd->num_verts = num_verts;
+        dd->num_batches = num_batches;
+        dd->num_sprites = num_sprites;
+    } // scope
+
     return dd;
 }
 
@@ -1805,85 +1808,85 @@ void sprite__drawdata_free(rizz_sprite_drawdata* data, const sx_alloc* alloc) {
 void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp, 
                         const sx_mat3* mats, sx_color* tints) {
 
-    rizz_temp_alloc_begin(tmp_alloc);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_scope(the_core->tmp_alloc_pop()) {
 
-    rizz_sprite_drawdata* dd =
-        sprite__drawdata_make_batch(sprs, num_sprites, tmp_alloc);
-    if (!dd) {
-        sx_memory_fail();
-        return;
-    }
-    
-    sx_color* initial_tints = tints;
-    if (!tints) {
-        tints = sx_malloc(tmp_alloc, sizeof(sx_color)*num_sprites);
-        if (!tints) {
+        rizz_sprite_drawdata* dd =
+            sprite__drawdata_make_batch(sprs, num_sprites, tmp_alloc);
+        if (!dd) {
             sx_memory_fail();
-            rizz_temp_alloc_end(tmp_alloc);
             return;
         }
-        for (int i = 0; i < num_sprites; i++) {
-            tints[i] = sx_colorn(0xffffffff);
-        }
-    }
-
-    const sprite__draw_context* dc = &g_spr.drawctx;
-
-    // append drawdata to buffers
-    int ib_offset = g_spr.draw_api->append_buffer(dc->ibuff, dd->indices, 
-                                                  sizeof(uint16_t)*dd->num_indices);
-    int vb_offset1 = g_spr.draw_api->append_buffer(dc->vbuff[0], dd->verts, 
-                                                   sizeof(rizz_sprite_vertex)*dd->num_verts);
-
-    sprite__vertex_transform* tverts = sx_malloc(tmp_alloc, 
-                                                 sizeof(sprite__vertex_transform)*dd->num_verts);
-    sx_assert(tverts);
-
-    // put transforms into another vbuff
-    for (int i = 0; i < dd->num_sprites; i++) {
-        rizz_sprite_drawsprite* dspr = &dd->sprites[i];
-        int orig_index = dspr->index;
-        const sx_mat3* m = &mats[orig_index];
-
-        sx_vec3 t1 = sx_vec3f(m->m11, m->m12, m->m21);
-        sx_vec3 t2 = sx_vec3f(m->m22, m->m13, m->m23);
-        int end_vertex = dspr->start_vertex + dspr->num_verts;
-        for (int v = dspr->start_vertex; v < end_vertex; v++) {
-            tverts[v].t1 = t1;
-            tverts[v].t2 = t2;
-            tverts[v].color = tints[orig_index].n;
-        }
-    }
-    int vb_offset2 = g_spr.draw_api->append_buffer(dc->vbuff[1], tverts, 
-                                                   sizeof(sprite__vertex_transform)*dd->num_verts);
-
-    sg_bindings bindings = {
-        .index_buffer = g_spr.drawctx.ibuff,
-        .vertex_buffers[0] = g_spr.drawctx.vbuff[0],
-        .vertex_buffers[1] = g_spr.drawctx.vbuff[1],
-        .vertex_buffer_offsets[0] = vb_offset1,
-        .vertex_buffer_offsets[1] = vb_offset2,
-        .index_buffer_offset = ib_offset,
-    };
-
-    g_spr.draw_api->apply_pipeline(dc->pip);
-    g_spr.draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, vp, sizeof(*vp));
-
-    // draw with batching
-    for (int i = 0; i < dd->num_batches; i++)  {
-        rizz_sprite_drawbatch* batch = &dd->batches[i];
-        bindings.fs_images[0] = ((rizz_texture*)the_asset->obj(batch->texture).ptr)->img;
-        g_spr.draw_api->apply_bindings(&bindings);
-        g_spr.draw_api->draw(batch->index_start, batch->index_count, 1);
-    }    
     
-    sx_free(tmp_alloc, tverts);
-    if (!initial_tints) {
-        sx_free(tmp_alloc, tints);
-    }
-    sx_free(tmp_alloc, dd);
+        sx_color* initial_tints = tints;
+        if (!tints) {
+            tints = sx_malloc(tmp_alloc, sizeof(sx_color)*num_sprites);
+            if (!tints) {
+                sx_memory_fail();
+                the_core->tmp_alloc_pop();
+                return;
+            }
+            for (int i = 0; i < num_sprites; i++) {
+                tints[i] = sx_colorn(0xffffffff);
+            }
+        }
 
-    rizz_temp_alloc_end(tmp_alloc);
+        const sprite__draw_context* dc = &g_spr.drawctx;
+
+        // append drawdata to buffers
+        int ib_offset = g_spr.draw_api->append_buffer(dc->ibuff, dd->indices, 
+                                                      sizeof(uint16_t)*dd->num_indices);
+        int vb_offset1 = g_spr.draw_api->append_buffer(dc->vbuff[0], dd->verts, 
+                                                       sizeof(rizz_sprite_vertex)*dd->num_verts);
+
+        sprite__vertex_transform* tverts = sx_malloc(tmp_alloc, 
+                                                     sizeof(sprite__vertex_transform)*dd->num_verts);
+        sx_assert(tverts);
+
+        // put transforms into another vbuff
+        for (int i = 0; i < dd->num_sprites; i++) {
+            rizz_sprite_drawsprite* dspr = &dd->sprites[i];
+            int orig_index = dspr->index;
+            const sx_mat3* m = &mats[orig_index];
+
+            sx_vec3 t1 = sx_vec3f(m->m11, m->m12, m->m21);
+            sx_vec3 t2 = sx_vec3f(m->m22, m->m13, m->m23);
+            int end_vertex = dspr->start_vertex + dspr->num_verts;
+            for (int v = dspr->start_vertex; v < end_vertex; v++) {
+                tverts[v].t1 = t1;
+                tverts[v].t2 = t2;
+                tverts[v].color = tints[orig_index].n;
+            }
+        }
+        int vb_offset2 = g_spr.draw_api->append_buffer(dc->vbuff[1], tverts, 
+                                                       sizeof(sprite__vertex_transform)*dd->num_verts);
+
+        sg_bindings bindings = {
+            .index_buffer = g_spr.drawctx.ibuff,
+            .vertex_buffers[0] = g_spr.drawctx.vbuff[0],
+            .vertex_buffers[1] = g_spr.drawctx.vbuff[1],
+            .vertex_buffer_offsets[0] = vb_offset1,
+            .vertex_buffer_offsets[1] = vb_offset2,
+            .index_buffer_offset = ib_offset,
+        };
+
+        g_spr.draw_api->apply_pipeline(dc->pip);
+        g_spr.draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, vp, sizeof(*vp));
+
+        // draw with batching
+        for (int i = 0; i < dd->num_batches; i++)  {
+            rizz_sprite_drawbatch* batch = &dd->batches[i];
+            bindings.fs_images[0] = ((rizz_texture*)the_asset->obj(batch->texture).ptr)->img;
+            g_spr.draw_api->apply_bindings(&bindings);
+            g_spr.draw_api->draw(batch->index_start, batch->index_count, 1);
+        }    
+    
+        sx_free(tmp_alloc, tverts);
+        if (!initial_tints) {
+            sx_free(tmp_alloc, tints);
+        }
+        sx_free(tmp_alloc, dd);
+    } // scope   
 }
 
 void sprite__draw(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat, sx_color tint) {
@@ -1896,45 +1899,45 @@ void sprite__draw_batch_srt(const rizz_sprite* sprs, int num_sprites, const sx_m
 {
     sx_assert(poss);
 
-    rizz_temp_alloc_begin(tmp_alloc);
-
-    sx_mat3* mats = (sx_mat3*)sx_malloc(tmp_alloc, sizeof(sx_mat3)*num_sprites);
-    if (!mats) {
-        rizz_temp_alloc_end(tmp_alloc);
-        sx_memory_fail();
-        return;
-    }
-
-    for (int i = 0; i < num_sprites; i++) {
-        mats[i] = sx_mat3_translatev(poss[i]);
-    }
-
-    if (angles) {
-        sx_mat3 rot;
-        for (int i = 0; i < num_sprites; i++) {
-            if (angles[i] == 0) {
-                continue;
-            }
-            sx_mat3_rotate(angles[i]);
-            mats[i] = sx_mat3_mul(&mats[i], &rot);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_scope(the_core->tmp_alloc_pop()) {
+        sx_mat3* mats = (sx_mat3*)sx_malloc(tmp_alloc, sizeof(sx_mat3)*num_sprites);
+        if (!mats) {
+            sx_memory_fail();
+            the_core->tmp_alloc_pop();
+            return;
         }
-    }
 
-    if (scales) {
-        sx_mat3 scale;
         for (int i = 0; i < num_sprites; i++) {
-            if (scales[i].x == 1.0f && scales[i].y == 1.0f) {
-                continue;
-            }
-            scale = sx_mat3_scale(scales[i].x, scales[i].y);
-            mats[i] = sx_mat3_mul(&mats[i], &scale);
+            mats[i] = sx_mat3_translatev(poss[i]);
         }
-    }
 
-    sprite__draw_batch(sprs, num_sprites, vp, mats, tints);
+        if (angles) {
+            sx_mat3 rot;
+            for (int i = 0; i < num_sprites; i++) {
+                if (angles[i] == 0) {
+                    continue;
+                }
+                sx_mat3_rotate(angles[i]);
+                mats[i] = sx_mat3_mul(&mats[i], &rot);
+            }
+        }
 
-    sx_free(tmp_alloc, mats);
-    rizz_temp_alloc_end(tmp_alloc);
+        if (scales) {
+            sx_mat3 scale;
+            for (int i = 0; i < num_sprites; i++) {
+                if (scales[i].x == 1.0f && scales[i].y == 1.0f) {
+                    continue;
+                }
+                scale = sx_mat3_scale(scales[i].x, scales[i].y);
+                mats[i] = sx_mat3_mul(&mats[i], &scale);
+            }
+        }
+
+        sprite__draw_batch(sprs, num_sprites, vp, mats, tints);
+
+        sx_free(tmp_alloc, mats);
+    } // scope
 }
 
 void sprite__draw_srt(rizz_sprite spr, const sx_mat4* vp, sx_vec2 pos, float angle, sx_vec2 scale, 
@@ -1944,68 +1947,67 @@ void sprite__draw_srt(rizz_sprite spr, const sx_mat4* vp, sx_vec2 pos, float ang
 }
 
 void sprite__draw_wireframe_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp, 
-                                         const sx_mat3* mats) {
-    rizz_temp_alloc_begin(tmp_alloc);
-
-    rizz_sprite_drawdata* dd =
-        sprite__drawdata_make_batch(sprs, num_sprites, tmp_alloc);
-    if (!dd) {
-        sx_assert(0);
-        return;
-    }
-
-    const sprite__draw_context* dc = &g_spr.drawctx;
-
-    rizz_sprite_vertex* verts = sx_malloc(tmp_alloc, sizeof(rizz_sprite_vertex)*dd->num_indices);
-    sx_assert(verts);
-    sprite__vertex_transform* tverts = sx_malloc(tmp_alloc, 
-                                                 sizeof(sprite__vertex_transform)*dd->num_indices);
-    sx_assert(tverts);
-    const sx_vec3 bcs[] = { {{ 1.0f, 0, 0 }}, {{ 0, 1.0f, 0 }}, {{ 0, 0, 1.0f }} };
-
-    // put transforms into another vbuff
-    int v = 0;
-    for (int i = 0; i < dd->num_sprites; i++) {
-        rizz_sprite_drawsprite* dspr = &dd->sprites[i];
-        const sx_mat3* m = &mats[i];
-
-        sx_vec3 t1 = sx_vec3f(m->m11, m->m12, m->m21);
-        sx_vec3 t2 = sx_vec3f(m->m22, m->m13, m->m23);
-        int end_index = dspr->start_index + dspr->num_indices;
-        for (int ii = dspr->start_index; ii < end_index; ii++) {
-            verts[v] = dd->verts[dd->indices[ii]];
-
-            tverts[v].t1 = t1;
-            tverts[v].t2 = t2;
-            tverts[v].bc = bcs[v % 3];
-            v++;
-        }
-    }
+                                         const sx_mat3* mats) 
+{
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
     
-    int vb_offset1 = g_spr.draw_api->append_buffer(dc->vbuff[0], verts, 
-                                                   sizeof(rizz_sprite_vertex)*dd->num_indices);
-    int vb_offset2 = g_spr.draw_api->append_buffer(dc->vbuff[1], tverts, 
-                                                   sizeof(sprite__vertex_transform)*dd->num_indices);
+    sx_scope(the_core->tmp_alloc_pop()) {
+        rizz_sprite_drawdata* dd = sprite__drawdata_make_batch(sprs, num_sprites, tmp_alloc);
+        if (!dd) {
+            sx_assert(0);
+            return;
+        }
 
-    sg_bindings bindings = {
-        .vertex_buffers[0] = g_spr.drawctx.vbuff[0],
-        .vertex_buffers[1] = g_spr.drawctx.vbuff[1],
-        .vertex_buffer_offsets[0] = vb_offset1,
-        .vertex_buffer_offsets[1] = vb_offset2,
-    };
+        const sprite__draw_context* dc = &g_spr.drawctx;
+        rizz_sprite_vertex* verts = sx_malloc(tmp_alloc, sizeof(rizz_sprite_vertex)*dd->num_indices);
+        sx_assert(verts);
+        sprite__vertex_transform* tverts = sx_malloc(tmp_alloc, 
+                                                     sizeof(sprite__vertex_transform)*dd->num_indices);
+        sx_assert(tverts);
+        const sx_vec3 bcs[] = { {{ 1.0f, 0, 0 }}, {{ 0, 1.0f, 0 }}, {{ 0, 0, 1.0f }} };
 
-    g_spr.draw_api->apply_pipeline(dc->pip_wire);
-    g_spr.draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, vp, sizeof(*vp));
+        // put transforms into another vbuff
+        int v = 0;
+        for (int i = 0; i < dd->num_sprites; i++) {
+            rizz_sprite_drawsprite* dspr = &dd->sprites[i];
+            const sx_mat3* m = &mats[i];
 
-    // draw with batching
-    for (int i = 0; i < dd->num_batches; i++)  {
-        rizz_sprite_drawbatch* batch = &dd->batches[i];
-        bindings.fs_images[0] = ((rizz_texture*)the_asset->obj(batch->texture).ptr)->img;
-        g_spr.draw_api->apply_bindings(&bindings);
-        g_spr.draw_api->draw(batch->index_start, batch->index_count, 1);
-    }    
+            sx_vec3 t1 = sx_vec3f(m->m11, m->m12, m->m21);
+            sx_vec3 t2 = sx_vec3f(m->m22, m->m13, m->m23);
+            int end_index = dspr->start_index + dspr->num_indices;
+            for (int ii = dspr->start_index; ii < end_index; ii++) {
+                verts[v] = dd->verts[dd->indices[ii]];
 
-    rizz_temp_alloc_end(tmp_alloc);
+                tverts[v].t1 = t1;
+                tverts[v].t2 = t2;
+                tverts[v].bc = bcs[v % 3];
+                v++;
+            }
+        }
+    
+        int vb_offset1 = g_spr.draw_api->append_buffer(dc->vbuff[0], verts, 
+                                                       sizeof(rizz_sprite_vertex)*dd->num_indices);
+        int vb_offset2 = g_spr.draw_api->append_buffer(dc->vbuff[1], tverts, 
+                                                       sizeof(sprite__vertex_transform)*dd->num_indices);
+
+        sg_bindings bindings = {
+            .vertex_buffers[0] = g_spr.drawctx.vbuff[0],
+            .vertex_buffers[1] = g_spr.drawctx.vbuff[1],
+            .vertex_buffer_offsets[0] = vb_offset1,
+            .vertex_buffer_offsets[1] = vb_offset2,
+        };
+
+        g_spr.draw_api->apply_pipeline(dc->pip_wire);
+        g_spr.draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, vp, sizeof(*vp));
+
+        // draw with batching
+        for (int i = 0; i < dd->num_batches; i++)  {
+            rizz_sprite_drawbatch* batch = &dd->batches[i];
+            bindings.fs_images[0] = ((rizz_texture*)the_asset->obj(batch->texture).ptr)->img;
+            g_spr.draw_api->apply_bindings(&bindings);
+            g_spr.draw_api->draw(batch->index_start, batch->index_count, 1);
+        }    
+    } // scope
 }
 
 void sprite__draw_wireframe(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* mat)

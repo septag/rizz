@@ -115,53 +115,52 @@ static void fons__draw_fn(void* user_ptr, const float* poss, const float* tcoord
     font__fons* fons = user_ptr;
     rizz_api_gfx_draw* draw_api = g_font.draw_api;
 
-    rizz_temp_alloc_begin(tmp_alloc);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_scope(the_core->tmp_alloc_pop()) {
+        rizz_font_vertex* verts = sx_malloc(tmp_alloc, sizeof(rizz_font_vertex) * nverts);
+        sx_assert(verts);
 
-    rizz_font_vertex* verts = sx_malloc(tmp_alloc, sizeof(rizz_font_vertex) * nverts);
-    sx_assert(verts);
+        sx_assert(nverts % 3 == 0);
+        int ntris = nverts / 3;
 
-    sx_assert(nverts % 3 == 0);
-    int ntris = nverts / 3;
+        // flip the orders of each triangle, because Y is reversed (thus the triangle ordering)
+        // so the flip the triangle to properly cull with BACK
+        for (int i = 0; i < ntris; i++) {
+            int vindex = i * 3;
 
-    // flip the orders of each triangle, because Y is reversed (thus the triangle ordering)
-    // so the flip the triangle to properly cull with BACK
-    for (int i = 0; i < ntris; i++) {
-        int vindex = i * 3;
+            int findex = vindex * 2;
+            verts[vindex + 2].pos = sx_vec2f(poss[findex], poss[findex + 1]);
+            verts[vindex + 2].uv = sx_vec2f(tcoords[findex], tcoords[findex + 1]);
+            verts[vindex + 2].color = sx_colorn(colors[i]);
 
-        int findex = vindex * 2;
-        verts[vindex + 2].pos = sx_vec2f(poss[findex], poss[findex + 1]);
-        verts[vindex + 2].uv = sx_vec2f(tcoords[findex], tcoords[findex + 1]);
-        verts[vindex + 2].color = sx_colorn(colors[i]);
+            findex += 2;
+            verts[vindex + 1].pos = sx_vec2f(poss[findex], poss[findex + 1]);
+            verts[vindex + 1].uv = sx_vec2f(tcoords[findex], tcoords[findex + 1]);
+            verts[vindex + 1].color = sx_colorn(colors[i]);
 
-        findex += 2;
-        verts[vindex + 1].pos = sx_vec2f(poss[findex], poss[findex + 1]);
-        verts[vindex + 1].uv = sx_vec2f(tcoords[findex], tcoords[findex + 1]);
-        verts[vindex + 1].color = sx_colorn(colors[i]);
+            findex += 2;
+            verts[vindex].pos = sx_vec2f(poss[findex], poss[findex + 1]);
+            verts[vindex].uv = sx_vec2f(tcoords[findex], tcoords[findex + 1]);
+            verts[vindex].color = sx_colorn(colors[i]);
+        }
 
-        findex += 2;
-        verts[vindex].pos = sx_vec2f(poss[findex], poss[findex + 1]);
-        verts[vindex].uv = sx_vec2f(tcoords[findex], tcoords[findex + 1]);
-        verts[vindex].color = sx_colorn(colors[i]);
-    }
+        int vb_offset = draw_api->append_buffer(g_font.vbuff, verts, sizeof(rizz_font_vertex) * nverts);
 
-    int vb_offset = draw_api->append_buffer(g_font.vbuff, verts, sizeof(rizz_font_vertex) * nverts);
+        sg_bindings bindings = { .vertex_buffers[0] = g_font.vbuff,
+                                 .vertex_buffer_offsets[0] = vb_offset,
+                                 .fs_images[0] = fons->f.img_atlas };
 
-    sg_bindings bindings = { .vertex_buffers[0] = g_font.vbuff,
-                             .vertex_buffer_offsets[0] = vb_offset,
-                             .fs_images[0] = fons->f.img_atlas };
+        FONSstate* state = fons__getState(fons->ctx);
 
-    FONSstate* state = fons__getState(fons->ctx);
-
-    draw_api->apply_pipeline(g_font.pip);
-    draw_api->apply_bindings(&bindings);
-    if (state->scissor[2] > 0 && state->scissor[3] > 0) {
-        draw_api->apply_scissor_rect(state->scissor[0], state->scissor[1], state->scissor[2],
-                                     state->scissor[3], !the_gfx->GL_family());
-    }
-    draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, state->mat, sizeof(state->mat));
-    draw_api->draw(0, nverts, 1);
-
-    rizz_temp_alloc_end(tmp_alloc);
+        draw_api->apply_pipeline(g_font.pip);
+        draw_api->apply_bindings(&bindings);
+        if (state->scissor[2] > 0 && state->scissor[3] > 0) {
+            draw_api->apply_scissor_rect(state->scissor[0], state->scissor[1], state->scissor[2],
+                                         state->scissor[3], !the_gfx->GL_family());
+        }
+        draw_api->apply_uniforms(SG_SHADERSTAGE_VS, 0, state->mat, sizeof(state->mat));
+        draw_api->draw(0, nverts, 1);
+    } // scope
 }
 
 static void fons__delete_fn(void* user_ptr)
@@ -367,25 +366,26 @@ bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx, r
     g_font.draw_api = &the_gfx->staged;
 
     // gfx objects
-    rizz_temp_alloc_begin(tmp_alloc);
-    rizz_shader shader = the_gfx->shader_make_with_data(
-        tmp_alloc, k_font_vs_size, k_font_vs_data, k_font_vs_refl_size, k_font_vs_refl_data,
-        k_font_fs_size, k_font_fs_data, k_font_fs_refl_size, k_font_fs_refl_data);
-    g_font.shader = shader.shd;
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_scope(the_core->tmp_alloc_pop()) {
+        rizz_shader shader = the_gfx->shader_make_with_data(
+            tmp_alloc, k_font_vs_size, k_font_vs_data, k_font_vs_refl_size, k_font_vs_refl_data,
+            k_font_fs_size, k_font_fs_data, k_font_fs_refl_size, k_font_fs_refl_data);
+        g_font.shader = shader.shd;
 
-    // note: when we make the geometry, we modify the
-    sg_pipeline_desc pip_desc =
-        (sg_pipeline_desc){ .layout.buffers[0].stride = sizeof(rizz_font_vertex),
-                            .rasterizer = { .cull_mode = SG_CULLMODE_BACK },
-                            .blend = { .enabled = true,
-                                       .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
-                                       .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA },
-                            .label = "rizz_font" };
+        // note: when we make the geometry, we modify the
+        sg_pipeline_desc pip_desc =
+            (sg_pipeline_desc){ .layout.buffers[0].stride = sizeof(rizz_font_vertex),
+                                .rasterizer = { .cull_mode = SG_CULLMODE_BACK },
+                                .blend = { .enabled = true,
+                                           .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
+                                           .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA },
+                                .label = "rizz_font" };
 
-    g_font.pip = the_gfx->make_pipeline(
-        the_gfx->shader_bindto_pipeline(&shader, &pip_desc, &k_font_vertex_layout));
+        g_font.pip = the_gfx->make_pipeline(
+            the_gfx->shader_bindto_pipeline(&shader, &pip_desc, &k_font_vertex_layout));
+    } // scope
 
-    rizz_temp_alloc_end(tmp_alloc);
 
     if (!font__resize_draw_limits(MAX_VERTICES)) {
         return false;

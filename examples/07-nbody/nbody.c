@@ -124,91 +124,90 @@ static bool init()
 
     uint16_t indices[] = { 0, 2, 1, 2, 0, 3 };
 
-    rizz_temp_alloc_begin(tmp_alloc);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_scope(the_core->tmp_alloc_pop()) {
+        // buffers
+        g_nbody.vbuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
+                                                                .type = SG_BUFFERTYPE_VERTEXBUFFER,
+                                                                .size = sizeof(nbody_draw_vertex) * 4,
+                                                                .content = vertices });
 
-    // buffers
-    g_nbody.vbuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
-                                                            .type = SG_BUFFERTYPE_VERTEXBUFFER,
-                                                            .size = sizeof(nbody_draw_vertex) * 4,
-                                                            .content = vertices });
+        g_nbody.ibuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
+                                                                .type = SG_BUFFERTYPE_INDEXBUFFER,
+                                                                .size = sizeof(uint16_t) * 6,
+                                                                .content = indices });
 
-    g_nbody.ibuff = the_gfx->make_buffer(&(sg_buffer_desc){ .usage = SG_USAGE_IMMUTABLE,
-                                                            .type = SG_BUFFERTYPE_INDEXBUFFER,
-                                                            .size = sizeof(uint16_t) * 6,
-                                                            .content = indices });
+        // shader
+        // this shader is built with `glslcc` that reside in `/tools` directory.
+        // see `glslcc --help` for details
+        char shader_path[RIZZ_MAX_PATH];
+        g_nbody.draw_shader = the_asset->load(
+            "shader", ex_shader_path(shader_path, sizeof(shader_path), "/assets/shaders", "nbody.sgs"),
+            NULL, 0, NULL, 0);
+        g_nbody.particle_shader = the_asset->load(
+            "shader",
+            ex_shader_path(shader_path, sizeof(shader_path), "/assets/shaders", "nbody.comp.sgs"), NULL,
+            0, NULL, 0);
 
-    // shader
-    // this shader is built with `glslcc` that reside in `/tools` directory.
-    // see `glslcc --help` for details
-    char shader_path[RIZZ_MAX_PATH];
-    g_nbody.draw_shader = the_asset->load(
-        "shader", ex_shader_path(shader_path, sizeof(shader_path), "/assets/shaders", "nbody.sgs"),
-        NULL, 0, NULL, 0);
-    g_nbody.particle_shader = the_asset->load(
-        "shader",
-        ex_shader_path(shader_path, sizeof(shader_path), "/assets/shaders", "nbody.comp.sgs"), NULL,
-        0, NULL, 0);
-
-    // pipelines
-    g_nbody.draw_pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
-        the_gfx->shader_get(g_nbody.draw_shader),
-        &(sg_pipeline_desc){ .layout.buffers[0].stride = sizeof(nbody_draw_vertex),
-                             .shader = the_gfx->shader_get(g_nbody.draw_shader)->shd,
-                             .index_type = SG_INDEXTYPE_UINT16,
-                             .rasterizer = { .cull_mode = SG_CULLMODE_BACK, .sample_count = 1 },
-                             .blend = { .enabled = true,
-                                        .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
-                                        .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA } },
-        &k_vertex_layout));
+        // pipelines
+        g_nbody.draw_pip = the_gfx->make_pipeline(the_gfx->shader_bindto_pipeline(
+            the_gfx->shader_get(g_nbody.draw_shader),
+            &(sg_pipeline_desc){ .layout.buffers[0].stride = sizeof(nbody_draw_vertex),
+                                 .shader = the_gfx->shader_get(g_nbody.draw_shader)->shd,
+                                 .index_type = SG_INDEXTYPE_UINT16,
+                                 .rasterizer = { .cull_mode = SG_CULLMODE_BACK, .sample_count = 1 },
+                                 .blend = { .enabled = true,
+                                            .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
+                                            .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA } },
+            &k_vertex_layout));
 
 
-    nbody_particle* particles =
-        (nbody_particle*)sx_malloc(tmp_alloc, sizeof(nbody_particle) * MAX_PARTICLES);
-    sx_assert(particles);
-    float center_spread = SPREAD * 0.5f;
-    load_particles(particles, sx_vec3f(center_spread, 0, 0),
-                   sx_vec4f(0, 0, -20.0f, 1.0f / 10000.0f / 10000.0f), SPREAD, MAX_PARTICLES / 2);
-    load_particles(particles + MAX_PARTICLES / 2, sx_vec3f(-center_spread, 0, 0),
-                   sx_vec4f(0, 0, 20.0f, 1.0f / 10000.0f / 10000.0f), SPREAD, MAX_PARTICLES / 2);
+        nbody_particle* particles =
+            (nbody_particle*)sx_malloc(tmp_alloc, sizeof(nbody_particle) * MAX_PARTICLES);
+        sx_assert(particles);
+        float center_spread = SPREAD * 0.5f;
+        load_particles(particles, sx_vec3f(center_spread, 0, 0),
+                       sx_vec4f(0, 0, -20.0f, 1.0f / 10000.0f / 10000.0f), SPREAD, MAX_PARTICLES / 2);
+        load_particles(particles + MAX_PARTICLES / 2, sx_vec3f(-center_spread, 0, 0),
+                       sx_vec4f(0, 0, 20.0f, 1.0f / 10000.0f / 10000.0f), SPREAD, MAX_PARTICLES / 2);
 
-    g_nbody.particle_pip = the_gfx->make_pipeline(&(sg_pipeline_desc){
-        .shader = the_gfx->shader_get(g_nbody.particle_shader)->shd });
+        g_nbody.particle_pip = the_gfx->make_pipeline(&(sg_pipeline_desc){
+            .shader = the_gfx->shader_get(g_nbody.particle_shader)->shd });
 
-    // particle buffers
-    g_nbody.particle_buff1 =
-        the_gfx->make_buffer(&(sg_buffer_desc){ .size = sizeof(nbody_particle) * MAX_PARTICLES,
-                                                .type = SG_BUFFERTYPE_RAW,
-                                                .shader_write = true,
-                                                .content = particles });
+        // particle buffers
+        g_nbody.particle_buff1 =
+            the_gfx->make_buffer(&(sg_buffer_desc){ .size = sizeof(nbody_particle) * MAX_PARTICLES,
+                                                    .type = SG_BUFFERTYPE_RAW,
+                                                    .shader_write = true,
+                                                    .content = particles });
 
-    g_nbody.particle_buff2 =
-        the_gfx->make_buffer(&(sg_buffer_desc){ .size = sizeof(nbody_particle) * MAX_PARTICLES,
-                                                .type = SG_BUFFERTYPE_RAW,
-                                                .shader_write = true });
+        g_nbody.particle_buff2 =
+            the_gfx->make_buffer(&(sg_buffer_desc){ .size = sizeof(nbody_particle) * MAX_PARTICLES,
+                                                    .type = SG_BUFFERTYPE_RAW,
+                                                    .shader_write = true });
 
-    // particle
-    g_nbody.img = the_asset->load("texture", "/assets/textures/particle.dds",
-                                  &(rizz_texture_load_params){ 0 }, 0, NULL, 0);
+        // particle
+        g_nbody.img = the_asset->load("texture", "/assets/textures/particle.dds",
+                                      &(rizz_texture_load_params){ 0 }, 0, NULL, 0);
 
-    //////////////////////////////////////////////////////////////////////////////////////////
-    // camera
-    // projection: setup for perspective, SPREAD*3.0f away from the center
-    // view: Z-UP Y-Forward (like blender)
-    sx_vec2 screen_size;
-    the_app->window_size(&screen_size);
-    const float view_width = screen_size.x;
-    const float view_height = screen_size.y;
-    the_camera->fps_init(&g_nbody.cam, 50.0f, sx_rectwh(0, 0, view_width, view_height), 10.0f,
-                         500000.0f);
-    the_camera->fps_lookat(&g_nbody.cam, sx_vec3f(0, -SPREAD * 3.0f, SPREAD * 3.0f), SX_VEC3_ZERO,
-                           SX_VEC3_UNITZ);
+        //////////////////////////////////////////////////////////////////////////////////////////
+        // camera
+        // projection: setup for perspective, SPREAD*3.0f away from the center
+        // view: Z-UP Y-Forward (like blender)
+        sx_vec2 screen_size;
+        the_app->window_size(&screen_size);
+        const float view_width = screen_size.x;
+        const float view_height = screen_size.y;
+        the_camera->fps_init(&g_nbody.cam, 50.0f, sx_rectwh(0, 0, view_width, view_height), 10.0f,
+                             500000.0f);
+        the_camera->fps_lookat(&g_nbody.cam, sx_vec3f(0, -SPREAD * 3.0f, SPREAD * 3.0f), SX_VEC3_ZERO,
+                               SX_VEC3_UNITZ);
 
-    g_nbody.camera_orbit = -SX_PIHALF;
+        g_nbody.camera_orbit = -SX_PIHALF;
 
-    rizz_temp_alloc_end(tmp_alloc);
-
-    g_nbody.simulation_speed = 0.1f;
-    g_nbody.damping = 1.0f;
+        g_nbody.simulation_speed = 0.1f;
+        g_nbody.damping = 1.0f;
+    } // scope
 
     return true;
 }

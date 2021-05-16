@@ -261,6 +261,7 @@ typedef struct rizz_api_3d
         void (*destroy_lib)(rizz_material_lib* lib);
         rizz_material (*add)(rizz_material_lib* lib, const rizz_material_data* mdata);
         const rizz_material_data* (*get_data)(const rizz_material_lib* lib, rizz_material mtl);
+        rizz_material (*get_blank)(const rizz_material_lib* lib);
     } material;
 
     struct {

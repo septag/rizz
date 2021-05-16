@@ -57,3 +57,4 @@ rizz_material material__add(rizz_material_lib* lib, const rizz_material_data* mt
 void material__remove(rizz_material_lib* lib, rizz_material mtl);
 rizz_material_lib* material__create_lib(const sx_alloc* alloc, int init_capacity);
 void material__destroy_lib(rizz_material_lib* lib);
+rizz_material material__get_blank(const rizz_material_lib* lib);

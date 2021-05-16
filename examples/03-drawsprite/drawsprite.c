@@ -192,85 +192,86 @@ static void update(float dt) {}
 // As an example, we modify vertices and use custom shader with the draw-data
 static void draw_custom(const drawsprite_params* params)
 {
-    rizz_temp_alloc_begin(tmp_alloc);
-    rizz_sprite_drawdata* dd =
-        the_2d->sprite.make_drawdata_batch(g_ds.sprites, NUM_SPRITES, tmp_alloc);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_scope(the_core->tmp_alloc_pop()) {
+        rizz_sprite_drawdata* dd =
+            the_2d->sprite.make_drawdata_batch(g_ds.sprites, NUM_SPRITES, tmp_alloc);
 
-    sg_bindings bindings = { .vertex_buffers[0] = g_ds.vbuff };
+        sg_bindings bindings = { .vertex_buffers[0] = g_ds.vbuff };
 
-    // populate new vertex buffer
-    if (!g_ds.wireframe) {
-        bindings.index_buffer = g_ds.ibuff;
-        drawsprite_vertex* verts = sx_malloc(tmp_alloc, sizeof(drawsprite_vertex) * dd->num_verts);
-        sx_assert(verts);
+        // populate new vertex buffer
+        if (!g_ds.wireframe) {
+            bindings.index_buffer = g_ds.ibuff;
+            drawsprite_vertex* verts = sx_malloc(tmp_alloc, sizeof(drawsprite_vertex) * dd->num_verts);
+            sx_assert(verts);
 
-        float start_x = -3.0f;
-        float start_y = -1.5f;
-        for (int i = 0; i < dd->num_sprites; i++) {
-            rizz_sprite_drawsprite* dspr = &dd->sprites[i];
+            float start_x = -3.0f;
+            float start_y = -1.5f;
+            for (int i = 0; i < dd->num_sprites; i++) {
+                rizz_sprite_drawsprite* dspr = &dd->sprites[i];
 
-            sx_vec4 transform = sx_vec4f(start_x, start_y, 0, 1.0f);
-            int end_vertex = dspr->start_vertex + dspr->num_verts;
-            for (int v = dspr->start_vertex; v < end_vertex; v++) {
-                verts[v].pos = dd->verts[v].pos;
-                verts[v].uv = dd->verts[v].uv;
-                verts[v].transform = transform;
-                verts[v].color = dd->verts[v].color;
+                sx_vec4 transform = sx_vec4f(start_x, start_y, 0, 1.0f);
+                int end_vertex = dspr->start_vertex + dspr->num_verts;
+                for (int v = dspr->start_vertex; v < end_vertex; v++) {
+                    verts[v].pos = dd->verts[v].pos;
+                    verts[v].uv = dd->verts[v].uv;
+                    verts[v].transform = transform;
+                    verts[v].color = dd->verts[v].color;
+                }
+                start_x += sx_rect_width(the_2d->sprite.bounds(g_ds.sprites[i])) * 0.8f;
+
+                if ((i + 1) % 3 == 0) {
+                    start_y += 3.0f;
+                    start_x = -3.0f;
+                }
             }
-            start_x += sx_rect_width(the_2d->sprite.bounds(g_ds.sprites[i])) * 0.8f;
 
-            if ((i + 1) % 3 == 0) {
-                start_y += 3.0f;
-                start_x = -3.0f;
+            the_gfx->staged.update_buffer(g_ds.vbuff, verts, sizeof(drawsprite_vertex) * dd->num_verts);
+            the_gfx->staged.update_buffer(g_ds.ibuff, dd->indices, sizeof(uint16_t) * dd->num_indices);
+            the_gfx->staged.apply_pipeline(g_ds.pip);
+        } else {
+            drawsprite_vertex* verts =
+                sx_malloc(tmp_alloc, sizeof(drawsprite_vertex) * dd->num_indices);
+            sx_assert(verts);
+            const sx_vec3 bcs[] = { { { 1.0f, 0, 0 } }, { { 0, 1.0f, 0 } }, { { 0, 0, 1.0f } } };
+
+            float start_x = -3.0f;
+            float start_y = -1.5f;
+            int vindex = 0;
+            for (int i = 0; i < dd->num_sprites; i++) {
+                rizz_sprite_drawsprite* dspr = &dd->sprites[i];
+
+                sx_vec4 transform = sx_vec4f(start_x, start_y, 0, 1.0f);
+                int end_index = dspr->start_index + dspr->num_indices;
+                for (int ii = dspr->start_index; ii < end_index; ii++) {
+                    int v = dd->indices[ii];
+                    verts[vindex].pos = dd->verts[v].pos;
+                    verts[vindex].uv = dd->verts[v].uv;
+                    verts[vindex].transform = transform;
+                    verts[vindex].color = dd->verts[v].color;
+                    verts[vindex].bc = bcs[vindex % 3];
+                    vindex++;
+                }
+                start_x += sx_rect_width(the_2d->sprite.bounds(g_ds.sprites[i])) * 0.8f;
+
+                if ((i + 1) % 3 == 0) {
+                    start_y += 3.0f;
+                    start_x = -3.0f;
+                }
             }
+
+            the_gfx->staged.update_buffer(g_ds.vbuff, verts,
+                                          sizeof(drawsprite_vertex) * dd->num_indices);
+            the_gfx->staged.apply_pipeline(g_ds.pip_wire);
         }
 
-        the_gfx->staged.update_buffer(g_ds.vbuff, verts, sizeof(drawsprite_vertex) * dd->num_verts);
-        the_gfx->staged.update_buffer(g_ds.ibuff, dd->indices, sizeof(uint16_t) * dd->num_indices);
-        the_gfx->staged.apply_pipeline(g_ds.pip);
-    } else {
-        drawsprite_vertex* verts =
-            sx_malloc(tmp_alloc, sizeof(drawsprite_vertex) * dd->num_indices);
-        sx_assert(verts);
-        const sx_vec3 bcs[] = { { { 1.0f, 0, 0 } }, { { 0, 1.0f, 0 } }, { { 0, 0, 1.0f } } };
+        bindings.fs_images[0] = the_gfx->texture_get(dd->batches[0].texture)->img;
+        the_gfx->staged.apply_bindings(&bindings);
 
-        float start_x = -3.0f;
-        float start_y = -1.5f;
-        int vindex = 0;
-        for (int i = 0; i < dd->num_sprites; i++) {
-            rizz_sprite_drawsprite* dspr = &dd->sprites[i];
+        the_gfx->staged.apply_uniforms(SG_SHADERSTAGE_VS, 0, params, sizeof(*params));
 
-            sx_vec4 transform = sx_vec4f(start_x, start_y, 0, 1.0f);
-            int end_index = dspr->start_index + dspr->num_indices;
-            for (int ii = dspr->start_index; ii < end_index; ii++) {
-                int v = dd->indices[ii];
-                verts[vindex].pos = dd->verts[v].pos;
-                verts[vindex].uv = dd->verts[v].uv;
-                verts[vindex].transform = transform;
-                verts[vindex].color = dd->verts[v].color;
-                verts[vindex].bc = bcs[vindex % 3];
-                vindex++;
-            }
-            start_x += sx_rect_width(the_2d->sprite.bounds(g_ds.sprites[i])) * 0.8f;
-
-            if ((i + 1) % 3 == 0) {
-                start_y += 3.0f;
-                start_x = -3.0f;
-            }
-        }
-
-        the_gfx->staged.update_buffer(g_ds.vbuff, verts,
-                                      sizeof(drawsprite_vertex) * dd->num_indices);
-        the_gfx->staged.apply_pipeline(g_ds.pip_wire);
-    }
-
-    bindings.fs_images[0] = the_gfx->texture_get(dd->batches[0].texture)->img;
-    the_gfx->staged.apply_bindings(&bindings);
-
-    the_gfx->staged.apply_uniforms(SG_SHADERSTAGE_VS, 0, params, sizeof(*params));
-
-    the_gfx->staged.draw(0, dd->num_indices, 1);
-    rizz_temp_alloc_end(tmp_alloc);
+        the_gfx->staged.draw(0, dd->num_indices, 1);
+    } // scope
 }
 
 static void render()

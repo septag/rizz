@@ -170,105 +170,107 @@ static void update(float dt)
 {
     update_cam_movement(dt);
 
-    rizz_temp_alloc_begin(tmp_alloc);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_scope(the_core->tmp_alloc_pop()) {
 
-    rizz_profile_begin(update, 0);
-    // move shapes around
-    int64_t frame = the_core->frame_index();
-    int num_pairs;
-    float detect_time, update_time;
-    {
-        uint64_t ents[NUM_SHAPES];
-        sx_tx3d transforms[NUM_SHAPES];
-        for (int i = 0; i < NUM_SHAPES; i++) {
-            entity_t* ent = &g_coll.ents[i];
-            ent->tm += dt;
-            float t = sx_sin(ent->tm)*0.5f + 0.5f;
-            ents[i] = i;
-            sx_vec3 pos = sx_vec3_lerp(ent->p1, ent->p2, t);
-            transforms[i] = sx_tx3d_set(pos, sx_mat3_ident());
-            ent->pos = pos;
+        rizz_profile_begin(update, 0);
+        // move shapes around
+        int64_t frame = the_core->frame_index();
+        int num_pairs;
+        float detect_time, update_time;
+        {
+            uint64_t ents[NUM_SHAPES];
+            sx_tx3d transforms[NUM_SHAPES];
+            for (int i = 0; i < NUM_SHAPES; i++) {
+                entity_t* ent = &g_coll.ents[i];
+                ent->tm += dt;
+                float t = sx_sin(ent->tm)*0.5f + 0.5f;
+                ents[i] = i;
+                sx_vec3 pos = sx_vec3_lerp(ent->p1, ent->p2, t);
+                transforms[i] = sx_tx3d_set(pos, sx_mat3_ident());
+                ent->pos = pos;
+            }
+
+            uint64_t t0 = sx_tm_now();
+            the_coll->update_transforms(g_coll.ctx, ents, NUM_SHAPES, transforms);
+
+            uint64_t t1 = sx_tm_now();
+            update_time = (float)sx_tm_ms(sx_tm_diff(t1, t0));
+
+            rizz_coll_pair* pairs = the_coll->detect(g_coll.ctx, tmp_alloc);
+            sx_assert_always(pairs);
+            for (int i = 0, ic = sx_array_count(pairs); i < ic; i++) {
+                rizz_coll_pair pair = pairs[i];
+                g_coll.ents[pair.ent1].col_frame = frame;
+                g_coll.ents[pair.ent2].col_frame = frame;
+            }
+
+            detect_time = (float)sx_tm_ms(sx_tm_diff(sx_tm_now(), t1));
+            num_pairs = sx_array_count(pairs);
         }
 
-        uint64_t t0 = sx_tm_now();
-        the_coll->update_transforms(g_coll.ctx, ents, NUM_SHAPES, transforms);
+        if (g_coll.show_raycast_debugger) {
+            sx_vec3 ray_pos = g_coll.cam.cam.pos;
+            sx_vec3 ray_dir = g_coll.cam.cam.forward;
 
-        uint64_t t1 = sx_tm_now();
-        update_time = (float)sx_tm_ms(sx_tm_diff(t1, t0));
-
-        rizz_coll_pair* pairs = the_coll->detect(g_coll.ctx, tmp_alloc);
-        sx_assert_always(pairs);
-        for (int i = 0, ic = sx_array_count(pairs); i < ic; i++) {
-            rizz_coll_pair pair = pairs[i];
-            g_coll.ents[pair.ent1].col_frame = frame;
-            g_coll.ents[pair.ent2].col_frame = frame;
+            rizz_coll_ray ray = rizz_coll_ray_set(ray_pos, ray_dir, g_coll.raycast_len);
+            rizz_coll_rayhit* hits = the_coll->query_ray(g_coll.ctx, ray, 0xffffffff, tmp_alloc);
+            sx_assert_always(hits);
+            for (int i = 0, ic = sx_array_count(hits); i < ic; i++) {
+                rizz_coll_rayhit hit = hits[i];
+                g_coll.ents[hit.ent].raycast_frame = frame;
+            }
         }
-
-        detect_time = (float)sx_tm_ms(sx_tm_diff(sx_tm_now(), t1));
-        num_pairs = sx_array_count(pairs);
-    }
-
-    if (g_coll.show_raycast_debugger) {
-        sx_vec3 ray_pos = g_coll.cam.cam.pos;
-        sx_vec3 ray_dir = g_coll.cam.cam.forward;
-
-        rizz_coll_ray ray = rizz_coll_ray_set(ray_pos, ray_dir, g_coll.raycast_len);
-        rizz_coll_rayhit* hits = the_coll->query_ray(g_coll.ctx, ray, 0xffffffff, tmp_alloc);
-        sx_assert_always(hits);
-        for (int i = 0, ic = sx_array_count(hits); i < ic; i++) {
-            rizz_coll_rayhit hit = hits[i];
-            g_coll.ents[hit.ent].raycast_frame = frame;
-        }
-    }
 	
-	show_debugmenu(the_imgui, the_core);	
+	    show_debugmenu(the_imgui, the_core);	
 
-    if (the_imgui->Begin("collision", NULL, 0)) {
-        if (the_imgui->Checkbox("Visualize Collision (F3)", &g_coll.show_collision_debugger)) {
-            if (g_coll.show_collision_debugger) {
-                g_coll.show_raycast_debugger = false;
+        if (the_imgui->Begin("collision", NULL, 0)) {
+            if (the_imgui->Checkbox("Visualize Collision (F3)", &g_coll.show_collision_debugger)) {
+                if (g_coll.show_collision_debugger) {
+                    g_coll.show_raycast_debugger = false;
+                }
             }
-        }
-        const char* items[] = {
-            "Collisions",
-            "Collision Heatmap",
-            "Entity Heatmap"
-        };
-        the_imgui->ComboStr_arr("Collision vis Mode", (int*)&g_coll.collision_vis_mode, items, 3, -1);
-        the_imgui->SliderFloat("Raycast len", &g_coll.raycast_len, 1.0f, 100.0f, "%.0f", 0);
-        if (the_imgui->Checkbox("Debug Raycast", &g_coll.show_raycast_debugger)) {
-            if (g_coll.show_raycast_debugger) {
-                g_coll.show_collision_debugger = false;
+            const char* items[] = {
+                "Collisions",
+                "Collision Heatmap",
+                "Entity Heatmap"
+            };
+            the_imgui->ComboStr_arr("Collision vis Mode", (int*)&g_coll.collision_vis_mode, items, 3, -1);
+            the_imgui->SliderFloat("Raycast len", &g_coll.raycast_len, 1.0f, 100.0f, "%.0f", 0);
+            if (the_imgui->Checkbox("Debug Raycast", &g_coll.show_raycast_debugger)) {
+                if (g_coll.show_raycast_debugger) {
+                    g_coll.show_collision_debugger = false;
+                }
             }
+            const char* items2[] = {
+                "Rayhits",
+                "Rayhit Heatmap",
+                "Raymarch Heatmap"
+            };
+            the_imgui->ComboStr_arr("Raycast vis Mode", (int*)&g_coll.raycast_vis_mode, items2, 3, -1);        
+            the_imgui->LabelText("Collisions", "%d", num_pairs);
+        } 
+        the_imgui->LabelText("Update time", "%.3f ms", update_time);
+        the_imgui->LabelText("Detection time", "%.3f ms", detect_time);
+        the_imgui->LabelText("Ft", "%.3f", the_core->delta_time()*1000.0f);
+        the_imgui->End();
+
+        if (g_coll.show_collision_debugger) {
+            the_coll->debug_collisions(g_coll.ctx, 0.95f, g_coll.collision_vis_mode, 10.0f);
         }
-        const char* items2[] = {
-            "Rayhits",
-            "Rayhit Heatmap",
-            "Raymarch Heatmap"
-        };
-        the_imgui->ComboStr_arr("Raycast vis Mode", (int*)&g_coll.raycast_vis_mode, items2, 3, -1);        
-        the_imgui->LabelText("Collisions", "%d", num_pairs);
-    } 
-    the_imgui->LabelText("Update time", "%.3f ms", update_time);
-    the_imgui->LabelText("Detection time", "%.3f ms", detect_time);
-    the_imgui->LabelText("Ft", "%.3f", the_core->delta_time()*1000.0f);
-    the_imgui->End();
+        if (g_coll.show_raycast_debugger) {
+            the_coll->debug_raycast(g_coll.ctx, 0.6f, g_coll.raycast_vis_mode, 1.0f);
+            // crossair
+            ImDrawList* draw_list = the_imguix->begin_fullscreen_draw("crossair");
+            sx_vec2 size;
+            the_app->window_size(&size);
+            sx_vec2 center = sx_vec2_mulf(size, 0.5f);
+            the_imgui->ImDrawList_AddCircle(draw_list, center, 5.0f, SX_COLOR_YELLOW.n, 12, 4.0f);
+        }
 
-    if (g_coll.show_collision_debugger) {
-        the_coll->debug_collisions(g_coll.ctx, 0.95f, g_coll.collision_vis_mode, 10.0f);
-    }
-    if (g_coll.show_raycast_debugger) {
-        the_coll->debug_raycast(g_coll.ctx, 0.6f, g_coll.raycast_vis_mode, 1.0f);
-        // crossair
-        ImDrawList* draw_list = the_imguix->begin_fullscreen_draw("crossair");
-        sx_vec2 size;
-        the_app->window_size(&size);
-        sx_vec2 center = sx_vec2_mulf(size, 0.5f);
-        the_imgui->ImDrawList_AddCircle(draw_list, center, 5.0f, SX_COLOR_YELLOW.n, 12, 4.0f);
-    }
+        rizz_profile_end(update);
+    } // scope
 
-    rizz_temp_alloc_end(tmp_alloc);
-    rizz_profile_end(update);
 }
 
 static void render(void)

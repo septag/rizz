@@ -465,104 +465,106 @@ static rizz_coll_pair* coll_detect(rizz_coll_context* ctx, const sx_alloc* alloc
     int const num_cells_x = ctx->num_cells_x;
     rizz_coll_pair* pairs = NULL;
 
-    rizz_temp_alloc_begin(tmp_alloc);
-    sx_array_reserve(alloc, pairs, 50);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_scope(the_core->tmp_alloc_pop()) {
 
-    #if STRIKE_DEBUG_COLLISION
-        int64_t frame_id = the_core->frame_index(); // used for debugging only
-        for (int i = 0; i < ctx->num_cells; i++) {
-            ctx->cells[i].num_collisions = 0;
-        }
-    #endif // STRIKE_DEBUG_COLLISION
+        sx_array_reserve(alloc, pairs, 50);
+
+        #if STRIKE_DEBUG_COLLISION
+            int64_t frame_id = the_core->frame_index(); // used for debugging only
+            for (int i = 0; i < ctx->num_cells; i++) {
+                ctx->cells[i].num_collisions = 0;
+            }
+        #endif // STRIKE_DEBUG_COLLISION
     
-    for (int i = 0, ic = sx_array_count(ctx->updated_ent_handles); i < ic; i++) {
-        sx_handle_t handle = ctx->updated_ent_handles[i];
-        int index = sx_handle_index(handle);
+        for (int i = 0, ic = sx_array_count(ctx->updated_ent_handles); i < ic; i++) {
+            sx_handle_t handle = ctx->updated_ent_handles[i];
+            int index = sx_handle_index(handle);
 
-        sx_handle_t* candidates = NULL;
+            sx_handle_t* candidates = NULL;
 
-        // collect all candidates for collision
-        sx_aabb aabb = ctx->transformed_aabbs[index];
-        sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(aabb.vmin));
-        sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(aabb.vmax));
+            // collect all candidates for collision
+            sx_aabb aabb = ctx->transformed_aabbs[index];
+            sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(aabb.vmin));
+            sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(aabb.vmax));
 
-        for (int y = hmin.y; y <= hmax.y; y++) {
-            for (int x = hmin.x; x <= hmax.x; x++) {
-                coll_spatial_grid_cell cell = ctx->cells[coll__cell_id(x, y, num_cells_x)];
-                int num_cell_ents = sx_array_count(cell.ents);
-                sx_memcpy(sx_array_add(tmp_alloc, candidates, num_cell_ents), cell.ents,
-                          num_cell_ents * sizeof(sx_handle_t));
+            for (int y = hmin.y; y <= hmax.y; y++) {
+                for (int x = hmin.x; x <= hmax.x; x++) {
+                    coll_spatial_grid_cell cell = ctx->cells[coll__cell_id(x, y, num_cells_x)];
+                    int num_cell_ents = sx_array_count(cell.ents);
+                    sx_memcpy(sx_array_add(tmp_alloc, candidates, num_cell_ents), cell.ents,
+                              num_cell_ents * sizeof(sx_handle_t));
+                }
             }
-        }
 
-        // remove duplicates
-        int num_candidates = sx_array_count(candidates);
-        //coll__sort_u32_quick_sort(candidates, num_candidates);
-        coll__sort_u32_tim_sort(candidates, num_candidates);
-        for (int e = 0; e < (num_candidates - 1); e++) {
-            if (candidates[e] == candidates[e+1]) {
-                sx_array_pop(candidates, e);
-                --e;
-                --num_candidates;
+            // remove duplicates
+            int num_candidates = sx_array_count(candidates);
+            //coll__sort_u32_quick_sort(candidates, num_candidates);
+            coll__sort_u32_tim_sort(candidates, num_candidates);
+            for (int e = 0; e < (num_candidates - 1); e++) {
+                if (candidates[e] == candidates[e+1]) {
+                    sx_array_pop(candidates, e);
+                    --e;
+                    --num_candidates;
+                }
             }
-        }
 
-        // perform narrow phase
-        sx_box box = ctx->transformed_boxes[index];
-        c2Poly poly;
-        c2x polytx;
-        coll_entity_mask_pair ent_mask = ctx->ent_mask_pairs[index];
-        coll__calc_poly_from_box(&box, &poly, &polytx);
+            // perform narrow phase
+            sx_box box = ctx->transformed_boxes[index];
+            c2Poly poly;
+            c2x polytx;
+            coll_entity_mask_pair ent_mask = ctx->ent_mask_pairs[index];
+            coll__calc_poly_from_box(&box, &poly, &polytx);
         
-        for (int e = 0; e < num_candidates; e++) {
-            int test_index = sx_handle_index(candidates[e]);
-            sx_aabb test_aabb = ctx->transformed_aabbs[test_index];
-            coll_entity_mask_pair test_ent_mask = ctx->ent_mask_pairs[test_index];
+            for (int e = 0; e < num_candidates; e++) {
+                int test_index = sx_handle_index(candidates[e]);
+                sx_aabb test_aabb = ctx->transformed_aabbs[test_index];
+                coll_entity_mask_pair test_ent_mask = ctx->ent_mask_pairs[test_index];
 
-            if ((ent_mask.mask & test_ent_mask.mask) == 0 || !sx_aabb_test(&aabb, &test_aabb)) {
-                continue;
-            }
-
-            sx_box test_box = ctx->transformed_boxes[test_index];
-            if ((test_box.e.x + test_box.e.y + test_box.e.z) > 0.00001f) {
-                c2Poly poly2;
-                c2x polytx2;
-                coll__calc_poly_from_box(&test_box, &poly2, &polytx2);
-                if (!c2PolytoPoly(&poly, &polytx, &poly2, &polytx2)) {
+                if ((ent_mask.mask & test_ent_mask.mask) == 0 || !sx_aabb_test(&aabb, &test_aabb)) {
                     continue;
                 }
-            } else {
-                // static poly
-                if (!c2PolytoPoly(&poly, &polytx, (const c2Poly*)&ctx->polys[test_index], NULL)) {
-                    continue;
+
+                sx_box test_box = ctx->transformed_boxes[test_index];
+                if ((test_box.e.x + test_box.e.y + test_box.e.z) > 0.00001f) {
+                    c2Poly poly2;
+                    c2x polytx2;
+                    coll__calc_poly_from_box(&test_box, &poly2, &polytx2);
+                    if (!c2PolytoPoly(&poly, &polytx, &poly2, &polytx2)) {
+                        continue;
+                    }
+                } else {
+                    // static poly
+                    if (!c2PolytoPoly(&poly, &polytx, (const c2Poly*)&ctx->polys[test_index], NULL)) {
+                        continue;
+                    }
                 }
-            }
 
-            if (ent_mask.entity != test_ent_mask.entity) {
-                rizz_coll_pair pair = { 
-                    .ent1 = ent_mask.entity,
-                    .ent2 = test_ent_mask.entity,
-                    .mask1 = ent_mask.mask,
-                    .mask2 = test_ent_mask.mask
-                };
+                if (ent_mask.entity != test_ent_mask.entity) {
+                    rizz_coll_pair pair = { 
+                        .ent1 = ent_mask.entity,
+                        .ent2 = test_ent_mask.entity,
+                        .mask1 = ent_mask.mask,
+                        .mask2 = test_ent_mask.mask
+                    };
 
-                #if STRIKE_DEBUG_COLLISION
-                    ctx->collision_frames[index] = frame_id;
-                    ctx->collision_frames[test_index] = frame_id;
-                    coll__mark_collision(ctx, &aabb);
-                    coll__mark_collision(ctx, &test_aabb);
-                #endif
+                    #if STRIKE_DEBUG_COLLISION
+                        ctx->collision_frames[index] = frame_id;
+                        ctx->collision_frames[test_index] = frame_id;
+                        coll__mark_collision(ctx, &aabb);
+                        coll__mark_collision(ctx, &test_aabb);
+                    #endif
 
-                if (!coll__check_existing_pair(pairs, sx_array_count(pairs), pair)) {
-                    sx_array_push(alloc, pairs, pair);
+                    if (!coll__check_existing_pair(pairs, sx_array_count(pairs), pair)) {
+                        sx_array_push(alloc, pairs, pair);
+                    }
                 }
-            }
-        } // foreach (candidate)
+            } // foreach (candidate)
                 
-    } // foreach (upadted_entity_handles)
+        } // foreach (upadted_entity_handles)
 
-    sx_array_clear(ctx->updated_ent_handles);
-    rizz_temp_alloc_end(tmp_alloc);
+        sx_array_clear(ctx->updated_ent_handles);
+    } // scope
 
     return pairs;
 }
@@ -624,65 +626,66 @@ static uint64_t* coll_query_sphere(rizz_coll_context* ctx, sx_vec3 center, float
     sx_aabb aabb = sx_aabbv(sx_vec3_sub(center, sx_vec3splat(radius)), sx_vec3_add(center, sx_vec3splat(radius)));
     sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(aabb.vmin));
     sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(aabb.vmax));
-
-    rizz_temp_alloc_begin(tmp_alloc);
-
-    // broad-phase
-    sx_handle_t* candidates = NULL;
-    for (int y = hmin.y; y <= hmax.y; y++) {
-        for (int x = hmin.x; x <= hmax.x; x++) {
-            coll_spatial_grid_cell cell = ctx->cells[coll__cell_id(x, y, num_cells_x)];
-            int num_cell_ents = sx_array_count(cell.ents);
-            sx_memcpy(sx_array_add(tmp_alloc, candidates, num_cell_ents), cell.ents,
-                        num_cell_ents * sizeof(sx_handle_t));
-        }
-    }
-
-    // remove duplicates
-    int num_candidates = sx_array_count(candidates);
-    coll__sort_u32_tim_sort(candidates, num_candidates);
-    for (int e = 0; e < (num_candidates - 1); e++) {
-        if (candidates[e] == candidates[e+1]) {
-            sx_array_pop(candidates, e);
-            --e;
-            --num_candidates;
-        }
-    }
-
     uint64_t* ents = NULL;
-    c2Circle circle;
-    circle.p.x = center.x;
-    circle.p.y = center.y;
-    circle.r = radius;
 
-    for (int e = 0; e < num_candidates; e++) {
-        int test_index = sx_handle_index(candidates[e]);
-        sx_aabb test_aabb = ctx->transformed_aabbs[test_index];
-        coll_entity_mask_pair test_entmask = ctx->ent_mask_pairs[test_index];
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_scope(the_core->tmp_alloc_pop()) {
 
-        if ((mask & test_entmask.mask) == 0 || !sx_aabb_test(&aabb, &test_aabb)) {
-            continue;
-        }
-
-        sx_box test_box = ctx->transformed_boxes[test_index];
-        if ((test_box.e.x + test_box.e.y + test_box.e.z) > 0.00001f) {
-            c2Poly poly2;
-            c2x polytx2;
-            coll__calc_poly_from_box(&test_box, &poly2, &polytx2);
-            if (!c2CircletoPoly(circle, &poly2, &polytx2)) {
-                continue;
-            }
-        } else {
-            // static poly
-            if (!c2CircletoPoly(circle, (const c2Poly*)&ctx->polys[test_index], NULL)) {
-                continue;
+        // broad-phase
+        sx_handle_t* candidates = NULL;
+        for (int y = hmin.y; y <= hmax.y; y++) {
+            for (int x = hmin.x; x <= hmax.x; x++) {
+                coll_spatial_grid_cell cell = ctx->cells[coll__cell_id(x, y, num_cells_x)];
+                int num_cell_ents = sx_array_count(cell.ents);
+                sx_memcpy(sx_array_add(tmp_alloc, candidates, num_cell_ents), cell.ents,
+                            num_cell_ents * sizeof(sx_handle_t));
             }
         }
 
-        sx_array_push(alloc, ents, test_entmask.entity);
-    } // foreach (candidate)
+        // remove duplicates
+        int num_candidates = sx_array_count(candidates);
+        coll__sort_u32_tim_sort(candidates, num_candidates);
+        for (int e = 0; e < (num_candidates - 1); e++) {
+            if (candidates[e] == candidates[e+1]) {
+                sx_array_pop(candidates, e);
+                --e;
+                --num_candidates;
+            }
+        }
 
-    rizz_temp_alloc_end(tmp_alloc);
+        c2Circle circle;
+        circle.p.x = center.x;
+        circle.p.y = center.y;
+        circle.r = radius;
+
+        for (int e = 0; e < num_candidates; e++) {
+            int test_index = sx_handle_index(candidates[e]);
+            sx_aabb test_aabb = ctx->transformed_aabbs[test_index];
+            coll_entity_mask_pair test_entmask = ctx->ent_mask_pairs[test_index];
+
+            if ((mask & test_entmask.mask) == 0 || !sx_aabb_test(&aabb, &test_aabb)) {
+                continue;
+            }
+
+            sx_box test_box = ctx->transformed_boxes[test_index];
+            if ((test_box.e.x + test_box.e.y + test_box.e.z) > 0.00001f) {
+                c2Poly poly2;
+                c2x polytx2;
+                coll__calc_poly_from_box(&test_box, &poly2, &polytx2);
+                if (!c2CircletoPoly(circle, &poly2, &polytx2)) {
+                    continue;
+                }
+            } else {
+                // static poly
+                if (!c2CircletoPoly(circle, (const c2Poly*)&ctx->polys[test_index], NULL)) {
+                    continue;
+                }
+            }
+
+            sx_array_push(alloc, ents, test_entmask.entity);
+        } // foreach (candidate)
+    } // scope
+
     return ents;
 }
 
@@ -696,63 +699,63 @@ static uint64_t* coll_query_poly(rizz_coll_context* ctx, const rizz_coll_shape_p
     }
     sx_ivec2 hmin = coll__hash_point(ctx, sx_vec2fv(rect.vmin));
     sx_ivec2 hmax = coll__hash_point(ctx, sx_vec2fv(rect.vmax));
-
-    rizz_temp_alloc_begin(tmp_alloc);
-
-    // broad-phase
-    sx_handle_t* candidates = NULL;
-    for (int y = hmin.y; y <= hmax.y; y++) {
-        for (int x = hmin.x; x <= hmax.x; x++) {
-            coll_spatial_grid_cell cell = ctx->cells[coll__cell_id(x, y, num_cells_x)];
-            int num_cell_ents = sx_array_count(cell.ents);
-            sx_memcpy(sx_array_add(tmp_alloc, candidates, num_cell_ents), cell.ents,
-                        num_cell_ents * sizeof(sx_handle_t));
-        }
-    }
-
-    // remove duplicates
-    int num_candidates = sx_array_count(candidates);
-    coll__sort_u32_tim_sort(candidates, num_candidates);
-    for (int e = 0; e < (num_candidates - 1); e++) {
-        if (candidates[e] == candidates[e+1]) {
-            sx_array_pop(candidates, e);
-            --e;
-            --num_candidates;
-        }
-    }
-
     uint64_t* ents = NULL;
-    sx_array_reserve(alloc, ents, 50);
 
-    for (int e = 0; e < num_candidates; e++) {
-        int test_index = sx_handle_index(candidates[e]);
-        sx_aabb test_aabb = ctx->transformed_aabbs[test_index];
-        sx_rect test_rect = sx_rectv(sx_vec2fv(test_aabb.vmin), sx_vec2fv(test_aabb.vmax));
-        coll_entity_mask_pair test_entmask = ctx->ent_mask_pairs[test_index];
-
-        if ((mask & test_entmask.mask) == 0 || !sx_rect_test_rect(rect, test_rect)) {
-            continue;
-        }
-
-        sx_box test_box = ctx->transformed_boxes[test_index];
-        if ((test_box.e.x + test_box.e.y + test_box.e.z) > 0.00001f) {
-            c2Poly poly2;
-            c2x polytx2;
-            coll__calc_poly_from_box(&test_box, &poly2, &polytx2);
-            if (!c2PolytoPoly((const c2Poly*)poly, NULL, &poly2, &polytx2)) {
-                continue;
-            }
-        } else {
-            // static poly
-            if (!c2PolytoPoly((const c2Poly*)poly, NULL, (const c2Poly*)&ctx->polys[test_index], NULL)) {
-                continue;
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_scope(the_core->tmp_alloc_pop()) {
+        // broad-phase
+        sx_handle_t* candidates = NULL;
+        for (int y = hmin.y; y <= hmax.y; y++) {
+            for (int x = hmin.x; x <= hmax.x; x++) {
+                coll_spatial_grid_cell cell = ctx->cells[coll__cell_id(x, y, num_cells_x)];
+                int num_cell_ents = sx_array_count(cell.ents);
+                sx_memcpy(sx_array_add(tmp_alloc, candidates, num_cell_ents), cell.ents,
+                            num_cell_ents * sizeof(sx_handle_t));
             }
         }
 
-        sx_array_push(alloc, ents, test_entmask.entity);
-    } // foreach (candidate)
+        // remove duplicates
+        int num_candidates = sx_array_count(candidates);
+        coll__sort_u32_tim_sort(candidates, num_candidates);
+        for (int e = 0; e < (num_candidates - 1); e++) {
+            if (candidates[e] == candidates[e+1]) {
+                sx_array_pop(candidates, e);
+                --e;
+                --num_candidates;
+            }
+        }
 
-    rizz_temp_alloc_end(tmp_alloc);
+        sx_array_reserve(alloc, ents, 50);
+
+        for (int e = 0; e < num_candidates; e++) {
+            int test_index = sx_handle_index(candidates[e]);
+            sx_aabb test_aabb = ctx->transformed_aabbs[test_index];
+            sx_rect test_rect = sx_rectv(sx_vec2fv(test_aabb.vmin), sx_vec2fv(test_aabb.vmax));
+            coll_entity_mask_pair test_entmask = ctx->ent_mask_pairs[test_index];
+
+            if ((mask & test_entmask.mask) == 0 || !sx_rect_test_rect(rect, test_rect)) {
+                continue;
+            }
+
+            sx_box test_box = ctx->transformed_boxes[test_index];
+            if ((test_box.e.x + test_box.e.y + test_box.e.z) > 0.00001f) {
+                c2Poly poly2;
+                c2x polytx2;
+                coll__calc_poly_from_box(&test_box, &poly2, &polytx2);
+                if (!c2PolytoPoly((const c2Poly*)poly, NULL, &poly2, &polytx2)) {
+                    continue;
+                }
+            } else {
+                // static poly
+                if (!c2PolytoPoly((const c2Poly*)poly, NULL, (const c2Poly*)&ctx->polys[test_index], NULL)) {
+                    continue;
+                }
+            }
+
+            sx_array_push(alloc, ents, test_entmask.entity);
+        } // foreach (candidate)
+    } // scope
+
     return ents;
 }
 
@@ -901,116 +904,118 @@ static rizz_coll_rayhit* coll_query_ray(rizz_coll_context* ctx, rizz_coll_ray ra
     // broadphase: Bresenham AA line drawing
     int* candidate_cells = NULL;
     rizz_coll_rayhit* hits = NULL;
-    rizz_temp_alloc_begin(tmp_alloc);
-    sx_array_reserve(alloc, hits, 50);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
-    int x0 = p0.x, y0 = p0.y, x1 = p1.x, y1 = p1.y;
-    int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-    int dy = abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-    int err = dx - dy, e2, x2;
-    int ed = dx + dy == 0 ? 1 : (int)sx_sqrt((float)dx*dx + (float)dy*dy);
-    int cell_id;
+    sx_scope(the_core->tmp_alloc_pop()) {
+        sx_array_reserve(alloc, hits, 50);
 
-    while (1) {
-        cell_id = coll__cell_id(x0, y0, num_cells_x);
-        if (!coll__id_exists(candidate_cells, sx_array_count(candidate_cells), cell_id)) {
-            #ifdef STRIKE_DEBUG_COLLISION
-                ++ctx->cells[cell_id].num_raymarches;
-            #endif
-            sx_array_push(tmp_alloc, candidate_cells, cell_id);
-        }
-        e2 = err; x2 = x0;
-        if (2 * e2 >= -dx) {    // x step
-            if (x0 == x1) {
-                break;
+        int x0 = p0.x, y0 = p0.y, x1 = p1.x, y1 = p1.y;
+        int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+        int dy = abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+        int err = dx - dy, e2, x2;
+        int ed = dx + dy == 0 ? 1 : (int)sx_sqrt((float)dx*dx + (float)dy*dy);
+        int cell_id;
+
+        while (1) {
+            cell_id = coll__cell_id(x0, y0, num_cells_x);
+            if (!coll__id_exists(candidate_cells, sx_array_count(candidate_cells), cell_id)) {
+                #ifdef STRIKE_DEBUG_COLLISION
+                    ++ctx->cells[cell_id].num_raymarches;
+                #endif
+                sx_array_push(tmp_alloc, candidate_cells, cell_id);
             }
-            if (e2 + dy < ed) {
-                cell_id = coll__cell_id(x0, y0 + sy, num_cells_x);
-                if (!coll__id_exists(candidate_cells, sx_array_count(candidate_cells), cell_id)) {
-                    #ifdef STRIKE_DEBUG_COLLISION
-                        ++ctx->cells[cell_id].num_raymarches;
-                    #endif
-                    sx_array_push(tmp_alloc, candidate_cells, cell_id);
+            e2 = err; x2 = x0;
+            if (2 * e2 >= -dx) {    // x step
+                if (x0 == x1) {
+                    break;
                 }
-            }
-            err -= dy; x0 += sx;
-        }
-        if (2 * e2 <= dy) {     // y step
-            if (y0 == y1) {
-                break;
-            }
-
-            if (dx-e2 < ed) {
-                cell_id = coll__cell_id(x2 + sx, y0, num_cells_x);
-                if (!coll__id_exists(candidate_cells, sx_array_count(candidate_cells), cell_id)) {
-                    #ifdef STRIKE_DEBUG_COLLISION
-                        ++ctx->cells[cell_id].num_raymarches;
-                    #endif
-                    sx_array_push(tmp_alloc, candidate_cells, cell_id);
+                if (e2 + dy < ed) {
+                    cell_id = coll__cell_id(x0, y0 + sy, num_cells_x);
+                    if (!coll__id_exists(candidate_cells, sx_array_count(candidate_cells), cell_id)) {
+                        #ifdef STRIKE_DEBUG_COLLISION
+                            ++ctx->cells[cell_id].num_raymarches;
+                        #endif
+                        sx_array_push(tmp_alloc, candidate_cells, cell_id);
+                    }
                 }
-            } 
-            err += dx; y0 += sy;
+                err -= dy; x0 += sx;
+            }
+            if (2 * e2 <= dy) {     // y step
+                if (y0 == y1) {
+                    break;
+                }
+
+                if (dx-e2 < ed) {
+                    cell_id = coll__cell_id(x2 + sx, y0, num_cells_x);
+                    if (!coll__id_exists(candidate_cells, sx_array_count(candidate_cells), cell_id)) {
+                        #ifdef STRIKE_DEBUG_COLLISION
+                            ++ctx->cells[cell_id].num_raymarches;
+                        #endif
+                        sx_array_push(tmp_alloc, candidate_cells, cell_id);
+                    }
+                } 
+                err += dx; y0 += sy;
+            }
         }
-    }
 
-    // extract entities from cells and sort/remove duplicates
-    sx_handle_t* candidates = NULL;
-    for (int i = 0, ic = sx_array_count(candidate_cells); i < ic; i++) {
-        coll_spatial_grid_cell* cell = &ctx->cells[candidate_cells[i]];
-        int num_cell_ents = sx_array_count(cell->ents);
-        sx_memcpy(sx_array_add(tmp_alloc, candidates, num_cell_ents), cell->ents,
-                  num_cell_ents * sizeof(sx_handle_t));
+        // extract entities from cells and sort/remove duplicates
+        sx_handle_t* candidates = NULL;
+        for (int i = 0, ic = sx_array_count(candidate_cells); i < ic; i++) {
+            coll_spatial_grid_cell* cell = &ctx->cells[candidate_cells[i]];
+            int num_cell_ents = sx_array_count(cell->ents);
+            sx_memcpy(sx_array_add(tmp_alloc, candidates, num_cell_ents), cell->ents,
+                      num_cell_ents * sizeof(sx_handle_t));
 
-    }   
+        }   
 
-    // remove duplicates
-    int num_candidates = sx_array_count(candidates);
-    coll__sort_u32_tim_sort(candidates, num_candidates);
-    for (int i = 0; i < (num_candidates - 1); i++) {
-        if (candidates[i] == candidates[i+1]) {
-            sx_array_pop(candidates, i);
-            --i;
-            --num_candidates;
+        // remove duplicates
+        int num_candidates = sx_array_count(candidates);
+        coll__sort_u32_tim_sort(candidates, num_candidates);
+        for (int i = 0; i < (num_candidates - 1); i++) {
+            if (candidates[i] == candidates[i+1]) {
+                sx_array_pop(candidates, i);
+                --i;
+                --num_candidates;
+            }
         }
-    }
 
-    #if STRIKE_DEBUG_COLLISION
+        #if STRIKE_DEBUG_COLLISION
+            for (int i = 0; i < num_candidates; i++) {
+                int index = sx_handle_index(candidates[i]);
+                ctx->raymarch_frames[index] = frame_id;
+            }
+        #endif // STRIKE_DEBUG_COLLISION
+
+        // perform narrow-phase ray cast on entities
+        rizz_coll_rayhit hit;
         for (int i = 0; i < num_candidates; i++) {
             int index = sx_handle_index(candidates[i]);
-            ctx->raymarch_frames[index] = frame_id;
+            sx_box test_box = ctx->transformed_boxes[index];
+            coll_entity_mask_pair test_entmask = ctx->ent_mask_pairs[index];
+
+            // must meet 3 conditions:
+            //  - masks bits match
+            //  - entity is not static poly
+            //  - ray intersects with the box
+            if ((mask & test_entmask.mask) && (test_box.e.x + test_box.e.y + test_box.e.z) > 0.00001f) {
+                if (coll_ray_cast_box(&test_box, ray, &hit)) {
+                    #ifdef STRIKE_DEBUG_COLLISION
+                        ctx->rayhit_frames[index] = frame_id;
+                        coll__mark_rayhit(ctx, &ctx->transformed_aabbs[index]);
+                    #endif
+                    hit.ent = test_entmask.entity;
+                    sx_array_push(alloc, hits, hit);
+                } 
+            } // if (mask) 
+        } // foreach (candidates)
+
+        // now sort all results by closest to the ray origin
+        int hit_count = sx_array_count(hits);
+        if (hit_count > 0) {
+            coll__sort_rayhit_tim_sort(hits, hit_count);
         }
-    #endif // STRIKE_DEBUG_COLLISION
+    } // scope
 
-    // perform narrow-phase ray cast on entities
-    rizz_coll_rayhit hit;
-    for (int i = 0; i < num_candidates; i++) {
-        int index = sx_handle_index(candidates[i]);
-        sx_box test_box = ctx->transformed_boxes[index];
-        coll_entity_mask_pair test_entmask = ctx->ent_mask_pairs[index];
-
-        // must meet 3 conditions:
-        //  - masks bits match
-        //  - entity is not static poly
-        //  - ray intersects with the box
-        if ((mask & test_entmask.mask) && (test_box.e.x + test_box.e.y + test_box.e.z) > 0.00001f) {
-            if (coll_ray_cast_box(&test_box, ray, &hit)) {
-                #ifdef STRIKE_DEBUG_COLLISION
-                    ctx->rayhit_frames[index] = frame_id;
-                    coll__mark_rayhit(ctx, &ctx->transformed_aabbs[index]);
-                #endif
-                hit.ent = test_entmask.entity;
-                sx_array_push(alloc, hits, hit);
-            } 
-        } // if (mask) 
-    } // foreach (candidates)
-
-    // now sort all results by closest to the ray origin
-    int hit_count = sx_array_count(hits);
-    if (hit_count > 0) {
-        coll__sort_rayhit_tim_sort(hits, hit_count);
-    }
-
-    rizz_temp_alloc_end(tmp_alloc);
     return hits;
 }
 

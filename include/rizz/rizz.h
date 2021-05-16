@@ -828,16 +828,6 @@ typedef struct rizz_api_core {
         (void)rmt_sample_raii_##_name;   \
         (RIZZ_CORE_API_VARNAME)->end_profile_sample();
 
-// using these macros are preferred to the_core->tmp_alloc_push() and the_core->tmp_alloc_pop()
-// They somewhat emulates C++ RAII and throws 'unused variable' warning when _end is not called
-// Also traces the origin of the calls for better error checking
-#define rizz_temp_alloc_begin(_name) \
-        uint32_t _temp_alloc_raii_##_name; \
-        const sx_alloc* _name = (RIZZ_CORE_API_VARNAME)->tmp_alloc_push_trace(__FILE__, __LINE__)
-#define rizz_temp_alloc_end(_name) \
-        (void)_temp_alloc_raii_##_name; \
-        (RIZZ_CORE_API_VARNAME)->tmp_alloc_pop()
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @graphics
 // _sg-types.h is copy/pasted from sokol_gfx.h, all the types are equal between these two files

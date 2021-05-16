@@ -71,126 +71,124 @@ static bool astar__findpath(const rizz_astar_world* world, const rizz_astar_agen
 {
 #define GRID_ITEM(_loc) (&calcgrid[(_loc).x + (_loc).y * world->width])
     const uint8_t openv = 1, closev = 2;
-    rizz_temp_alloc_begin(talloc);
+    const sx_alloc* talloc = the_core->tmp_alloc_push();
+    int ret = -1;   // other than -1 exits the main loop, =0 means success
 
-    loc sloc, eloc;
-    gridcoord(world, start, &sloc);
-    gridcoord(world, end, &eloc);
+    sx_scope(the_core->tmp_alloc_pop()) {
+        loc sloc, eloc;
+        gridcoord(world, start, &sloc);
+        gridcoord(world, end, &eloc);
 
-    sx_bheap* openlist = sx_bheap_create(talloc, world->width * world->height);
-    cell* calcgrid = sx_malloc(talloc, sizeof(cell) * world->width * world->height);
-    sx_memset(calcgrid, 0, sizeof(cell) * world->width * world->height);
+        sx_bheap* openlist = sx_bheap_create(talloc, world->width * world->height);
+        cell* calcgrid = sx_malloc(talloc, sizeof(cell) * world->width * world->height);
+        sx_memset(calcgrid, 0, sizeof(cell) * world->width * world->height);
 
-    cell* scell = GRID_ITEM(sloc);
-    *scell = (cell){ .g = 0, .f = heuristic(sloc, eloc), .p = sloc };
-    sx_bheap_push_min(openlist, scell->f, scell);
+        cell* scell = GRID_ITEM(sloc);
+        *scell = (cell){ .g = 0, .f = heuristic(sloc, eloc), .p = sloc };
+        sx_bheap_push_min(openlist, scell->f, scell);
 
-    uint32_t num_search = 0;
-    bool found = false;
-    while (!sx_bheap_empty(openlist)) {
-        cell* ccell = (cell*)sx_bheap_pop_min(openlist).user;
-        loc cloc = (loc){
-            .x = (uint16_t)((uint64_t)(ccell - calcgrid) % world->width),
-            .y = (uint16_t)((uint64_t)(ccell - calcgrid) / world->width),
-        };
-        ccell->stat = closev;
+        uint32_t num_search = 0;
+        bool found = false;
+        while (!sx_bheap_empty(openlist) && ret == -1) {
+            cell* ccell = (cell*)sx_bheap_pop_min(openlist).user;
+            loc cloc = (loc){
+                .x = (uint16_t)((uint64_t)(ccell - calcgrid) % world->width),
+                .y = (uint16_t)((uint64_t)(ccell - calcgrid) / world->width),
+            };
+            ccell->stat = closev;
 
-        if (cloc.id == eloc.id) {
-            found = true;
-            break;
-        }
+            if (cloc.id == eloc.id) {
+                found = true;
+                break;
+            }
 
-        loc cdir = (loc){
-            .x = (uint16_t)(ccell->p.x - cloc.x),
-            .y = (uint16_t)(ccell->p.y - cloc.y),
-        };
-
-        for (int32_t i = 0; i < 8; i++) {
-            loc nloc = (loc){
-                .x = (uint16_t)(cloc.x + k_dirs[i][0]),
-                .y = (uint16_t)(cloc.y + k_dirs[i][1]),
+            loc cdir = (loc){
+                .x = (uint16_t)(ccell->p.x - cloc.x),
+                .y = (uint16_t)(ccell->p.y - cloc.y),
             };
 
-            if (nloc.x >= world->width || nloc.y >= world->height)
-                continue;
+            for (int32_t i = 0; i < 8; i++) {
+                loc nloc = (loc){
+                    .x = (uint16_t)(cloc.x + k_dirs[i][0]),
+                    .y = (uint16_t)(cloc.y + k_dirs[i][1]),
+                };
 
-            uint8_t cost = agent->costs[world->cells[nloc.x + nloc.y * world->width]];
-            if (cost == 0)
-                continue;
+                if (nloc.x >= world->width || nloc.y >= world->height)
+                    continue;
 
-            cell* ncell = GRID_ITEM(nloc);
-            if (ncell->stat == closev)
-                continue;
+                uint8_t cost = agent->costs[world->cells[nloc.x + nloc.y * world->width]];
+                if (cost == 0)
+                    continue;
 
-            int32_t ng = ccell->g + cost * (i > 3 ? ASTAR_DIAGONAL_COST : ASTAR_DEFAULT_COST);
+                cell* ncell = GRID_ITEM(nloc);
+                if (ncell->stat == closev)
+                    continue;
 
-            loc ndir = (loc){
-                .x = (uint16_t)(cloc.x - nloc.x),
-                .y = (uint16_t)(cloc.y - nloc.y),
-            };
+                int32_t ng = ccell->g + cost * (i > 3 ? ASTAR_DIAGONAL_COST : ASTAR_DEFAULT_COST);
 
-            if (cdir.id != ndir.id)
-                ng += ASTAR_CHANGE_DIR_COST;
+                loc ndir = (loc){
+                    .x = (uint16_t)(cloc.x - nloc.x),
+                    .y = (uint16_t)(cloc.y - nloc.y),
+                };
 
-            if (ncell->stat == 0 || ncell->g > ng) {
-                ncell->g = ng;
-                ncell->f = ng + heuristic(nloc, eloc);
-                ncell->p = cloc;
-                if (ncell->stat == 0)
-                    sx_bheap_push_min(openlist, ncell->f, ncell);
+                if (cdir.id != ndir.id)
+                    ng += ASTAR_CHANGE_DIR_COST;
 
-                ncell->stat = openv;
+                if (ncell->stat == 0 || ncell->g > ng) {
+                    ncell->g = ng;
+                    ncell->f = ng + heuristic(nloc, eloc);
+                    ncell->p = cloc;
+                    if (ncell->stat == 0)
+                        sx_bheap_push_min(openlist, ncell->f, ncell);
+
+                    ncell->stat = openv;
+                }
+
+            }    // for
+            if (num_search++ > g_maxsearch) {
+                ret = 1;
+                break;
+            }
+        }    // while
+
+        if (found) {
+            sx_array_clear(path->array);
+            loc cloc = eloc;
+            cell* ccell = GRID_ITEM(cloc);
+            int dx = 0, dy = 0;
+            while (cloc.id != ccell->p.id) {
+                int dx2 = (int)cloc.x - (int)ccell->p.x;
+                int dy2 = (int)cloc.y - (int)ccell->p.y;
+                if (dx2 != dx || dy2 != dy) {
+                    sx_array_push(path->alloc, path->array, worldcoord(world, cloc));
+                    dx = dx2;
+                    dy = dy2;
+                }
+                cloc = ccell->p;
+                ccell = GRID_ITEM(cloc);
+            }
+            if (((int)cloc.x - (int)ccell->p.x) != dx || ((int)cloc.y - (int)ccell->p.y) != dy) {
+                sx_array_push(path->alloc, path->array, worldcoord(world, sloc));
             }
 
-        }    // for
-        if (num_search++ > g_maxsearch)
-            goto fail;
-    }    // while
-
-    if (found) {
-        sx_array_clear(path->array);
-        loc cloc = eloc;
-        cell* ccell = GRID_ITEM(cloc);
-        int dx = 0, dy = 0;
-        while (cloc.id != ccell->p.id) {
-            int dx2 = (int)cloc.x - (int)ccell->p.x;
-            int dy2 = (int)cloc.y - (int)ccell->p.y;
-            if (dx2 != dx || dy2 != dy) {
-                sx_array_push(path->alloc, path->array, worldcoord(world, cloc));
-                dx = dx2;
-                dy = dy2;
+            { // reverse array
+                int count = sx_array_count(path->array);
+                int half = count / 2;
+                for (int i = 0; i < half; i++) {
+                    int ri = count - i - 1;
+                    sx_vec2 tmp = path->array[i];
+                    path->array[i] = path->array[ri];
+                    path->array[ri] = tmp;
+                }
             }
-            cloc = ccell->p;
-            ccell = GRID_ITEM(cloc);
+            
+            ret = 0;
+        } else {
+            ret = 1;
         }
-        if (((int)cloc.x - (int)ccell->p.x) != dx || ((int)cloc.y - (int)ccell->p.y) != dy) {
-            sx_array_push(path->alloc, path->array, worldcoord(world, sloc));
-        }
+    } // scope
 
-        { // reverse array
-            int count = sx_array_count(path->array);
-            int half = count / 2;
-            for (int i = 0; i < half; i++) {
-                int ri = count - i - 1;
-                sx_vec2 tmp = path->array[i];
-                path->array[i] = path->array[ri];
-                path->array[ri] = tmp;
-            }
-        }
-
-        goto succeed;
-    } else {
-        goto fail;
-    }
-
-fail:
-    rizz_temp_alloc_end(talloc);
-    return false;
-succeed:
-    rizz_temp_alloc_end(talloc);
-    return true;
-
-#undef GRID_ITEM
+    return ret == 0;
 }
 
 static rizz_api_astar the__astar = {

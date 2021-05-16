@@ -27,6 +27,7 @@ typedef struct rizz_material_lib
     sx_handle_pool* ids;          // binds to `datas`
     material__data* datas;        // sx_array
     sx_hashtbl* hashes;           // data hash -> index to handles (sx_handle_at)
+    rizz_material blank_mtl;
 } rizz_material_lib;
 
 typedef struct shader_permut 
@@ -110,6 +111,16 @@ rizz_material_lib* material__create_lib(const sx_alloc* alloc, int init_capacity
     sx_array_reserve(alloc, lib->datas, init_capacity);
     lib->hashes = sx_hashtbl_create(alloc, init_capacity);
 
+    // add dummy material
+    lib->blank_mtl = material__add(lib, &(rizz_material_data) {
+        .name = {""},
+        .has_metal_roughness = true,
+        .pbr_metallic_roughness = {
+            .base_color_factor = sx_vec4f(1.0f, 1.0f, 1.0f, 1.0f),
+            .roughness_factor = 1.0f
+        }
+    });
+
     return lib;
 }
 
@@ -125,11 +136,16 @@ void material__destroy_lib(rizz_material_lib* lib)
     }
 }
 
-const rizz_material_data* material_get_data(const rizz_material_lib* lib, rizz_material mtl)
+const rizz_material_data* material__get_data(const rizz_material_lib* lib, rizz_material mtl)
 {
     sx_assert_always(sx_handle_valid(lib->ids, mtl.id));
 
     return &lib->datas[sx_handle_index(mtl.id)].d;
+}
+
+rizz_material material__get_blank(const rizz_material_lib* lib)
+{
+    return lib->blank_mtl;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -322,7 +338,8 @@ static rizz_api_3d the__3d = {
         .create_lib = material__create_lib,
         .destroy_lib = material__destroy_lib,
         .add = material__add,
-        .get_data = material_get_data
+        .get_data = material__get_data,
+        .get_blank = material__get_blank
     },
     .shader = {
         .create_lib = shader_create_lib,

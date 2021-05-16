@@ -1140,27 +1140,27 @@ static bool imgui__init(void)
 
     conf->Fonts->TexID = (ImTextureID)(uintptr_t)g_imgui.font_tex.id;
 
-    rizz_temp_alloc_begin(tmp_alloc);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_scope(the_core->tmp_alloc_pop()) {
+        rizz_shader shader = the_gfx->shader_make_with_data(
+            tmp_alloc, k_imgui_vs_size, k_imgui_vs_data, k_imgui_vs_refl_size, k_imgui_vs_refl_data,
+            k_imgui_fs_size, k_imgui_fs_data, k_imgui_fs_refl_size, k_imgui_fs_refl_data);
+        g_imgui.shader = shader.shd;
 
-    rizz_shader shader = the_gfx->shader_make_with_data(
-        tmp_alloc, k_imgui_vs_size, k_imgui_vs_data, k_imgui_vs_refl_size, k_imgui_vs_refl_data,
-        k_imgui_fs_size, k_imgui_fs_data, k_imgui_fs_refl_size, k_imgui_fs_refl_data);
-    g_imgui.shader = shader.shd;
+        sg_pipeline_desc pip_desc = { .layout.buffers[0].stride = sizeof(ImDrawVert),
+                                      .shader = g_imgui.shader,
+                                      .index_type = SG_INDEXTYPE_UINT16,                                  
+                                      .rasterizer = { .cull_mode = SG_CULLMODE_NONE },
+                                      .blend = { .enabled = true,
+                                                 .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
+                                                 .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                                                 .color_write_mask = SG_COLORMASK_RGB },
+                                      .label = "imgui" };
+        g_imgui.pip = the_gfx->make_pipeline(
+            the_gfx->shader_bindto_pipeline(&shader, &pip_desc, &k__imgui_vertex));
 
-    sg_pipeline_desc pip_desc = { .layout.buffers[0].stride = sizeof(ImDrawVert),
-                                  .shader = g_imgui.shader,
-                                  .index_type = SG_INDEXTYPE_UINT16,                                  
-                                  .rasterizer = { .cull_mode = SG_CULLMODE_NONE },
-                                  .blend = { .enabled = true,
-                                             .src_factor_rgb = SG_BLENDFACTOR_SRC_ALPHA,
-                                             .dst_factor_rgb = SG_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
-                                             .color_write_mask = SG_COLORMASK_RGB },
-                                  .label = "imgui" };
-    g_imgui.pip = the_gfx->make_pipeline(
-        the_gfx->shader_bindto_pipeline(&shader, &pip_desc, &k__imgui_vertex));
-
-    apply_theme();
-    rizz_temp_alloc_end(tmp_alloc);
+        apply_theme();
+    } // scope
 
     g_imgui.stage = the_gfx->stage_register("imgui", (rizz_gfx_stage) {0});
 

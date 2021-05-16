@@ -311,87 +311,88 @@ static void model__calculate_tangents(rizz_model_mesh* mesh, const rizz_model_ge
     sg_index_type index_type = mesh->index_type;
     void* ibuff = mesh->cpu.ibuff;
 
-    rizz_temp_alloc_begin(tmp_alloc);
-    sx_vec3* tan1 = sx_calloc(tmp_alloc, sizeof(sx_vec3)*2*mesh->num_vertices);
-    if (!tan1) {
-        sx_out_of_memory();
-        return;
-    }
-    sx_vec3* tan2 = tan1 + mesh->num_vertices;
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_scope(the_core->tmp_alloc_pop()) {
 
-    for (int i = 0, num_indices = mesh->num_indices; i < num_indices; i+=3) {
-        uint32_t i1, i2, i3;
-        if (index_type == SG_INDEXTYPE_UINT16) {
-            uint16_t* indices = (uint16_t*)ibuff;
-            i1 = indices[i];
-            i2 = indices[i+1];
-            i3 = indices[i+2];
-        } else {
-            uint32_t* indices = (uint32_t*)ibuff;
-            i1 = indices[i];
-            i2 = indices[i+1];
-            i3 = indices[i+2];
+        sx_vec3* tan1 = sx_calloc(tmp_alloc, sizeof(sx_vec3)*2*mesh->num_vertices);
+        if (!tan1) {
+            sx_out_of_memory();
+            return;
+        }
+        sx_vec3* tan2 = tan1 + mesh->num_vertices;
+
+        for (int i = 0, num_indices = mesh->num_indices; i < num_indices; i+=3) {
+            uint32_t i1, i2, i3;
+            if (index_type == SG_INDEXTYPE_UINT16) {
+                uint16_t* indices = (uint16_t*)ibuff;
+                i1 = indices[i];
+                i2 = indices[i+1];
+                i3 = indices[i+2];
+            } else {
+                uint32_t* indices = (uint32_t*)ibuff;
+                i1 = indices[i];
+                i2 = indices[i+1];
+                i3 = indices[i+2];
+            }
+
+            int pos_stride = 0, uv_stride = 0;
+            uint8_t* pos_ptr = model__layout_get_attr(mesh, vertex_layout, "POSITION", 0, &pos_stride);
+            uint8_t* uv_ptr = model__layout_get_attr(mesh, vertex_layout, "TEXCOORD", 0, &uv_stride);
+
+            sx_vec3 v1 = *((sx_vec3*)(pos_ptr + pos_stride*i1));
+            sx_vec3 v2 = *((sx_vec3*)(pos_ptr + pos_stride*i2));
+            sx_vec3 v3 = *((sx_vec3*)(pos_ptr + pos_stride*i3));
+
+            sx_vec2 w1 = *((sx_vec2*)(uv_ptr + uv_stride*i1));
+            sx_vec2 w2 = *((sx_vec2*)(uv_ptr + uv_stride*i2));
+            sx_vec2 w3 = *((sx_vec2*)(uv_ptr + uv_stride*i3));
+
+            float x1 = v2.x - v1.x;
+            float x2 = v3.x - v1.x;
+            float y1 = v2.y - v1.y;
+            float y2 = v3.y - v1.y;
+            float z1 = v2.z - v1.z;
+            float z2 = v3.z - v1.z;
+
+            float s1 = w2.x - w1.x;
+            float s2 = w3.x - w1.x;
+            float t1 = w2.y - w1.y;
+            float t2 = w3.y - w1.y;
+
+            float r = 1.0f / (s1 * t2 - s2 * t1);
+            if (!sx_isinf(r)) {
+                sx_vec3 sdir = sx_vec3f((t2 * x1 - t1 * x2)*r, (t2 * y1 - t1 * y2)*r, (t2 * z1 - t1 * z2)*r);
+                sx_vec3 tdir = sx_vec3f((s1 * x2 - s2 * x1)*r, (s1 * y2 - s2 * y1)*r, (s1 * z2 - s2 * z1)*r);
+
+                tan1[i1] = sx_vec3_add(tan1[i1], sdir);
+                tan1[i2] = sx_vec3_add(tan1[i2], sdir);
+                tan1[i3] = sx_vec3_add(tan1[i3], sdir);
+                tan2[i1] = sx_vec3_add(tan2[i1], tdir);
+                tan2[i2] = sx_vec3_add(tan2[i2], tdir);
+                tan2[i3] = sx_vec3_add(tan2[i3], tdir);
+            }
         }
 
-        int pos_stride = 0, uv_stride = 0;
-        uint8_t* pos_ptr = model__layout_get_attr(mesh, vertex_layout, "POSITION", 0, &pos_stride);
-        uint8_t* uv_ptr = model__layout_get_attr(mesh, vertex_layout, "TEXCOORD", 0, &uv_stride);
+        for (int i = 0, num_verts = mesh->num_vertices; i < num_verts; i++) {
+            int normal_stride = 0, tangent_stride = 0, bitangent_stride = 0;
+            uint8_t* normal_ptr = model__layout_get_attr(mesh, vertex_layout, "NORMAL", 0, &normal_stride);
+            uint8_t* tangent_ptr = model__layout_get_attr(mesh, vertex_layout, "TANGENT", 0, &tangent_stride);
+            uint8_t* bitangent_ptr = model__layout_get_attr(mesh, vertex_layout, "BINORMAL", 0, &bitangent_stride);
 
-        sx_vec3 v1 = *((sx_vec3*)(pos_ptr + pos_stride*i1));
-        sx_vec3 v2 = *((sx_vec3*)(pos_ptr + pos_stride*i2));
-        sx_vec3 v3 = *((sx_vec3*)(pos_ptr + pos_stride*i3));
-
-        sx_vec2 w1 = *((sx_vec2*)(uv_ptr + uv_stride*i1));
-        sx_vec2 w2 = *((sx_vec2*)(uv_ptr + uv_stride*i2));
-        sx_vec2 w3 = *((sx_vec2*)(uv_ptr + uv_stride*i3));
-
-        float x1 = v2.x - v1.x;
-        float x2 = v3.x - v1.x;
-        float y1 = v2.y - v1.y;
-        float y2 = v3.y - v1.y;
-        float z1 = v2.z - v1.z;
-        float z2 = v3.z - v1.z;
-
-        float s1 = w2.x - w1.x;
-        float s2 = w3.x - w1.x;
-        float t1 = w2.y - w1.y;
-        float t2 = w3.y - w1.y;
-
-        float r = 1.0f / (s1 * t2 - s2 * t1);
-        if (!sx_isinf(r)) {
-            sx_vec3 sdir = sx_vec3f((t2 * x1 - t1 * x2)*r, (t2 * y1 - t1 * y2)*r, (t2 * z1 - t1 * z2)*r);
-            sx_vec3 tdir = sx_vec3f((s1 * x2 - s2 * x1)*r, (s1 * y2 - s2 * y1)*r, (s1 * z2 - s2 * z1)*r);
-
-            tan1[i1] = sx_vec3_add(tan1[i1], sdir);
-            tan1[i2] = sx_vec3_add(tan1[i2], sdir);
-            tan1[i3] = sx_vec3_add(tan1[i3], sdir);
-            tan2[i1] = sx_vec3_add(tan2[i1], tdir);
-            tan2[i2] = sx_vec3_add(tan2[i2], tdir);
-            tan2[i3] = sx_vec3_add(tan2[i3], tdir);
-        }
-    }
-
-    for (int i = 0, num_verts = mesh->num_vertices; i < num_verts; i++) {
-        int normal_stride = 0, tangent_stride = 0, bitangent_stride = 0;
-        uint8_t* normal_ptr = model__layout_get_attr(mesh, vertex_layout, "NORMAL", 0, &normal_stride);
-        uint8_t* tangent_ptr = model__layout_get_attr(mesh, vertex_layout, "TANGENT", 0, &tangent_stride);
-        uint8_t* bitangent_ptr = model__layout_get_attr(mesh, vertex_layout, "BINORMAL", 0, &bitangent_stride);
-
-        sx_vec3 n = *((sx_vec3*)(normal_ptr + normal_stride*i));
-        sx_vec3 t = tan1[i];
+            sx_vec3 n = *((sx_vec3*)(normal_ptr + normal_stride*i));
+            sx_vec3 t = tan1[i];
         
-        if (sx_vec3_dot(t, t) != 0) {
-            sx_vec3 tangent = sx_vec3_norm(sx_vec3_sub(t, sx_vec3_mulf(n, sx_vec3_dot(n, t))));
-            *((sx_vec3*)(tangent_ptr + tangent_stride*i)) = tangent;
+            if (sx_vec3_dot(t, t) != 0) {
+                sx_vec3 tangent = sx_vec3_norm(sx_vec3_sub(t, sx_vec3_mulf(n, sx_vec3_dot(n, t))));
+                *((sx_vec3*)(tangent_ptr + tangent_stride*i)) = tangent;
         
-            // (Dot(Cross(n, t), tan2[a]) < 0.0F) ? -1.0F : 1.0F;
-            float handedness = (sx_vec3_dot(sx_vec3_cross(n, t), tan2[i]) < 0.0f) ? -1.0f : 1.0f;
+                // (Dot(Cross(n, t), tan2[a]) < 0.0F) ? -1.0F : 1.0F;
+                float handedness = (sx_vec3_dot(sx_vec3_cross(n, t), tan2[i]) < 0.0f) ? -1.0f : 1.0f;
 
-            *((sx_vec3*)(bitangent_ptr + bitangent_stride*i)) = sx_vec3_mulf(sx_vec3_cross(n, tangent), -handedness);
+                *((sx_vec3*)(bitangent_ptr + bitangent_stride*i)) = sx_vec3_mulf(sx_vec3_cross(n, tangent), -handedness);
+            }
         }
-    }
-
-    rizz_temp_alloc_end(tmp_alloc);
+    }   // scope
 }
 
 static void model__setup_buffers(rizz_model_mesh* mesh, const rizz_model_geometry_layout* vertex_layout, 
@@ -723,6 +724,8 @@ static rizz_asset_load_data model__on_prepare(const rizz_asset_load_params* para
                 if (prim->material) {
                     tmp_meshes[i].submeshes[k].mtl = 
                         model__create_material_from_gltf(prim->material, g_model.mtllib, filedir);
+                } else {
+                    tmp_meshes[i].submeshes[k].mtl = material__get_blank(g_model.mtllib);
                 }
             }
         }
@@ -751,108 +754,107 @@ static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
     char ext[32];
     sx_os_path_ext(ext, sizeof(ext), params->path);
     if (sx_strequalnocase(ext, ".gltf") || sx_strequalnocase(ext, ".glb")) {
-        rizz_temp_alloc_begin(tmp_alloc);
-
-        cgltf_data* gltf = data->user1;
-        cgltf_options options = {
-            .type = cgltf_file_type_invalid,
-            .memory = {
-                .alloc = model__cgltf_alloc,
-                .free = model__cgltf_free,
-                .user_data = (void*)tmp_alloc
-            },
-            .file = {
-                .read = model__cgltf_read,
-                .release = model__cgltf_release,
-                .user_data = (void*)mem
-            }
-        };
-        cgltf_result result = cgltf_load_buffers(&options, gltf, params->path);
-        if (result != cgltf_result_success) {
-            rizz_temp_alloc_end(tmp_alloc);
-            return false;
-        }
-
-        // meshes
-        for (cgltf_size i = 0; i < gltf->meshes_count; i++) {
-            rizz_model_mesh* mesh = &model->meshes[i];
-            cgltf_mesh* _mesh = &gltf->meshes[i];
-
-            sx_strcpy(mesh->name, sizeof(mesh->name), _mesh->name);
-            model__setup_buffers(mesh, layout, _mesh);
-        }
-
-        // nodes
-        for (cgltf_size i = 0; i < gltf->nodes_count; i++) {
-            rizz_model_node* node = &model->nodes[i];
-            cgltf_node* _node = &gltf->nodes[i];
-
-            node->local_tx = sx_tx3d_ident();
-
-            sx_strcpy(node->name, sizeof(node->name), _node->name);
-            if (sx_strlen(node->name) != sx_strlen(_node->name)) {
-                rizz_log_warn("model: %s, node: '%s' - name is too long (more than 31 characters), "
-                              "node setup will probably have errors", params->path, _node->name);
-            }
-
-            // TODO: apply scaling to the model
-            sx_assert_alwaysf(!_node->has_scale, "not supported yet. Apply scaling in DCC before exporting");
-
-            if (_node->has_rotation) {
-                sx_mat4 rot_mat = sx_quat_mat4(sx_quat4fv(_node->rotation));
-                node->local_tx.rot = sx_mat3fv(rot_mat.fc1, rot_mat.fc2, rot_mat.fc3);
-            }
-
-            if (_node->has_translation) {
-                node->local_tx.pos = sx_vec3fv(_node->translation);
-            }
-
-            // assign mesh, find the index of the pointer. it is as same as 
-            node->mesh_id = -1;
-            for (cgltf_size mi = 0; mi < gltf->meshes_count; mi++) {
-                if (&gltf->meshes[mi] == _node->mesh) {
-                    node->mesh_id = (int)mi;
-                    break;
+        const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+        sx_scope(the_core->tmp_alloc_pop()) {
+            cgltf_data* gltf = data->user1;
+            cgltf_options options = {
+                .type = cgltf_file_type_invalid,
+                .memory = {
+                    .alloc = model__cgltf_alloc,
+                    .free = model__cgltf_free,
+                    .user_data = (void*)tmp_alloc
+                },
+                .file = {
+                    .read = model__cgltf_read,
+                    .release = model__cgltf_release,
+                    .user_data = (void*)mem
                 }
+            };
+            cgltf_result result = cgltf_load_buffers(&options, gltf, params->path);
+            if (result != cgltf_result_success) {
+                the_core->tmp_alloc_pop();
+                return false;
             }
 
-            // bounds
-            sx_aabb bounds = sx_aabb_empty();
-            if (node->mesh_id != -1) {
-                rizz_model_mesh* mesh = &model->meshes[node->mesh_id];
-                const rizz_vertex_attr* attr = model__find_attribute(layout, "POSITION", 0);
-                int vertex_stride = layout->buffer_strides[attr->buffer_index];
-                uint8_t* vbuff = mesh->cpu.vbuffs[attr->buffer_index];
-                for (int v = 0; v < mesh->num_vertices; v++) {
-                    sx_vec3 pos = *((sx_vec3*)(vbuff + v*vertex_stride + attr->offset));
-                    sx_aabb_add_point(&bounds, pos);
+            // meshes
+            for (cgltf_size i = 0; i < gltf->meshes_count; i++) {
+                rizz_model_mesh* mesh = &model->meshes[i];
+                cgltf_mesh* _mesh = &gltf->meshes[i];
+
+                sx_strcpy(mesh->name, sizeof(mesh->name), _mesh->name);
+                model__setup_buffers(mesh, layout, _mesh);
+            }
+
+            // nodes
+            for (cgltf_size i = 0; i < gltf->nodes_count; i++) {
+                rizz_model_node* node = &model->nodes[i];
+                cgltf_node* _node = &gltf->nodes[i];
+
+                node->local_tx = sx_tx3d_ident();
+
+                sx_strcpy(node->name, sizeof(node->name), _node->name);
+                if (sx_strlen(node->name) != sx_strlen  (_node->name)) {
+                    rizz_log_warn("model: %s, node: '%s' - name is too long (more than 31 characters), "
+                                  "node setup will probably have errors", params->path, _node->name);
                 }
-            }
-            node->bounds = bounds;
-        }
 
-        // build node hierarchy based on node names
-        for (cgltf_size i = 0; i < gltf->nodes_count; i++) {
-            rizz_model_node* node = &model->nodes[i];
-            cgltf_node* _node = &gltf->nodes[i];
+                // TODO: apply scaling to the model
+                sx_assert_alwaysf(!_node->has_scale, "not supported yet. Apply scaling in DCC before exporting");
 
-            if (_node->parent) {
-                node->parent_id = model__find_node_byname(model, _node->parent->name);
-            } else {
-                node->parent_id = -1;
-            }
-
-            node->num_childs = (int)_node->children_count;
-            if (_node->children_count > 0) {
-                for (cgltf_size ci = 0; ci < _node->children_count; ci++) {
-                    node->children[ci] = model__find_node_byname(model, _node->children[ci]->name);
+                if (_node->has_rotation) {
+                    sx_mat4 rot_mat = sx_quat_mat4(sx_quat4fv(_node->rotation));
+                    node->local_tx.rot = sx_mat3fv(rot_mat.fc1, rot_mat.fc2, rot_mat.fc3);
                 }
-            } 
-        }
 
-        sx_memcpy(&model->layout, layout, sizeof(rizz_model_geometry_layout));
+                if (_node->has_translation) {
+                    node->local_tx.pos = sx_vec3fv(_node->translation);
+                }
 
-        rizz_temp_alloc_end(tmp_alloc);
+                // assign mesh, find the index of the pointer. it is as same as 
+                node->mesh_id = -1;
+                for (cgltf_size mi = 0; mi < gltf->meshes_count; mi++) {
+                    if (&gltf->meshes[mi] == _node->mesh) {
+                        node->mesh_id = (int)mi;
+                        break;
+                    }
+                }
+
+                // bounds
+                sx_aabb bounds = sx_aabb_empty();
+                if (node->mesh_id != -1) {
+                    rizz_model_mesh* mesh = &model->meshes[node->mesh_id];
+                    const rizz_vertex_attr* attr = model__find_attribute(layout, "POSITION", 0);
+                    int vertex_stride = layout->buffer_strides[attr->buffer_index];
+                    uint8_t* vbuff = mesh->cpu.vbuffs[attr->buffer_index];
+                    for (int v = 0; v < mesh->num_vertices; v++) {
+                        sx_vec3 pos = *((sx_vec3*)(vbuff + v*vertex_stride + attr->offset));
+                        sx_aabb_add_point(&bounds, pos);
+                    }
+                }
+                node->bounds = bounds;
+            }
+
+            // build node hierarchy based on node names
+            for (cgltf_size i = 0; i < gltf->nodes_count; i++) {
+                rizz_model_node* node = &model->nodes[i];
+                cgltf_node* _node = &gltf->nodes[i];
+
+                if (_node->parent) {
+                    node->parent_id = model__find_node_byname(model, _node->parent->name);
+                } else {
+                    node->parent_id = -1;
+                }
+
+                node->num_childs = (int)_node->children_count;
+                if (_node->children_count > 0) {
+                    for (cgltf_size ci = 0; ci < _node->children_count; ci++) {
+                        node->children[ci] = model__find_node_byname(model, _node->children[ci]->name);
+                    }
+                } 
+            }
+
+            sx_memcpy(&model->layout, layout, sizeof(rizz_model_geometry_layout));
+        }  // scope
     }   // if glb
 
     return true;

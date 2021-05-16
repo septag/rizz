@@ -420,39 +420,40 @@ static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_param
         src->sample_rate = wav.sampleRate;
         float* samples = sx_align_ptr(buff, 0, 16);
         float* wav_samples = NULL;
-        rizz_temp_alloc_begin(tmp_alloc);
-        if (wav.channels > 1) {
-            wav_samples =
-                sx_malloc(tmp_alloc, sizeof(float) * (size_t)wav.totalPCMFrameCount * wav.channels);
-            if (!wav_samples) {
-                sx_out_of_memory();
+        const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+        sx_scope(the_core->tmp_alloc_pop()) {
+            if (wav.channels > 1) {
+                wav_samples =
+                    sx_malloc(tmp_alloc, sizeof(float) * (size_t)wav.totalPCMFrameCount * wav.channels);
+                if (!wav_samples) {
+                    sx_out_of_memory();
+                    sx_assert_always(0);
+                }
+            }
+
+            uint64_t num_frames = drwav_read_pcm_frames_f32(&wav, wav.totalPCMFrameCount, samples);
+            if (num_frames != wav.totalPCMFrameCount) {
+                rizz_log_warn("loading sound '%s' failed: reached EOF", params->path);
+                snd__destroy_source(srchandle, alloc);
                 return false;
             }
-        }
 
-        uint64_t num_frames = drwav_read_pcm_frames_f32(&wav, wav.totalPCMFrameCount, samples);
-        if (num_frames != wav.totalPCMFrameCount) {
-            rizz_log_warn("loading sound '%s' failed: reached EOF", params->path);
-            snd__destroy_source(srchandle, alloc);
-            return false;
-        }
+            // down-mix multiple channels to mono
+            if (wav.channels > 1) {
+                sx_assert(wav_samples);
+                float channels_rcp = 1.0f / (float)wav.channels;
+                for (int i = 0, c = (int)wav.totalPCMFrameCount; i < c; i++) {
+                    float sum = 0;
+                    for (int ch = 0; ch < wav.channels; ch++) {
+                        sum += wav_samples[ch];
+                    }
 
-        // down-mix multiple channels to mono
-        if (wav.channels > 1) {
-            sx_assert(wav_samples);
-            float channels_rcp = 1.0f / (float)wav.channels;
-            for (int i = 0, c = (int)wav.totalPCMFrameCount; i < c; i++) {
-                float sum = 0;
-                for (int ch = 0; ch < wav.channels; ch++) {
-                    sum += wav_samples[ch];
+                    wav_samples += wav.channels;
+                    samples[i] = sum * channels_rcp;
                 }
 
-                wav_samples += wav.channels;
-                samples[i] = sum * channels_rcp;
             }
-
-        }
-        rizz_temp_alloc_end(tmp_alloc);
+        } // scope
 
         drwav_uninit(&wav);
         src->samples = samples;
@@ -460,43 +461,44 @@ static bool snd__on_load(rizz_asset_load_data* data, const rizz_asset_load_param
         // TODO: possible bug with tmp_alloc or vorbis. I saw some random crashes, until I put
         //       the tmp_buff = sx_malloc right next to vorbis_buff
         int vorbis_err;
-        rizz_temp_alloc_begin(tmp_alloc);
-        int vorbis_buffer_size = *((int*)buff);
-        buff += sizeof(int);
+        const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+        sx_scope(the_core->tmp_alloc_pop()) {
+            int vorbis_buffer_size = *((int*)buff);
+            buff += sizeof(int);
 
-        sx_assert(vorbis_buffer_size > 0);
-        void* vorbis_buff = sx_malloc(tmp_alloc, vorbis_buffer_size);
-        float* tmp_buff = sx_malloc(tmp_alloc, sizeof(float) * 4096);
+            sx_assert(vorbis_buffer_size > 0);
+            void* vorbis_buff = sx_malloc(tmp_alloc, vorbis_buffer_size);
+            float* tmp_buff = sx_malloc(tmp_alloc, sizeof(float) * 4096);
 
-        stb_vorbis* vorbis =
-            stb_vorbis_open_memory(mem->data, (int)mem->size, &vorbis_err,
-                                   &(stb_vorbis_alloc){
-                                       .alloc_buffer = vorbis_buff,
-                                       .alloc_buffer_length_in_bytes = vorbis_buffer_size,
-                                   });
-        if (!vorbis) {
-            rizz_log_warn("loading sound '%s' failed: %s", params->path,
-                          snd__vorbis_get_error(vorbis_err));
-            snd__destroy_source(srchandle, alloc);
-            return false;
-        }
-
-        float* samples = sx_align_ptr(buff, 0, 16);
-        float* dst_samples = samples;
-
-        while (1) {
-            int n = stb_vorbis_get_samples_float_interleaved(vorbis, 1, tmp_buff, 4096);
-            if (n == 0) {
-                break;
+            stb_vorbis* vorbis =
+                stb_vorbis_open_memory(mem->data, (int)mem->size, &vorbis_err,
+                                       &(stb_vorbis_alloc){
+                                           .alloc_buffer = vorbis_buff,
+                                           .alloc_buffer_length_in_bytes = vorbis_buffer_size,
+                                       });
+            if (!vorbis) {
+                rizz_log_warn("loading sound '%s' failed: %s", params->path,
+                              snd__vorbis_get_error(vorbis_err));
+                snd__destroy_source(srchandle, alloc);
+                the_core->tmp_alloc_pop();
             }
-            sx_memcpy(dst_samples, tmp_buff, n * sizeof(float));
-            dst_samples += n;
-        }
-        src->sample_rate = stb_vorbis_get_info(vorbis).sample_rate;
-        src->samples = samples;
 
-        stb_vorbis_close(vorbis);
-        rizz_temp_alloc_end(tmp_alloc);
+            float* samples = sx_align_ptr(buff, 0, 16);
+            float* dst_samples = samples;
+
+            while (1) {
+                int n = stb_vorbis_get_samples_float_interleaved(vorbis, 1, tmp_buff, 4096);
+                if (n == 0) {
+                    break;
+                }
+                sx_memcpy(dst_samples, tmp_buff, n * sizeof(float));
+                dst_samples += n;
+            }
+            src->sample_rate = stb_vorbis_get_info(vorbis).sample_rate;
+            src->samples = samples;
+
+            stb_vorbis_close(vorbis);
+        } // scope
     }
 
     return true;
@@ -950,67 +952,70 @@ static void snd__mix(float* dst, int dst_num_frames, int dst_num_channels, int d
     int num_garbage = 0;
     sx_assert(g_snd.num_plays <= RIZZ_SND_DEVICE_MAX_LANES);
 
-    rizz_temp_alloc_begin(tmp_alloc);
-    for (int i = 0, c = g_snd.num_plays; i < c; i++) {
-        rizz_snd_instance insthandle = g_snd.playlist[i];
-        sx_assert_always(sx_handle_valid(g_snd.instance_handles, insthandle.id));
-        snd__instance* inst = &g_snd.instances[sx_handle_index(insthandle.id)];
-        rizz_snd_source srchandle = inst->srchandle;
-        sx_assert_always(sx_handle_valid(g_snd.source_handles, srchandle.id));
-        snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
-        int pos = inst->pos;
-        int src_frames_remain = src->num_frames - pos;
-        int num_frames = sx_min(dst_num_frames, src_frames_remain);
-        int num_samples = num_frames;    // mono
-        float* frames;
+    sx_scope(the_core->tmp_alloc_pop()) {
 
-        if (src->sample_rate != dst_sample_rate) {
-            // resample and upmix to device_channels
-            frames = sx_malloc(tmp_alloc, sizeof(float) * num_samples);
-            sx_assert(frames);
+        for (int i = 0, c = g_snd.num_plays; i < c; i++) {
+            rizz_snd_instance insthandle = g_snd.playlist[i];
+            sx_assert_always(sx_handle_valid(g_snd.instance_handles, insthandle.id));
+            snd__instance* inst = &g_snd.instances[sx_handle_index(insthandle.id)];
+            rizz_snd_source srchandle = inst->srchandle;
+            sx_assert_always(sx_handle_valid(g_snd.source_handles, srchandle.id));
+            snd__source* src = &g_snd.sources[sx_handle_index(srchandle.id)];
 
-            inst->pos = snd__resample_point(frames, num_samples, inst->pos, src->samples,
-                                            (float)src->sample_rate, dst_sample_ratef);
-        } else {
-            // the source and device sample format is the same. do nothing
-            frames = src->samples + inst->pos;
-            inst->pos += num_frames;
-        }
+            int pos = inst->pos;
+            int src_frames_remain = src->num_frames - pos;
+            int num_frames = sx_min(dst_num_frames, src_frames_remain);
+            int num_samples = num_frames;    // mono
+            float* frames;
 
-        // remove sound if EOF / loop
-        if (inst->pos >= src->num_frames) {
-            if (!(src->flags & SND_SOURCEFLAG_LOOPING)) {
-                garbage[num_garbage++] = insthandle;
+            if (src->sample_rate != dst_sample_rate) {
+                // resample and upmix to device_channels
+                frames = sx_malloc(tmp_alloc, sizeof(float) * num_samples);
+                sx_assert(frames);
+
+                inst->pos = snd__resample_point(frames, num_samples, inst->pos, src->samples,
+                                                (float)src->sample_rate, dst_sample_ratef);
             } else {
-                inst->pos = 0;
+                // the source and device sample format is the same. do nothing
+                frames = src->samples + inst->pos;
+                inst->pos += num_frames;
             }
+
+            // remove sound if EOF / loop
+            if (inst->pos >= src->num_frames) {
+                if (!(src->flags & SND_SOURCEFLAG_LOOPING)) {
+                    garbage[num_garbage++] = insthandle;
+                } else {
+                    inst->pos = 0;
+                }
+            }
+
+            // add to destination buffer. upmix to device_channels if output is stereo
+            float vol = inst->volume * src->volume * g_snd.master_volume;
+
+            int dst_num_samples = num_frames * dst_num_channels;
+            if (dst_num_channels == 2) {
+                float pan = inst->pan;
+                float channel1 = master_pan_ch1 * (pan > 0 ? (1.0f - pan) : 1.0f) * vol;    // left
+                float channel2 = master_pan_ch2 * (pan < 0 ? (1.0f + pan) : 1.0f) * vol;    // right
+
+                for (int s = 0, p = 0; s < dst_num_samples; s += dst_num_channels, p++) {
+                    dst[s] += frames[p] * channel1;
+                    dst[s + 1] += frames[p] * channel2;
+                }
+            } else if (dst_num_channels == 1) {
+                for (int s = 0, p = 0; s < dst_num_samples; s += dst_num_channels, p++) {
+                    dst[s] += frames[p] * vol;
+                }
+            } else {
+                sx_assertf(0, "not implemented");
+            }
+
+            frames_written = sx_max(frames_written, num_frames);
         }
-
-        // add to destination buffer. upmix to device_channels if output is stereo
-        float vol = inst->volume * src->volume * g_snd.master_volume;
-
-        int dst_num_samples = num_frames * dst_num_channels;
-        if (dst_num_channels == 2) {
-            float pan = inst->pan;
-            float channel1 = master_pan_ch1 * (pan > 0 ? (1.0f - pan) : 1.0f) * vol;    // left
-            float channel2 = master_pan_ch2 * (pan < 0 ? (1.0f + pan) : 1.0f) * vol;    // right
-
-            for (int s = 0, p = 0; s < dst_num_samples; s += dst_num_channels, p++) {
-                dst[s] += frames[p] * channel1;
-                dst[s + 1] += frames[p] * channel2;
-            }
-        } else if (dst_num_channels == 1) {
-            for (int s = 0, p = 0; s < dst_num_samples; s += dst_num_channels, p++) {
-                dst[s] += frames[p] * vol;
-            }
-        } else {
-            sx_assertf(0, "not implemented");
-        }
-
-        frames_written = sx_max(frames_written, num_frames);
-    }
-    rizz_temp_alloc_end(tmp_alloc);
+    } // scope
 
     // A very naive clipping
     int samples_written = frames_written * dst_num_channels;
@@ -1081,115 +1086,118 @@ static void snd__update(float dt)
 
     frames_remain = frames_needed != 0 ? sx_min(frames_remain, frames_needed) : frames_remain;
     if (frames_remain) {
-        rizz_temp_alloc_begin(tmp_alloc);
-
-        float* frames = sx_malloc(tmp_alloc, sizeof(float) * frames_remain * device_channels);
-        if (!frames) {
-            sx_out_of_memory();
-            return;
+        const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+        
+        sx_scope(the_core->tmp_alloc_pop()) {
+            float* frames = sx_malloc(tmp_alloc, sizeof(float) * frames_remain * device_channels);
+            if (!frames) {
+                sx_out_of_memory();
+                return;
+            }
+            sx_memset(frames, 0x0, sizeof(float) * frames_remain * device_channels);
+            snd__mix(frames, frames_remain, device_channels, device_sample_rate);
+            snd__ringbuffer_produce(&g_snd.mixer_buffer, frames, frames_remain * device_channels);
         }
-        sx_memset(frames, 0x0, sizeof(float) * frames_remain * device_channels);
-        snd__mix(frames, frames_remain, device_channels, device_sample_rate);
-        snd__ringbuffer_produce(&g_snd.mixer_buffer, frames, frames_remain * device_channels);
-
-        rizz_temp_alloc_end(tmp_alloc);
     }
 }
 
 static void snd__plot_samples_rms(const char* label, const float* samples, int num_samples,
                                   int channel, int num_channels, int height, float scale)
 {
-    rizz_temp_alloc_begin(tmp_alloc);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
 
-    sx_vec2 region;
-    the_imgui->GetContentRegionAvail(&region);
-    int width = (int)region.x;
-    int num_values;
-    float* values;
-    const int optimal_values = 50;
+    sx_scope(the_core->tmp_alloc_pop()) {
+        sx_vec2 region;
+        the_imgui->GetContentRegionAvail(&region);
+        int width = (int)region.x;
+        int num_values;
+        float* values;
+        const int optimal_values = 50;
 
-    if (num_samples > 0) {
-        int num_plot_samples = num_samples / num_channels;
-        float* plot_samples = sx_malloc(tmp_alloc, sizeof(float) * num_plot_samples);
-        sx_assert(plot_samples);
+        if (num_samples > 0) {
+            int num_plot_samples = num_samples / num_channels;
+            float* plot_samples = sx_malloc(tmp_alloc, sizeof(float) * num_plot_samples);
+            sx_assert(plot_samples);
 
-        for (int i = 0, p = 0; i < num_samples; i += num_channels, p++) {
-            plot_samples[p] = samples[i + channel];
-        }
-
-        num_values = width * optimal_values / 250;
-        if (num_values < 20)
-            num_values = 20;
-        values = sx_malloc(tmp_alloc, sizeof(float) * num_values);
-        sx_assert(values);
-        int block_sz = num_plot_samples / num_values;
-        float block_sz_rcp = 1.0f / (float)block_sz;
-        for (int i = 0; i < num_values; i++) {
-            float rms = 0;
-            for (int s = 0; s < block_sz; s++) {
-                rms += plot_samples[s] * plot_samples[s];
+            for (int i = 0, p = 0; i < num_samples; i += num_channels, p++) {
+                plot_samples[p] = samples[i + channel];
             }
-            values[i] = sx_sqrt(rms * block_sz_rcp) * scale;
-            plot_samples += block_sz;
-        }
-    } else {
-        values = sx_malloc(tmp_alloc, sizeof(float) * optimal_values);
-        num_values = optimal_values;
-        sx_memset(values, 0x0, sizeof(float) * optimal_values);
-    }
 
-    the_imgui->PlotHistogramFloatPtr(label, values, num_values, 0, NULL, 0, 1.0f,
-                                     sx_vec2f((float)width, (float)height), sizeof(float));
-    rizz_temp_alloc_end(tmp_alloc);
+            num_values = width * optimal_values / 250;
+            if (num_values < 20)
+                num_values = 20;
+            values = sx_malloc(tmp_alloc, sizeof(float) * num_values);
+            sx_assert(values);
+            int block_sz = num_plot_samples / num_values;
+            float block_sz_rcp = 1.0f / (float)block_sz;
+            for (int i = 0; i < num_values; i++) {
+                float rms = 0;
+                for (int s = 0; s < block_sz; s++) {
+                    rms += plot_samples[s] * plot_samples[s];
+                }
+                values[i] = sx_sqrt(rms * block_sz_rcp) * scale;
+                plot_samples += block_sz;
+            }
+        } else {
+            values = sx_malloc(tmp_alloc, sizeof(float) * optimal_values);
+            num_values = optimal_values;
+            sx_memset(values, 0x0, sizeof(float) * optimal_values);
+        }
+
+        the_imgui->PlotHistogramFloatPtr(label, values, num_values, 0, NULL, 0, 1.0f,
+                                         sx_vec2f((float)width, (float)height), sizeof(float));
+    } // scope
 }
 
 static void snd__plot_samples_wav(const char* label, const float* samples, int num_samples,
                                   int height)
 {
-    rizz_temp_alloc_begin(tmp_alloc);
-    sx_assert(num_samples > 0);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    
+    sx_scope(the_core->tmp_alloc_pop()) {
+        sx_assert(num_samples > 0);
 
-    sx_vec2 region;
-    the_imgui->GetContentRegionAvail(&region);
-    int width = (int)region.x;
-    const int optimal_values = 50;
+        sx_vec2 region;
+        the_imgui->GetContentRegionAvail(&region);
+        int width = (int)region.x;
+        const int optimal_values = 50;
 
-    int num_values = width * optimal_values / 250;
-    if (num_values < 20)
-        num_values = 20;
-    float* values = sx_malloc(tmp_alloc, sizeof(float) * num_values * 2);
-    sx_assert(values);
-    int block_sz = num_samples / num_values;
-    const float* plot_samples = samples;
-    for (int i = 0; i < num_values; i++) {
-        float _max = -FLT_MAX;
-        float _min = FLT_MAX;
-        int max_idx = -1;
-        int min_idx = -1;
+        int num_values = width * optimal_values / 250;
+        if (num_values < 20)
+            num_values = 20;
+        float* values = sx_malloc(tmp_alloc, sizeof(float) * num_values * 2);
+        sx_assert(values);
+        int block_sz = num_samples / num_values;
+        const float* plot_samples = samples;
+        for (int i = 0; i < num_values; i++) {
+            float _max = -FLT_MAX;
+            float _min = FLT_MAX;
+            int max_idx = -1;
+            int min_idx = -1;
 
-        for (int s = 0; s < block_sz; s++) {
-            if (plot_samples[s] > _max) {
-                _max = plot_samples[s];
-                max_idx = s;
+            for (int s = 0; s < block_sz; s++) {
+                if (plot_samples[s] > _max) {
+                    _max = plot_samples[s];
+                    max_idx = s;
+                }
+                if (plot_samples[s] < _min) {
+                    _min = plot_samples[s];
+                    min_idx = s;
+                }
             }
-            if (plot_samples[s] < _min) {
-                _min = plot_samples[s];
-                min_idx = s;
+            if (max_idx > min_idx) {
+                values[i * 2] = _min;
+                values[i * 2 + 1] = _max;
+            } else {
+                values[i * 2] = _max;
+                values[i * 2 + 1] = _min;
             }
+            plot_samples += block_sz;
         }
-        if (max_idx > min_idx) {
-            values[i * 2] = _min;
-            values[i * 2 + 1] = _max;
-        } else {
-            values[i * 2] = _max;
-            values[i * 2 + 1] = _min;
-        }
-        plot_samples += block_sz;
-    }
 
-    the_imgui->PlotLinesFloatPtr(label, values, num_values * 2, 0, NULL, -1.0f, 1.0f,
-                         sx_vec2f((float)width, (float)height), sizeof(float));
-    rizz_temp_alloc_end(tmp_alloc);
+        the_imgui->PlotLinesFloatPtr(label, values, num_values * 2, 0, NULL, -1.0f, 1.0f,
+                             sx_vec2f((float)width, (float)height), sizeof(float));
+    } // scope
 }
 
 static void snd__show_mixer_tab_contents()
@@ -1201,95 +1209,96 @@ static void snd__show_mixer_tab_contents()
 
     // plot samples
     static float plot_scale = 1.0f;
-    rizz_temp_alloc_begin(tmp_alloc);
-    int num_channels = saudio_channels();
-    int num_samples = RIZZ_SND_DEVICE_BUFFER_FRAMES * num_channels;
-    float* samples = sx_malloc(tmp_alloc, sizeof(float) * num_samples);
-    if (!samples) {
-        sx_out_of_memory();
-        return;
-    }
-    num_samples =
-        snd__ringbuffer_consume(&g_snd.mixer_plot_buffer, samples, sx_min(512, num_samples));
-    sx_vec2 region;
-    the_imgui->GetContentRegionAvail(&region);
-    float plot_width = region.x;
-    the_imgui->Columns(num_channels + 1, "mixer_wav_cols", false);
-    the_imgui->SetColumnWidth(0, 25.0f);
-    plot_width -= 25.0f;
-    the_imgui->SetColumnWidth(1, plot_width * 0.5f);
-    the_imgui->SetColumnWidth(2, plot_width * 0.5f);
-    the_imgui->VSliderFloat("##plot_scale", sx_vec2f(12.0f, 50.0f), &plot_scale, 1.0f, 10.0f, "", 0);
-    the_imgui->NextColumn();
-    for (int ch = 0; ch < num_channels; ch++) {
-        char plot_str[32];
-        sx_snprintf(plot_str, sizeof(plot_str), "channel #%d", ch + 1);
-        snd__plot_samples_rms("##mixer_plot", samples, num_samples, ch, num_channels, 50,
-                              plot_scale);
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    
+    sx_scope(the_core->tmp_alloc_pop()) {
+        int num_channels = saudio_channels();
+        int num_samples = RIZZ_SND_DEVICE_BUFFER_FRAMES * num_channels;
+        float* samples = sx_malloc(tmp_alloc, sizeof(float) * num_samples);
+        if (!samples) {
+            sx_out_of_memory();
+            return;
+        }
+        num_samples =
+            snd__ringbuffer_consume(&g_snd.mixer_plot_buffer, samples, sx_min(512, num_samples));
+        sx_vec2 region;
+        the_imgui->GetContentRegionAvail(&region);
+        float plot_width = region.x;
+        the_imgui->Columns(num_channels + 1, "mixer_wav_cols", false);
+        the_imgui->SetColumnWidth(0, 25.0f);
+        plot_width -= 25.0f;
+        the_imgui->SetColumnWidth(1, plot_width * 0.5f);
+        the_imgui->SetColumnWidth(2, plot_width * 0.5f);
+        the_imgui->VSliderFloat("##plot_scale", sx_vec2f(12.0f, 50.0f), &plot_scale, 1.0f, 10.0f, "", 0);
         the_imgui->NextColumn();
-    }
+        for (int ch = 0; ch < num_channels; ch++) {
+            char plot_str[32];
+            sx_snprintf(plot_str, sizeof(plot_str), "channel #%d", ch + 1);
+            snd__plot_samples_rms("##mixer_plot", samples, num_samples, ch, num_channels, 50,
+                                  plot_scale);
+            the_imgui->NextColumn();
+        }
 
-    the_imgui->Columns(1, NULL, false);
-    the_imgui->Separator();
-
-    {
-        int num_sounds = g_snd.num_plays;
-
-        the_imgui->Columns(4, NULL, false);
-        the_imgui->SetColumnWidth(0, 30.0f);
-        the_imgui->SetColumnWidth(1, 30.0f);
-        the_imgui->SetColumnWidth(2, 100.0f);
-        the_imgui->Text("#");
-        the_imgui->NextColumn();
-        the_imgui->Text("Bus");
-        the_imgui->NextColumn();
-        the_imgui->Text("Progress");
-        the_imgui->NextColumn();
-        the_imgui->Text("Source");
-        the_imgui->NextColumn();
+        the_imgui->Columns(1, NULL, false);
         the_imgui->Separator();
 
-        the_imgui->Columns(1, NULL, false);
-        the_imgui->BeginChildStr("mixer_sound_list",
-                              sx_vec2f(the_imgui->GetWindowContentRegionWidth(), -1.0f), false, 0);
-        the_imgui->Columns(4, NULL, false);
-        the_imgui->SetColumnWidth(0, 30.0f);
-        the_imgui->SetColumnWidth(1, 30.0f);
-        the_imgui->SetColumnWidth(2, 100.0f);
-        ImGuiListClipper clipper;
-        the_imgui->ImGuiListClipper_Begin(&clipper, num_sounds, -1.0f);
-        while (the_imgui->ImGuiListClipper_Step(&clipper)) {
-            int start = num_sounds - clipper.DisplayStart - 1;
-            int end = num_sounds - clipper.DisplayEnd;
-            for (int i = start; i >= end; i--) {
-                rizz_snd_instance insthandle = g_snd.playlist[i];
-                sx_assert_always(sx_handle_valid(g_snd.instance_handles, insthandle.id));
+        {
+            int num_sounds = g_snd.num_plays;
 
-                const snd__instance* inst = &g_snd.instances[sx_handle_index(insthandle.id)];
-                sx_assert_always(sx_handle_valid(g_snd.source_handles, inst->srchandle.id));
-                const snd__source* src = &g_snd.sources[sx_handle_index(inst->srchandle.id)];
+            the_imgui->Columns(4, NULL, false);
+            the_imgui->SetColumnWidth(0, 30.0f);
+            the_imgui->SetColumnWidth(1, 30.0f);
+            the_imgui->SetColumnWidth(2, 100.0f);
+            the_imgui->Text("#");
+            the_imgui->NextColumn();
+            the_imgui->Text("Bus");
+            the_imgui->NextColumn();
+            the_imgui->Text("Progress");
+            the_imgui->NextColumn();
+            the_imgui->Text("Source");
+            the_imgui->NextColumn();
+            the_imgui->Separator();
 
-                the_imgui->Text("%d", i + 1);
-                the_imgui->NextColumn();
+            the_imgui->Columns(1, NULL, false);
+            the_imgui->BeginChildStr("mixer_sound_list",
+                                  sx_vec2f(the_imgui->GetWindowContentRegionWidth(), -1.0f), false, 0);
+            the_imgui->Columns(4, NULL, false);
+            the_imgui->SetColumnWidth(0, 30.0f);
+            the_imgui->SetColumnWidth(1, 30.0f);
+            the_imgui->SetColumnWidth(2, 100.0f);
+            ImGuiListClipper clipper;
+            the_imgui->ImGuiListClipper_Begin(&clipper, num_sounds, -1.0f);
+            while (the_imgui->ImGuiListClipper_Step(&clipper)) {
+                int start = num_sounds - clipper.DisplayStart - 1;
+                int end = num_sounds - clipper.DisplayEnd;
+                for (int i = start; i >= end; i--) {
+                    rizz_snd_instance insthandle = g_snd.playlist[i];
+                    sx_assert_always(sx_handle_valid(g_snd.instance_handles, insthandle.id));
 
-                the_imgui->Text("%d", inst->bus_id);
-                the_imgui->NextColumn();
+                    const snd__instance* inst = &g_snd.instances[sx_handle_index(insthandle.id)];
+                    sx_assert_always(sx_handle_valid(g_snd.source_handles, inst->srchandle.id));
+                    const snd__source* src = &g_snd.sources[sx_handle_index(inst->srchandle.id)];
 
-                float progress = (float)inst->pos / (float)src->num_frames;
-                the_imgui->ProgressBar(progress, sx_vec2f(-1.0f, 15.0f), NULL);
-                the_imgui->NextColumn();
+                    the_imgui->Text("%d", i + 1);
+                    the_imgui->NextColumn();
 
-                sx_assert(src->name);
-                the_imgui->Text(sx_strpool_cstr(g_snd.name_pool, src->name));
-                the_imgui->NextColumn();
+                    the_imgui->Text("%d", inst->bus_id);
+                    the_imgui->NextColumn();
+
+                    float progress = (float)inst->pos / (float)src->num_frames;
+                    the_imgui->ProgressBar(progress, sx_vec2f(-1.0f, 15.0f), NULL);
+                    the_imgui->NextColumn();
+
+                    sx_assert(src->name);
+                    the_imgui->Text(sx_strpool_cstr(g_snd.name_pool, src->name));
+                    the_imgui->NextColumn();
+                }
             }
+            the_imgui->ImGuiListClipper_End(&clipper);
+            the_imgui->EndChild();
+            the_imgui->Columns(1, NULL, false);
         }
-        the_imgui->ImGuiListClipper_End(&clipper);
-        the_imgui->EndChild();
-        the_imgui->Columns(1, NULL, false);
-    }
-
-    rizz_temp_alloc_end(tmp_alloc);
+    } // scope
 }
 
 static float snd__source_duration(rizz_snd_source srchandle)

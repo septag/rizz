@@ -257,7 +257,8 @@ static void imgui__draw_log(bool* p_open)
             imgui__log_entry_ref* entries = g_log.cached;    // entries are offsets to the ring-buffer
             int num_items = sx_array_count(entries);
 
-            rizz_temp_alloc_begin(tmp_alloc);
+            const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+
             the__imgui.ImGuiListClipper_Begin(&clipper, num_items, -1.0f);
             while (the__imgui.ImGuiListClipper_Step(&clipper)) {
                 for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
@@ -304,9 +305,7 @@ static void imgui__draw_log(bool* p_open)
 
             the__imgui.ImGuiListClipper_End(&clipper);
             the__imgui.EndChild();
-
-            rizz_temp_alloc_end(tmp_alloc);
-        }    //
+        }    // scope
 
     }
     the__imgui.End();
@@ -331,42 +330,43 @@ static void imgui__log_entryfn(const rizz_log_entry* entry, void* user)
     sx_linear_buffer_addtype(&item_buff, rizz_log_entry, char, text, entry->text_len + 1, 0);
     sx_linear_buffer_addtype(&item_buff, rizz_log_entry, char, source_file, source_file_len + 1, 0);
 
-    rizz_temp_alloc_begin(tmp_alloc);
-    rizz_log_entry* _entry = (rizz_log_entry*)sx_linear_buffer_calloc(&item_buff, tmp_alloc);
-    _entry->type = entry->type;
-    _entry->channels = entry->channels;
-    _entry->text_len = entry->text_len;
-    _entry->source_file_len = source_file_len;
-    sx_strcpy((char*)_entry->text, entry->text_len + 1, entry->text);
-    if (source_file_len > 0) {
-        sx_strcpy((char*)_entry->source_file, source_file_len + 1, filename);
-    } else {
-        ((char*)_entry->source_file)[0] = '\0';
-    }
-    _entry->line = entry->line;
+    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    sx_scope(the_core->tmp_alloc_pop()) {
+        rizz_log_entry* _entry = (rizz_log_entry*)sx_linear_buffer_calloc(&item_buff, tmp_alloc);
+        _entry->type = entry->type;
+        _entry->channels = entry->channels;
+        _entry->text_len = entry->text_len;
+        _entry->source_file_len = source_file_len;
+        sx_strcpy((char*)_entry->text, entry->text_len + 1, entry->text);
+        if (source_file_len > 0) {
+            sx_strcpy((char*)_entry->source_file, source_file_len + 1, filename);
+        } else {
+            ((char*)_entry->source_file)[0] = '\0';
+        }
+        _entry->line = entry->line;
 
-    // write to ring-buffer
-    // first check if expected size is met, if not, just advance some bytes in ring-buffer to make 
-    // this data fit into it
-    int expect_size = sx_ringbuffer_expect_write(g_log.buffer);
-    int needed_size = (int)(sizeof(uint32_t) + sizeof(item_buff.size) + item_buff.size);
-    if (expect_size < needed_size) {
-        sx_ringbuffer_read(g_log.buffer, NULL, needed_size - expect_size);
-        sx_assert(sx_ringbuffer_expect_write(g_log.buffer) == needed_size);
-    }
+        // write to ring-buffer
+        // first check if expected size is met, if not, just advance some bytes in ring-buffer to make 
+        // this data fit into it
+        int expect_size = sx_ringbuffer_expect_write(g_log.buffer);
+        int needed_size = (int)(sizeof(uint32_t) + sizeof(item_buff.size) + item_buff.size);
+        if (expect_size < needed_size) {
+            sx_ringbuffer_read(g_log.buffer, NULL, needed_size - expect_size);
+            sx_assert(sx_ringbuffer_expect_write(g_log.buffer) == needed_size);
+        }
 
-    const uint32_t log_tag = LOG_ENTRY;
-    const int entry_sz = (int)item_buff.size;
-    sx_ringbuffer_write(g_log.buffer, &log_tag, sizeof(log_tag));
-    sx_ringbuffer_write(g_log.buffer, &entry_sz, sizeof(entry_sz));
+        const uint32_t log_tag = LOG_ENTRY;
+        const int entry_sz = (int)item_buff.size;
+        sx_ringbuffer_write(g_log.buffer, &log_tag, sizeof(log_tag));
+        sx_ringbuffer_write(g_log.buffer, &entry_sz, sizeof(entry_sz));
 
-    // HACK: instead of actual pointers, change them to offsets that start from entry pointer
-    _entry->text = (const char*)((uintptr_t)_entry->text - (uintptr_t)_entry);
-    _entry->source_file = (const char*)((uintptr_t)_entry->source_file - (uintptr_t)_entry);
-    sx_ringbuffer_write(g_log.buffer, _entry, entry_sz);
+        // HACK: instead of actual pointers, change them to offsets that start from entry pointer
+        _entry->text = (const char*)((uintptr_t)_entry->text - (uintptr_t)_entry);
+        _entry->source_file = (const char*)((uintptr_t)_entry->source_file - (uintptr_t)_entry);
+        sx_ringbuffer_write(g_log.buffer, _entry, entry_sz);
 
-    sx_free(tmp_alloc, _entry);
-    rizz_temp_alloc_end(tmp_alloc);
+        sx_free(tmp_alloc, _entry);
+    }  // scope
 
     sx_array_clear(g_log.cached);
 }
