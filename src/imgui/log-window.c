@@ -257,47 +257,46 @@ static void imgui__draw_log(bool* p_open)
             imgui__log_entry_ref* entries = g_log.cached;    // entries are offsets to the ring-buffer
             int num_items = sx_array_count(entries);
 
-            const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+            rizz_with_temp_alloc(tmp_alloc) {
+                the__imgui.ImGuiListClipper_Begin(&clipper, num_items, -1.0f);
+                while (the__imgui.ImGuiListClipper_Step(&clipper)) {
+                    for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
+                        const imgui__log_entry_ref* ref = &entries[i];
+                        int offset = ref->offset;
+                        rizz_log_entry* entry = sx_malloc(tmp_alloc, ref->size);
+                        sx_assert(entry);
+                        sx_ringbuffer_read_noadvance(g_log.buffer, entry, ref->size, &offset);
 
-            the__imgui.ImGuiListClipper_Begin(&clipper, num_items, -1.0f);
-            while (the__imgui.ImGuiListClipper_Step(&clipper)) {
-                for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
-                    const imgui__log_entry_ref* ref = &entries[i];
-                    int offset = ref->offset;
-                    rizz_log_entry* entry = sx_malloc(tmp_alloc, ref->size);
-                    sx_assert(entry);
-                    sx_ringbuffer_read_noadvance(g_log.buffer, entry, ref->size, &offset);
+                        const char* text = (const char*)entry + (uintptr_t)entry->text;
+                        const char* source_file = (const char*)entry + (uintptr_t)entry->source_file;
 
-                    const char* text = (const char*)entry + (uintptr_t)entry->text;
-                    const char* source_file = (const char*)entry + (uintptr_t)entry->source_file;
+                        sx_assert(entry->type >= 0 && entry->type < _RIZZ_LOG_LEVEL_COUNT);
+                        the__imgui.SetColumnWidth(0, text_width);
+                        the__imgui.PushStyleColorVec4(ImGuiCol_Text, k_log_colors[entry->type]);
+                        if (the__imgui.SelectableBool(text, g_log.selected == i, 
+                            ImGuiSelectableFlags_SpanAllColumns|ImGuiSelectableFlags_AllowDoubleClick, sx_vec2f(0, 0))) {
+                            // copy to clipboard
+                            int len = entry->text_len + entry->source_file_len + 32;
+                            char* clipboard_text = alloca(len);
+                            sx_assert_always(clipboard_text);
+                            sx_snprintf(clipboard_text, len, "(%s:%d) %s", source_file, entry->line, text);
+                            the_app->set_clipboard_string(clipboard_text);
+                            g_log.selected = i;
+                        }
+                        the__imgui.PopStyleColor(1);
+                        the__imgui.NextColumn();
 
-                    sx_assert(entry->type >= 0 && entry->type < _RIZZ_LOG_LEVEL_COUNT);
-                    the__imgui.SetColumnWidth(0, text_width);
-                    the__imgui.PushStyleColorVec4(ImGuiCol_Text, k_log_colors[entry->type]);
-                    if (the__imgui.SelectableBool(text, g_log.selected == i, 
-                        ImGuiSelectableFlags_SpanAllColumns|ImGuiSelectableFlags_AllowDoubleClick, sx_vec2f(0, 0))) {
-                        // copy to clipboard
-                        int len = entry->text_len + entry->source_file_len + 32;
-                        char* clipboard_text = alloca(len);
-                        sx_assert_always(clipboard_text);
-                        sx_snprintf(clipboard_text, len, "(%s:%d) %s", source_file, entry->line, text);
-                        the_app->set_clipboard_string(clipboard_text);
-                        g_log.selected = i;
+                        the__imgui.SetColumnWidth(1, 110.0f);
+                        the__imgui.TextEx(source_file, source_file + entry->source_file_len, 0);
+                        the__imgui.NextColumn();
+
+                        the__imgui.SetColumnWidth(2, 60.0f);
+                        the__imgui.Text("%d", entry->line);
+                        the__imgui.NextColumn();
                     }
-                    the__imgui.PopStyleColor(1);
-                    the__imgui.NextColumn();
-
-                    the__imgui.SetColumnWidth(1, 110.0f);
-                    the__imgui.TextEx(source_file, source_file + entry->source_file_len, 0);
-                    the__imgui.NextColumn();
-
-                    the__imgui.SetColumnWidth(2, 60.0f);
-                    the__imgui.Text("%d", entry->line);
-                    the__imgui.NextColumn();
-
-                    sx_free(tmp_alloc, entry);
                 }
-            }
+            }   // with temp_alloc
+
 
             if (the__imgui.GetScrollY() >= the__imgui.GetScrollMaxY()) {
                 the__imgui.SetScrollHereY(1.0f);
@@ -305,7 +304,7 @@ static void imgui__draw_log(bool* p_open)
 
             the__imgui.ImGuiListClipper_End(&clipper);
             the__imgui.EndChild();
-        }    // scope
+        }   
 
     }
     the__imgui.End();

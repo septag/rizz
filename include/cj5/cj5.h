@@ -141,6 +141,7 @@ CJ5_API cj5_result cj5_parse(const char* json5, int len, cj5_token* tokens, int 
 // token helpers
 #if CJ5_TOKEN_HELPERS
 CJ5_API int cj5_seek(cj5_result* r, int parent_id, const char* key);
+CJ5_API int cj5_seek_hash(cj5_result* r, int parent_id, const uint32_t key_hash);
 CJ5_API int cj5_seek_recursive(cj5_result* r, int parent_id, const char* key);
 CJ5_API const char* cj5_get_string(cj5_result* r, int id, char* str, int max_str);
 CJ5_API double cj5_get_double(cj5_result* r, int id);
@@ -429,7 +430,13 @@ found:
         type = CJ5_TOKEN_STRING;
     } else {
         // detect other types, subtypes
+#if __arm__
+        uint32_t fourcc_ = (uint32_t)json5[start];
+        CJ5_MEMCPY(&fourcc_, &json5[start], 4);
+        uint32_t* fourcc = &fourcc_;
+#else
         uint32_t* fourcc = (uint32_t*)&json5[start];
+#endif
         if (*fourcc == CJ5__NULL_FOURCC) {
             type = CJ5_TOKEN_NULL;
         } else if (*fourcc == CJ5__TRUE_FOURCC) {
@@ -845,11 +852,9 @@ int cj5_seek_recursive(cj5_result* r, int parent_id, const char* key)
     return cj5__seek_recursive(r, parent_id, key_hash);
 }
 
-int cj5_seek(cj5_result* r, int parent_id, const char* key)
+int cj5_seek_hash(cj5_result* r, int parent_id, const uint32_t key_hash)
 {
     CJ5_ASSERT(parent_id >= 0 && parent_id < r->num_tokens);
-
-    uint32_t key_hash = cj5__hash_fnv32(key, key + cj5__strlen(key));
     const cj5_token* parent_tok = &r->tokens[parent_id];
 
     for (int i = parent_id + 1, count = 0; i < r->num_tokens && count < parent_tok->size; i++) {
@@ -869,6 +874,15 @@ int cj5_seek(cj5_result* r, int parent_id, const char* key)
     }
 
     return -1;
+}
+
+int cj5_seek(cj5_result* r, int parent_id, const char* key)
+{
+    CJ5_ASSERT(parent_id >= 0 && parent_id < r->num_tokens);
+
+    uint32_t key_hash = cj5__hash_fnv32(key, key + cj5__strlen(key));
+
+    return cj5_seek_hash(r, parent_id, key_hash);
 }
 
 const char* cj5_get_string(cj5_result* r, int id, char* str, int max_str)
@@ -1011,7 +1025,7 @@ int cj5_seekget_array_double(cj5_result* r, int parent_id, const char* key, doub
     int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
     if (id != -1) {
         const cj5_token* tok = &r->tokens[id];
-        sx_unused(tok);
+        CJ5__UNUSED(tok);
         CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
         int count = 0;
         for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
@@ -1029,7 +1043,7 @@ int cj5_seekget_array_float(cj5_result* r, int parent_id, const char* key, float
     int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
     if (id != -1) {
         const cj5_token* tok = &r->tokens[id];
-        sx_unused(tok);
+        CJ5__UNUSED(tok);
         CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
         int count = 0;
         for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
@@ -1047,7 +1061,7 @@ int cj5_seekget_array_int16(cj5_result* r, int parent_id, const char* key, int16
     int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
     if (id != -1) {
         const cj5_token* tok = &r->tokens[id];
-        sx_unused(tok);
+        CJ5__UNUSED(tok);
         CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
         int count = 0;
         for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
@@ -1065,7 +1079,7 @@ int cj5_seekget_array_uint16(cj5_result* r, int parent_id, const char* key, uint
     int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
     if (id != -1) {
         const cj5_token* tok = &r->tokens[id];
-        sx_unused(tok);
+        CJ5__UNUSED(tok);
         CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
         int count = 0;
         for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
@@ -1084,7 +1098,7 @@ int cj5_seekget_array_int(cj5_result* r, int parent_id, const char* key, int* va
     int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
     if (id != -1) {
         const cj5_token* tok = &r->tokens[id];
-        sx_unused(tok);
+        CJ5__UNUSED(tok);
         CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
         int count = 0;
         for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
@@ -1102,7 +1116,7 @@ int cj5_seekget_array_uint(cj5_result* r, int parent_id, const char* key, uint32
     int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
     if (id != -1) {
         const cj5_token* tok = &r->tokens[id];
-        sx_unused(tok);
+        CJ5__UNUSED(tok);
         CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
         int count = 0;
         for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
@@ -1120,7 +1134,7 @@ int cj5_seekget_array_uint64(cj5_result* r, int parent_id, const char* key, uint
     int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
     if (id != -1) {
         const cj5_token* tok = &r->tokens[id];
-        sx_unused(tok);
+        CJ5__UNUSED(tok);
         CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
         int count = 0;
         for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
@@ -1138,7 +1152,7 @@ int cj5_seekget_array_int64(cj5_result* r, int parent_id, const char* key, int64
     int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
     if (id != -1) {
         const cj5_token* tok = &r->tokens[id];
-        sx_unused(tok);
+        CJ5__UNUSED(tok);
         CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
         int count = 0;
         for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
@@ -1156,7 +1170,7 @@ int cj5_seekget_array_bool(cj5_result* r, int parent_id, const char* key, bool* 
     int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
     if (id != -1) {
         const cj5_token* tok = &r->tokens[id];
-        sx_unused(tok);
+        CJ5__UNUSED(tok);
         CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
         int count = 0;
         for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {
@@ -1174,7 +1188,7 @@ int cj5_seekget_array_string(cj5_result* r, int parent_id, const char* key, char
     int id = key != NULL ? cj5_seek(r, parent_id, key) : parent_id;
     if (id != -1) {
         const cj5_token* tok = &r->tokens[id];
-        sx_unused(tok);
+        CJ5__UNUSED(tok);
         CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
         int count = 0;
         for (int i = id + 1, ic = r->num_tokens; i < ic && r->tokens[i].parent_id == id && count < max_values; i++) {

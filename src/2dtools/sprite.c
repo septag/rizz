@@ -1815,6 +1815,7 @@ void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4*
             sprite__drawdata_make_batch(sprs, num_sprites, tmp_alloc);
         if (!dd) {
             sx_memory_fail();
+            the_core->tmp_alloc_pop();
             return;
         }
     

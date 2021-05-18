@@ -828,13 +828,23 @@ typedef struct rizz_api_core {
         (void)rmt_sample_raii_##_name;   \
         (RIZZ_CORE_API_VARNAME)->end_profile_sample();
 
+// usage pattern:
+// rizz_profile(name) {
+//  ...
+// } // automatically ends profile sample
+#define rizz_profile(_name) static uint32_t sx_concat(rmt_sample_hash_, _name) = 0; \
+        sx_defer((RIZZ_CORE_API_VARNAME)->begin_profile_sample(sx_stringize(_name), 0, &sx_concat(rmt_sample_hash_, _name)), \
+                 (RIZZ_CORE_API_VARNAME)->end_profile_sample())
+
+#define rizz_with_temp_alloc(_name) sx_with(const sx_alloc* _name = (RIZZ_CORE_API_VARNAME)->tmp_alloc_push(), \
+                                            (RIZZ_CORE_API_VARNAME)->tmp_alloc_pop()) 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @graphics
 // _sg-types.h is copy/pasted from sokol_gfx.h, all the types are equal between these two files
 
 #define _rizz_concat_path_3(s1, s2, s3) sx_stringize(s1/s2/s3)
-#define _rizz_shader_path_lang(_basepath, _lang, _filename) \
-    _rizz_concat_path_3(_basepath, _lang, _filename)
+#define _rizz_shader_path_lang(_basepath, _lang, _filename) _rizz_concat_path_3(_basepath, _lang, _filename)
 
 // HELP: this macro can be used as a helper in including cross-platform shaders from source
 //       appends _api_ (hlsl/glsl/gles/msl) between `_basepath` and `_filename`

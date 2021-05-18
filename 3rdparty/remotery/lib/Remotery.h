@@ -49,7 +49,7 @@ documented just below this comment.
 
 // Help performance of the server sending data to the client by marking this machine as little-endian 
 #ifndef RMT_ASSUME_LITTLE_ENDIAN
-#define RMT_ASSUME_LITTLE_ENDIAN 1
+#define RMT_ASSUME_LITTLE_ENDIAN 0
 #endif
 
 // Used by the Celtoys TinyCRT library (not released yet)
@@ -125,6 +125,15 @@ documented just below this comment.
 #elif defined(__APPLE__)
     #define RMT_PLATFORM_MACOS
     #define RMT_PLATFORM_POSIX
+#endif
+
+// Architecture identification
+#ifdef RMT_PLATFORM_WINDOWS
+#ifdef _M_AMD64
+#define RMT_ARCH_64BIT
+#else
+#define RMT_ARCH_32BIT
+#endif
 #endif
 
 #ifdef RMT_DLL
@@ -217,18 +226,20 @@ typedef const char* rmtPStr;
 // Handle to the main remotery instance
 typedef struct Remotery Remotery;
 
-
 // All possible error codes
+// clang-format off
 typedef enum rmtError
 {
     RMT_ERROR_NONE,
     RMT_ERROR_RECURSIVE_SAMPLE,                 // Not an error but an internal message to calling code
+    RMT_ERROR_UNKNOWN,                          // An error with a message yet to be defined, only for internal error handling
 
     // System errors
     RMT_ERROR_MALLOC_FAIL,                      // Malloc call within remotery failed
     RMT_ERROR_TLS_ALLOC_FAIL,                   // Attempt to allocate thread local storage failed
     RMT_ERROR_VIRTUAL_MEMORY_BUFFER_FAIL,       // Failed to create a virtual memory mirror buffer
     RMT_ERROR_CREATE_THREAD_FAIL,               // Failed to create a thread for the server
+    RMT_ERROR_OPEN_THREAD_HANDLE_FAIL,          // Failed to open a thread handle, given a thread id
 
     // Network TCP/IP socket errors
     RMT_ERROR_SOCKET_INIT_NETWORK_FAIL,         // Network initialisation failure (e.g. on Win32, WSAStartup fails)
@@ -281,7 +292,7 @@ typedef enum rmtError
 
     RMT_ERROR_CUDA_UNKNOWN,
 } rmtError;
-
+// clang-format on
 
 typedef enum rmtSampleFlags
 {
@@ -348,7 +359,6 @@ typedef void* (*rmtMallocPtr)(void* mm_context, rmtU32 size);
 typedef void* (*rmtReallocPtr)(void* mm_context, void* ptr, rmtU32 size);
 typedef void (*rmtFreePtr)(void* mm_context, void* ptr);
 typedef void (*rmtInputHandlerPtr)(const char* text, void* context);
-typedef void (*rmtCustomViewHandler)(const void* buff, rmtU32 size, void* context);
 
 
 // Struture to fill in to modify Remotery default settings
@@ -357,10 +367,9 @@ typedef struct rmtSettings
     // Which port to listen for incoming connections on
     rmtU16 port;
 
-    // When this server exits it can leave the port open in TIME_WAIT state for
-    // a while. This forces subsequent server bind attempts to fail when
-    // restarting. If you find restarts fail repeatedly with bind attempts, set
-    // this to true to forcibly reuse the open port.
+    // When this server exits it can leave the port open in TIME_WAIT state for a while. This forces
+    // subsequent server bind attempts to fail when restarting. If you find restarts fail repeatedly
+    // with bind attempts, set this to true to forcibly reuse the open port.
     rmtBool reuse_open_port;
 
     // Only allow connections on localhost?
@@ -368,6 +377,12 @@ typedef struct rmtSettings
     // you distribute a game to your players with Remotery active, probably best
     // to limit connections to localhost.
     rmtBool limit_connections_to_localhost;
+
+    // Whether to enable runtime thread sampling that discovers which processors a thread is running
+    // on. This will suspend and resume threads from outside repeatdly and inject code into each
+    // thread that automatically instruments the processor.
+    // Default: Enabled
+    rmtBool enableThreadSampler;
 
     // How long to sleep between server updates, hopefully trying to give
     // a little CPU back to other threads.
@@ -394,11 +409,7 @@ typedef struct rmtSettings
     // Context pointer that gets sent to Remotery console callback function
     void* input_handler_context;
 
-    // Callback pointer for view handler
-    void* view_handler_context;
-    rmtCustomViewHandler view_handler;
-
-    rmtPStr logFilename;
+    rmtPStr logPath;
 } rmtSettings;
 
 

@@ -767,51 +767,49 @@ void rizz__asset_release()
 
 void rizz__asset_update()
 {
-    rizz__profile_begin(Asset_update, 0);
+    rizz__profile(Asset_update) {
+        rizz__asset_async_job* ajob = g_asset.async_job_list;
+        while (ajob) {
+            rizz__asset_async_job* next = ajob->next;
+            if (the__core.job_test_and_del(ajob->job)) {
+                rizz__asset* a = &g_asset.assets[sx_handle_index(ajob->asset.id)];
+                sx_assert(a->resource_id);
+                rizz__asset_resource* res = &g_asset.resources[rizz_to_index(a->resource_id)];
 
-    rizz__asset_async_job* ajob = g_asset.async_job_list;
-    while (ajob) {
-        rizz__asset_async_job* next = ajob->next;
-        if (the__core.job_test_and_del(ajob->job)) {
-            rizz__asset* a = &g_asset.assets[sx_handle_index(ajob->asset.id)];
-            sx_assert(a->resource_id);
-            rizz__asset_resource* res = &g_asset.resources[rizz_to_index(a->resource_id)];
+                switch (ajob->state) {
+                case ASSET_JOB_STATE_SUCCESS:
+                    ajob->amgr->callbacks.on_finalize(&ajob->load_data, &ajob->lparams, ajob->mem);
+                    a->obj = ajob->load_data.obj;
+                    a->state = RIZZ_ASSET_STATE_OK;
+                    break;
 
-            switch (ajob->state) {
-            case ASSET_JOB_STATE_SUCCESS:
-                ajob->amgr->callbacks.on_finalize(&ajob->load_data, &ajob->lparams, ajob->mem);
-                a->obj = ajob->load_data.obj;
-                a->state = RIZZ_ASSET_STATE_OK;
-                break;
+                case ASSET_JOB_STATE_LOAD_FAILED:
+                    rizz__asset_errmsg(res->path, res->real_path, "loading");
+                    a->obj = ajob->amgr->failed_obj;
+                    a->state = RIZZ_ASSET_STATE_FAILED;
 
-            case ASSET_JOB_STATE_LOAD_FAILED:
-                rizz__asset_errmsg(res->path, res->real_path, "loading");
-                a->obj = ajob->amgr->failed_obj;
-                a->state = RIZZ_ASSET_STATE_FAILED;
+                    if (ajob->load_data.obj.id)
+                        ajob->amgr->callbacks.on_release(ajob->load_data.obj, ajob->lparams.alloc);
 
-                if (ajob->load_data.obj.id)
-                    ajob->amgr->callbacks.on_release(ajob->load_data.obj, ajob->lparams.alloc);
+                    break;
 
-                break;
+                default:
+                    sx_assertf(0, "finished job should not be any other state");
+                    break;
+                }
 
-            default:
-                sx_assertf(0, "finished job should not be any other state");
-                break;
-            }
+                sx_assert(!(ajob->lparams.flags & RIZZ_ASSET_LOAD_FLAG_RELOAD));
 
-            sx_assert(!(ajob->lparams.flags & RIZZ_ASSET_LOAD_FLAG_RELOAD));
+                sx_mem_destroy_block(ajob->mem);
 
-            sx_mem_destroy_block(ajob->mem);
+                rizz__asset_job_remove_list(&g_asset.async_job_list, &g_asset.async_job_list_last,
+                                            ajob);
+                sx_free(g_asset.alloc, ajob);
+            }    // if (job-is-done)
 
-            rizz__asset_job_remove_list(&g_asset.async_job_list, &g_asset.async_job_list_last,
-                                        ajob);
-            sx_free(g_asset.alloc, ajob);
-        }    // if (job-is-done)
-
-        ajob = next;
+            ajob = next;
+        }
     }
-
-    rizz__profile_end(Asset_update);
 }
 
 static rizz_asset rizz__asset_load(const char* name, const char* path, const void* params,

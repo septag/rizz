@@ -49,12 +49,8 @@ void rizz__core_fix_callback_ptrs(const void** ptrs, const void** new_ptrs, int 
 #define rizz__coro_yieldn(_n)              the__core.coro_yield(&__transfer.from, (_n))
 #define rizz__coro_invoke(_name, _user)    the__core.coro_invoke(coro__##_name, (_user))
 
-#define rizz__temp_alloc_begin(_name) \
-        uint32_t _temp_alloc_raii_##_name; \
-        const sx_alloc* _name = the__core.tmp_alloc_push_trace(__FILE__, __LINE__)
-#define rizz__temp_alloc_end(_name) \
-        (void)_temp_alloc_raii_##_name; \
-        the__core.tmp_alloc_pop()
+#define rizz__with_temp_alloc(_name) sx_with(const sx_alloc* _name = the__core.tmp_alloc_push(), \
+                                             the__core.tmp_alloc_pop()) 
 
 #define rizz__profile_begin(_name, _flags) \
         static uint32_t rmt_sample_hash_##_name = 0; \
@@ -63,6 +59,14 @@ void rizz__core_fix_callback_ptrs(const void** ptrs, const void** new_ptrs, int 
 #define rizz__profile_end(_name)               \
         (void)rmt_sample_raii_##_name;   \
         the__core.end_profile_sample();
+
+// usage pattern:
+// rizz__profile(name) {
+//  ...
+// } // automatically ends profile sample
+#define rizz__profile(_name) static uint32_t sx_concat(rmt_sample_hash_, _name) = 0; \
+        sx_defer(the__core.begin_profile_sample(sx_stringize(_name), 0, &sx_concat(rmt_sample_hash_, _name)), \
+                 the__core.end_profile_sample())
 
 // clang-format on
 

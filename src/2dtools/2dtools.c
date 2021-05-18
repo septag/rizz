@@ -113,7 +113,7 @@ rizz_plugin_decl_main(2dtools, plugin, e)
         break;
 
     case RIZZ_PLUGIN_EVENT_SHUTDOWN:
-        the_plugin->remove_api("2d", 0);
+        the_plugin->remove_api("2dtools", 0);
         sprite__release();
         font__release();
         break;

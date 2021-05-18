@@ -171,9 +171,8 @@ static void update(float dt)
     update_cam_movement(dt);
 
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
+    rizz_profile(CollisionUpdate) {
     sx_scope(the_core->tmp_alloc_pop()) {
-
-        rizz_profile_begin(update, 0);
         // move shapes around
         int64_t frame = the_core->frame_index();
         int num_pairs;
@@ -267,9 +266,8 @@ static void update(float dt)
             sx_vec2 center = sx_vec2_mulf(size, 0.5f);
             the_imgui->ImDrawList_AddCircle(draw_list, center, 5.0f, SX_COLOR_YELLOW.n, 12, 4.0f);
         }
-
-        rizz_profile_end(update);
     } // scope
+    } // profile
 
 }
 

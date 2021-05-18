@@ -180,13 +180,10 @@
 // sx_defer and scope can be used to mimick the behavior of go and zig's defer 
 // "start" is the statement that you would like to run at the begining of the scope
 // "end" is the statement that you would like to run at the end of the scope
-#define _sx_var(name) sx_concat(name, __LINE__)
-#define sx_defer(start, end) for ( \
-    int _sx_var(_i_) = (start, 0); \
-    !_sx_var(_i_);                 \
-    (_sx_var(_i_) += 1), end)      
+#define _sx_var(_name) sx_concat(_name, __LINE__)
+#define sx_defer(_start, _end) for (int _sx_var(_i_) = (_start, 0); !_sx_var(_i_); (_sx_var(_i_) += 1), _end)
+#define sx_scope(_end) for (int _sx_var(_i_) = 0; !_sx_var(_i_); (_sx_var(_i_) += 1), _end)
 
-#define sx_scope(end) for (        \
-    int _sx_var(_i_) = 0;          \
-    !_sx_var(_i_);                 \
-    (_sx_var(_i_) += 1), end)
+// somewhat like python's `with` statement
+#define sx_with(_init, _release) _init; for (int _sx_var(_i_) = 0; !_sx_var(_i_); (_sx_var(_i_) += 1), _release)
+

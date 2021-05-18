@@ -1810,10 +1810,10 @@ rizz_plugin_decl_main(sound, plugin, e)
 {
     switch (e) {
     case RIZZ_PLUGIN_EVENT_STEP: {
-        rizz_profile_begin(Sound, 0);
-        snd__execute_command_buffers();
-        snd__update((float)sx_tm_sec(the_core->delta_tick()));
-        rizz_profile_end(Sound);
+        rizz_profile(Sound) {
+            snd__execute_command_buffers();
+            snd__update((float)sx_tm_sec(the_core->delta_tick()));
+        }
         break;
     }
     case RIZZ_PLUGIN_EVENT_INIT:
