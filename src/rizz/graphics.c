@@ -622,7 +622,9 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
         int comp;
         if (stbi_info_from_memory(mem->data, (int)mem->size, &info->width, &info->height, &comp)) {
             sx_assertf(!stbi_is_16_bit_from_memory(mem->data, (int)mem->size),
-                      "images with 16bit color channel are not supported");
+                      "images with 16bit color channel are not supported: %s", params->path);
+            sx_assertf(info->width > 0 && info->height > 0, "invalid image size (%dx%d): %s", 
+                       info->width, info->height, params->path);
             info->type = SG_IMAGETYPE_2D;
             info->format = SG_PIXELFORMAT_RGBA8;    // always convert to RGBA
             info->mem_size_bytes = 4 * info->width * info->height;
@@ -630,8 +632,7 @@ static rizz_asset_load_data rizz__texture_on_prepare(const rizz_asset_load_param
             info->mips = 1;
             info->bpp = 32;
         } else {
-            rizz__log_warn("reading image '%s' metadata failed: %s", params->path,
-                           stbi_failure_reason());
+            rizz__log_warn("reading image '%s' metadata failed: %s", params->path, stbi_failure_reason());
             sx_memset(info, 0x0, sizeof(rizz_texture_info));
         }
     }
