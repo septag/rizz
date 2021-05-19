@@ -369,6 +369,7 @@ foreach (native_project ${native_projects})
                 /wd4221  # cannot be initialized using address of automatic variable
                 /wd4053  # one void operand for
                 /wd4204  # nonstandard extension used: non-constant aggregate initializer
+                /wd4127  # conditional expression is constant (if (1)) 
                 ) 
         endif()
         set_target_properties(${native_project} PROPERTIES LINK_FLAGS "/INCREMENTAL:NO")
