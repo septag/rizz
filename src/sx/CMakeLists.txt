@@ -191,4 +191,7 @@ if (SX_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
+# temp
+add_definitions(-DSX_CONFIG_EXPERIMENTAL_SPINLOCK=1)
+
 
