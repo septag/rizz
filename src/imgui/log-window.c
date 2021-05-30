@@ -87,7 +87,7 @@ static bool imgui__bitselector(const char* label, uint32_t* bits)
             the__imgui.PushOverrideID(bit_index);
 
             bool on = (*bits  & (0x1 << bit_index)) ? true : false;
-            the__imgui.PushStyleColorU32(ImGuiCol_Button, on ? 0xff00ff00 : 0xff000000);
+            the__imgui.PushStyleColor_U32(ImGuiCol_Button, on ? 0xff00ff00 : 0xff000000);
             if (the__imgui.SmallButton("  ")) {
                 on = !on;
                 *bits = on ? (*bits | (0x1 << bit_index)) : (*bits & ~(0x1 << bit_index));
@@ -216,11 +216,11 @@ static void imgui__draw_log(bool* p_open)
 
         if (g_log.show_filters) {
             bool filter_changed = false;
-            filter_changed |= the__imgui.CheckboxFlags("Error", &g_log.filter_types, LOG_FILTER_ERROR);   the__imgui.SameLine(0, -1);
-            filter_changed |= the__imgui.CheckboxFlags("Warning", &g_log.filter_types, LOG_FILTER_WARNING); the__imgui.SameLine(0, -1);
-            filter_changed |= the__imgui.CheckboxFlags("Info", &g_log.filter_types, LOG_FILTER_INFO); the__imgui.SameLine(0, -1);
-            filter_changed |= the__imgui.CheckboxFlags("Verbose", &g_log.filter_types, LOG_FILTER_VERBOSE); the__imgui.SameLine(0, -1);
-            filter_changed |= the__imgui.CheckboxFlags("Debug", &g_log.filter_types, LOG_FILTER_DEBUG); the__imgui.SameLine(0, -1);
+            filter_changed |= the__imgui.CheckboxFlags_UintPtr("Error", &g_log.filter_types, LOG_FILTER_ERROR);   the__imgui.SameLine(0, -1);
+            filter_changed |= the__imgui.CheckboxFlags_UintPtr("Warning", &g_log.filter_types, LOG_FILTER_WARNING); the__imgui.SameLine(0, -1);
+            filter_changed |= the__imgui.CheckboxFlags_UintPtr("Info", &g_log.filter_types, LOG_FILTER_INFO); the__imgui.SameLine(0, -1);
+            filter_changed |= the__imgui.CheckboxFlags_UintPtr("Verbose", &g_log.filter_types, LOG_FILTER_VERBOSE); the__imgui.SameLine(0, -1);
+            filter_changed |= the__imgui.CheckboxFlags_UintPtr("Debug", &g_log.filter_types, LOG_FILTER_DEBUG); the__imgui.SameLine(0, -1);
             filter_changed |= imgui__bitselector("##Channels", &g_log.filter_channels);
 
             if (filter_changed) {
@@ -232,24 +232,16 @@ static void imgui__draw_log(bool* p_open)
         float width = the__imgui.GetWindowContentRegionWidth();
         float text_width = width - 170.0f;
 
-        if (g_log.buffer->size) {
-            the__imgui.Columns(3, NULL, false);
-            the__imgui.SetColumnWidth(0, text_width);
-            the__imgui.Text("Text");
-            the__imgui.NextColumn();
-            the__imgui.SetColumnWidth(1, 110.0f);
-            the__imgui.Text("File");
-            the__imgui.NextColumn();
-            the__imgui.SetColumnWidth(2, 60.0f);
-            the__imgui.Text("Line");
-            the__imgui.NextColumn();
-            the__imgui.Separator();
+        if (g_log.buffer->size && 
+            the__imgui.BeginTable("Sound Sources", 3, 
+                                  ImGuiTableFlags_Resizable|ImGuiTableFlags_RowBg|
+                                  ImGuiTableFlags_BordersOuterH|ImGuiTableFlags_SizingStretchProp, 
+                                  SX_VEC2_ZERO, 0)) {
 
-            the__imgui.Columns(1, NULL, false);
-            sx_vec2 region;
-            the__imgui.GetContentRegionAvail(&region);
-            the__imgui.BeginChildStr("LogEntries", sx_vec2f(region.x, -1.0f), false, 0);
-            the__imgui.Columns(3, NULL, false);
+            the__imgui.TableSetupColumn("Text", 0, text_width, 0);
+            the__imgui.TableSetupColumn("File", 0, 110.0f, 0);
+            the__imgui.TableSetupColumn("Line", 0, 60.0f, 0);
+            the__imgui.TableHeadersRow();
 
             if (sx_array_count(g_log.cached) == 0) {
                 imgui__update_entry_cache();
@@ -261,6 +253,8 @@ static void imgui__draw_log(bool* p_open)
                 the__imgui.ImGuiListClipper_Begin(&clipper, num_items, -1.0f);
                 while (the__imgui.ImGuiListClipper_Step(&clipper)) {
                     for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
+                        the__imgui.TableNextRow(0, 0);
+
                         const imgui__log_entry_ref* ref = &entries[i];
                         int offset = ref->offset;
                         rizz_log_entry* entry = sx_malloc(tmp_alloc, ref->size);
@@ -271,9 +265,9 @@ static void imgui__draw_log(bool* p_open)
                         const char* source_file = (const char*)entry + (uintptr_t)entry->source_file;
 
                         sx_assert(entry->type >= 0 && entry->type < _RIZZ_LOG_LEVEL_COUNT);
-                        the__imgui.SetColumnWidth(0, text_width);
-                        the__imgui.PushStyleColorVec4(ImGuiCol_Text, k_log_colors[entry->type]);
-                        if (the__imgui.SelectableBool(text, g_log.selected == i, 
+                        the__imgui.TableNextColumn();
+                        the__imgui.PushStyleColor_Vec4(ImGuiCol_Text, k_log_colors[entry->type]);
+                        if (the__imgui.Selectable_Bool(text, g_log.selected == i, 
                             ImGuiSelectableFlags_SpanAllColumns|ImGuiSelectableFlags_AllowDoubleClick, sx_vec2f(0, 0))) {
                             // copy to clipboard
                             int len = entry->text_len + entry->source_file_len + 32;
@@ -284,15 +278,12 @@ static void imgui__draw_log(bool* p_open)
                             g_log.selected = i;
                         }
                         the__imgui.PopStyleColor(1);
-                        the__imgui.NextColumn();
 
-                        the__imgui.SetColumnWidth(1, 110.0f);
+                        the__imgui.TableNextColumn();
                         the__imgui.TextEx(source_file, source_file + entry->source_file_len, 0);
-                        the__imgui.NextColumn();
 
-                        the__imgui.SetColumnWidth(2, 60.0f);
+                        the__imgui.TableNextColumn();
                         the__imgui.Text("%d", entry->line);
-                        the__imgui.NextColumn();
                     }
                 }
             }   // with temp_alloc
@@ -303,7 +294,7 @@ static void imgui__draw_log(bool* p_open)
             }
 
             the__imgui.ImGuiListClipper_End(&clipper);
-            the__imgui.EndChild();
+            the__imgui.EndTable();
         }   
 
     }

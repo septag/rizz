@@ -2459,15 +2459,15 @@ _SOKOL_PRIVATE void _sg_imgui_err_bindings_invalid(void* user_data) {
 
 /*--- IMGUI HELPERS ----------------------------------------------------------*/
 _SOKOL_PRIVATE bool _sg_imgui_draw_resid_list_item(uint32_t res_id, const char* label, bool selected) {
-    the__imgui.PushIDInt((int)res_id);
+    the__imgui.PushID_Int((int)res_id);
     bool res;
     if (label[0]) {
-        res = the__imgui.SelectableBool(label, selected, 0, sx_vec2f(0, 0));
+        res = the__imgui.Selectable_Bool(label, selected, 0, sx_vec2f(0, 0));
     }
     else {
         sg_imgui_str_t str;
         _sg_imgui_snprintf(&str, "0x%08X", res_id);
-        res = the__imgui.SelectableBool(str.buf, selected, 0, sx_vec2f(0, 0));
+        res = the__imgui.Selectable_Bool(str.buf, selected, 0, sx_vec2f(0, 0));
     }
     the__imgui.PopID();
     return res;
@@ -2484,7 +2484,7 @@ _SOKOL_PRIVATE bool _sg_imgui_draw_resid_link(uint32_t res_id, const char* label
         _sg_imgui_snprintf(&str_buf, "0x%08X", res_id);
         str = str_buf.buf;
     }
-    the__imgui.PushIDInt((int)res_id);
+    the__imgui.PushID_Int((int)res_id);
     bool res = the__imgui.SmallButton(str);
     the__imgui.PopID();
     return res;
@@ -2533,7 +2533,7 @@ _SOKOL_PRIVATE void _sg_imgui_show_shader(sg_imgui_t* ctx, sg_shader shd) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_buffer_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChildStr("buffer_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChild_Str("buffer_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     for (int i = 0; i < ctx->buffers.num_slots; i++) {
         sg_buffer buf = ctx->buffers.slots[i].res_id;
         sg_resource_state state = ctx->api->query_buffer_state(buf);
@@ -2548,7 +2548,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_buffer_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_image_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChildStr("image_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChild_Str("image_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     for (int i = 0; i < ctx->images.num_slots; i++) {
         sg_image img = ctx->images.slots[i].res_id;
         sg_resource_state state = ctx->api->query_image_state(img);
@@ -2563,7 +2563,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_image_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_shader_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChildStr("shader_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChild_Str("shader_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     for (int i = 0; i < ctx->shaders.num_slots; i++) {
         sg_shader shd = ctx->shaders.slots[i].res_id;
         sg_resource_state state = ctx->api->query_shader_state(shd);
@@ -2578,7 +2578,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_shader_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_pipeline_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChildStr("pipeline_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChild_Str("pipeline_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     for (int i = 1; i < ctx->pipelines.num_slots; i++) {
         sg_pipeline pip = ctx->pipelines.slots[i].res_id;
         sg_resource_state state = ctx->api->query_pipeline_state(pip);
@@ -2593,7 +2593,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_pipeline_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_pass_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChildStr("pass_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChild_Str("pass_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     for (int i = 1; i < ctx->passes.num_slots; i++) {
         sg_pass pass = ctx->passes.slots[i].res_id;
         sg_resource_state state = ctx->api->query_pass_state(pass);
@@ -2608,18 +2608,18 @@ _SOKOL_PRIVATE void _sg_imgui_draw_pass_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_capture_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChildStr("capture_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChild_Str("capture_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
     const uint32_t num_items = _sg_imgui_capture_num_read_items(ctx);
     uint64_t group_stack = 1;   /* bit set: group unfolded, cleared: folded */
     for (uint32_t i = 0; i < num_items; i++) {
         const sg_imgui_capture_item_t* item = _sg_imgui_capture_read_item_at(ctx, i);
         sg_imgui_str_t item_string = _sg_imgui_capture_item_string(ctx, i, item);
-        the__imgui.PushStyleColorU32(ImGuiCol_Text, item->color);
+        the__imgui.PushStyleColor_U32(ImGuiCol_Text, item->color);
         if (item->cmd == SG_IMGUI_CMD_PUSH_DEBUG_GROUP) {
             if (group_stack & 1) {
                 group_stack <<= 1;
                 const char* group_name = item->args.push_debug_group.name.buf;
-                if (the__imgui.TreeNodeStrStr(group_name, "Group: %s", group_name)) {
+                if (the__imgui.TreeNode_StrStr(group_name, "Group: %s", group_name)) {
                     group_stack |= 1;
                 }
             }
@@ -2634,8 +2634,8 @@ _SOKOL_PRIVATE void _sg_imgui_draw_capture_list(sg_imgui_t* ctx) {
             group_stack >>= 1;
         }
         else if (group_stack & 1) {
-            the__imgui.PushIDInt(i);
-            if (the__imgui.SelectableBool(item_string.buf, ctx->capture.sel_item == i, 0, sx_vec2f(0, 0))) {
+            the__imgui.PushID_Int(i);
+            if (the__imgui.Selectable_Bool(item_string.buf, ctx->capture.sel_item == i, 0, sx_vec2f(0, 0))) {
                 ctx->capture.sel_item = i;
             }
             if (the__imgui.IsItemHovered(0)) {
@@ -2650,7 +2650,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_capture_list(sg_imgui_t* ctx) {
 
 _SOKOL_PRIVATE void _sg_imgui_draw_buffer_panel(sg_imgui_t* ctx, sg_buffer buf) {
     if (buf.id != SG_INVALID_ID) {
-        the__imgui.BeginChildStr("buffer", sx_vec2f(0,0), false, 0);
+        the__imgui.BeginChild_Str("buffer", sx_vec2f(0,0), false, 0);
         sg_buffer_info info = ctx->api->query_buffer_info(buf);
         if (info.slot.state == SG_RESOURCESTATE_VALID) {
             const sg_imgui_buffer_t* buf_ui = &ctx->buffers.slots[_sg_imgui_slot_index(buf.id)];
@@ -2685,7 +2685,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_embedded_image(sg_imgui_t* ctx, sg_image img,
     if (ctx->api->query_image_state(img) == SG_RESOURCESTATE_VALID) {
         sg_imgui_image_t* img_ui = &ctx->images.slots[_sg_imgui_slot_index(img.id)];
         if (_sg_imgui_image_renderable(ctx, img_ui->desc.type, img_ui->desc.pixel_format)) {
-            the__imgui.PushIDInt((int)img.id);
+            the__imgui.PushID_Int((int)img.id);
             the__imgui.SliderFloat("Scale", scale, 0.125f, 8.0f, "%.3f", ImGuiSliderFlags_None);
             float w = (float)img_ui->desc.width * (*scale);
             float h = (float)img_ui->desc.height * (*scale);
@@ -2700,7 +2700,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_embedded_image(sg_imgui_t* ctx, sg_image img,
 }
 _SOKOL_PRIVATE void _sg_imgui_draw_image_panel(sg_imgui_t* ctx, sg_image img) {
     if (img.id != SG_INVALID_ID) {
-        the__imgui.BeginChildStr("image", sx_vec2f(0,0), false, 0);
+        the__imgui.BeginChild_Str("image", sx_vec2f(0,0), false, 0);
         sg_image_info info = ctx->api->query_image_info(img);
         if (info.slot.state == SG_RESOURCESTATE_VALID) {
             sg_imgui_image_t* img_ui = &ctx->images.slots[_sg_imgui_slot_index(img.id)];
@@ -2767,7 +2767,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_shader_stage(sg_imgui_t* ctx, const sg_shader
         }
     }
     if (num_valid_ubs > 0) {
-        if (the__imgui.TreeNodeStr("Uniform Blocks")) {
+        if (the__imgui.TreeNode_Str("Uniform Blocks")) {
             for (int i = 0; i < num_valid_ubs; i++) {
                 the__imgui.Text("#%d:", i);
                 const sg_shader_uniform_block_desc* ub = &stage->uniform_blocks[i];
@@ -2787,7 +2787,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_shader_stage(sg_imgui_t* ctx, const sg_shader
         }
     }
     if (num_valid_images > 0) {
-        if (the__imgui.TreeNodeStr("Images")) {
+        if (the__imgui.TreeNode_Str("Images")) {
             for (int i = 0; i < SG_MAX_SHADERSTAGE_IMAGES; i++) {
                 const sg_shader_image_desc* sid = &stage->images[i];
                 if (sid->type != _SG_IMAGETYPE_DEFAULT) {
@@ -2804,13 +2804,13 @@ _SOKOL_PRIVATE void _sg_imgui_draw_shader_stage(sg_imgui_t* ctx, const sg_shader
         the__imgui.Text("Entry: %s", stage->entry);
     }
     if (stage->source) {
-        if (the__imgui.TreeNodeStr("Source")) {
+        if (the__imgui.TreeNode_Str("Source")) {
             the__imgui.Text("%s", stage->source);
             the__imgui.TreePop();
         }
     }
     else if (stage->byte_code) {
-        if (the__imgui.TreeNodeStr("Byte Code")) {
+        if (the__imgui.TreeNode_Str("Byte Code")) {
             the__imgui.Text("Byte-code display currently not supported.");
             the__imgui.TreePop();
         }
@@ -2819,14 +2819,14 @@ _SOKOL_PRIVATE void _sg_imgui_draw_shader_stage(sg_imgui_t* ctx, const sg_shader
 
 _SOKOL_PRIVATE void _sg_imgui_draw_shader_panel(sg_imgui_t* ctx, sg_shader shd) {
     if (shd.id != SG_INVALID_ID) {
-        the__imgui.BeginChildStr("shader", sx_vec2f(0,0), false, ImGuiWindowFlags_HorizontalScrollbar);
+        the__imgui.BeginChild_Str("shader", sx_vec2f(0,0), false, ImGuiWindowFlags_HorizontalScrollbar);
         sg_shader_info info = ctx->api->query_shader_info(shd);
         if (info.slot.state == SG_RESOURCESTATE_VALID) {
             const sg_imgui_shader_t* shd_ui = &ctx->shaders.slots[_sg_imgui_slot_index(shd.id)];
             the__imgui.Text("Label: %s", shd_ui->label.buf[0] ? shd_ui->label.buf : "---");
             _sg_imgui_draw_resource_slot(&info.slot);
             the__imgui.Separator();
-            if (the__imgui.TreeNodeStr("Attrs")) {
+            if (the__imgui.TreeNode_Str("Attrs")) {
                 for (int i = 0; i < SG_MAX_VERTEX_ATTRIBUTES; i++) {
                     const sg_shader_attr_desc* a_desc = &shd_ui->desc.attrs[i];
                     if (a_desc->name || a_desc->sem_index) {
@@ -2838,11 +2838,11 @@ _SOKOL_PRIVATE void _sg_imgui_draw_shader_panel(sg_imgui_t* ctx, sg_shader shd) 
                 }
                 the__imgui.TreePop();
             }
-            if (the__imgui.TreeNodeStr("Vertex Shader Stage")) {
+            if (the__imgui.TreeNode_Str("Vertex Shader Stage")) {
                 _sg_imgui_draw_shader_stage(ctx, &shd_ui->desc.vs);
                 the__imgui.TreePop();
             }
-            if (the__imgui.TreeNodeStr("Fragment Shader Stage")) {
+            if (the__imgui.TreeNode_Str("Fragment Shader Stage")) {
                 _sg_imgui_draw_shader_stage(ctx, &shd_ui->desc.fs);
                 the__imgui.TreePop();
             }
@@ -2855,7 +2855,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_shader_panel(sg_imgui_t* ctx, sg_shader shd) 
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_vertex_layout(const sg_layout_desc* layout) {
-    if (the__imgui.TreeNodeStr("Buffers")) {
+    if (the__imgui.TreeNode_Str("Buffers")) {
         for (int i = 0; i < SG_MAX_SHADERSTAGE_BUFFERS; i++) {
             const sg_buffer_layout_desc* l_desc = &layout->buffers[i];
             if (l_desc->stride > 0) {
@@ -2867,7 +2867,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_vertex_layout(const sg_layout_desc* layout) {
         }
         the__imgui.TreePop();
     }
-    if (the__imgui.TreeNodeStr("Attrs")) {
+    if (the__imgui.TreeNode_Str("Attrs")) {
         for (int i = 0; i < SG_MAX_VERTEX_ATTRIBUTES; i++) {
             const sg_vertex_attr_desc* a_desc = &layout->attrs[i];
             if (a_desc->format != SG_VERTEXFORMAT_INVALID) {
@@ -2895,11 +2895,11 @@ _SOKOL_PRIVATE void _sg_imgui_draw_depth_stencil_state(const sg_depth_stencil_st
     the__imgui.Text("Stencil Read Mask:   0x%02X", dss->stencil_read_mask);
     the__imgui.Text("Stencil Write Mask:  0x%02X", dss->stencil_write_mask);
     the__imgui.Text("Stencil Ref:         0x%02X", dss->stencil_ref);
-    if (the__imgui.TreeNodeStr("Stencil Front")) {
+    if (the__imgui.TreeNode_Str("Stencil Front")) {
         _sg_imgui_draw_stencil_state(&dss->stencil_front);
         the__imgui.TreePop();
     }
-    if (the__imgui.TreeNodeStr("Stencil Back")) {
+    if (the__imgui.TreeNode_Str("Stencil Back")) {
         _sg_imgui_draw_stencil_state(&dss->stencil_back);
         the__imgui.TreePop();
     }
@@ -2934,7 +2934,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_rasterizer_state(const sg_rasterizer_state* r
 
 _SOKOL_PRIVATE void _sg_imgui_draw_pipeline_panel(sg_imgui_t* ctx, sg_pipeline pip) {
     if (pip.id != SG_INVALID_ID) {
-        the__imgui.BeginChildStr("pipeline", sx_vec2f(0,0), false, 0);
+        the__imgui.BeginChild_Str("pipeline", sx_vec2f(0,0), false, 0);
         sg_pipeline_info info = ctx->api->query_pipeline_info(pip);
         if (info.slot.state == SG_RESOURCESTATE_VALID) {
             const sg_imgui_pipeline_t* pip_ui = &ctx->pipelines.slots[_sg_imgui_slot_index(pip.id)];
@@ -2947,19 +2947,19 @@ _SOKOL_PRIVATE void _sg_imgui_draw_pipeline_panel(sg_imgui_t* ctx, sg_pipeline p
             }
             the__imgui.Text("Prim Type:  %s", _sg_imgui_primitivetype_string(pip_ui->desc.primitive_type));
             the__imgui.Text("Index Type: %s", _sg_imgui_indextype_string(pip_ui->desc.index_type));
-            if (the__imgui.TreeNodeStr("Vertex Layout")) {
+            if (the__imgui.TreeNode_Str("Vertex Layout")) {
                 _sg_imgui_draw_vertex_layout(&pip_ui->desc.layout);
                 the__imgui.TreePop();
             } 
-            if (the__imgui.TreeNodeStr("Depth Stencil State")) {
+            if (the__imgui.TreeNode_Str("Depth Stencil State")) {
                 _sg_imgui_draw_depth_stencil_state(&pip_ui->desc.depth_stencil);
                 the__imgui.TreePop();
             }
-            if (the__imgui.TreeNodeStr("Blend State")) {
+            if (the__imgui.TreeNode_Str("Blend State")) {
                 _sg_imgui_draw_blend_state(&pip_ui->desc.blend);
                 the__imgui.TreePop();
             }
-            if (the__imgui.TreeNodeStr("Rasterizer State")) {
+            if (the__imgui.TreeNode_Str("Rasterizer State")) {
                 _sg_imgui_draw_rasterizer_state(&pip_ui->desc.rasterizer);
                 the__imgui.TreePop();
             }
@@ -2983,7 +2983,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_attachment(sg_imgui_t* ctx, const sg_attachme
 
 _SOKOL_PRIVATE void _sg_imgui_draw_pass_panel(sg_imgui_t* ctx, sg_pass pass) {
     if (pass.id != SG_INVALID_ID) {
-        the__imgui.BeginChildStr("pass", sx_vec2f(0,0), false, 0);
+        the__imgui.BeginChild_Str("pass", sx_vec2f(0,0), false, 0);
         sg_pass_info info = ctx->api->query_pass_info(pass);
         if (info.slot.state == SG_RESOURCESTATE_VALID) {
             sg_imgui_pass_t* pass_ui = &ctx->passes.slots[_sg_imgui_slot_index(pass.id)];
@@ -3204,8 +3204,8 @@ _SOKOL_PRIVATE void _sg_imgui_draw_capture_panel(sg_imgui_t* ctx) {
         return;
     }
     sg_imgui_capture_item_t* item = _sg_imgui_capture_read_item_at(ctx, sel_item_index);
-    the__imgui.BeginChildStr("capture_item", sx_vec2f(0, 0), false, 0);
-    the__imgui.PushStyleColorU32(ImGuiCol_Text, item->color);
+    the__imgui.BeginChild_Str("capture_item", sx_vec2f(0, 0), false, 0);
+    the__imgui.PushStyleColor_U32(ImGuiCol_Text, item->color);
     the__imgui.Text("%s", _sg_imgui_capture_item_string(ctx, sel_item_index, item).buf);
     the__imgui.PopStyleColor(1);
     the__imgui.Separator();

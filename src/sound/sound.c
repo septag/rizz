@@ -1144,8 +1144,8 @@ static void snd__plot_samples_rms(const char* label, const float* samples, int n
             sx_memset(values, 0x0, sizeof(float) * optimal_values);
         }
 
-        the_imgui->PlotHistogramFloatPtr(label, values, num_values, 0, NULL, 0, 1.0f,
-                                         sx_vec2f((float)width, (float)height), sizeof(float));
+        the_imgui->PlotHistogram_FloatPtr(label, values, num_values, 0, NULL, 0, 1.0f,
+                                          sx_vec2f((float)width, (float)height), sizeof(float));
     } // scope
 }
 
@@ -1195,8 +1195,8 @@ static void snd__plot_samples_wav(const char* label, const float* samples, int n
             plot_samples += block_sz;
         }
 
-        the_imgui->PlotLinesFloatPtr(label, values, num_values * 2, 0, NULL, -1.0f, 1.0f,
-                             sx_vec2f((float)width, (float)height), sizeof(float));
+        the_imgui->PlotLines_FloatPtr(label, values, num_values * 2, 0, NULL, -1.0f, 1.0f,
+                                      sx_vec2f((float)width, (float)height), sizeof(float));
     } // scope
 }
 
@@ -1219,8 +1219,7 @@ static void snd__show_mixer_tab_contents()
             sx_out_of_memory();
             return;
         }
-        num_samples =
-            snd__ringbuffer_consume(&g_snd.mixer_plot_buffer, samples, sx_min(512, num_samples));
+        num_samples = snd__ringbuffer_consume(&g_snd.mixer_plot_buffer, samples, sx_min(512, num_samples));
         sx_vec2 region;
         the_imgui->GetContentRegionAvail(&region);
         float plot_width = region.x;
@@ -1242,36 +1241,25 @@ static void snd__show_mixer_tab_contents()
         the_imgui->Columns(1, NULL, false);
         the_imgui->Separator();
 
-        {
+        if (the_imgui->BeginTable("Sound Sources", 4, 
+                                  ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_BordersOuterH|ImGuiTableFlags_SizingFixedFit|ImGuiTableFlags_RowBg,
+                                  SX_VEC2_ZERO, 0)) {
             int num_sounds = g_snd.num_plays;
+            the_imgui->GetContentRegionAvail(&region);
+            the_imgui->TableSetupColumn("#", 0, 30.0f, 0);
+            the_imgui->TableSetupColumn("Bus", 0, 30.0f, 0);
+            the_imgui->TableSetupColumn("Progres", 0, 100.0f, 0);
+            the_imgui->TableSetupColumn("Source", 0, region.x, 0);
+            the_imgui->TableHeadersRow();
 
-            the_imgui->Columns(4, NULL, false);
-            the_imgui->SetColumnWidth(0, 30.0f);
-            the_imgui->SetColumnWidth(1, 30.0f);
-            the_imgui->SetColumnWidth(2, 100.0f);
-            the_imgui->Text("#");
-            the_imgui->NextColumn();
-            the_imgui->Text("Bus");
-            the_imgui->NextColumn();
-            the_imgui->Text("Progress");
-            the_imgui->NextColumn();
-            the_imgui->Text("Source");
-            the_imgui->NextColumn();
-            the_imgui->Separator();
-
-            the_imgui->Columns(1, NULL, false);
-            the_imgui->BeginChildStr("mixer_sound_list",
-                                  sx_vec2f(the_imgui->GetWindowContentRegionWidth(), -1.0f), false, 0);
-            the_imgui->Columns(4, NULL, false);
-            the_imgui->SetColumnWidth(0, 30.0f);
-            the_imgui->SetColumnWidth(1, 30.0f);
-            the_imgui->SetColumnWidth(2, 100.0f);
             ImGuiListClipper clipper;
             the_imgui->ImGuiListClipper_Begin(&clipper, num_sounds, -1.0f);
             while (the_imgui->ImGuiListClipper_Step(&clipper)) {
                 int start = num_sounds - clipper.DisplayStart - 1;
                 int end = num_sounds - clipper.DisplayEnd;
                 for (int i = start; i >= end; i--) {
+                    the_imgui->TableNextRow(0, 0);
+
                     rizz_snd_instance insthandle = g_snd.playlist[i];
                     sx_assert_always(sx_handle_valid(g_snd.instance_handles, insthandle.id));
 
@@ -1279,24 +1267,23 @@ static void snd__show_mixer_tab_contents()
                     sx_assert_always(sx_handle_valid(g_snd.source_handles, inst->srchandle.id));
                     const snd__source* src = &g_snd.sources[sx_handle_index(inst->srchandle.id)];
 
+                    the_imgui->TableNextColumn();
                     the_imgui->Text("%d", i + 1);
-                    the_imgui->NextColumn();
 
+                    the_imgui->TableNextColumn();
                     the_imgui->Text("%d", inst->bus_id);
-                    the_imgui->NextColumn();
 
                     float progress = (float)inst->pos / (float)src->num_frames;
+                    the_imgui->TableNextColumn();
                     the_imgui->ProgressBar(progress, sx_vec2f(-1.0f, 15.0f), NULL);
-                    the_imgui->NextColumn();
 
                     sx_assert(src->name);
+                    the_imgui->TableNextColumn();
                     the_imgui->Text(sx_strpool_cstr(g_snd.name_pool, src->name));
-                    the_imgui->NextColumn();
                 }
             }
             the_imgui->ImGuiListClipper_End(&clipper);
-            the_imgui->EndChild();
-            the_imgui->Columns(1, NULL, false);
+            the_imgui->EndTable();
         }
     } // scope
 }
@@ -1314,55 +1301,52 @@ static void snd__show_sources_tab_contents()
     static int selected_source = -1;
     int num_sources = g_snd.source_handles->count;
 
-    the_imgui->Columns(3, NULL, false);
-    the_imgui->SetColumnWidth(0, 30.0f);
-    the_imgui->SetColumnWidth(1, 35.0f);
-    the_imgui->Text("#");
-    the_imgui->NextColumn();
-    the_imgui->Text("Play");
-    the_imgui->NextColumn();
-    the_imgui->Text("Name");
-    the_imgui->NextColumn();
-    the_imgui->Separator();
-    the_imgui->Columns(1, NULL, false);
-    the_imgui->BeginChildStr("source_list", sx_vec2f(the_imgui->GetWindowContentRegionWidth(), 200.0f),
-                          false, 0);
-    the_imgui->Columns(3, NULL, false);
-    the_imgui->SetColumnWidth(0, 30.0f);
-    the_imgui->SetColumnWidth(1, 35.0f);
-    ImGuiListClipper clipper;
-    the_imgui->ImGuiListClipper_Begin(&clipper, num_sources, -1.0f);
-    char row_str[32];
-    char pcount_str[32];
-    while (the_imgui->ImGuiListClipper_Step(&clipper)) {
-        int start = num_sources - clipper.DisplayStart - 1;
-        int end = num_sources - clipper.DisplayEnd;
-        for (int i = start; i >= end; i--) {
-            sx_handle_t handle = sx_handle_at(g_snd.source_handles, i);
-            sx_assert_always(sx_handle_valid(g_snd.source_handles, handle));
-            const snd__source* src = &g_snd.sources[sx_handle_index(handle)];
+    if (the_imgui->BeginTable("Sound Sources", 3, 
+                              ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_BordersOuterH|ImGuiTableFlags_SizingFixedFit, 
+                              SX_VEC2_ZERO, 0)) {
+        the_imgui->TableSetupColumn("#", 0, 30.0f, 0);
+        the_imgui->TableSetupColumn("Play", 0, 35.0f, 0);
+        the_imgui->TableSetupColumn("Name", 0, 0, 0);
+        the_imgui->TableHeadersRow();
 
-            sx_snprintf(row_str, sizeof(row_str), "%d", i + 1);
-            if (the_imgui->SelectableBool(row_str, selected_source == i,
-                                      ImGuiSelectableFlags_SpanAllColumns, SX_VEC2_ZERO)) {
-                selected_source = i;
+        ImGuiListClipper clipper;
+        the_imgui->ImGuiListClipper_Begin(&clipper, num_sources, -1.0f);
+        char row_str[32];
+        char pcount_str[32];
+        while (the_imgui->ImGuiListClipper_Step(&clipper)) {
+
+            int start = num_sources - clipper.DisplayStart - 1;
+            int end = num_sources - clipper.DisplayEnd;
+            for (int i = start; i >= end; i--) {
+                the_imgui->TableNextRow(0, 0);
+
+                sx_handle_t handle = sx_handle_at(g_snd.source_handles, i);
+                sx_assert_always(sx_handle_valid(g_snd.source_handles, handle));
+                const snd__source* src = &g_snd.sources[sx_handle_index(handle)];
+
+                the_imgui->TableSetColumnIndex(0);
+                sx_snprintf(row_str, sizeof(row_str), "%d", i + 1);
+                if (the_imgui->Selectable_Bool(row_str, selected_source == i,
+                                               ImGuiSelectableFlags_SpanAllColumns, SX_VEC2_ZERO)) {
+                    selected_source = i;
+                }
+
+                the_imgui->TableSetColumnIndex(1);
+                sx_snprintf(pcount_str, sizeof(pcount_str), "%d", src->num_plays);
+                the_imgui->ColorButton(pcount_str,
+                                       src->num_plays > 0 ? sx_vec4f(0.0f, 0.8f, 0.1f, 1.0f)
+                                                          : sx_vec4f(0.3f, 0.3f, 0.3f, 1.0f),
+                                       0, sx_vec2f(14.0f, 14.0f));
+
+                the_imgui->TableSetColumnIndex(2);
+                the_imgui->Text(sx_strpool_cstr(g_snd.name_pool, src->name));                
             }
-            the_imgui->NextColumn();
-
-            sx_snprintf(pcount_str, sizeof(pcount_str), "%d", src->num_plays);
-            the_imgui->ColorButton(pcount_str,
-                                   src->num_plays > 0 ? sx_vec4f(0.0f, 0.8f, 0.1f, 1.0f)
-                                                      : sx_vec4f(0.3f, 0.3f, 0.3f, 1.0f),
-                                   0, sx_vec2f(14.0f, 14.0f));
-            the_imgui->NextColumn();
-
-            the_imgui->Text(sx_strpool_cstr(g_snd.name_pool, src->name));
-            the_imgui->NextColumn();
         }
-    }
-    the_imgui->ImGuiListClipper_End(&clipper);
-    the_imgui->EndChild();
-    the_imgui->Columns(1, NULL, false);
+        the_imgui->ImGuiListClipper_End(&clipper);
+
+        the_imgui->EndTable();
+    } // end:sound source table
+
     the_imgui->Separator();
 
     if (selected_source != -1) {
@@ -1401,7 +1385,7 @@ static void snd__show_debugger(bool* p_open)
         return;
     }
 
-    the_imgui->SetNextWindowSizeConstraints(sx_vec2f(250.0f, 500.0f), sx_vec2f(FLT_MAX, FLT_MAX),
+    the_imgui->SetNextWindowSizeConstraints(sx_vec2f(450.0f, 500.0f), sx_vec2f(FLT_MAX, FLT_MAX),
                                             NULL, NULL);
     if (the_imgui->Begin("Sound Debugger", p_open, 0)) {
         if (the_imgui->BeginTabBar("sound_tab", 0)) {

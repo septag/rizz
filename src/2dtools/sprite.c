@@ -2017,7 +2017,7 @@ void sprite__draw_wireframe(rizz_sprite spr, const sx_mat4* vp, const sx_mat3* m
 }
 
 static void sprite__show_sprite_preview(sprite__data* spr) {
-    the_imgui->BeginChildStr("sprite_preview", SX_VEC2_ZERO, false, 0);
+    the_imgui->BeginChild_Str("sprite_preview", SX_VEC2_ZERO, false, 0);
     {
         ImDrawList* draw_list = the_imgui->GetWindowDrawList();
         sx_vec2     wsize;
@@ -2107,7 +2107,7 @@ static void sprite__show_sprite_tab_contents(sprite__data* spr) {
 
     // 
     the_imgui->Columns(2, "sprite_cols", true);
-    the_imgui->BeginChildStr("sprite_info", SX_VEC2_ZERO, false, 0);
+    the_imgui->BeginChild_Str("sprite_info", SX_VEC2_ZERO, false, 0);
 
     the_imgui->Columns(2, "sprite_info_cols", false);
     the_imgui->SetColumnWidth(0, 70.0f);
@@ -2153,7 +2153,7 @@ static void sprite__show_animclip_tab_contents(sprite__data* spr)
 
     the_imgui->Columns(2, "animclip_cols", true);
 
-    the_imgui->BeginChildStr("animclip_info", SX_VEC2_ZERO, false, 0);
+    the_imgui->BeginChild_Str("animclip_info", SX_VEC2_ZERO, false, 0);
     the_imgui->Columns(2, "animclip_info_cols", false);
     the_imgui->SetColumnWidth(0, 80.0f);
 
@@ -2197,7 +2197,7 @@ static void sprite__show_animctrl_tab_contents(sprite__data* spr)
 
     the_imgui->Columns(2, "animctrl_cols", true);
 
-    the_imgui->BeginChildStr("animctrl_info", SX_VEC2_ZERO, false, 0);
+    the_imgui->BeginChild_Str("animctrl_info", SX_VEC2_ZERO, false, 0);
     the_imgui->Columns(2, "animctrl_info_cols", false);
     the_imgui->SetColumnWidth(0, 80.0f);
 
@@ -2207,8 +2207,8 @@ static void sprite__show_animctrl_tab_contents(sprite__data* spr)
     the_imgui->NextColumn();
     the_imgui->Columns(1, NULL, false);
 
-    if (the_imgui->TreeNodeExStr("Params", ImGuiTreeNodeFlags_DefaultOpen|ImGuiTreeNodeFlags_CollapsingHeader)) {
-        the_imgui->BeginChildStr("params", SX_VEC2_ZERO, false, 0);
+    if (the_imgui->TreeNodeEx_Str("Params", ImGuiTreeNodeFlags_DefaultOpen|ImGuiTreeNodeFlags_CollapsingHeader)) {
+        the_imgui->BeginChild_Str("params", SX_VEC2_ZERO, false, 0);
         the_imgui->Columns(2, "params_cols", false);
         the_imgui->SetColumnWidth(0, 80.0f);
         for (sprite__animctrl_param* p = &ctrl->params[0]; p->name_hash; p++) {
@@ -2218,7 +2218,7 @@ static void sprite__show_animctrl_tab_contents(sprite__data* spr)
             // check type
             char id[32];
             sx_snprintf(id, sizeof(id), "param_%s", p->name);
-            the_imgui->PushIDStr(id);
+            the_imgui->PushID_Str(id);
             switch (p->type) {
             case RIZZ_SPRITE_PARAMTYPE_BOOL:
                 the_imgui->Checkbox("", &p->value.b);
@@ -2271,8 +2271,8 @@ void sprite__show_debugger(bool* p_open)
         the_imgui->Separator();
 
         the_imgui->Columns(1, NULL, false);
-        the_imgui->BeginChildStr("sprite_list",
-                              sx_vec2f(the_imgui->GetWindowContentRegionWidth(), 100.0f), false, 0);
+        the_imgui->BeginChild_Str("sprite_list",
+                                  sx_vec2f(the_imgui->GetWindowContentRegionWidth(), 100.0f), false, 0);
         the_imgui->Columns(3, NULL, false);
 
         ImGuiListClipper clipper;
@@ -2287,8 +2287,8 @@ void sprite__show_debugger(bool* p_open)
                 sprite__data* spr = &g_spr.sprites[sx_handle_index(handle)];
                 sx_snprintf(handle_str, sizeof(handle_str), "0x%x", handle);
                 the_imgui->SetColumnWidth(0, 70.0f);
-                if (the_imgui->SelectableBool(handle_str, selected_sprite == i,
-                                          ImGuiSelectableFlags_SpanAllColumns, SX_VEC2_ZERO)) {
+                if (the_imgui->Selectable_Bool(handle_str, selected_sprite == i,
+                                               ImGuiSelectableFlags_SpanAllColumns, SX_VEC2_ZERO)) {
                     selected_sprite = i;
                 }
                 the_imgui->NextColumn();

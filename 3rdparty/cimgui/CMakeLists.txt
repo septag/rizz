@@ -11,7 +11,8 @@ set(IMGUI_SOURCES cimgui.cpp
                   imgui/imgui.h 
                   imgui/imgui.cpp 
                   imgui/imgui_draw.cpp 
-                  imgui/imgui_widgets.cpp)
+                  imgui/imgui_widgets.cpp 
+                  imgui/imgui_tables.cpp)
 
 add_definitions("-DIMGUI_IMPL_API=extern \"C\" ")
 

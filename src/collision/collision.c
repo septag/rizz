@@ -1220,7 +1220,7 @@ static void coll_debug_raycast(rizz_coll_context* ctx, float opacity,
             float color[3];
             sx_color_HSVtoRGB(color, hsv);
 
-            the_imgui->ImDrawList_AddRect(draw_list, v1, v2, SX_COLOR_GREEN.n, 0, ImDrawCornerFlags_All, 1.0f);
+            the_imgui->ImDrawList_AddRect(draw_list, v1, v2, SX_COLOR_GREEN.n, 0, ImDrawFlags_None, 1.0f);
             the_imgui->ImDrawList_AddRectFilled(
                 draw_list, v1, v2, sx_color4f(color[0], color[1], color[2], 0.3f).n, 0, 0);
         }

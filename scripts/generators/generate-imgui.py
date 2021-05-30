@@ -6,16 +6,16 @@
 # You must first preprocess the cimgui.h before submitting it to this program
 # Here's clang command to preprocess the file first:
 # Make sure to extract fake_libc_includes.zip to the current directory
-#   clang -P -E -DCIMGUI_DEFINE_ENUMS_AND_STRUCTS -Ifake_libc_include cimgui.h -D__int64="long long" -D"__declspec(dllexport)=" -Dextern="" > cimgui.i
-#   python generate-imgui.py cimgui.i imgui-defs.h
-#   Now extract the bindings and copy/paste them into imgui.h/imgui.c
-#   change ImVec2 and ImVec4 typedefs:
+#   1) clang -P -E -DCIMGUI_DEFINE_ENUMS_AND_STRUCTS -Ifake_libc_include cimgui.h -D__int64="long long" -D"__declspec(dllexport)=" -Dextern="" > cimgui.i
+#   2) python generate-imgui.py cimgui.i imgui-defs.h
+#   3) Copy/Paste all the type parts (after CIMGUI_DEFINE_ENUMS_AND_STRUCTS in cimgui.h up to the API defs) to imgui.h
+#   4) Now extract the API bindings and copy/paste them into imgui.h/imgui.c
+#   5) change ImVec2 and ImVec4 typedefs:
 #       typedef union sx_vec2 ImVec2;
 #       typedef union sx_vec4 ImVec4;
-#   remove 'struct ImNewDummy {};'
-#   in imgui.h, change `#ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS` to `#if !defined(CIMGUI_DEFINE_ENUMS_AND_STRUCTS) && !defined(RIZZ__IMGUI)`
-#   Change `.Render = imgui__render` in the api struct def
-#   Remove all these references in cimgui.cpp and imgui.c:
+#   6) in imgui.h, cimgui.h, change `#ifndef CIMGUI_DEFINE_ENUMS_AND_STRUCTS` to `#if !defined(CIMGUI_DEFINE_ENUMS_AND_STRUCTS) && !defined(RIZZ__IMGUI)` 
+#   7) Change `.Render = imgui__render` in the api struct def
+#   8) Remove all these references in cimgui.cpp and imgui.c:
 #       ImGui::ShowDemoWindow
 #       ImGui::ShowAboutWindow
 #       ImGui::ShowStyleEditor

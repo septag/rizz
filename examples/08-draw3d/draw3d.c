@@ -223,15 +223,15 @@ static void update(float dt)
             g_draw3d.light_dir.y = 0.1f;
         }
 
-        if (the_imgui->RadioButtonBool("Translate", g_draw3d.gizmo_type == GIZMO_TYPE_TRANSLATE)) {
+        if (the_imgui->RadioButton_Bool("Translate", g_draw3d.gizmo_type == GIZMO_TYPE_TRANSLATE)) {
             g_draw3d.gizmo_type = GIZMO_TYPE_TRANSLATE;
         }
         the_imgui->SameLine(0, -1);
-        if (the_imgui->RadioButtonBool("Rotate", g_draw3d.gizmo_type == GIZMO_TYPE_ROTATE)) {
+        if (the_imgui->RadioButton_Bool("Rotate", g_draw3d.gizmo_type == GIZMO_TYPE_ROTATE)) {
             g_draw3d.gizmo_type = GIZMO_TYPE_ROTATE;
         }
         the_imgui->SameLine(0, -1);
-        if (the_imgui->RadioButtonBool("Scale", g_draw3d.gizmo_type == GIZMO_TYPE_SCALE)) {
+        if (the_imgui->RadioButton_Bool("Scale", g_draw3d.gizmo_type == GIZMO_TYPE_SCALE)) {
             g_draw3d.gizmo_type = GIZMO_TYPE_SCALE;
         }
 
@@ -242,7 +242,7 @@ static void update(float dt)
         if (the_imgui->BeginCombo("Model", k_models[g_draw3d.model_index], 0)) {
             for (int i = 0; i < 3; i++) {
                 bool selected = g_draw3d.model_index == i;
-                if (the_imgui->SelectableBool(k_models[i], selected, 0, SX_VEC2_ZERO)) {
+                if (the_imgui->Selectable_Bool(k_models[i], selected, 0, SX_VEC2_ZERO)) {
                     g_draw3d.model_index = i;
                 }
                 if (selected) {

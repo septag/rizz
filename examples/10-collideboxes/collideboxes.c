@@ -234,7 +234,7 @@ static void update(float dt)
                 "Collision Heatmap",
                 "Entity Heatmap"
             };
-            the_imgui->ComboStr_arr("Collision vis Mode", (int*)&g_coll.collision_vis_mode, items, 3, -1);
+            the_imgui->Combo_Str_arr("Collision vis Mode", (int*)&g_coll.collision_vis_mode, items, 3, -1);
             the_imgui->SliderFloat("Raycast len", &g_coll.raycast_len, 1.0f, 100.0f, "%.0f", 0);
             if (the_imgui->Checkbox("Debug Raycast", &g_coll.show_raycast_debugger)) {
                 if (g_coll.show_raycast_debugger) {
@@ -246,7 +246,7 @@ static void update(float dt)
                 "Rayhit Heatmap",
                 "Raymarch Heatmap"
             };
-            the_imgui->ComboStr_arr("Raycast vis Mode", (int*)&g_coll.raycast_vis_mode, items2, 3, -1);        
+            the_imgui->Combo_Str_arr("Raycast vis Mode", (int*)&g_coll.raycast_vis_mode, items2, 3, -1);        
             the_imgui->LabelText("Collisions", "%d", num_pairs);
         } 
         the_imgui->LabelText("Update time", "%.3f ms", update_time);

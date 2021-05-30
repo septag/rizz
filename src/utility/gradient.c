@@ -103,7 +103,7 @@ void gradient__eval(const rizz_gradient* gradient, float t, sx_color* outcolor)
 
 void gradient__edit(const rizz_api_imgui* gui, const char* label, rizz_gradient* gradient)
 {
-    gui->PushIDStr(label);
+    gui->PushID_Str(label);
     sx_vec2 rpos, rsize, mpos;
     gui->GetMousePos(&mpos);
     gui->GetCursorScreenPos(&rpos);
@@ -149,7 +149,7 @@ void gradient__edit(const rizz_api_imgui* gui, const char* label, rizz_gradient*
     // draw keys
     int del_i = -1;
     for (int i = 0; i < count; i++) {
-        gui->PushIDInt(i);
+        gui->PushID_Int(i);
         sx_color ic = gradient->keys[i].color;
         float it = gradient->keys[i].t;
         sx_vec2 kpos = sx_vec2f(rpos.x + it * rsize.x, rpos.y + rsize.y * 0.5f);

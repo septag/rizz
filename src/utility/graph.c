@@ -125,9 +125,9 @@ void graph__edit_multiple(const rizz_api_imgui* gui, rizz_graph** graphs, const 
     rizz_graph* graph = graphs[*selected];
 
     if (names && names[0])
-        gui->PushIDStr(names[0]);
+        gui->PushID_Str(names[0]);
     else
-        gui->PushIDStr("graph");
+        gui->PushID_Str("graph");
 
     sx_vec2 rpos, rsize, mpos;
     gui->GetMousePos(&mpos);
@@ -202,7 +202,7 @@ void graph__edit_multiple(const rizz_api_imgui* gui, rizz_graph** graphs, const 
     // draw keys
     int del_i = -1;
     for (int i = 0; i < count; i++) {
-        gui->PushIDInt(i);
+        gui->PushID_Int(i);
         sx_vec2 kpos = sx_vec2f(rpos.x + graph->keys[i].t * rsize.x,
                                 rpos.y + rsize.y * (1 - graph->keys[i].value));
 
@@ -275,7 +275,7 @@ void graph__edit_multiple(const rizz_api_imgui* gui, rizz_graph** graphs, const 
     if (names) {
         gui->SameLine(0, 4);
         if (num_graphs > 1) {
-            gui->ListBoxStr_arr("", selected, names, num_graphs, 4 /* TODO: calc listbox height*/);
+            gui->ListBox_Str_arr("", selected, names, num_graphs, 4 /* TODO: calc listbox height*/);
         } else {
             gui->Text(names[0]);
         }
