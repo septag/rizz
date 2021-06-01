@@ -1,5 +1,6 @@
-#include "rizz/imgui.h"
 #include "rizz/rizz.h"
+#include "rizz/imgui.h"
+#include "rizz/imgui-extra.h"
 
 #include "rizz/sound.h"
 
@@ -30,6 +31,7 @@ RIZZ_STATE static rizz_api_core* the_core;
 RIZZ_STATE static rizz_api_asset* the_asset;
 RIZZ_STATE static rizz_api_refl* the_refl;
 RIZZ_STATE static rizz_api_imgui* the_imgui;
+RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
 
 RIZZ_STATE static const sx_alloc* g_snd_alloc;
 
@@ -1202,8 +1204,7 @@ static void snd__plot_samples_wav(const char* label, const float* samples, int n
 
 static void snd__show_mixer_tab_contents()
 {
-    the_imgui->LabelText("sample_rate", "%d", saudio_sample_rate());
-    the_imgui->LabelText("channels", "%d", saudio_channels());
+    the_imguix->label("channels", "%d", saudio_channels());
     the_imgui->SliderFloat("master", &g_snd.master_volume, 0.0f, 1.2f, "%.1f", 0);
     the_imgui->SliderFloat("pan", &g_snd.master_pan, -1.0f, 1.0f, "%.1f", 0);
 
@@ -1242,14 +1243,15 @@ static void snd__show_mixer_tab_contents()
         the_imgui->Separator();
 
         if (the_imgui->BeginTable("Sound Sources", 4, 
-                                  ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_BordersOuterH|ImGuiTableFlags_SizingFixedFit|ImGuiTableFlags_RowBg,
+                                  ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_BordersOuterH|
+                                  ImGuiTableFlags_SizingFixedFit|ImGuiTableFlags_RowBg|ImGuiTableFlags_ScrollY,
                                   SX_VEC2_ZERO, 0)) {
             int num_sounds = g_snd.num_plays;
             the_imgui->GetContentRegionAvail(&region);
             the_imgui->TableSetupColumn("#", 0, 30.0f, 0);
             the_imgui->TableSetupColumn("Bus", 0, 30.0f, 0);
             the_imgui->TableSetupColumn("Progres", 0, 100.0f, 0);
-            the_imgui->TableSetupColumn("Source", 0, region.x, 0);
+            the_imgui->TableSetupColumn("Source", 0, sx_max(50.0f, region.x - 160.0f), 0);
             the_imgui->TableHeadersRow();
 
             ImGuiListClipper clipper;
@@ -1301,8 +1303,12 @@ static void snd__show_sources_tab_contents()
     static int selected_source = -1;
     int num_sources = g_snd.source_handles->count;
 
+    sx_vec2 region;
+    the_imgui->GetContentRegionAvail(&region);
+    the_imgui->BeginChild_Str("SourcesContainer", sx_vec2f(0, region.y*0.5f), false, 0);
     if (the_imgui->BeginTable("Sound Sources", 3, 
-                              ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_BordersOuterH|ImGuiTableFlags_SizingFixedFit, 
+                              ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_BordersOuterH|
+                              ImGuiTableFlags_SizingFixedFit|ImGuiTableFlags_ScrollY, 
                               SX_VEC2_ZERO, 0)) {
         the_imgui->TableSetupColumn("#", 0, 30.0f, 0);
         the_imgui->TableSetupColumn("Play", 0, 35.0f, 0);
@@ -1346,6 +1352,7 @@ static void snd__show_sources_tab_contents()
 
         the_imgui->EndTable();
     } // end:sound source table
+    the_imgui->EndChild();
 
     the_imgui->Separator();
 
@@ -1355,17 +1362,15 @@ static void snd__show_sources_tab_contents()
         const snd__source* src = &g_snd.sources[sx_handle_index(handle)];
         snd__plot_samples_wav("##source_plot", src->samples, src->num_frames, 70);
 
+        const float offset = 100.0f;
         the_imgui->Columns(2, "source_info_cols", true);
-        the_imgui->LabelText("sample_rate", "%d", src->sample_rate);
-        the_imgui->LabelText("channels", "%d", 1);
-        the_imgui->LabelText("volume", "%.1f", src->volume);
+        the_imguix->label_spacing(offset, 0, "sample_rate", "%d", src->sample_rate);
+        the_imguix->label_spacing(offset, 0, "channels", "%d", 1);
+        the_imguix->label_spacing(offset, 0, "volume", "%.1f", src->volume);
         float duration = snd__source_duration((rizz_snd_source){ handle });
-        the_imgui->LabelText("duration", "%.3fs (%.2fms)", duration, duration * 1000.0f);
-        bool looping = (src->flags & SND_SOURCEFLAG_LOOPING) ? true : false;
-        bool singleton = (src->flags & SND_SOURCEFLAG_SINGLETON) ? true : false;
-        the_imgui->Checkbox("looping", &looping);
-        the_imgui->SameLine(0, -1.0f);
-        the_imgui->Checkbox("singleton", &singleton);
+        the_imguix->label_spacing(offset, 0, "duration", "%.3fs (%.2fms)", duration, duration * 1000.0f);
+        the_imguix->label_spacing(offset, 0, "looping", (src->flags & SND_SOURCEFLAG_LOOPING) ? "Yes" : "No");
+        the_imguix->label_spacing(offset, 0, "singleton", (src->flags & SND_SOURCEFLAG_SINGLETON) ? "Yes" : "No");
 
         the_imgui->NextColumn();
         static int bus_id = 0;
@@ -1806,6 +1811,7 @@ rizz_plugin_decl_main(sound, plugin, e)
         the_asset = the_plugin->get_api(RIZZ_API_ASSET, 0);
         the_refl = the_plugin->get_api(RIZZ_API_REFLECT, 0);
         the_imgui = the_plugin->get_api_byname("imgui", 0);
+        the_imguix = the_plugin->get_api_byname("imgui_extra", 0);
 
         if (!snd__init()) {
             return -1;

@@ -234,7 +234,7 @@ static void imgui__draw_log(bool* p_open)
 
         if (g_log.buffer->size && 
             the__imgui.BeginTable("Sound Sources", 3, 
-                                  ImGuiTableFlags_Resizable|ImGuiTableFlags_RowBg|
+                                  ImGuiTableFlags_Resizable|ImGuiTableFlags_RowBg|ImGuiTableFlags_ScrollY|
                                   ImGuiTableFlags_BordersOuterH|ImGuiTableFlags_SizingStretchProp, 
                                   SX_VEC2_ZERO, 0)) {
 

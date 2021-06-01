@@ -1084,7 +1084,7 @@ static void apply_theme(void)
 
     style->ScrollbarSize = 18;
     style->GrabMinSize = 12;
-    style->WindowBorderSize = 0;
+    style->WindowBorderSize = 1;
     style->ChildBorderSize = 0;
     style->PopupBorderSize = 0;
     style->FrameBorderSize = 0;
@@ -1101,7 +1101,6 @@ static void apply_theme(void)
     style->AntiAliasedFill = true;
     style->AntiAliasedLines = true;
 
-    // clang-format off
     style->Colors[ImGuiCol_Text]                   = sx_vec4f(1.00f, 1.00f, 1.00f, 0.89f);
     style->Colors[ImGuiCol_TextDisabled]           = sx_vec4f(1.00f, 1.00f, 1.00f, 0.39f);
     style->Colors[ImGuiCol_WindowBg]               = sx_vec4f(0.20f, 0.20f, 0.20f, 1.00f);
@@ -1150,7 +1149,6 @@ static void apply_theme(void)
     style->Colors[ImGuiCol_NavWindowingHighlight]  = sx_vec4f(1.00f, 1.00f, 1.00f, 0.71f);
     style->Colors[ImGuiCol_NavWindowingDimBg]      = sx_vec4f(0.80f, 0.80f, 0.80f, 0.20f);
     style->Colors[ImGuiCol_ModalWindowDimBg]       = sx_vec4f(0.80f, 0.80f, 0.80f, 0.35f);
-    // clang-format on
 }
 
 static bool imgui__init(void)
@@ -1602,6 +1600,60 @@ static sx_vec2 imgui__project_to_screen(const sx_vec3 pt, const sx_mat4* mvp, co
     return sx_vec2f(trans.x, trans.y);
 }
 
+static void imgui__labelv_all(const ImVec4* name_color, const ImVec4* text_color, float offset,
+                              float spacing, const char* name, const char* fmt, va_list args)
+{
+    char formatted[512];
+    char name_w_colon[128];
+    sx_strcat(sx_strcpy(name_w_colon, sizeof(name_w_colon), name), sizeof(name_w_colon), ":");
+    sx_vsnprintf(formatted, sizeof(formatted), fmt, args);
+
+    the__imgui.TextColored(*name_color, name_w_colon);
+    the__imgui.SameLine(offset, spacing);
+    the__imgui.TextColored(*text_color, formatted);
+}
+
+static void imgui__label(const char* name, const char* fmt, ...)
+{
+    const ImVec4* text_color = the__imgui.GetStyleColorVec4(ImGuiCol_Text);
+    const ImVec4* name_color = the__imgui.GetStyleColorVec4(ImGuiCol_TextDisabled);
+
+    va_list args;
+    va_start(args, fmt);
+    imgui__labelv_all(name_color, text_color, 0, -1.0f, name, fmt, args);
+    va_end(args);
+}
+
+static void imgui__label_colored(const ImVec4* name_color, const ImVec4* text_color,
+                                 const char* name, const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    imgui__labelv_all(name_color, text_color, 0, -1.0f, name, fmt, args);
+    va_end(args);
+}
+
+static void imgui__label_spacing(float offset, float spacing, const char* name, const char* fmt, ...)
+{
+    const ImVec4* text_color = the__imgui.GetStyleColorVec4(ImGuiCol_Text);
+    const ImVec4* name_color = the__imgui.GetStyleColorVec4(ImGuiCol_TextDisabled);
+
+    va_list args;
+    va_start(args, fmt);
+    imgui__labelv_all(name_color, text_color, offset, spacing, name, fmt, args);
+    va_end(args);
+}
+
+static void imgui__label_colored_spacing(const ImVec4* name_color, const ImVec4* text_color,
+                                         float offset, float spacing, const char* name,
+                                         const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    imgui__labelv_all(name_color, text_color, offset, spacing, name, fmt, args);
+    va_end(args);
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // memory debugger
 static void imgui__dual_progress_bar(float fraction1, float fraction2, const sx_vec2 ctrl_size,
@@ -1729,27 +1781,34 @@ static void imgui__graphics_debugger(const rizz_gfx_trace_info* info, bool* p_op
         if (the__imgui.BeginTabBar("#gfx_debugger_tabs", 0)) {
             if (the__imgui.BeginTabItem("General", NULL, 0)) {
                 const rizz_gfx_perframe_trace_info* pf = &info->pf[RIZZ_GFX_TRACE_COMMON];
-                the__imgui.LabelText("Fps", "%.1f", the_core->fps());
-                the__imgui.LabelText("Fps (mean)", "%.1f", the_core->fps_mean());
-                the__imgui.LabelText("FrameTime (ms)", "%.1f", ft);
 
+                const float text_offset = 120.0f;
                 the__imgui.PushItemWidth(-1);
                 the__imgui.PlotHistogram_FloatPtr("##Ft_plot", fts, ft_count, 0, NULL, 0, 32.0f, 
                                                   sx_vec2f(0, 50.0f), sizeof(float));
                 the__imgui.PopItemWidth();
 
-                the__imgui.LabelText("Draws", "%d", pf->num_draws);
-                the__imgui.LabelText("Instances", "%d", pf->num_instances);
-                the__imgui.LabelText("Elements", "%d", pf->num_elements);
+                if (the__imgui.BeginTable("PerFrame", 3, ImGuiTableFlags_SizingStretchSame, SX_VEC2_ZERO, 0)) {
+                    the__imgui.TableNextColumn();
+                    imgui__label_spacing(text_offset, -1.0f, "Fps", "%.1f", the_core->fps());
+                    imgui__label_spacing(text_offset, -1.0f, "Fps (mean)", "%.1f", the_core->fps_mean());
+                    imgui__label_spacing(text_offset, -1.0f, "FrameTime (ms)", "%.1f", ft);
+                    the__imgui.TableNextColumn();
+                    imgui__label_spacing(text_offset, -1.0f, "Draws", "%d", pf->num_draws);
+                    imgui__label_spacing(text_offset, -1.0f, "Instances", "%d", pf->num_instances);
+                    imgui__label_spacing(text_offset, -1.0f, "Elements", "%d", pf->num_elements);
+                    the__imgui.TableNextColumn();
+                    imgui__label_spacing(text_offset, -1.0f, "Active Pipelines", "%d", pf->num_apply_pipelines);
+                    imgui__label_spacing(text_offset, -1.0f, "Active Passes", "%d", pf->num_apply_passes);
+                    the__imgui.EndTable();
+                }
                 the__imgui.Separator();
-                the__imgui.LabelText("Active Pipelines", "%d", pf->num_apply_pipelines);
-                the__imgui.LabelText("Active Passes", "%d", pf->num_apply_passes);
-                the__imgui.Separator();
-                the__imgui.LabelText("Pipelines", "%d", info->num_pipelines);
-                the__imgui.LabelText("Shaders", "%d", info->num_shaders);
-                the__imgui.LabelText("Passes", "%d", info->num_passes);
-                the__imgui.LabelText("Images", "%d", info->num_images);
-                the__imgui.LabelText("Buffers", "%d", info->num_buffers);
+                
+                imgui__label_spacing(text_offset, -1.0f, "Pipelines", "%d", info->num_pipelines);
+                imgui__label_spacing(text_offset, -1.0f, "Shaders", "%d", info->num_shaders);
+                imgui__label_spacing(text_offset, -1.0f, "Passes", "%d", info->num_passes);
+                imgui__label_spacing(text_offset, -1.0f, "Images", "%d", info->num_images);
+                imgui__label_spacing(text_offset, -1.0f, "Buffers", "%d", info->num_buffers);
                 the__imgui.Separator();
 
                 char size_text[32];
@@ -1812,9 +1871,15 @@ static void imgui__graphics_debugger(const rizz_gfx_trace_info* info, bool* p_op
 
             if (the__imgui.BeginTabItem("ImGui", NULL, 0)) {
                 const rizz_gfx_perframe_trace_info* pf = &info->pf[RIZZ_GFX_TRACE_IMGUI];
-                the__imgui.LabelText("Draws", "%d", pf->num_draws);
-                the__imgui.LabelText("Instances", "%d", pf->num_instances);
-                the__imgui.LabelText("Elements", "%d", pf->num_elements);
+                imgui__label_spacing(100.0f, 0, "Draws", "%d", pf->num_draws);
+                imgui__label_spacing(100.0f, 0, "Instances", "%d", pf->num_instances);
+                imgui__label_spacing(100.0f, 0, "Elements", "%d", pf->num_elements);
+
+                static bool show_metrics = false;
+                the__imgui.Checkbox("Show Metrics", &show_metrics);
+                if (show_metrics) {
+                    the__imgui.ShowMetricsWindow(&show_metrics);
+                }
                 the__imgui.EndTabItem();
             }
 
@@ -1836,7 +1901,7 @@ static void imgui__memory_debugger(const rizz_mem_info* info, bool* p_open)
     if (the__imgui.Begin("Memory Debugger", p_open, 0)) {
         if (the__imgui.TreeNodeEx_Str("Heap", ImGuiTreeNodeFlags_DefaultOpen)) {
             the__imgui.Columns(3, NULL, false);
-            the__imgui.LabelText("Count", "%d", info->heap_count);
+            imgui__label("Count", "%d", info->heap_count);
             the__imgui.NextColumn();
             the__imgui.NextColumn();
             the__imgui.Checkbox("Peaks", &peaks);
@@ -1881,80 +1946,62 @@ static void imgui__memory_debugger(const rizz_mem_info* info, bool* p_open)
                 }
             }
 
-            if (selected_heap != -1) {
+            if (selected_heap != -1 && 
+                the__imgui.BeginTable("HeapAllocs", 6, 
+                                      ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_BordersOuterH|
+                                      ImGuiTableFlags_SizingFixedFit|ImGuiTableFlags_RowBg|ImGuiTableFlags_ScrollY,
+                                      SX_VEC2_ZERO, 0)) {
                 char text[32];
                 const rizz_trackalloc_info* t = &info->trackers[selected_heap];
                 ImGuiListClipper clipper;
                 int num_items = t->num_items;
 
                 if (num_items) {
-                    the__imgui.Separator();
-                    the__imgui.Columns(6, NULL, false);
-                    the__imgui.SetColumnWidth(0, 35.0f);
-                    the__imgui.Text("#");
-                    the__imgui.NextColumn();
-                    the__imgui.SetColumnWidth(1, 150.0f);
-                    the__imgui.Text("Ptr");
-                    the__imgui.NextColumn();
-                    the__imgui.SetColumnWidth(2, 50.0f);
-                    the__imgui.Text("Size");
-                    the__imgui.NextColumn();
-                    the__imgui.SetColumnWidth(3, 100.0f);
-                    the__imgui.Text("File");
-                    the__imgui.NextColumn();
-                    the__imgui.SetColumnWidth(4, 200.0f);
-                    the__imgui.Text("Function");
-                    the__imgui.NextColumn();
-                    the__imgui.SetColumnWidth(5, 35.0f);
-                    the__imgui.Text("Line");
-                    the__imgui.NextColumn();
-                    the__imgui.Separator();
+                    the__imgui.TableSetupColumn("#", 0, 35.0f, 0);
+                    the__imgui.TableSetupColumn("Ptr", 0, 150.0f, 0);
+                    the__imgui.TableSetupColumn("Size", 0, 50.0f, 0);
+                    the__imgui.TableSetupColumn("File", 0, 100.0f, 0);
+                    the__imgui.TableSetupColumn("Function", 0, 200.0f, 0);
+                    the__imgui.TableSetupColumn("Line", 0, 35.0f, 0);
+                    the__imgui.TableHeadersRow();
 
-                    the__imgui.Columns(1, NULL, false);
-                    the__imgui.BeginChild_Str("AllocationList",
-                                              sx_vec2f(the__imgui.GetWindowContentRegionWidth(), -1.0f),
-                                              false, 0);
                     the__imgui.Columns(6, NULL, false);
                     the__imgui.ImGuiListClipper_Begin(&clipper, num_items, -1.0f);
                     while (the__imgui.ImGuiListClipper_Step(&clipper)) {
+                        the__imgui.TableNextRow(0, 0);
                         int start = num_items - clipper.DisplayStart - 1;
                         int end = num_items - clipper.DisplayEnd;
                         for (int i = start; i >= end; i--) {
                             const rizz_track_alloc_item* mitem = &t->items[i];
 
                             sx_snprintf(text, sizeof(text), "%d", i + 1);
-                            the__imgui.SetColumnWidth(0, 35.0f);
+                            the__imgui.TableNextColumn();
                             the__imgui.Text(text);
-                            the__imgui.NextColumn();
 
                             sx_snprintf(text, sizeof(text), "0x%p", mitem->ptr);
-                            the__imgui.SetColumnWidth(1, 150.0f);
+                            the__imgui.TableNextColumn();
                             the__imgui.Text(text);
-                            the__imgui.NextColumn();
 
                             sx_snprintf(text, sizeof(text), "%$.2d", mitem->size);
-                            the__imgui.SetColumnWidth(2, 50.0f);
+                            the__imgui.TableNextColumn();
                             the__imgui.Text(text);
-                            the__imgui.NextColumn();
 
-                            the__imgui.SetColumnWidth(3, 100.0f);
+                            the__imgui.TableNextColumn();
                             the__imgui.Text(mitem->file);
-                            the__imgui.NextColumn();
 
-                            the__imgui.SetColumnWidth(4, 200.0f);
+                            the__imgui.TableNextColumn();
                             the__imgui.Text(mitem->func);
-                            the__imgui.NextColumn();
 
-                            the__imgui.SetColumnWidth(5, 35.0f);
+                            the__imgui.TableNextColumn();
                             sx_snprintf(text, sizeof(text), "%d", mitem->line);
                             the__imgui.Text(text);
-                            the__imgui.NextColumn();
                         }
                     }
                     the__imgui.ImGuiListClipper_End(&clipper);
-                    the__imgui.EndChild();
-                }    //
-            }        // list-clipper
+                }    // list-clipper
+
+                the__imgui.EndTable();
+            }        // 
             the__imgui.TreePop();
         }            // Heap
 
@@ -2006,7 +2053,11 @@ static rizz_api_imgui_extra the__imgui_extra = {
     .project_to_screen = imgui__project_to_screen,
     .is_capturing_mouse = imgui__is_capturing_mouse,
     .is_capturing_keyboard = imgui__is_capturing_keyboard,
-    .dock_space_id = imgui__dock_space_id
+    .dock_space_id = imgui__dock_space_id,
+    .label = imgui__label,
+    .label_colored = imgui__label_colored,
+    .label_spacing = imgui__label_spacing,
+    .label_colored_spacing = imgui__label_colored_spacing
 };
 
 rizz_plugin_decl_event_handler(imgui, e)

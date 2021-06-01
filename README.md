@@ -6,6 +6,8 @@
 Rizz (ریز) is a tiny, multi-platform, and minimal game/app development framework, Written in C language. Inspired by [The Machinery](https://ourmachinery.com/) and [sokol libs](https://github.com/floooh/sokol).
 It's currently a work in progress, features and improvements will be added constantly to different platforms.
 
+![preview](examples/screenshots/preview.png)
+
 ## Design and Basic usage
 For more detailed information about design principles, architecture and basic usage of the framework, please read the document [rizz Architecture and Basic usage](http://www.glitterbombg.com/blog/posts/rizz-basics), which is also available in [docs/guide](docs/guide)
 

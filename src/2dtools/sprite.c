@@ -2259,56 +2259,50 @@ void sprite__show_debugger(bool* p_open)
     the_imgui->SetNextWindowSizeConstraints(sx_vec2f(350.0f, 500.0f), sx_vec2f(FLT_MAX, FLT_MAX),
                                             NULL, NULL);
     if (the_imgui->Begin("Sprite Debugger", p_open, 0)) {
-        the_imgui->Columns(3, NULL, false);
-        the_imgui->SetColumnWidth(0, 70.0f);
-        the_imgui->Text("Handle");
-        the_imgui->NextColumn();
-        the_imgui->SetColumnWidth(1, 200.0f);
-        the_imgui->Text("Name");
-        the_imgui->NextColumn();
-        the_imgui->Text("Image");
-        the_imgui->NextColumn();
-        the_imgui->Separator();
+        ImVec2 region;
+        the_imgui->GetContentRegionAvail(&region);
+        the_imgui->BeginChild_Str("SpriteListContainer", sx_vec2f(0, region.y*0.33f), false, 0);
+        if (the_imgui->BeginTable("SpriteList", 3, ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_BordersOuterH|
+                                                   ImGuiTableFlags_SizingFixedFit|ImGuiTableFlags_RowBg|ImGuiTableFlags_ScrollY,
+                                  SX_VEC2_ZERO, 0))
+        {
+            the_imgui->GetContentRegionAvail(&region);
+            the_imgui->TableSetupColumn("Handle", 0, 70.0f, 0);
+            the_imgui->TableSetupColumn("Name", 0, 200.0f, 0);
+            the_imgui->TableSetupColumn("Image", 0, sx_max(50.0f, region.x - 270.0f), 0);
+            the_imgui->TableHeadersRow();
 
-        the_imgui->Columns(1, NULL, false);
-        the_imgui->BeginChild_Str("sprite_list",
-                                  sx_vec2f(the_imgui->GetWindowContentRegionWidth(), 100.0f), false, 0);
-        the_imgui->Columns(3, NULL, false);
+            ImGuiListClipper clipper;
+            char handle_str[32];
+            the_imgui->ImGuiListClipper_Begin(&clipper, num_items, -1.0f);
+            while (the_imgui->ImGuiListClipper_Step(&clipper)) {
+                int start = num_items - clipper.DisplayStart - 1;
+                int end = num_items - clipper.DisplayEnd;
+                for (int i = start; i >= end; i--) {
+                    the_imgui->TableNextRow(0, 0);
 
-        ImGuiListClipper clipper;
-        the_imgui->ImGuiListClipper_Begin(&clipper, num_items, -1.0f);
-        char handle_str[32];
+                    sx_handle_t handle = sx_handle_at(g_spr.sprite_handles, i);
+                    sprite__data* spr = &g_spr.sprites[sx_handle_index(handle)];
+                    sx_snprintf(handle_str, sizeof(handle_str), "0x%x", handle);
+                    the_imgui->TableNextColumn();
+                    if (the_imgui->Selectable_Bool(handle_str, selected_sprite == i,
+                                                   ImGuiSelectableFlags_SpanAllColumns, SX_VEC2_ZERO)) {
+                        selected_sprite = i;
+                    }
 
-        while (the_imgui->ImGuiListClipper_Step(&clipper)) {
-            int start = num_items - clipper.DisplayStart - 1;
-            int end = num_items - clipper.DisplayEnd;
-            for (int i = start; i >= end; i--) {
-                sx_handle_t handle = sx_handle_at(g_spr.sprite_handles, i);
-                sprite__data* spr = &g_spr.sprites[sx_handle_index(handle)];
-                sx_snprintf(handle_str, sizeof(handle_str), "0x%x", handle);
-                the_imgui->SetColumnWidth(0, 70.0f);
-                if (the_imgui->Selectable_Bool(handle_str, selected_sprite == i,
-                                               ImGuiSelectableFlags_SpanAllColumns, SX_VEC2_ZERO)) {
-                    selected_sprite = i;
+                    the_imgui->TableNextColumn();
+                    the_imgui->Text(spr->name ? sx_strpool_cstr(g_spr.name_pool, spr->name) : "[noname]");
+
+                    the_imgui->TableNextColumn();
+                    if (spr->texture.id)  the_imgui->Text(the_asset->path(spr->texture));
+                    else                  the_imgui->Text("");
                 }
-                the_imgui->NextColumn();
-
-                the_imgui->SetColumnWidth(1, 200.0f);
-                the_imgui->Text(spr->name ? sx_strpool_cstr(g_spr.name_pool, spr->name)
-                                          : "[noname]");
-                the_imgui->NextColumn();
-
-                if (spr->texture.id) {
-                    the_imgui->Text(the_asset->path(spr->texture));
-                } else {
-                    the_imgui->Text("");
-                }
-
-                the_imgui->NextColumn();
             }
+            the_imgui->ImGuiListClipper_End(&clipper);
+
+            the_imgui->EndTable();
+            the_imgui->EndChild();
         }
-        the_imgui->ImGuiListClipper_End(&clipper);
-        the_imgui->EndChild();
 
         if (selected_sprite != -1 && the_imgui->BeginTabBar("sprite_tab", 0)) {
             sx_handle_t handle = sx_handle_at(g_spr.sprite_handles, selected_sprite);
