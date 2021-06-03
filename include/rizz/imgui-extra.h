@@ -59,4 +59,10 @@ typedef struct rizz_api_imgui_extra {
     //      ImGuiDockNode* cnode = the_imgui->DockBuilderGetCentralNode(the_imguix->dock_space_id());
     //      SetRenderViewport(cnode->Pos.x, cnode->Pos.y, cnode->Size.x, cnode->Size.y);
     ImGuiID (*dock_space_id)(void);
+
+    void (*label)(const char* name, const char* fmt, ...);
+    void (*label_colored)(const ImVec4* name_color, const ImVec4* text_color, const char* name, const char* fmt, ...);
+    void (*label_spacing)(float offset, float spacing, const char* name, const char* fmt, ...);
+    void (*label_colored_spacing)(const ImVec4* name_color, const ImVec4* text_color, float offset, float spacing, 
+                                  const char* name, const char* fmt, ...);
 } rizz_api_imgui_extra;

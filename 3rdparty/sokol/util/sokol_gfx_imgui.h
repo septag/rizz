@@ -2533,7 +2533,7 @@ _SOKOL_PRIVATE void _sg_imgui_show_shader(sg_imgui_t* ctx, sg_shader shd) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_buffer_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChild_Str("buffer_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChild_Str("buffer_list", sx_vec2f(0,0), true, 0);
     for (int i = 0; i < ctx->buffers.num_slots; i++) {
         sg_buffer buf = ctx->buffers.slots[i].res_id;
         sg_resource_state state = ctx->api->query_buffer_state(buf);
@@ -2548,7 +2548,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_buffer_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_image_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChild_Str("image_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChild_Str("image_list", sx_vec2f(0,0), true, 0);
     for (int i = 0; i < ctx->images.num_slots; i++) {
         sg_image img = ctx->images.slots[i].res_id;
         sg_resource_state state = ctx->api->query_image_state(img);
@@ -2563,7 +2563,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_image_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_shader_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChild_Str("shader_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChild_Str("shader_list", sx_vec2f(0,0), true, 0);
     for (int i = 0; i < ctx->shaders.num_slots; i++) {
         sg_shader shd = ctx->shaders.slots[i].res_id;
         sg_resource_state state = ctx->api->query_shader_state(shd);
@@ -2578,7 +2578,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_shader_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_pipeline_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChild_Str("pipeline_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChild_Str("pipeline_list", sx_vec2f(0,0), true, 0);
     for (int i = 1; i < ctx->pipelines.num_slots; i++) {
         sg_pipeline pip = ctx->pipelines.slots[i].res_id;
         sg_resource_state state = ctx->api->query_pipeline_state(pip);
@@ -2593,7 +2593,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_pipeline_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_pass_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChild_Str("pass_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChild_Str("pass_list", sx_vec2f(0,0), true, 0);
     for (int i = 1; i < ctx->passes.num_slots; i++) {
         sg_pass pass = ctx->passes.slots[i].res_id;
         sg_resource_state state = ctx->api->query_pass_state(pass);
@@ -2608,7 +2608,7 @@ _SOKOL_PRIVATE void _sg_imgui_draw_pass_list(sg_imgui_t* ctx) {
 }
 
 _SOKOL_PRIVATE void _sg_imgui_draw_capture_list(sg_imgui_t* ctx) {
-    the__imgui.BeginChild_Str("capture_list", sx_vec2f(_SG_IMGUI_LIST_WIDTH,0), true, 0);
+    the__imgui.BeginChild_Str("capture_list", sx_vec2f(0,0), true, 0);
     const uint32_t num_items = _sg_imgui_capture_num_read_items(ctx);
     uint64_t group_stack = 1;   /* bit set: group unfolded, cleared: folded */
     for (uint32_t i = 0; i < num_items; i++) {
@@ -3614,44 +3614,77 @@ SOKOL_API_IMPL void sg_imgui_draw_capabilities_window(sg_imgui_t* ctx) {
 
 SOKOL_API_IMPL void sg_imgui_draw_buffers_content(sg_imgui_t* ctx) {
     SOKOL_ASSERT(ctx && (ctx->init_tag == 0xABCDABCD));
-    _sg_imgui_draw_buffer_list(ctx);
-    the__imgui.SameLine(0, -1.0f);
-    _sg_imgui_draw_buffer_panel(ctx, ctx->buffers.sel_buf);
+    if (the__imgui.BeginTable("PassesTbl", 2, ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_SizingStretchSame, 
+                              SX_VEC2_ZERO, 0)) {
+        the__imgui.TableNextColumn();
+        _sg_imgui_draw_buffer_list(ctx);
+        the__imgui.TableNextColumn();
+        _sg_imgui_draw_buffer_panel(ctx, ctx->buffers.sel_buf);
+        the__imgui.EndTable();
+    }
 }
 
 SOKOL_API_IMPL void sg_imgui_draw_images_content(sg_imgui_t* ctx) {
     SOKOL_ASSERT(ctx && (ctx->init_tag == 0xABCDABCD));
-    _sg_imgui_draw_image_list(ctx);
-    the__imgui.SameLine(0, -1.0f);
-    _sg_imgui_draw_image_panel(ctx, ctx->images.sel_img);
+    if (the__imgui.BeginTable("ImagesTbl", 2, ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_SizingStretchSame,
+                              SX_VEC2_ZERO, 0)) {
+        the__imgui.TableNextColumn();
+        _sg_imgui_draw_image_list(ctx);
+        the__imgui.TableNextColumn();
+        _sg_imgui_draw_image_panel(ctx, ctx->images.sel_img);
+        the__imgui.EndTable();
+    }
 }
 
 SOKOL_API_IMPL void sg_imgui_draw_shaders_content(sg_imgui_t* ctx) {
     SOKOL_ASSERT(ctx && (ctx->init_tag == 0xABCDABCD));
-    _sg_imgui_draw_shader_list(ctx);
-    the__imgui.SameLine(0, -1.0f);
-    _sg_imgui_draw_shader_panel(ctx, ctx->shaders.sel_shd);
+    if (the__imgui.BeginTable("ShadersTbl", 2,
+                              ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_SizingStretchSame,
+                              SX_VEC2_ZERO, 0)) {
+        the__imgui.TableNextColumn();
+        _sg_imgui_draw_shader_list(ctx);
+        the__imgui.TableNextColumn();
+        _sg_imgui_draw_shader_panel(ctx, ctx->shaders.sel_shd);
+        the__imgui.EndTable();
+    }
 }
 
 SOKOL_API_IMPL void sg_imgui_draw_pipelines_content(sg_imgui_t* ctx) {
     SOKOL_ASSERT(ctx && (ctx->init_tag == 0xABCDABCD));
-    _sg_imgui_draw_pipeline_list(ctx);
-    the__imgui.SameLine(0, -1.0f);
-    _sg_imgui_draw_pipeline_panel(ctx, ctx->pipelines.sel_pip);
+    if (the__imgui.BeginTable("PipelinesTbl", 2, ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_SizingStretchSame,
+                              SX_VEC2_ZERO, 0)) {
+        the__imgui.TableNextColumn();
+        _sg_imgui_draw_pipeline_list(ctx);
+        the__imgui.TableNextColumn();
+        _sg_imgui_draw_pipeline_panel(ctx, ctx->pipelines.sel_pip);
+        the__imgui.EndTable();
+    }
 }
 
 SOKOL_API_IMPL void sg_imgui_draw_passes_content(sg_imgui_t* ctx) {
     SOKOL_ASSERT(ctx && (ctx->init_tag == 0xABCDABCD));
-    _sg_imgui_draw_pass_list(ctx);
-    the__imgui.SameLine(0, -1.0f);
-    _sg_imgui_draw_pass_panel(ctx, ctx->passes.sel_pass);
+
+    if (the__imgui.BeginTable("PassesTbl", 2, ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_SizingStretchSame,
+                              SX_VEC2_ZERO, 0)) {
+        the__imgui.TableNextColumn();
+        _sg_imgui_draw_pass_list(ctx);
+        the__imgui.TableNextColumn();
+        _sg_imgui_draw_pass_panel(ctx, ctx->passes.sel_pass);
+        the__imgui.EndTable();
+    }
 }
 
 SOKOL_API_IMPL void sg_imgui_draw_capture_content(sg_imgui_t* ctx) {
     SOKOL_ASSERT(ctx && (ctx->init_tag == 0xABCDABCD));
-    _sg_imgui_draw_capture_list(ctx);
-    the__imgui.SameLine(0, -1.0f);
-    _sg_imgui_draw_capture_panel(ctx);
+
+    if (the__imgui.BeginTable("CaptureTbl", 2, ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_SizingStretchSame,
+                              SX_VEC2_ZERO, 0)) {
+        the__imgui.TableNextColumn();
+        _sg_imgui_draw_capture_list(ctx);
+        the__imgui.TableNextColumn();
+        _sg_imgui_draw_capture_panel(ctx);
+        the__imgui.EndTable();
+    }
 }
 
 SOKOL_API_IMPL void sg_imgui_draw_capabilities_content(sg_imgui_t* ctx) {
