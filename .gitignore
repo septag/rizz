@@ -46,6 +46,7 @@ docs/warnings.txt
 imgui.ini
 install
 *.log
+.vscode/tasks.json
 .vscode/launch.json
 .vscode/c_cpp_properties.json
 shaders_h
@@ -57,7 +58,6 @@ compile_commands.json
 examples/assets/shaders/**
 
 # temp
-.vscode/build.bat
 scripts/generators/fake_libc_include
 temp
 
