@@ -149,7 +149,7 @@ static void rizz__cam_fps_lookat(rizz_camera_fps* cam, sx_vec3 pos, sx_vec3 targ
 
     sx_vec3 euler = sx_quat_toeuler(cam->cam.quat);
     cam->pitch = euler.x;
-    cam->yaw = euler.y;
+    cam->yaw = euler.z;
 }
 
 static void rizz__cam_update_rot(rizz_camera* cam)
