@@ -860,8 +860,7 @@ static bool model__on_load(rizz_asset_load_data* data, const rizz_asset_load_par
     return true;
 }
 
-static void model__on_finalize(rizz_asset_load_data* data, const rizz_asset_load_params* params, 
-                               const sx_mem_block* mem)
+static void model__on_finalize(rizz_asset_load_data* data, const rizz_asset_load_params* params, const sx_mem_block* mem)
 {
     sx_unused(mem);
 
@@ -900,8 +899,9 @@ static void model__on_release(rizz_asset_obj obj, const sx_alloc* alloc)
 
         the_gfx->destroy_buffer(mesh->gpu.ibuff);
 
-        if (mesh->gpu._ibuff_name_hdl)
+        if (mesh->gpu._ibuff_name_hdl) {
             the_core->str_free(mesh->gpu._ibuff_name_hdl);
+        }
 
         for (int k = 0; k < mesh->num_submeshes; k++) {
             rizz_model_submesh* submesh = &mesh->submeshes[k];

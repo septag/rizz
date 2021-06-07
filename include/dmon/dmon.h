@@ -50,7 +50,7 @@
 //          default implementation logs to stdout in DEBUG and does nothing in other builds
 //      DMON_API_DECL, DMON_API_IMPL
 //          define these to provide your own API declerations. (for example: static)
-//          default is nothing (which is extern in C language)
+//          default is nothing (which is extern in C language )
 //      DMON_MAX_PATH
 //          Maximum size of path characters
 //          default is 260 characters
@@ -67,12 +67,22 @@
 //      1.0.0       First version. working Win32/Linux backends
 //      1.1.0       MacOS backend
 //      1.1.1       Minor fixes, eliminate gcc/clang warnings with -Wall
+//      1.1.2       Eliminate some win32 dead code
+//      1.1.3       Fixed select not resetting causing high cpu usage on linux
 //
 #ifndef __DMON_H__
 #define __DMON_H__
 
 #include <stdbool.h>
 #include <stdint.h>
+
+#ifndef DMON_API_DECL
+#   define DMON_API_DECL
+#endif
+
+#ifndef DMON_API_IMPL
+#   define DMON_API_IMPL
+#endif
 
 typedef struct { uint32_t id; } dmon_watch_id;
 
@@ -96,15 +106,15 @@ typedef enum dmon_action_t {
 extern "C" {
 #endif
 
-void dmon_init(void);
-void dmon_deinit(void);
+DMON_API_DECL void dmon_init(void);
+DMON_API_DECL void dmon_deinit(void);
 
-dmon_watch_id dmon_watch(const char* rootdir,
+DMON_API_DECL  dmon_watch_id dmon_watch(const char* rootdir,
                          void (*watch_cb)(dmon_watch_id watch_id, dmon_action action,
                                           const char* rootdir, const char* filepath,
                                           const char* oldfilepath, void* user),
                          uint32_t flags, void* user_data);
-void dmon_unwatch(dmon_watch_id id);
+DMON_API_DECL void dmon_unwatch(dmon_watch_id id);
 
 #ifdef __cplusplus
 }
@@ -189,14 +199,6 @@ void dmon_unwatch(dmon_watch_id id);
 #   else
 #       define DMON_LOG_DEBUG(s)    
 #   endif
-#endif
-
-#ifndef DMON_API_DECL
-#   define DMON_API_DECL
-#endif
-
-#ifndef DMON_API_IMPL
-#   define DMON_API_IMPL
 #endif
 
 #ifndef DMON_MAX_WATCHES
@@ -308,34 +310,6 @@ _DMON_PRIVATE char* dmon__unixpath(char* dst, int size, const char* path)
     return dst;
 }
 
-#if DMON_OS_WINDOWS
-_DMON_PRIVATE char* dmon__winpath(char* dst, int size, const char* path)
-{
-    int len = sx_strlen(path);
-    len = sx_min(len, size - 1);
-
-    for (int i = 0; i < len; i++) {
-        if (path[i] != '/')
-            dst[i] = path[i];
-        else
-            dst[i] = '\\';
-    }
-    dst[len] = '\0';
-    return dst;
-}
-#endif // DMON_OS_WINDOWS
-
-_DMON_PRIVATE char* dmon__normpath(char* dst, int size, const char* path)
-{
-#if SX_PLATFORM_WINDOWS
-    return dmon__tolower(dst, size, dmon__winpath(dst, size, path));
-#elif SX_PLATFORM_APPLE
-    return dmon__tolower(dst, size, dmon__unixpath(dst, size, path));
-#else
-    return dmon__unixpath(dst, size, path);
-#endif
-}
-
 #if DMON_OS_LINUX || DMON_OS_MACOS
 _DMON_PRIVATE char* dmon__strcat(char* dst, int dst_sz, const char* src)
 {
@@ -382,7 +356,7 @@ typedef void (dmon__watch_cb)(dmon_watch_id, dmon_action, const char*, const cha
 #if DMON_OS_WINDOWS
 // IOCP (windows)
 #ifdef UNICODE
-#   define _DMON_WINAPI_STR(name, size) wchar_t _##name[size]; MultiByteToWideChar(CP_UTF8, 0, name, -1, 0, 0)
+#   define _DMON_WINAPI_STR(name, size) wchar_t _##name[size]; MultiByteToWideChar(CP_UTF8, 0, name, -1, _##name, size)
 #else
 #   define _DMON_WINAPI_STR(name, size) const char* _##name = name
 #endif
@@ -449,7 +423,7 @@ _DMON_PRIVATE void dmon__win32_process_events(void)
             // remove duplicate modifies on a single file
             for (int j = i + 1; j < c; j++) {
                 dmon__win32_event* check_ev = &_dmon.events[j];
-                if (check_ev->action == FILE_ACTION_MODIFIED && ev->action == check_ev->action &&
+                if (check_ev->action == FILE_ACTION_MODIFIED &&
                     strcmp(ev->filepath, check_ev->filepath) == 0) {
                     check_ev->skip = true;
                 }
@@ -464,6 +438,10 @@ _DMON_PRIVATE void dmon__win32_process_events(void)
             continue;
         }
         dmon__watch_state* watch = &_dmon.watches[ev->watch_id.id - 1];
+
+        if(watch == NULL || watch->watch_cb == NULL) {
+            continue;
+        }
 
         switch (ev->action) {
         case FILE_ACTION_ADDED:
@@ -497,7 +475,7 @@ _DMON_PRIVATE void dmon__win32_process_events(void)
 
 _DMON_PRIVATE DWORD WINAPI dmon__thread(LPVOID arg)
 {
-    (void)(arg);
+    _DMON_UNUSED(arg);
     HANDLE wait_handles[DMON_MAX_WATCHES];
 
     SYSTEMTIME starttm;
@@ -883,6 +861,10 @@ _DMON_PRIVATE void dmon__inotify_process_events(void)
         }
         dmon__watch_state* watch = &_dmon.watches[ev->watch_id.id - 1];
 
+        if(watch == NULL || watch->watch_cb == NULL) {
+            continue;
+        }
+
         switch (ev->mask) {
         case IN_CREATE:
             watch->watch_cb(ev->watch_id, DMON_ACTION_CREATE, watch->rootdir, ev->filepath, NULL,
@@ -921,7 +903,6 @@ static void* dmon__thread(void* arg)
     struct timespec req = { (time_t)10 / 1000, (long)(10 * 1000000) };
     struct timespec rem = { 0, 0 };
     struct timeval timeout;
-    timeout.tv_usec = 100000;
     uint64_t usecs_elapsed = 0;
 
     struct timeval starttm;
@@ -945,6 +926,8 @@ static void* dmon__thread(void* arg)
             fd_set rfds;
             FD_ZERO(&rfds);
             FD_SET(watch->fd, &rfds);
+            timeout.tv_sec = 0;
+            timeout.tv_usec = 100000;
 
             if (select(FD_SETSIZE, &rfds, NULL, NULL, &timeout)) {
                 ssize_t offset = 0;
@@ -1254,6 +1237,10 @@ _DMON_PRIVATE void dmon__fsevent_process_events(void)
         }
         dmon__watch_state* watch = &_dmon.watches[ev->watch_id.id - 1];
 
+        if(watch == NULL || watch->watch_cb == NULL) {
+            continue;
+        }
+
         if (ev->event_flags & kFSEventStreamEventFlagItemCreated) {
             watch->watch_cb(ev->watch_id, DMON_ACTION_CREATE, watch->rootdir, ev->filepath, NULL,
                             watch->user_data);
@@ -1402,7 +1389,11 @@ _DMON_PRIVATE void dmon__fsevent_callback(ConstFSEventStreamRef stream_ref, void
         memset(&ev, 0x0, sizeof(ev));
 
         dmon__strcpy(abs_filepath, sizeof(abs_filepath), filepath);
-        dmon__normpath(abs_filepath, sizeof(abs_filepath), abs_filepath);
+
+        // normalize path (TODO: have to recheck this to be consistent with other platforms)
+        dmon__tolower(abs_filepath, sizeof(abs_filepath), 
+            dmon__unixpath(abs_filepath, sizeof(abs_filepath), abs_filepath));
+
         // strip the root dir
         DMON_ASSERT(strstr(abs_filepath, watch->rootdir) == abs_filepath);
         dmon__strcpy(ev.filepath, sizeof(ev.filepath), abs_filepath + strlen(watch->rootdir));

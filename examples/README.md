@@ -61,6 +61,7 @@ Demonstrates basic application setup. Just clears the view with blue color.
 ![08-draw3d](screenshots/08-draw3d.png)
 
 ### [PathFind](09-pathfind/pathfind.c)
+- Contributed by @amin67v
 - Basic A* path finding 
 - Path priorities/Agents with different cell weights
 
@@ -78,3 +79,9 @@ Demonstrates basic application setup. Just clears the view with blue color.
 - Camera movement along path
 
 ![11-pathspline](screenshots/11-pathspline.png)
+
+### [Boids](12-boids/boids.c)
+- Contributed by @amin67v
+- Boids example, demonstrates the use of job system
+
+![12-boids](screenshots/12-boids.png)

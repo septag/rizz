@@ -246,8 +246,7 @@ static bool init()
     the_app->window_size(&screen_size);
     const float view_width = screen_size.x;
     const float view_height = screen_size.y;
-    the_camera->fps_init(&g_simulation.cam, 60.0f, sx_rectwh(0, 0, view_width, view_height), 0.1f,
-                         500.0f);
+    the_camera->fps_init(&g_simulation.cam, 60.0f, sx_rectwh(0, 0, view_width, view_height), 0.1f, 500.0f);
     the_camera->fps_lookat(&g_simulation.cam, sx_vec3f(5, 15, 5), SX_VEC3_ZERO, SX_VEC3_UNITZ);
 
     // init boids
@@ -360,8 +359,6 @@ static void render(void)
     the_camera->view_mat(&g_simulation.cam.cam, &view);
     sx_mat4 viewproj = sx_mat4_mul(&proj, &view);
 
-    // the_3d->debug.grid_xyplane_cam(1.0f, 5.0f, 50.0f, &g_simulation.cam.cam, &viewproj);
-
     const sx_alloc* talloc = the_core->tmp_alloc_push();
     sx_scope(the_core->tmp_alloc_pop())
     {
@@ -372,21 +369,19 @@ static void render(void)
             boxes[i].e = sx_vec3f(.05f, .05f, .05f);
         }
 
-        the_3d->debug.draw_boxes(boxes, NUM_BOIDS, &viewproj, RIZZ_3D_DEBUG_MAPTYPE_WHITE,
-                                 g_simulation.boids->col);
+        the_3d->debug.draw_boxes(boxes, NUM_BOIDS, &viewproj, RIZZ_3D_DEBUG_MAPTYPE_WHITE, g_simulation.boids->col);
     }
 
     sx_box wall_box;
     wall_box.e = sx_vec3f(WALL_SIZE, WALL_SIZE, WALL_SIZE);
     wall_box.tx = sx_tx3d_ident();
 
-    the_3d->debug.draw_box(&wall_box, &viewproj, RIZZ_3D_DEBUG_MAPTYPE_WHITE,
-                           sx_color4f(0.0f, 0.5f, 1.0f, 0.3f));
+    the_3d->debug.draw_box(&wall_box, &viewproj, RIZZ_3D_DEBUG_MAPTYPE_WHITE, sx_color4f(0.0f, 0.5f, 1.0f, 0.3f));
     the_gfx->staged.end_pass();
     the_gfx->staged.end();
 }
 
-rizz_plugin_decl_event_handler(pathfind, e)
+rizz_plugin_decl_event_handler(boids, e)
 {
     static bool mouse_down = false;
     float dt = (float)sx_tm_sec(the_core->delta_tick());
@@ -429,7 +424,7 @@ rizz_plugin_decl_event_handler(pathfind, e)
     }
 }
 
-rizz_plugin_decl_main(draw3d, plugin, e)
+rizz_plugin_decl_main(boids, plugin, e)
 {
     switch (e) {
     case RIZZ_PLUGIN_EVENT_STEP:
@@ -474,10 +469,10 @@ rizz_game_decl_config(conf)
     conf->app_title = "boids";
     conf->app_flags |= RIZZ_APP_FLAG_HIGHDPI;
     conf->log_level = RIZZ_LOG_LEVEL_DEBUG;
-    conf->window_width = 800;
-    conf->window_height = 600;
+    conf->window_width = EXAMPLES_DEFAULT_WIDTH;
+    conf->window_height = EXAMPLES_DEFAULT_HEIGHT;
     conf->multisample_count = 4;
-    conf->swap_interval = 1;
+    conf->swap_interval = RIZZ_APP_SWAP_INTERVAL_NOSYNC;
     conf->plugins[0] = "imgui";
     conf->plugins[1] = "3dtools";
     conf->plugins[2] = "utility";

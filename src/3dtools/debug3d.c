@@ -455,9 +455,7 @@ void debug3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
     case RIZZ_3D_DEBUG_MAPTYPE_CHECKER:      map = g_debug3d.checker_tex.img; break;
     }
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
-    sx_scope(the_core->tmp_alloc_pop()) {
-
+    sx_with(const sx_alloc* tmp_alloc = the_core->tmp_alloc_push(), the_core->tmp_alloc_pop()) {
         debug3d__reset_stats();
         sx_assert_always((g_debug3d.num_instances + num_boxes) <= g_debug3d.max_instances);
         debug3d__instance* instances = sx_malloc(tmp_alloc, sizeof(debug3d__instance)*num_boxes);
@@ -473,7 +471,7 @@ void debug3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
             debug3d__instance* instance = &instances[i];
             instance->tx1 = sx_vec4f(tx->pos.x, tx->pos.y, tx->pos.z, tx->rot.m11);
             instance->tx2 = sx_vec4f(tx->rot.m21, tx->rot.m31, tx->rot.m12, tx->rot.m22);
-            instance->tx3 = sx_vec4f(tx->rot.m23, tx->rot.m13, tx->rot.m23, tx->rot.m33);
+            instance->tx3 = sx_vec4f(tx->rot.m32, tx->rot.m13, tx->rot.m23, tx->rot.m33);
             instance->scale = sx_vec3_mulf(boxes[i].e, 2.0f);
             instance->color = tints ? tints[i] : SX_COLOR_WHITE;
             if (tints) {
@@ -524,7 +522,7 @@ void debug3d__draw_boxes(const sx_box* boxes, int num_boxes, const sx_mat4* view
         });
 
         draw_api->draw(0, g_debug3d.unit_box.num_indices, num_boxes);
-    } // sx_scope
+    } // sx_with (temp_alloc)
 }
 
 bool debug3d__generate_cone_geometry(const sx_alloc* alloc, rizz_3d_debug_geometry* geo,

@@ -106,8 +106,8 @@ rizz_game_decl_config(conf)
     conf->app_version = 1000;
     conf->app_title = "01 - Hello";
     conf->app_flags |= RIZZ_APP_FLAG_HIGHDPI;
-    conf->window_width = 800;
-    conf->window_height = 600;
+    conf->window_width = EXAMPLES_DEFAULT_WIDTH;
+    conf->window_height = EXAMPLES_DEFAULT_HEIGHT;
     conf->swap_interval = 2;
     conf->plugins[0] = "imgui";
 }

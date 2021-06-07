@@ -422,8 +422,8 @@ rizz_game_decl_config(conf)
     conf->app_title = "Collision example";
     conf->app_flags |= RIZZ_APP_FLAG_HIGHDPI;
     conf->log_level = RIZZ_LOG_LEVEL_DEBUG;
-    conf->window_width = 1280;
-    conf->window_height = 720;
+    conf->window_width = EXAMPLES_DEFAULT_WIDTH;
+    conf->window_height = EXAMPLES_DEFAULT_HEIGHT;
     conf->multisample_count = 4;
     conf->swap_interval = 1;
     conf->plugins[0] = "imgui";

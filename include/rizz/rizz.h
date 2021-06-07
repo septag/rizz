@@ -50,6 +50,9 @@ typedef struct { uint32_t id; } rizz_gfx_stage;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @app
+
+#define RIZZ_APP_SWAP_INTERVAL_NOSYNC 0xffffffff
+
 enum {
     RIZZ_APP_MAX_TOUCHPOINTS = 8,
     RIZZ_APP_MAX_MOUSEBUTTONS = 3,

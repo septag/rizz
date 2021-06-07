@@ -422,8 +422,8 @@ rizz_game_decl_config(conf)
     conf->app_title = "03 - DrawSprite";
     conf->app_flags |= RIZZ_APP_FLAG_HIGHDPI;
     conf->log_level = RIZZ_LOG_LEVEL_DEBUG;
-    conf->window_width = 1280;
-    conf->window_height = 800;
+    conf->window_width = EXAMPLES_DEFAULT_WIDTH;
+    conf->window_height = EXAMPLES_DEFAULT_HEIGHT;
     conf->swap_interval = 2;
     conf->plugins[0] = "imgui";
     conf->plugins[1] = "2dtools";
