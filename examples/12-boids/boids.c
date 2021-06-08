@@ -365,8 +365,15 @@ static void render(void)
         const int count = g_simulation.boids->count;
         sx_box* boxes = sx_malloc(talloc, sizeof(sx_box) * count);
         for (int i = 0; i < count; i++) {
-            boxes[i].tx = sx_tx3d_set(g_simulation.boids->pos[i], sx_mat3_ident());
-            boxes[i].e = sx_vec3f(.05f, .05f, .05f);
+            sx_vec3 nvel = g_simulation.boids->vel[i];
+            sx_vec3 zz = sx_vec3_norm(nvel);
+            sx_vec3 xx = sx_vec3_norm(sx_vec3_cross(zz, SX_VEC3_UNITY));
+            sx_vec3 yy = sx_vec3_cross(xx, zz);
+
+            sx_mat3 m = sx_mat3v(xx, sx_vec3_mulf(yy, -1.0f), zz);
+
+            boxes[i].tx = sx_tx3d_set(g_simulation.boids->pos[i], m);
+            boxes[i].e = sx_vec3f(.05f, .05f, .2f);
         }
 
         the_3d->debug.draw_boxes(boxes, NUM_BOIDS, &viewproj, RIZZ_3D_DEBUG_MAPTYPE_WHITE, g_simulation.boids->col);
