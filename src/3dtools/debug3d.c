@@ -139,7 +139,7 @@ bool debug3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
                                 },
                                 .label = "debug3d_solid"};
         sg_pipeline_desc pip_desc_alphablend = 
-            (sg_pipeline_desc){ .layout.buffers[0].stride = sizeof(rizz_3d_debug_vertex),
+            (sg_pipeline_desc){ .layout.buffers[0].stride = sizeof(rizz_3d_debug_vertex) + 1,
                                 .layout.buffers[1].stride = sizeof(debug3d__instance),
                                 .layout.buffers[1].step_func = SG_VERTEXSTEP_PER_INSTANCE,
                                 .rasterizer = { .cull_mode = SG_CULLMODE_BACK },

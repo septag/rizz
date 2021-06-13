@@ -87,10 +87,11 @@ static const sx_alloc*      g_gfx_alloc = NULL;
 // this is just a redirection in order to skip including "rizz.h"
 static void rizz__gfx_log_error(const char* source_file, int line, const char* str);
 static void rizz__gfx_assert_last_error(void);
+static void rizz__gfx_set_shader_error(void);
 
 #define SOKOL_MALLOC(s)             sx_malloc(g_gfx_alloc, s)
 #define SOKOL_FREE(p)               sx_free(g_gfx_alloc, p)
-#define SOKOL_LOG(s)                rizz__gfx_log_error(__FILE__, __LINE__, s)
+#define SOKOL_LOG(s)                rizz__gfx_set_shader_error(); rizz__gfx_log_error(__FILE__, __LINE__, s)  
 #define SOKOL_ASSERT(c)             if (!(c)) rizz__gfx_assert_last_error()
 
 SX_PRAGMA_DIAGNOSTIC_PUSH()
@@ -293,6 +294,7 @@ typedef struct rizz__gfx {
 
     bool enable_profile;
     bool record_make_commands;
+    bool last_shader_error;
 } rizz__gfx;
 
 
@@ -312,6 +314,11 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG("-Wshorten-64-to-32")
 SX_PRAGMA_DIAGNOSTIC_POP()
 
 static rizz__gfx g_gfx;
+
+static void rizz__gfx_set_shader_error(void)
+{
+    g_gfx.last_shader_error = true;
+}
 
 static void rizz__gfx_assert_last_error(void)
 {
@@ -2211,6 +2218,12 @@ static void rizz__trace_make_image(const sg_image_desc* desc, sg_image result, v
     ++g_gfx.trace.t.num_images;
 }
 
+static sg_shader rizz__make_shader_stub(const sg_shader_desc* desc)
+{
+    g_gfx.last_shader_error = false;
+    return sg_make_shader(desc);
+}
+
 static void rizz__trace_make_shader(const sg_shader_desc* desc, sg_shader result, void* user_data)
 {
     sx_unused(user_data);
@@ -2223,10 +2236,14 @@ static void rizz__trace_make_shader(const sg_shader_desc* desc, sg_shader result
     }
 
     ++g_gfx.trace.t.num_shaders;
+
+    if (g_gfx.last_shader_error) {
+        rizz__log_error("In shader: %s", desc->label);
+        g_gfx.last_shader_error = false;
+    }
 }
 
-static void rizz__trace_make_pipeline(const sg_pipeline_desc* desc, sg_pipeline result,
-                                      void* user_data)
+static void rizz__trace_make_pipeline(const sg_pipeline_desc* desc, sg_pipeline result, void* user_data)
 {
     sx_unused(user_data);
 
@@ -4055,7 +4072,7 @@ rizz_api_gfx the__gfx = {
     .commit_commands            = rizz__gfx_commit,
     .make_buffer                = rizz__make_buffer,
     .make_image                 = sg_make_image,
-    .make_shader                = sg_make_shader,
+    .make_shader                = rizz__make_shader_stub,
     .make_pipeline              = rizz__make_pipeline,
     .make_pass                  = sg_make_pass,
     .destroy_buffer             = rizz__destroy_buffer,

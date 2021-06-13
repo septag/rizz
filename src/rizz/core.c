@@ -1571,16 +1571,12 @@ bool rizz__core_init(const rizz_config* conf)
 }
 
 #ifdef _DEBUG
-static void rizz__core_dump_leak(const char* formatted_msg, const char* file, const char* func,
+static void rizz__core_dump_leak(const char* formatted_msg, 
+                                 const char* file, const char* func,
                                  int line, size_t size, void* ptr)
 {
-    sx_unused(file);
-    sx_unused(size);
-    sx_unused(ptr);
-    sx_unused(line);
-    sx_unused(func);
-
-    rizz__log_debug(formatted_msg);
+    sx_unused(formatted_msg);
+    the__core.print_debug(0, file, line, "MEMORY LEAK: @%s, %$ubytes (ptr=0x%p)", func, size, ptr);
 }
 #endif
 
