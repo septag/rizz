@@ -2218,12 +2218,6 @@ static void rizz__trace_make_image(const sg_image_desc* desc, sg_image result, v
     ++g_gfx.trace.t.num_images;
 }
 
-static sg_shader rizz__make_shader_stub(const sg_shader_desc* desc)
-{
-    g_gfx.last_shader_error = false;
-    return sg_make_shader(desc);
-}
-
 static void rizz__trace_make_shader(const sg_shader_desc* desc, sg_shader result, void* user_data)
 {
     sx_unused(user_data);
@@ -2236,11 +2230,6 @@ static void rizz__trace_make_shader(const sg_shader_desc* desc, sg_shader result
     }
 
     ++g_gfx.trace.t.num_shaders;
-
-    if (g_gfx.last_shader_error) {
-        rizz__log_error("In shader: %s", desc->label);
-        g_gfx.last_shader_error = false;
-    }
 }
 
 static void rizz__trace_make_pipeline(const sg_pipeline_desc* desc, sg_pipeline result, void* user_data)
@@ -3869,6 +3858,8 @@ static void rizz__init_pipeline(sg_pipeline pip_id, const sg_pipeline_desc* desc
 
 static sg_pipeline rizz__make_pipeline(const sg_pipeline_desc* desc)
 {
+    g_gfx.last_shader_error = false;
+
     sg_pipeline pip_id = sg_make_pipeline(desc);
 #if RIZZ_CONFIG_HOT_LOADING
 #    if defined(SOKOL_METAL)
@@ -3878,6 +3869,11 @@ static sg_pipeline rizz__make_pipeline(const sg_pipeline_desc* desc)
     sx_array_push(g_gfx_alloc, g_gfx.pips, pip_id);
 #    endif
 #endif
+
+    if (g_gfx.last_shader_error) {
+        rizz__log_error("in pipeline: %s", desc->label ? desc->label : "[NA]");
+        g_gfx.last_shader_error = false;
+    }
 
     return pip_id;
 }
@@ -4072,7 +4068,7 @@ rizz_api_gfx the__gfx = {
     .commit_commands            = rizz__gfx_commit,
     .make_buffer                = rizz__make_buffer,
     .make_image                 = sg_make_image,
-    .make_shader                = rizz__make_shader_stub,
+    .make_shader                = sg_make_shader,
     .make_pipeline              = rizz__make_pipeline,
     .make_pass                  = sg_make_pass,
     .destroy_buffer             = rizz__destroy_buffer,
