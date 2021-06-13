@@ -291,7 +291,10 @@ static bool init()
     return true;
 }
 
-static void shutdown(void) {}
+static void shutdown(void) 
+{
+    sx_free(the_core->alloc(RIZZ_MEMID_GAME), g_simulation.boids);
+}
 
 static void update_job_cb(int start, int end, int thrd_index, void* user)
 {

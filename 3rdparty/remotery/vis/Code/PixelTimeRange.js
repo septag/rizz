@@ -1,13 +1,15 @@
 
-class PixelTimeRange
+
+PixelTimeRange = (function()
 {
-	constructor(start_us, span_us, span_px)
+	function PixelTimeRange(start_us, span_us, span_px)
 	{
 		this.Span_px = span_px;
 		this.Set(start_us, span_us);
 	}
 
-	Set(start_us, span_us)
+
+	PixelTimeRange.prototype.Set = function(start_us, span_us)
 	{
 		this.Start_us = start_us;
 		this.Span_us = span_us;
@@ -15,50 +17,45 @@ class PixelTimeRange
 		this.usPerPixel = this.Span_px / this.Span_us;
 	}
 
-	SetStart(start_us)
+
+	PixelTimeRange.prototype.SetStart = function(start_us)
 	{
 		this.Start_us = start_us;
 		this.End_us = start_us + this.Span_us;
 	}
 
-	SetEnd(end_us)
+
+	PixelTimeRange.prototype.SetEnd = function(end_us)
 	{
 		this.End_us = end_us;
 		this.Start_us = end_us - this.Span_us;
 	}
 
-	SetPixelSpan(span_px)
+
+	PixelTimeRange.prototype.SetPixelSpan = function(span_px)
 	{
 		this.Span_px = span_px;
 		this.usPerPixel = this.Span_px / this.Span_us;
 	}
 
-	PixelOffset(time_us)
+
+	PixelTimeRange.prototype.PixelOffset = function(time_us)
 	{
 		return Math.floor((time_us - this.Start_us) * this.usPerPixel);
 	}
 
-	PixelSize(time_us)
+
+	PixelTimeRange.prototype.PixelSize = function(time_us)
 	{
 		return Math.floor(time_us * this.usPerPixel);
 	}
 
-	TimeAtPosition(position)
-	{
-		return this.Start_us + position / this.usPerPixel;
-	}
 
-	Clone()
+	PixelTimeRange.prototype.Clone = function()
 	{
 		return new PixelTimeRange(this.Start_us, this.Span_us, this.Span_px);
 	}
 
-	SetAsUniform(gl, program)
-	{
-		glSetUniform(gl, program, "inTimeRange.pxSpan", this.Span_px);
-		glSetUniform(gl, program, "inTimeRange.usStart", this.Start_us);
-		glSetUniform(gl, program, "inTimeRange.usSpan", this.Span_us);
-		glSetUniform(gl, program, "inTimeRange.usEnd", this.End_us);
-		glSetUniform(gl, program, "inTimeRange.usPerPixel", this.usPerPixel);
-	}
-}
+
+	return PixelTimeRange;
+})();

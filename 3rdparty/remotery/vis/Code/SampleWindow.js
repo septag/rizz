@@ -38,12 +38,6 @@ SampleWindow = (function()
     }
 
 
-    SampleWindow.prototype.Close = function()
-    {
-        this.Window.Close();
-    }
-
-
     SampleWindow.prototype.SetXPos = function(xpos, top_window, bottom_window)
     {
         Anim.Animate(
@@ -64,9 +58,9 @@ SampleWindow = (function()
         if (visible != this.Visible)
         {
             if (visible == true)
-                this.Window.ShowNoAnim();
+                this.Window.Show();
             else
-                this.Window.HideNoAnim();
+                this.Window.Hide();
 
             this.Visible = visible;
         }

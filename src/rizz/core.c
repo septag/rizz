@@ -1476,8 +1476,10 @@ bool rizz__core_init(const rizz_config* conf)
     // profiler
     rmtSettings* rmt_config = rmt_Settings();
     if (rmt_config) {
-        rmt_config->enableThreadSampler = false;    // FIXME: Due to assert failure we had to disable this feature: 
-                                                    // https://github.com/Celtoys/Remotery/issues/178#issue-894595107
+        // FIXME: removed due to various regression bugs
+        //        at some point, we need to get back to the newer versions and recheck this
+        // rmt_config->enableThreadSampler = false;    // FIXME: Due to assert failure we had to disable this feature: 
+                                                       // https://github.com/Celtoys/Remotery/issues/178#issue-894595107
         rmt_config->malloc = rmt__malloc;
         rmt_config->free = rmt__free;
         rmt_config->realloc = rmt__realloc;
