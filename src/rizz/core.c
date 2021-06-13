@@ -382,16 +382,14 @@ static void rizz__log_backend_terminal(const rizz_log_entry* entry, void* user)
         const char* close_fmt;
 
         // terminal coloring
-        // clang-format off
 		switch (entry->type) {
         case RIZZ_LOG_LEVEL_INFO:		open_fmt = "";  close_fmt = "";	break;
         case RIZZ_LOG_LEVEL_DEBUG:		open_fmt = TERM_COLOR_DIM; close_fmt = TERM_COLOR_RESET; break;
         case RIZZ_LOG_LEVEL_VERBOSE:	open_fmt = TERM_COLOR_DIM; close_fmt = TERM_COLOR_RESET; break;
-        case RIZZ_LOG_LEVEL_WARNING:	open_fmt = TERM_COLOR_RED; close_fmt = TERM_COLOR_RESET; break;
-        case RIZZ_LOG_LEVEL_ERROR:		open_fmt = TERM_COLOR_YELLOW; close_fmt = TERM_COLOR_RESET; break;
+        case RIZZ_LOG_LEVEL_WARNING:	open_fmt = TERM_COLOR_YELLOW; close_fmt = TERM_COLOR_RESET; break;
+        case RIZZ_LOG_LEVEL_ERROR:		open_fmt = TERM_COLOR_RED; close_fmt = TERM_COLOR_RESET; break;
 		default:			    		open_fmt = "";	close_fmt = "";	break;
         }
-        // clang-format on
 
         sx_snprintf(text, new_size, "%s%s%s%s", open_fmt, k_log_entry_types[entry->type],
                     entry->text, close_fmt);

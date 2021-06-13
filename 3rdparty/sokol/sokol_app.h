@@ -615,7 +615,7 @@
 extern "C" {
 #endif
 
-#define SAPP_SWAP_INTERVAL_NOSYNC 0xffffffff
+#define SAPP_SWAP_INTERVAL_NOSYNC 0x7fffffff
 
 enum {
     SAPP_MAX_TOUCHPOINTS = 8,
@@ -7620,7 +7620,7 @@ _SOKOL_PRIVATE void _sapp_run(const sapp_desc* desc) {
     _sapp_glx_create_context();
     _sapp.valid = true;
     _sapp_x11_show_window();
-    _sapp_glx_swapinterval(_sapp.swap_interval);
+    _sapp_glx_swapinterval(_sapp.swap_interval != SAPP_SWAP_INTERVAL_NOSYNC ? _sapp.swap_interval : 0);
     XFlush(_sapp_x11_display);
     while (!_sapp.quit_ordered) {
         _sapp_glx_make_current();
