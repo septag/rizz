@@ -164,7 +164,7 @@ endif()
 add_library(sx ${SOURCE_FILES} ${INCLUDE_FILES} ${ASM_SOURCES})
 
 # compat files include dir
-if (MSVC)
+if (WIN32)
     set(COMPAT_DIR ../../include/compat/msvc)
 elseif(APPLE)
     if (IOS)

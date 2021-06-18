@@ -2528,7 +2528,7 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
     }
 
     #ifdef SOKOL_D3D11
-        HRESULT hr = _sg.d3d11.ctx->lpVtbl->QueryInterface(_sg.d3d11.ctx, &IID_ID3D11DeviceContext2, &g_gfx.d3d11_ctx);
+        HRESULT hr = _sg.d3d11.ctx->lpVtbl->QueryInterface(_sg.d3d11.ctx, &IID_ID3D11DeviceContext2, (void**)&g_gfx.d3d11_ctx);
         if (SUCCEEDED(hr)) {
             g_gfx.d3d11_has_marker = g_gfx.d3d11_ctx->lpVtbl->IsAnnotationEnabled(g_gfx.d3d11_ctx) ? true : false;
         } else {
