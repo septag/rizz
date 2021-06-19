@@ -51,7 +51,8 @@ typedef struct { uint32_t id; } rizz_gfx_stage;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // @app
 
-#define RIZZ_APP_SWAP_INTERVAL_NOSYNC 0xffffffff
+// Set this flag for rizz_config.swap_interval to disable vsync
+#define RIZZ_APP_SWAP_INTERVAL_NOSYNC 0x7fffffff
 
 enum {
     RIZZ_APP_MAX_TOUCHPOINTS = 8,
@@ -574,14 +575,13 @@ typedef struct rizz_config {
 
     int window_width;
     int window_height;
-    int multisample_count;
-    int swap_interval;
-    int texture_first_mip;          
+    int multisample_count;          // MSAA: (0, 2, 4, 8, 16)
+    int swap_interval;              // default = 1, set RIZZ_APP_SWAP_INTERVAL_NOSYNC to disable vsync
+    int texture_first_mip;          // default = 0, first texture mip to load from textures, higher values lowers overall texture quality and improves performance
     sg_filter texture_filter_min;   // default = SG_FILTER_LINEAR_MIP_LINEAR
     sg_filter texture_filter_mag;   // default = SG_FILTER_LINEAR
-    int texture_aniso;              
+    int texture_aniso;              // default = 0, texture anisotropy quality              
 
-    const char* html5_canvas_name;
     rizz_app_event_cb* event_cb;
 
     int job_num_threads;    // number of worker threads (default:-1, then it will be num_cores-1)

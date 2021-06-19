@@ -882,8 +882,8 @@ static void rizz__rmt_view_handler(const void* data, uint32_t size, void* contex
     sx_mem_read(&r, &num_samples, sizeof(num_samples));
     sx_mem_read(&r, &digest_hash, sizeof(digest_hash));
 
-    char msg[256];
-    sx_snprintf(msg, sizeof(msg), "%s:\n", thread_name);
+    //char msg[256];
+    //sx_snprintf(msg, sizeof(msg), "%s:\n", thread_name);
     // OutputDebugStringA(msg);
 
     // read sample tree
@@ -1355,10 +1355,8 @@ bool rizz__core_init(const rizz_config* conf)
     g_core.strpool = sx_strpool_create(alloc, NULL);
     sx_assert_alwaysf(g_core.strpool, "out of memory");
 
-    int num_worker_threads =
-        conf->job_num_threads >= 0 ? conf->job_num_threads : (sx_os_numcores() - 1);
-    num_worker_threads =
-        sx_max(1, num_worker_threads);              // we should have at least one worker thread
+    int num_worker_threads = conf->job_num_threads >= 0 ? conf->job_num_threads : (sx_os_numcores() - 1);
+    num_worker_threads = sx_max(1, num_worker_threads);   // we should have at least one worker thread
     g_core.num_threads = num_worker_threads + 1;    // include the main-thread
 
     // log queues per thread
@@ -1487,7 +1485,7 @@ bool rizz__core_init(const rizz_config* conf)
         rmt_config->reuse_open_port = true;
         rmt_config->input_handler = rizz__rmt_input_handler;
         rmt_config->input_handler_context = (void*)rizz__alloc(RIZZ_MEMID_TOOLSET);
-        // rmt_config->view_handler = rizz__rmt_view_handler;
+        rmt_config->view_handler = rizz__rmt_view_handler;
     }
     rmtError rmt_err;
     if ((rmt_err = rmt_CreateGlobalInstance(&g_core.rmt)) != RMT_ERROR_NONE) {

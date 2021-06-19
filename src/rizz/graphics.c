@@ -329,7 +329,6 @@ static void rizz__gfx_assert_last_error(void)
         stage = "[unset]";
     }
 
-    static char msg[512];
     if (g_gfx.cur_source_loc.file) {
         the__core.print_error(0, g_gfx.cur_source_loc.file, g_gfx.cur_source_loc.line, "Stage = '%s'", stage);
     } else {

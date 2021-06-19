@@ -839,7 +839,6 @@ sapp_desc sokol_main(int argc, char* argv[])
     // Before closing the dll, save the strings into static variables
     rizz__app_save_config_str(default_name, conf.app_name);
     rizz__app_save_config_str(default_title, conf.app_title);
-    rizz__app_save_config_str(default_html5_canvas, conf.html5_canvas_name);
     rizz__app_save_config_str(default_plugin_path, conf.plugin_path);
     rizz__app_save_config_str(default_cache_path, conf.cache_path);
     rizz__app_save_config_str(default_cwd, conf.cwd);
@@ -872,7 +871,6 @@ sapp_desc sokol_main(int argc, char* argv[])
         .high_dpi = (conf.app_flags & RIZZ_APP_FLAG_HIGHDPI) ? true : false,
         .fullscreen = (conf.app_flags & RIZZ_APP_FLAG_FULLSCREEN) ? true : false,
         .alpha = (conf.app_flags & RIZZ_APP_FLAG_ALPHA) ? true : false,
-        .html5_canvas_name = conf.html5_canvas_name,
         .ios_keyboard_resizes_canvas = (conf.app_flags & RIZZ_APP_FLAG_IOS_KEYBOARD_RESIZES_CANVAS) ? true : false,
         .user_cursor = (conf.app_flags & RIZZ_APP_FLAG_USER_CURSOR) ? true : false,
         .gl_force_gles2 = (conf.app_flags & RIZZ_APP_FLAG_FORCE_GLES2) ? true : false,
