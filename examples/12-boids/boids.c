@@ -45,6 +45,7 @@ RIZZ_STATE static rizz_api_utility* the_utility;
 #define WALL_SIZE 5.0f
 #define WALL_DIST 2.0f
 #define WALL_WEIGHT 1.0f
+#define OBSTACLE_WEIGHT 16.0f
 #define ALIGNMENT_WEIGHT 2.0f
 #define COHESION_WEIGHT 3.0f
 
@@ -80,6 +81,8 @@ typedef struct {
 typedef struct {
     rizz_gfx_stage stage;
     rizz_camera_fps cam;
+    sx_vec3 obstacle_origin;
+    float obstacle_radius;
     boid_t* boids;
     bool use_jobs;
 } boid_simulation_t;
@@ -140,6 +143,17 @@ void update_boid(int bi, float dt)
         r = sx_vec3_add(r, zn);
 
         g_simulation.boids->acl[bi] = sx_vec3_add(g_simulation.boids->acl[bi], r);
+    }
+
+    // avoid obstacle
+    {
+        sx_vec3 bpos = g_simulation.boids->pos[bi];
+        float dist;
+        sx_vec3 dir = sx_vec3_norm_len(sx_vec3_sub(bpos, g_simulation.obstacle_origin), &dist);
+        if (dist < g_simulation.obstacle_radius)
+        {
+            g_simulation.boids->acl[bi] = sx_vec3_add(g_simulation.boids->acl[bi], sx_vec3_mulf(dir, OBSTACLE_WEIGHT));
+        }
     }
 
     // seperation
@@ -287,7 +301,8 @@ static bool init()
         }
     }
 
-    the_3d->debug.set_max_instances(NUM_BOIDS + 1);
+    the_3d->debug.set_max_instances(NUM_BOIDS + 16);
+    g_simulation.obstacle_radius = 3.0f;
     return true;
 }
 
@@ -333,6 +348,12 @@ static void update(float dt)
     }
     the_imgui->End();
 
+    static float time = 0.0f;
+    time += dt;
+    g_simulation.obstacle_origin.x = sx_sin(time) * 1.5f;
+    g_simulation.obstacle_origin.y = sx_cos(time) * 1.5f;
+    g_simulation.obstacle_origin.z = sx_sin(time * 0.25f) * 1.5f;
+
     // simulate boids
     if (g_simulation.use_jobs) {
         sx_job_t job =
@@ -343,7 +364,6 @@ static void update(float dt)
             update_boid(i, dt);
         }
     }
-
 
     show_debugmenu(the_imgui, the_core);
 }
@@ -380,6 +400,8 @@ static void render(void)
         }
 
         the_3d->debug.draw_boxes(boxes, NUM_BOIDS, &viewproj, RIZZ_3D_DEBUG_MAPTYPE_WHITE, g_simulation.boids->col);
+        the_3d->debug.draw_sphere(g_simulation.obstacle_origin, g_simulation.obstacle_radius,
+                                  &viewproj, RIZZ_3D_DEBUG_MAPTYPE_WHITE, sx_color4f(1.0f, 0.0f, 0.0f, 0.5f));
     }
 
     sx_box wall_box;
