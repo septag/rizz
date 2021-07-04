@@ -39,3 +39,11 @@ elseif(APPLE)
       target_link_libraries(gainput PUBLIC ${APPKIT})
   endif()
 endif()
+
+if (NOT MSVC)
+  target_compile_options(gainput PUBLIC -Wno-implicit-fallthrough -Wno-unused-parameter)
+endif()
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  target_compile_options(gainput PUBLIC -Wno-stringop-truncation)
+endif()

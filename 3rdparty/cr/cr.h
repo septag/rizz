@@ -532,6 +532,11 @@ struct cr_plugin {
 #   define CR_MALLOC(size)         ::malloc(size)
 #endif
 
+#if !defined(IMAGE_NT_HEADER_FUNC) && defined(_MSC_VER)
+#pragma comment(lib, "dbghelp.lib") // attempt to link dbghelp.lib if not provided by host (dynamic loading)
+#define IMAGE_NT_HEADER_FUNC ImageNtHeader
+#endif
+
 #if defined(_MSC_VER)
 // we should probably push and pop this
 #   pragma warning(disable:4003) // not enough actual parameters for macro 'identifier'
@@ -666,16 +671,12 @@ extern "C" void cr_set_temporary_path(cr_plugin &ctx, const std::string &path) {
 
 #if defined(CR_WINDOWS)
 
-// clang-format off
 #ifndef WIN32_LEAN_AND_MEAN
 #   define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
 #include <dbghelp.h>
-// clang-format on
-#ifdef _MSC_VER
-#pragma comment(lib, "dbghelp.lib")
-#endif
+
 using so_handle = HMODULE;
 
 #ifdef UNICODE
@@ -1033,7 +1034,7 @@ static bool cr_plugin_validate_sections(cr_plugin &ctx, so_handle handle,
     if (p->mode == CR_DISABLE) {
         return true;
     }
-    auto ntHeaders = ImageNtHeader(handle);
+    auto ntHeaders = IMAGE_NT_HEADER_FUNC(handle);
     auto base = ntHeaders->OptionalHeader.ImageBase;
     auto sectionHeaders = (IMAGE_SECTION_HEADER *)(ntHeaders + 1);
     bool result = true;

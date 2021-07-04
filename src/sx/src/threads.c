@@ -308,19 +308,19 @@ void sx_mutex_release(sx_mutex* mutex)
     pthread_mutex_destroy(&_m->handle);
 }
 
-void sx_mutex_lock(sx_mutex* mutex)
+void sx_mutex_enter(sx_mutex* mutex)
 {
     sx__mutex* _m = (sx__mutex*)mutex->data;
     pthread_mutex_lock(&_m->handle);
 }
 
-void sx_mutex_unlock(sx_mutex* mutex)
+void sx_mutex_exit(sx_mutex* mutex)
 {
     sx__mutex* _m = (sx__mutex*)mutex->data;
     pthread_mutex_unlock(&_m->handle);
 }
 
-bool sx_mutex_trylock(sx_mutex* mutex)
+bool sx_mutex_try(sx_mutex* mutex)
 {
     sx__mutex* _m = (sx__mutex*)mutex->data;
     return pthread_mutex_trylock(&_m->handle) == 0;
@@ -501,19 +501,19 @@ void sx_mutex_release(sx_mutex* mutex)
     DeleteCriticalSection(&_m->handle);
 }
 
-void sx_mutex_lock(sx_mutex* mutex)
+void sx_mutex_enter(sx_mutex* mutex)
 {
     sx__mutex* _m = (sx__mutex*)mutex->data;
     EnterCriticalSection(&_m->handle);
 }
 
-void sx_mutex_unlock(sx_mutex* mutex)
+void sx_mutex_exit(sx_mutex* mutex)
 {
     sx__mutex* _m = (sx__mutex*)mutex->data;
     LeaveCriticalSection(&_m->handle);
 }
 
-bool sx_mutex_trylock(sx_mutex* mutex)
+bool sx_mutex_try(sx_mutex* mutex)
 {
     sx__mutex* _m = (sx__mutex*)mutex->data;
     return TryEnterCriticalSection(&_m->handle) == TRUE;
@@ -691,14 +691,14 @@ void sx_thread_setname(sx_thread* thrd, const char* name)
     tn.flags = 0;
 
     #if !SX_CRT_MINGW
-    __try {
-    #endif
+        __try {
+        #endif
 
-        RaiseException(0x406d1388, 0, sizeof(tn) / 4, (ULONG_PTR*)(&tn));
+            RaiseException(0x406d1388, 0, sizeof(tn) / 4, (ULONG_PTR*)(&tn));
 
-    #if !SX_CRT_MINGW
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-    }
+        #if !SX_CRT_MINGW
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+        }
     #endif
 }
 
@@ -725,7 +725,7 @@ uint32_t sx_thread_tid()
 #endif    // SX_PLATFORM_
 }
 
-#if SX_CONFIG_EXPERIMENTAL_SPINLOCK
+// TODO: replace this for our current atomic functions in the future
 #include "../3rdparty/c89atomic/c89atomic.h"
 
 typedef struct sx__padded_flag
@@ -734,19 +734,19 @@ typedef struct sx__padded_flag
     uint8_t padding[SX_CACHE_LINE_SIZE-1];
 } sx__padded_flag;
 
-typedef sx_align_decl(SX_CACHE_LINE_SIZE, struct) sx_anderson_lock
+typedef sx_align_decl(SX_CACHE_LINE_SIZE, struct) sx_anderson_lock_t
 {
     sx_align_decl(SX_CACHE_LINE_SIZE, sx__padded_flag*) locked;
     sx_align_decl(SX_CACHE_LINE_SIZE, c89atomic_uint64) next_free_idx;
     sx_align_decl(SX_CACHE_LINE_SIZE, c89atomic_uint64) next_serving_idx;
     int max_threads;
-} sx_anderson_lock;
+} sx_anderson_lock_t;
 
-sx_anderson_lock* sx_anderson_lock_create(const sx_alloc* alloc, int max_threads) 
+sx_anderson_lock_t* sx_anderson_lock_create(const sx_alloc* alloc, int max_threads) 
 {
     sx_assert(max_threads > 0);
 
-    sx_anderson_lock* l = sx_calloc(alloc, sizeof(sx_anderson_lock) + max_threads*sizeof(sx__padded_flag));
+    sx_anderson_lock_t* l = sx_calloc(alloc, sizeof(sx_anderson_lock_t) + max_threads*sizeof(sx__padded_flag));
     if (!l) {
         return NULL;
     }
@@ -762,14 +762,15 @@ sx_anderson_lock* sx_anderson_lock_create(const sx_alloc* alloc, int max_threads
     return l;
 }
 
-void sx_anderson_lock_destroy(sx_anderson_lock* lock, const sx_alloc* alloc) 
+void sx_anderson_lock_destroy(sx_anderson_lock_t* lock, const sx_alloc* alloc) 
 {
     sx_free(alloc, lock);
 }
 
-void sx_anderson_lock_enter(sx_anderson_lock* lock) 
+void sx_anderson_lock_enter(sx_anderson_lock_t* lock) 
 {
-    const uint64_t index = c89atomic_fetch_add_64(&lock->next_free_idx, 1) % lock->max_threads;
+    const uint64_t index = 
+        c89atomic_fetch_add_explicit_64(&lock->next_free_idx, 1, c89atomic_memory_order_release) % lock->max_threads;
     c89atomic_flag* flag = &lock->locked[index].flag;
 
     // ensure overflow never happens
@@ -781,7 +782,8 @@ void sx_anderson_lock_enter(sx_anderson_lock* lock)
     // sx_yield_cpu apparantly has a lot of latency in modern cpus, so this loop is a workaround
     // Reference: https://software.intel.com/content/www/us/en/develop/articles/a-common-construct-to-avoid-the-contention-of-threads-architecture-agnostic-spin-wait-loops.html
     int counter = 0;
-    while (*flag) {
+    
+    while (c89atomic_load_explicit_8(flag, c89atomic_memory_order_acquire)) {
         if ((++counter & SX__LOCK_PRESPIN) == 0) {
             sx_track_contention();
             sx_thread_yield();  // too much waiting, relief control of the current thread
@@ -793,13 +795,12 @@ void sx_anderson_lock_enter(sx_anderson_lock* lock)
         }
     }
 
-    c89atomic_store_8(flag, 1);
+    c89atomic_store_explicit_8(flag, 1, c89atomic_memory_order_release);
 }
 
-void sx_anderson_lock_exit(sx_anderson_lock* lock) 
+void sx_anderson_lock_exit(sx_anderson_lock_t* lock) 
 {
     const uint64_t index = c89atomic_fetch_add_64(&lock->next_serving_idx, 1);
-    c89atomic_store_8(&lock->locked[index%lock->max_threads].flag, 0);
+    c89atomic_store_explicit_8(&lock->locked[index%lock->max_threads].flag, 0, c89atomic_memory_order_release);
 }
 
-#endif // SX_CONFIG_EXPERIMENTAL_SPINLOCK

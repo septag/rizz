@@ -122,15 +122,15 @@ static void* stb_leakcheck_malloc(size_t sz, const char* file, const char* func,
 
     sx_strcpy(mi->file, sizeof(mi->file), file);
     sx_strcpy(mi->func, sizeof(mi->func), func);
-    sx_lock(&mi_lock);
-    mi->line = line;
-    mi->next = mi_head;
-    if (mi_head)
-        mi->next->prev = mi;
-    mi->prev = NULL;
-    mi->size = (int)sz;
-    mi_head = mi;
-    sx_unlock(&mi_lock);
+    sx_lock(mi_lock) {
+        mi->line = line;
+        mi->next = mi_head;
+        if (mi_head)
+            mi->next->prev = mi;
+        mi->prev = NULL;
+        mi->size = (int)sz;
+        mi_head = mi;
+    }
     return mi + 1;
 }
 
@@ -139,15 +139,15 @@ static void stb_leakcheck_free(void* ptr)
     if (ptr != NULL) {
         stb__leakcheck_malloc_info* mi = (stb__leakcheck_malloc_info*)ptr - 1;
         mi->size = ~mi->size;
-        sx_lock(&mi_lock);
-        if (mi->prev == NULL) {
-            sx_assert(mi_head == mi);
-            mi_head = mi->next;
-        } else
-            mi->prev->next = mi->next;
-        if (mi->next)
-            mi->next->prev = mi->prev;
-        sx_unlock(&mi_lock);
+        sx_lock(mi_lock) {
+            if (mi->prev == NULL) {
+                sx_assert(mi_head == mi);
+                mi_head = mi->next;
+            } else
+                mi->prev->next = mi->next;
+            if (mi->next)
+                mi->next->prev = mi->prev;
+        }
         free(mi);
     }
 }

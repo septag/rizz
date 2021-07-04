@@ -9,7 +9,7 @@ namespace gainput
 class InputDevicePadImplNull : public InputDevicePadImpl
 {
 public:
-	InputDevicePadImplNull(InputManager& manager, InputDevice& device, unsigned index, InputState& state, InputState& previousState)
+	InputDevicePadImplNull(InputManager& /*manager*/, InputDevice& /*device*/, unsigned /*index*/, InputState& /*state*/, InputState& /*previousState*/)
 	{
 	}
 

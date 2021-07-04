@@ -34,7 +34,7 @@ static const char* PadDeviceIds[MaxPadCount] =
 class InputDevicePadImplLinux : public InputDevicePadImpl
 {
 public:
-	InputDevicePadImplLinux(InputManager& manager, InputDevice& device, unsigned index, InputState& state, InputState& previousState) :
+	InputDevicePadImplLinux(InputManager& manager, InputDevice& device, unsigned index, InputState& state, InputState& /*previousState*/) :
 		manager_(manager),
 		device_(device),
 		state_(state),

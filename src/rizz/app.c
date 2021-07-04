@@ -15,11 +15,8 @@
 
 #include <stdio.h>
 
-#if SX_COMPILER_CLANG  
-#include <assert.h>  // static_assert ?! 
-#endif
-
 #include "Remotery.h"
+#include "stackwalkerc/stackwalkerc.h"
 
 // Choose api based on the platform
 #if RIZZ_GRAPHICS_API_D3D==11
@@ -133,21 +130,30 @@ static long WINAPI rizz__app_generate_crash_dump(EXCEPTION_POINTERS* except)
 
     #if !RIZZ_FINAL
     if (g_app.conf.app_flags & RIZZ_APP_FLAG_CRASH_DUMP) {
-        MINIDUMP_EXCEPTION_INFORMATION einfo = { 0 };
-        HANDLE dump_handle;
+        HMODULE dbghelp = sw_load_dbghelp();
+        if (dbghelp) {
+            typedef BOOL (__stdcall* MiniDumpWriteDump_t)(HANDLE, DWORD, HANDLE, MINIDUMP_TYPE, PMINIDUMP_EXCEPTION_INFORMATION, 
+                                                          PMINIDUMP_USER_STREAM_INFORMATION, PMINIDUMP_CALLBACK_INFORMATION);
+            MiniDumpWriteDump_t fMiniDumpWriteDump = (MiniDumpWriteDump_t)GetProcAddress(dbghelp, "MiniDumpWriteDump");
+            if (fMiniDumpWriteDump) {
+                MINIDUMP_EXCEPTION_INFORMATION einfo = { 0 };
+                HANDLE dump_handle;
 
-        einfo.ThreadId = GetCurrentThreadId();
-        einfo.ExceptionPointers = except;
-        einfo.ClientPointers = TRUE;
+                einfo.ThreadId = GetCurrentThreadId();
+                einfo.ExceptionPointers = except;
+                einfo.ClientPointers = TRUE;
 
-        char filename[128];
-        sx_strcat(sx_strcpy(filename, sizeof(filename), g_app.conf.app_name), sizeof(filename), "_crash.dmp");
-        dump_handle = CreateFile(filename, GENERIC_READ | GENERIC_WRITE, 
-                                    FILE_SHARE_WRITE | FILE_SHARE_READ, 0, CREATE_ALWAYS, 0, 0);
-        MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), dump_handle, MiniDumpNormal, 
-                            &einfo, NULL, NULL);
+                char filename[256];
+                sx_strcat(sx_strcpy(filename, sizeof(filename), g_app.conf.app_name), sizeof(filename), "_crash.dmp");
+                dump_handle = CreateFile(filename, GENERIC_READ | GENERIC_WRITE, 
+                                         FILE_SHARE_WRITE | FILE_SHARE_READ, 0, CREATE_ALWAYS, 0, 0);
+                fMiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), dump_handle, MiniDumpNormal, &einfo, NULL, NULL);
 
-        rizz__log_error("Crash: dump created '%s'", filename);
+                rizz__log_error("Crash: dump created '%s'", filename);
+            }
+
+            FreeLibrary(dbghelp);
+        }
     } 
     #endif
 

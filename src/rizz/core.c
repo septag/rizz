@@ -20,6 +20,7 @@
 #include "sx/threads.h"
 #include "sx/timer.h"
 #include "sx/vmem.h"
+#include "sx/pool.h"
 
 #include <alloca.h>
 #include <stdio.h>
@@ -28,6 +29,7 @@
 #include "Remotery.h"
 
 #define MAX_TEMP_ALLOC_WAIT_TIME 2.0
+#define RMT_SMALL_MEMORY_SIZE 160
 
 #if SX_PLATFORM_ANDROID
 #    include <android/log.h>
@@ -42,7 +44,7 @@ __declspec(dllimport) void __stdcall OutputDebugStringA(const char* lpOutputStri
 #define rmt__end_cpu_sample() RMT_OPTIONAL(RMT_ENABLED, _rmt_EndCPUSample())
 
 // cj5 implementation, external modules (non-static build) should implement it for themselves
-#define CJ5_ASSERT(e)		sx_assert(e);
+#define CJ5_ASSERT(e)		sx_assert(e)
 #define CJ5_IMPLEMENT
 #include "cj5/cj5.h"
 
@@ -61,7 +63,6 @@ __declspec(dllimport) void __stdcall OutputDebugStringA(const char* lpOutputStri
 #   define TERM_COLOR_GREEN     "\033[32m"
 #   define TERM_COLOR_DIM       "\033[2m"
 #endif
-// clang-format on
 
 static const char* k__memid_names[_RIZZ_MEMID_COUNT] = { "Core",          //
                                                          "Graphics",      //
@@ -130,22 +131,6 @@ typedef struct rizz__core_cmd {
     void* user;
 } rizz__core_cmd;
 
-typedef struct rizz__proxy_alloc_header {
-    intptr_t size;
-    uint32_t ptr_offset;
-    int track_item_idx;
-} rizz__proxy_alloc_header;
-
-typedef struct rizz__track_alloc {
-    sx_alloc alloc;
-    int mem_id;
-    const char* name;
-    int64_t size;
-    int64_t peak;
-    sx_lock_t _lk;
-    rizz_track_alloc_item* items;    // sx_array
-} rizz__track_alloc;
-
 typedef struct rizz__tls_var {
     uint32_t name_hash;
     void* user;
@@ -183,11 +168,7 @@ typedef struct rizz__show_debugger_deferred {
 
 typedef struct rizz__core {
     const sx_alloc* heap_alloc;
-    sx_alloc heap_proxy_alloc;
-    rizz__track_alloc track_allocs[_RIZZ_MEMID_COUNT];
-    sx_atomic_int heap_count;
-    sx_atomic_size heap_size;
-    sx_atomic_size heap_max;
+    sx_alloc* track_allocs[_RIZZ_MEMID_COUNT];
 
     sx_job_context* jobs;
     sx_coro_context* coro;
@@ -224,7 +205,9 @@ typedef struct rizz__core {
     rizz__show_debugger_deferred show_memory;
     rizz__show_debugger_deferred show_graphics;
     rizz__show_debugger_deferred show_log;
-
+    
+    sx_mutex rmt_mtx;
+    sx_pool* rmt_alloc_pool;
     sx_strpool* strpool;
 
     bool paused;
@@ -247,13 +230,13 @@ static rizz__core g_core;
 
 static const sx_alloc* rizz__alloc(rizz_mem_id id)
 {
-#if RIZZ_CONFIG_DEBUG_MEMORY
-    sx_assert(id < _RIZZ_MEMID_COUNT);
-    return &g_core.track_allocs[id].alloc;
-#else
-    sx_unused(id);
-    return &g_core.heap_proxy_alloc;
-#endif
+    #if RIZZ_CONFIG_DEBUG_MEMORY
+        sx_assert(id < _RIZZ_MEMID_COUNT);
+        return g_core.track_allocs[id];
+    #else
+        sx_unused(id);
+        return &g_core.heap_alloc;
+    #endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -687,25 +670,42 @@ static void rizz__log_update()
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
 static void* rmt__malloc(void* ctx, uint32_t size)
 {
-    return sx_malloc((const sx_alloc*)ctx, size);
+    const sx_alloc* fallback_alloc = (const sx_alloc*)ctx;
+    return (size <= RMT_SMALL_MEMORY_SIZE) ? 
+        sx_pool_new_and_grow(g_core.rmt_alloc_pool, fallback_alloc) : 
+        sx_malloc(fallback_alloc, size);
 }
 
 static void rmt__free(void* ctx, void* ptr)
 {
-    sx_free((const sx_alloc*)ctx, ptr);
+    const sx_alloc* fallback_alloc = (const sx_alloc*)ctx;
+    if (ptr) {
+        if (sx_pool_valid_ptr(g_core.rmt_alloc_pool, ptr)) {
+            sx_pool_del(g_core.rmt_alloc_pool, ptr);
+        } else {
+            sx_free(fallback_alloc, ptr);
+        }
+    }
 }
 
 static void* rmt__realloc(void* ctx, void* ptr, uint32_t size)
 {
-    return sx_realloc((const sx_alloc*)ctx, ptr, size);
+    const sx_alloc* fallback_alloc = (const sx_alloc*)ctx;
+    if (sx_pool_valid_ptr(g_core.rmt_alloc_pool, ptr)) {
+        sx_pool_del(g_core.rmt_alloc_pool, ptr);
+    } else {
+        sx_free(fallback_alloc, ptr);
+    }
+    return (size <= RMT_SMALL_MEMORY_SIZE) ? 
+        sx_pool_new_and_grow(g_core.rmt_alloc_pool, fallback_alloc) : 
+        sx_malloc(fallback_alloc, size);
 }
 
 static const sx_alloc* rizz__heap_alloc(void)
 {
-    return &g_core.heap_proxy_alloc;
+    return g_core.heap_alloc;
 }
 
 static uint64_t rizz__delta_tick(void)
@@ -990,14 +990,6 @@ static void rizz__execute_console_command(const char* cmd_and_args)
 
 }
 
-static inline void rizz__atomic_max(sx_atomic_size* _max, intptr_t val)
-{
-    intptr_t cur_max = *_max;
-    while (cur_max < val && sx_atomic_cas_size(_max, val, cur_max) != cur_max) {
-        cur_max = *_max;
-    }
-}
-
 static void* rizz__tmp_alloc_debug_cb(void* ptr, size_t size, uint32_t align, const char* file,
                                       const char* func, uint32_t line, void* user_data)
 {
@@ -1135,177 +1127,6 @@ static void* rizz__tmp_alloc_cb(void* ptr, size_t size, uint32_t align, const ch
     }
 }
 
-static void* rizz__proxy_alloc_cb(void* ptr, size_t size, uint32_t align, const char* file,
-                                  const char* func, uint32_t line, void* user_data)
-{
-    sx_unused(ptr);
-
-    const sx_alloc* heap_alloc = (const sx_alloc*)user_data;
-    if (size == 0) {
-        // free
-        if (ptr) {
-            uint8_t* aligned = (uint8_t*)ptr;
-            rizz__proxy_alloc_header* header = (rizz__proxy_alloc_header*)ptr - 1;
-            ptr = aligned - header->ptr_offset;
-
-            sx_atomic_fetch_add_size(&g_core.heap_size, -header->size);
-            sx_atomic_decr(&g_core.heap_count);
-
-            sx__free(heap_alloc, ptr, 0, file, func, line);
-        }
-
-        return NULL;
-    } else if (ptr == NULL) {
-        // malloc
-        align = sx_max((int)align, SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT);
-
-        // do the alignment ourselves
-        intptr_t total = (intptr_t)size + sizeof(rizz__proxy_alloc_header) + align;
-        uint8_t* _ptr = sx__malloc(heap_alloc, total, 0, file, func, line);
-        if (!_ptr) {
-            sx_out_of_memory();
-            return NULL;
-        }
-
-        uint8_t* aligned = (uint8_t*)sx_align_ptr(_ptr, sizeof(rizz__proxy_alloc_header), align);
-        rizz__proxy_alloc_header* header = (rizz__proxy_alloc_header*)aligned - 1;
-        header->size = total;
-        header->ptr_offset = (uint32_t)(uintptr_t)(aligned - _ptr);
-        header->track_item_idx = -1;
-
-        sx_atomic_fetch_add_size(&g_core.heap_size, total);
-        rizz__atomic_max(&g_core.heap_max, g_core.heap_size);
-        sx_atomic_incr(&g_core.heap_count);
-
-        return aligned;
-    } else {
-        // realloc
-        uint8_t* aligned = (uint8_t*)ptr;
-        rizz__proxy_alloc_header* header = (rizz__proxy_alloc_header*)ptr - 1;
-        uint32_t offset = header->ptr_offset;
-        intptr_t prev_size = header->size;
-        ptr = aligned - offset;
-        sx_atomic_fetch_add_size(&g_core.heap_size, -header->size);
-
-        align = sx_max((int)align, SX_CONFIG_ALLOCATOR_NATURAL_ALIGNMENT);
-        intptr_t total = (intptr_t)size + sizeof(rizz__proxy_alloc_header) + align;
-        ptr = sx__realloc(heap_alloc, ptr, total, 0, file, func, line);
-        if (!ptr) {
-            sx_out_of_memory();
-            return NULL;
-        }
-        uint8_t* new_aligned = (uint8_t*)sx_align_ptr(ptr, sizeof(rizz__proxy_alloc_header), align);
-        if (new_aligned == aligned) {
-            header->size = total;
-            return aligned;
-        }
-
-        aligned = (uint8_t*)ptr + offset;
-        sx_memmove(new_aligned, aligned, size);
-        header = (rizz__proxy_alloc_header*)new_aligned - 1;
-        header->size = total;
-        header->ptr_offset = (uint32_t)(uintptr_t)(new_aligned - (uint8_t*)ptr);
-
-        intptr_t size_diff = total - prev_size;
-        sx_atomic_fetch_add_size(&g_core.heap_size, size_diff);
-        if (size_diff > 0)
-            rizz__atomic_max(&g_core.heap_max, g_core.heap_size);
-        return new_aligned;
-    }
-}
-
-// NOTE: this special tracker alloc, always assumes that the redirecting allocator is
-// proxy-allocator
-//       Thus is assumes that all our pointers have rizz__proxy_alloc_header
-// TODO: There is a catch and a possible bug:
-//       malloc and realloc can conflict in multi-threaded environment, where it is called on the
-//       same pointer on different threads
-static void* rizz__track_alloc_cb(void* ptr, size_t size, uint32_t align, const char* file,
-                                  const char* func, uint32_t line, void* user_data)
-{
-
-    rizz__track_alloc* talloc = user_data;
-    const sx_alloc* proxy_alloc = &g_core.heap_proxy_alloc;
-
-    if (size == 0) {
-        // free
-        if (ptr) {
-            const rizz__proxy_alloc_header* header = (rizz__proxy_alloc_header*)ptr - 1;
-            sx_lock(&talloc->_lk);
-            sx_assert(header->track_item_idx >= 0 &&
-                      header->track_item_idx < sx_array_count(talloc->items));
-            talloc->size -= header->size;
-            rizz_track_alloc_item* mem_item = &talloc->items[header->track_item_idx];
-            sx_assertf(mem_item->ptr == ptr, "memory corruption");
-            mem_item->ptr = NULL;    // invalidate memory item pointer
-
-            if (header->track_item_idx != sx_array_count(talloc->items) - 1) {
-                void* last_ptr = sx_array_last(talloc->items).ptr;
-                sx_assert(last_ptr);
-                rizz__proxy_alloc_header* last_header = (rizz__proxy_alloc_header*)last_ptr - 1;
-                last_header->track_item_idx = header->track_item_idx;
-                sx_array_pop(talloc->items, header->track_item_idx);
-            } else {
-                sx_array_pop_last(talloc->items);
-            }
-            sx_unlock(&talloc->_lk);
-            sx__free(proxy_alloc, ptr, align, file, func, line);
-        }
-
-        return NULL;
-    } else if (ptr == NULL) {
-        // malloc
-        ptr = sx__malloc(proxy_alloc, size, align, file, func, line);
-        sx_assert(ptr);
-        rizz__proxy_alloc_header* header = (rizz__proxy_alloc_header*)ptr - 1;
-        rizz_track_alloc_item mem_item = { .ptr = ptr, .line = line, .size = header->size };
-        if (file) {
-            sx_os_path_basename(mem_item.file, sizeof(mem_item.file), file);
-        }
-        if (func) {
-            sx_strcpy(mem_item.func, sizeof(mem_item.func), func);
-        }
-
-        sx_lock(&talloc->_lk);
-        talloc->size += header->size;
-        talloc->peak = sx_max(talloc->peak, talloc->size);
-        header->track_item_idx = sx_array_count(talloc->items);
-        sx_array_push(g_core.heap_alloc, talloc->items, mem_item);
-        sx_unlock(&talloc->_lk);
-
-        return ptr;
-    } else {
-        // realloc
-        const rizz__proxy_alloc_header* prev_header = (rizz__proxy_alloc_header*)ptr - 1;
-        int64_t prev_size = prev_header->size;
-
-        ptr = sx__realloc(proxy_alloc, ptr, size, align, file, func, line);
-        sx_assert(ptr);
-        const rizz__proxy_alloc_header* header = (rizz__proxy_alloc_header*)ptr - 1;
-
-        sx_lock(&talloc->_lk);
-        sx_assert(header->track_item_idx >= 0 &&
-                  header->track_item_idx < sx_array_count(talloc->items));
-        int64_t size_diff = header->size - prev_size;
-        talloc->size += size_diff;
-        if (size_diff > 0)
-            talloc->peak = sx_max(talloc->peak, talloc->size);
-        rizz_track_alloc_item* mem_item = &talloc->items[header->track_item_idx];
-        if (file) {
-            sx_os_path_basename(mem_item->file, sizeof(mem_item->file), file);
-        }
-        if (func) {
-            sx_strcpy(mem_item->func, sizeof(mem_item->func), func);
-        }
-        mem_item->ptr = ptr;
-        mem_item->line = line;
-        mem_item->size = header->size;
-        sx_unlock(&talloc->_lk);
-
-        return ptr;
-    }
-}
-
 static int rizz__core_echo_command(int argc, char* argv[], void* user)
 {
     sx_unused(user);
@@ -1324,26 +1145,28 @@ bool rizz__core_init(const rizz_config* conf)
                             ? sx_alloc_malloc_leak_detect()
                             : sx_alloc_malloc();
 
-#ifdef RIZZ_VERSION
-    rizz__parse_version(sx_stringize(RIZZ_VERSION), &g_core.ver.major, &g_core.ver.minor, 
-                        g_core.ver.git, sizeof(g_core.ver.git));
-#endif
+    #ifdef RIZZ_VERSION
+        rizz__parse_version(sx_stringize(RIZZ_VERSION), &g_core.ver.major, &g_core.ver.minor, 
+                            g_core.ver.git, sizeof(g_core.ver.git));
+    #endif
 
-    if (RIZZ_CONFIG_DEBUG_MEMORY) {
-        g_core.heap_proxy_alloc =
-            (sx_alloc){ .alloc_cb = rizz__proxy_alloc_cb, .user_data = (void*)g_core.heap_alloc };
-
+    #if RIZZ_CONFIG_DEBUG_MEMORY
+        rizz__mem_init(RIZZ_MEMOPTION_TRACE_CALLSTACK|RIZZ_MEMOPTION_MULTITHREAD);
         // initialize track allocators
         for (int i = 0; i < _RIZZ_MEMID_COUNT; i++) {
-            g_core.track_allocs[i] =
-                (rizz__track_alloc){ .alloc = { .alloc_cb = rizz__track_alloc_cb,
-                                                .user_data = (void*)&g_core.track_allocs[i] },
-                                     .mem_id = (rizz_mem_id)i,
-                                     .name = k__memid_names[i] };
+            g_core.track_allocs[i] = rizz__mem_create_allocator(
+                k__memid_names[i], 
+                RIZZ_MEMOPTION_INHERIT,
+                NULL,
+                g_core.heap_alloc);
+            if (!g_core.track_allocs[i]) {
+                rizz__log_error("creating track allocators failed");
+                return false;
+            }
         }
-    } else {
+    #else
         g_core.heap_proxy_alloc = *g_core.heap_alloc;
-    }
+    #endif
 
     const sx_alloc* alloc = rizz__alloc(RIZZ_MEMID_CORE);
     sx_strcpy(g_core.app_name, sizeof(g_core.app_name), conf->app_name);
@@ -1374,10 +1197,10 @@ bool rizz__core_init(const rizz_config* conf)
         }
     }
 
-#if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
-    // TEMP: remove log to file flag on mobile
-    g_core.flags &= ~RIZZ_CORE_FLAG_LOG_TO_FILE;
-#endif
+    #if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
+        // TEMP: remove log to file flag on mobile
+        g_core.flags &= ~RIZZ_CORE_FLAG_LOG_TO_FILE;
+    #endif
 
     if (g_core.flags & RIZZ_CORE_FLAG_LOG_TO_FILE) {
         sx_strcpy(g_core.logfile, sizeof(g_core.logfile), conf->app_name);
@@ -1470,40 +1293,47 @@ bool rizz__core_init(const rizz_config* conf)
     rizz__log_info("(init) asset system: hot-loading=%d", RIZZ_CONFIG_HOT_LOADING);
 
     // profiler
-    rmtSettings* rmt_config = rmt_Settings();
-    if (rmt_config) {
-        // FIXME: removed due to various regression bugs
-        //        at some point, we need to get back to the newer versions and recheck this
-        // rmt_config->enableThreadSampler = false;    // FIXME: Due to assert failure we had to disable this feature: 
-                                                       // https://github.com/Celtoys/Remotery/issues/178#issue-894595107
-        rmt_config->malloc = rmt__malloc;
-        rmt_config->free = rmt__free;
-        rmt_config->realloc = rmt__realloc;
-        rmt_config->mm_context = (void*)rizz__alloc(RIZZ_MEMID_TOOLSET);
-        rmt_config->port = (uint16_t)conf->profiler_listen_port;
-        rmt_config->msSleepBetweenServerUpdates = conf->profiler_update_interval_ms;
-        rmt_config->reuse_open_port = true;
-        rmt_config->input_handler = rizz__rmt_input_handler;
-        rmt_config->input_handler_context = (void*)rizz__alloc(RIZZ_MEMID_TOOLSET);
-        rmt_config->view_handler = rizz__rmt_view_handler;
-    }
-    rmtError rmt_err;
-    if ((rmt_err = rmt_CreateGlobalInstance(&g_core.rmt)) != RMT_ERROR_NONE) {
-        rizz__log_warn("initializing profiler failed: %d", rmt_err);
-    }
+    #if RMT_ENABLED 
+        g_core.rmt_alloc_pool = sx_pool_create(rizz__alloc(RIZZ_MEMID_TOOLSET), RMT_SMALL_MEMORY_SIZE, 1000);
+        if (g_core.rmt_alloc_pool == NULL) {
+            sx_memory_fail();
+            return false;
+        }
+        rmtSettings* rmt_config = rmt_Settings();
+        if (rmt_config) {
+            // FIXME: removed due to various regression bugs
+            //        at some point, we need to get back to the newer versions and recheck this
+            // rmt_config->enableThreadSampler = false; // FIXME: Due to assert failure we had to disable this feature: 
+                                                        // https://github.com/Celtoys/Remotery/issues/178#issue-894595107
+            rmt_config->malloc = rmt__malloc;
+            rmt_config->free = rmt__free;
+            rmt_config->realloc = rmt__realloc;
+            rmt_config->mm_context = (void*)rizz__alloc(RIZZ_MEMID_TOOLSET);
+            rmt_config->port = (uint16_t)conf->profiler_listen_port;
+            rmt_config->msSleepBetweenServerUpdates = conf->profiler_update_interval_ms;
+            rmt_config->reuse_open_port = true;
+            rmt_config->input_handler = rizz__rmt_input_handler;
+            rmt_config->input_handler_context = (void*)rizz__alloc(RIZZ_MEMID_TOOLSET);
+            rmt_config->view_handler = rizz__rmt_view_handler;
+        }
+        rmtError rmt_err;
+        if ((rmt_err = rmt_CreateGlobalInstance(&g_core.rmt)) != RMT_ERROR_NONE) {
+            rizz__log_warn("initializing profiler failed: %d", rmt_err);
+        }
 
-    rmt_SetCurrentThreadName("Main");
-    if (RMT_ENABLED && g_core.rmt) {
-        const char* profile_subsets;
-        if (conf->core_flags & RIZZ_CORE_FLAG_PROFILE_GPU)
-            profile_subsets = "cpu/gpu";
-        else
-            profile_subsets = "cpu";
-        rizz__log_info("(init) profiler (%s): port=%d", profile_subsets, conf->profiler_listen_port);
+        rmt_SetCurrentThreadName("Main");
+        if (g_core.rmt) {
+            const char* profile_subsets;
+            if (conf->core_flags & RIZZ_CORE_FLAG_PROFILE_GPU)
+                profile_subsets = "cpu/gpu";
+            else
+                profile_subsets = "cpu";
+            rizz__log_info("(init) profiler (%s): port=%d", profile_subsets, conf->profiler_listen_port);
 
-        g_core.rmt_command_queue = sx_queue_spsc_create(alloc, sizeof(char*), 16);
-        sx_assert_always(g_core.rmt_command_queue);
-    }
+            g_core.rmt_command_queue = sx_queue_spsc_create(alloc, sizeof(char*), 16);
+            sx_assert_always(g_core.rmt_command_queue);
+        }
+    #endif // RMT_ENABLED
 
     // graphics
     sg_desc gfx_desc;
@@ -1576,6 +1406,7 @@ static void rizz__core_dump_leak(const char* formatted_msg,
 }
 #endif
 
+
 void rizz__core_release()
 {
     if (!g_core.heap_alloc)
@@ -1607,10 +1438,13 @@ void rizz__core_release()
     rizz__gfx_release();
     rizz__vfs_release();
 
-    sx_queue_spsc_destroy(g_core.rmt_command_queue, alloc);
-    if (g_core.rmt) {
-        rmt_DestroyGlobalInstance(g_core.rmt);
-    }
+    #if RMT_ENABLED
+        sx_queue_spsc_destroy(g_core.rmt_command_queue, alloc);
+        if (g_core.rmt) {
+            rmt_DestroyGlobalInstance(g_core.rmt);
+        }
+        sx_pool_destroy(g_core.rmt_alloc_pool, rizz__alloc(RIZZ_MEMID_TOOLSET));
+    #endif // RMT_ENABLED
     sx_array_free(alloc, g_core.console_cmds);
 
     if (g_core.tmp_allocs) {
@@ -1644,11 +1478,12 @@ void rizz__core_release()
 
     sx_strpool_destroy(g_core.strpool, alloc);
 
-    if (RIZZ_CONFIG_DEBUG_MEMORY) {
+    #if RIZZ_CONFIG_DEBUG_MEMORY
         for (int i = 0; i < _RIZZ_MEMID_COUNT; i++) {
-            sx_array_free(g_core.heap_alloc, g_core.track_allocs[i].items);
+            rizz__mem_destroy_allocator(g_core.track_allocs[i]);
         }
-    }
+        rizz__mem_release();
+    #endif
     
     for (int i = 0; i < sx_array_count(g_core.tls_vars); i++) {
         if (g_core.tls_vars[i].tls) {
@@ -1656,7 +1491,7 @@ void rizz__core_release()
         }
     }
 
-    sx_array_free(&g_core.heap_proxy_alloc, g_core.tls_vars);
+    sx_array_free(g_core.heap_alloc, g_core.tls_vars);
     rizz__log_info("shutdown");
 
 #ifdef _DEBUG
@@ -1778,9 +1613,7 @@ void rizz__core_frame()
             rizz__profile(ImGui_draw) {
                 rizz_api_imgui_extra* the_imguix = the__plugin.get_api_byname("imgui_extra", 0);
                 if (g_core.show_memory.show) {
-                    rizz_mem_info minfo;
-                    the__core.get_mem_info(&minfo);
-                    the_imguix->memory_debugger(&minfo, g_core.show_memory.p_open);
+                    rizz__mem_show_debugger(g_core.show_memory.p_open);
                     g_core.show_memory.show = false;
                 }
                 if (g_core.show_graphics.show) {
@@ -1953,35 +1786,6 @@ static void rizz__end_profile_sample()
     rmt__end_cpu_sample();
 }
 
-static void rizz__get_mem_info(rizz_mem_info* info)
-{
-    for (int i = 0; i < _RIZZ_MEMID_COUNT; i++) {
-        rizz__track_alloc* t = &g_core.track_allocs[i];
-        info->trackers[i] = (rizz_trackalloc_info){ .name = t->name,
-                                                    .items = t->items,
-                                                    .num_items = sx_array_count(t->items),
-                                                    .mem_id = t->mem_id,
-                                                    .size = t->size,
-                                                    .peak = t->peak };
-    }
-
-    int num_temp_allocs = sx_min(g_core.num_threads, RIZZ_MAX_TEMP_ALLOCS);
-    for (int i = 0; i < g_core.num_threads && i < num_temp_allocs; i++) {
-        rizz__core_tmpalloc* talloc = &g_core.tmp_allocs[i];
-        size_t size = (size_t)talloc->vmem.num_pages * (size_t)sx_os_pagesz();
-        info->temp_allocs[i] =
-            (rizz_linalloc_info){ .offset = talloc->frame_peak,
-                                  .size = size,
-                                  .peak = talloc->peak };
-    }
-
-    info->num_trackers = RIZZ_CONFIG_DEBUG_MEMORY ? _RIZZ_MEMID_COUNT : 0;
-    info->num_temp_allocs = g_core.num_threads;
-    info->heap = g_core.heap_size;
-    info->heap_max = g_core.heap_max;
-    info->heap_count = g_core.heap_count;
-}
-
 static void rizz__core_coro_invoke(void (*coro_cb)(sx_fiber_transfer), void* user)
 {
     sx__coro_invoke(g_core.coro, coro_cb, user);
@@ -2027,7 +1831,7 @@ static void rizz__core_tls_register(const char* name, void* user,
 
     sx_assert(tvar.tls);
 
-    sx_array_push(&g_core.heap_proxy_alloc, g_core.tls_vars, tvar);
+    sx_array_push(g_core.heap_alloc, g_core.tls_vars, tvar);
 }
 
 static void* rizz__core_tls_var(const char* name)
@@ -2130,7 +1934,9 @@ rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .tls_register = rizz__core_tls_register,
                             .tls_var = rizz__core_tls_var,
                             .alloc = rizz__alloc,
-                            .get_mem_info = rizz__get_mem_info,
+                            .trace_alloc_destroy = rizz__mem_destroy_allocator,
+                            .trace_alloc_clear = rizz__mem_allocator_clear_trace,
+                            .trace_alloc_dump_contexts = rizz__mem_trace_dump_contexts,
                             .version = rizz__version,
                             .delta_tick = rizz__delta_tick,
                             .delta_time = rizz__delta_time,

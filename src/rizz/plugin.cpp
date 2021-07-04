@@ -10,6 +10,7 @@
 #include "sx/string.h"
 
 #ifndef RIZZ_BUNDLE
+#    include "stackwalkerc/stackwalkerc.h"
 #    define CR_MAIN_FUNC "rizz_plugin_main"
 #    define CR_EVENT_FUNC "rizz_plugin_event_handler"
 // uncomment this on to debug CR
@@ -21,6 +22,13 @@
 #    endif
 #    define CR_ERROR(...) the__core.print_error(0, __FILE__, __LINE__, __VA_ARGS__)
 #    define CR_HOST CR_SAFEST
+
+#   if SX_PLATFORM_WINDOWS
+    typedef struct _IMAGE_NT_HEADERS64 *PIMAGE_NT_HEADERS64;
+    typedef PIMAGE_NT_HEADERS64 (__stdcall* ImageNtHeader_t)(void*);
+    static ImageNtHeader_t fImageNtHeader;
+    #define IMAGE_NT_HEADER_FUNC fImageNtHeader
+#   endif
 
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG_GCC("-Wunused-function")
@@ -65,6 +73,9 @@ struct rizz__plugin_mgr {
     int* plugin_update_order = nullptr;    // indices to 'plugins' array
     char plugin_path[256] = { 0 };
     rizz__plugin_injected_api* injected = nullptr;
+    #if SX_PLATFORM_WINDOWS && !defined(RIZZ_BUNDLE)
+        HMODULE dbghelp;
+    #endif
     bool loaded;
 };
 
@@ -104,6 +115,15 @@ bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path)
 
 #if RIZZ_BUNDLE
     rizz__plugin_bundle();
+#elif SX_PLATFORM_WINDOWS
+    g_plugin.dbghelp = (HMODULE)sw_load_dbghelp();
+    if (g_plugin.dbghelp) {
+        fImageNtHeader = (ImageNtHeader_t)GetProcAddress(g_plugin.dbghelp, "ImageNtHeader");
+    }
+    if (!fImageNtHeader) {
+        rizz__log_error("cannot find 'ImageNtHeader' function from dbghelp.dll");
+        return false;
+    }
 #endif
 
     return true;
@@ -161,6 +181,12 @@ void rizz__plugin_release()
 
     sx_array_free(g_plugin.alloc, g_plugin.injected);
     sx_array_free(g_plugin.alloc, g_plugin.plugin_update_order);
+
+    #if SX_PLATFORM_WINDOWS && !defined(RIZZ_BUNDLE)
+        if (g_plugin.dbghelp) {
+            FreeLibrary(g_plugin.dbghelp);
+        }
+    #endif
 
     sx_memset(&g_plugin, 0x0, sizeof(g_plugin));
 }
@@ -450,6 +476,7 @@ bool rizz__plugin_init_plugins()
         int index = g_plugin.plugin_update_order[i];
         rizz__plugin_item* item = &g_plugin.plugins[index];
 
+        rizz__mem_reload_modules();
         if (!cr_plugin_load(item->p, item->filepath, rizz__plugin_reload_handler)) {
             rizz__log_error("plugin init failed: %s", item->filepath);
             return false;

@@ -1498,8 +1498,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
     }
 
     int jinputs = -1;
-    int num_inputs = 0, num_uniforms = 0, num_textures = 0, num_storage_images = 0,
-        num_storage_buffers = 0;
+    int num_inputs = 0, num_uniforms = 0, num_textures = 0, num_storage_images = 0, num_storage_buffers = 0;
     int juniforms, jtextures, jstorage_images, jstorage_buffers;
 
     if (stage == RIZZ_SHADER_STAGE_VS) {
@@ -1538,8 +1537,7 @@ static rizz_shader_refl* rizz__shader_parse_reflect_json(const sx_alloc* alloc,
     }
 
     char tmpstr[128];
-    refl->lang = rizz__shader_str_to_lang(
-        cj5_seekget_string(&jres, 0, "language", tmpstr, sizeof(tmpstr), ""));
+    refl->lang = rizz__shader_str_to_lang(cj5_seekget_string(&jres, 0, "language", tmpstr, sizeof(tmpstr), ""));
     refl->stage = stage;
     refl->profile_version = cj5_seekget_int(&jres, 0, "profile_version", 0);
     refl->code_type = cj5_seekget_bool(&jres, 0, "bytecode", false) ? RIZZ_SHADER_CODE_BYTECODE
@@ -2810,19 +2808,21 @@ static bool rizz__cb_begin_stage(rizz_gfx_stage stage)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
-    sx_lock(&g_gfx.stage_lk);
-    rizz__gfx_stage* _stage = &g_gfx.stages[rizz_to_index(stage.id)];
-    sx_assertf(_stage->state == STAGE_STATE_NONE, "already called begin on this stage");
-    bool enabled = _stage->enabled;
-    if (!enabled) {
-        sx_unlock(&g_gfx.stage_lk);
-        return false;
+    rizz__gfx_stage* _stage;
+    const char* stage_name;
+    sx_lock(g_gfx.stage_lk) {
+        _stage = &g_gfx.stages[rizz_to_index(stage.id)];
+        sx_assertf(_stage->state == STAGE_STATE_NONE, "already called begin on this stage");
+        bool enabled = _stage->enabled;
+        if (!enabled) {
+            sx_lock_exit(&g_gfx.stage_lk);
+            return false;
+        }
+        _stage->state = STAGE_STATE_SUBMITTING;
+        cb->running_stage = stage;
+        cb->stage_order = _stage->order;
+        stage_name = _stage->name;
     }
-    _stage->state = STAGE_STATE_SUBMITTING;
-    cb->running_stage = stage;
-    cb->stage_order = _stage->order;
-    const char* stage_name = _stage->name;
-    sx_unlock(&g_gfx.stage_lk);
 
     rizz__cb_record_begin_stage(_stage->name, sizeof(_stage->name));
 
@@ -2840,11 +2840,11 @@ static void rizz__cb_end_stage()
 
     rizz__cb_end_profile_sample();
 
-    sx_lock(&g_gfx.stage_lk);
-    rizz__gfx_stage* _stage = &g_gfx.stages[rizz_to_index(cb->running_stage.id)];
-    sx_assertf(_stage->state == STAGE_STATE_SUBMITTING, "should call begin on this stage first");
-    _stage->state = STAGE_STATE_DONE;
-    sx_unlock(&g_gfx.stage_lk);
+    sx_lock(g_gfx.stage_lk) {
+        rizz__gfx_stage* _stage = &g_gfx.stages[rizz_to_index(cb->running_stage.id)];
+        sx_assertf(_stage->state == STAGE_STATE_SUBMITTING, "should call begin on this stage first");
+        _stage->state = STAGE_STATE_DONE;
+    }
 
     rizz__cb_record_end_stage();
     cb->running_stage = (rizz_gfx_stage){ 0 };
@@ -3630,19 +3630,19 @@ static const rizz__run_command_cb k_run_cbs[_GFX_COMMAND_COUNT] = {
 
 static void rizz__gfx_validate_stage_deps()
 {
-    sx_lock(&g_gfx.stage_lk);
-    for (int i = 0, c = sx_array_count(g_gfx.stages); i < c; i++) {
-        rizz__gfx_stage* _stage = &g_gfx.stages[i];
-        if (_stage->state == STAGE_STATE_DONE && _stage->parent.id) {
-            rizz__gfx_stage* _parent = &g_gfx.stages[rizz_to_index(_stage->parent.id)];
-            if (_parent->state != STAGE_STATE_DONE) {
-                sx_assertf(0,
-                    "trying to execute stage '%s' that depends on '%s', but '%s' is not rendered",
-                    _stage->name, _parent->name, _parent->name);
+    sx_lock(g_gfx.stage_lk) {
+        for (int i = 0, c = sx_array_count(g_gfx.stages); i < c; i++) {
+            rizz__gfx_stage* _stage = &g_gfx.stages[i];
+            if (_stage->state == STAGE_STATE_DONE && _stage->parent.id) {
+                rizz__gfx_stage* _parent = &g_gfx.stages[rizz_to_index(_stage->parent.id)];
+                if (_parent->state != STAGE_STATE_DONE) {
+                    sx_assertf(0,
+                        "trying to execute stage '%s' that depends on '%s', but '%s' is not rendered",
+                        _stage->name, _parent->name, _parent->name);
+                }
             }
         }
     }
-    sx_unlock(&g_gfx.stage_lk);
 }
 
 static int rizz__gfx_execute_command_buffer(rizz__gfx_cmdbuffer* cmds)
@@ -3786,45 +3786,46 @@ static void rizz__stage_enable(rizz_gfx_stage stage)
 {
     sx_assert(stage.id);
 
-    sx_lock(&g_gfx.stage_lk);
-    rizz__gfx_stage* _stage = &g_gfx.stages[rizz_to_index(stage.id)];
-    _stage->enabled = true;
-    _stage->single_enabled = true;
+    sx_lock(g_gfx.stage_lk) {
+        rizz__gfx_stage* _stage = &g_gfx.stages[rizz_to_index(stage.id)];
+        _stage->enabled = true;
+        _stage->single_enabled = true;
 
-    // apply for children
-    for (rizz_gfx_stage child = _stage->child; child.id;
-         child = g_gfx.stages[rizz_to_index(child.id)].next) {
-        rizz__gfx_stage* _child = &g_gfx.stages[rizz_to_index(child.id)];
-        _child->enabled = _child->single_enabled;
+        // apply for children
+        for (rizz_gfx_stage child = _stage->child; child.id;
+            child = g_gfx.stages[rizz_to_index(child.id)].next) {
+            rizz__gfx_stage* _child = &g_gfx.stages[rizz_to_index(child.id)];
+            _child->enabled = _child->single_enabled;
+        }
     }
-    sx_unlock(&g_gfx.stage_lk);
 }
 
 static void rizz__stage_disable(rizz_gfx_stage stage)
 {
     sx_assert(stage.id);
 
-    sx_lock(&g_gfx.stage_lk);
-    rizz__gfx_stage* _stage = &g_gfx.stages[rizz_to_index(stage.id)];
-    _stage->enabled = false;
-    _stage->single_enabled = false;
+    sx_lock(g_gfx.stage_lk) {
+        rizz__gfx_stage* _stage = &g_gfx.stages[rizz_to_index(stage.id)];
+        _stage->enabled = false;
+        _stage->single_enabled = false;
 
-    // apply for children
-    for (rizz_gfx_stage child = _stage->child; child.id;
-         child = g_gfx.stages[rizz_to_index(child.id)].next) {
-        rizz__gfx_stage* _child = &g_gfx.stages[rizz_to_index(child.id)];
-        _child->enabled = false;
+        // apply for children
+        for (rizz_gfx_stage child = _stage->child; child.id;
+            child = g_gfx.stages[rizz_to_index(child.id)].next) {
+            rizz__gfx_stage* _child = &g_gfx.stages[rizz_to_index(child.id)];
+            _child->enabled = false;
+        }
     }
-    sx_unlock(&g_gfx.stage_lk);
 }
 
 static bool rizz__stage_isenabled(rizz_gfx_stage stage)
 {
     sx_assert(stage.id);
 
-    sx_lock(&g_gfx.stage_lk);
-    bool enabled = g_gfx.stages[rizz_to_index(stage.id)].enabled;
-    sx_unlock(&g_gfx.stage_lk);
+    bool enabled;
+    sx_lock(g_gfx.stage_lk) {
+        enabled = g_gfx.stages[rizz_to_index(stage.id)].enabled;
+    }
     return enabled;
 }
 
@@ -3833,12 +3834,12 @@ static rizz_gfx_stage rizz__stage_find(const char* name)
     sx_assert(name);
 
     uint32_t name_hash = sx_hash_fnv32_str(name);
-    sx_lock(&g_gfx.stage_lk);
-    for (int i = 0, c = sx_array_count(g_gfx.stages); i < c; i++) {
-        if (g_gfx.stages[i].name_hash == name_hash)
-            return (rizz_gfx_stage){ .id = rizz_to_id(i) };
+    sx_lock(g_gfx.stage_lk) {
+        for (int i = 0, c = sx_array_count(g_gfx.stages); i < c; i++) {
+            if (g_gfx.stages[i].name_hash == name_hash)
+                return (rizz_gfx_stage){ .id = rizz_to_id(i) };
+        }
     }
-    sx_unlock(&g_gfx.stage_lk);
     return (rizz_gfx_stage){ .id = 0 };
 }
 
@@ -3958,17 +3959,19 @@ static const rizz_gfx_trace_info* rizz__trace_info()
 
 static bool rizz__imm_begin_stage(rizz_gfx_stage stage)
 {
-    sx_lock(&g_gfx.stage_lk);
-    rizz__gfx_stage* _stage = &g_gfx.stages[rizz_to_index(stage.id)];
-    sx_assertf(_stage->state == STAGE_STATE_NONE, "already called begin on this stage");
-    bool enabled = _stage->enabled;
-    if (!enabled) {
-        sx_unlock(&g_gfx.stage_lk);
-        return false;
+    rizz__gfx_stage* _stage;
+    const char* stage_name;
+    sx_lock(g_gfx.stage_lk) {
+        _stage = &g_gfx.stages[rizz_to_index(stage.id)];
+        sx_assertf(_stage->state == STAGE_STATE_NONE, "already called begin on this stage");
+        bool enabled = _stage->enabled;
+        if (!enabled) {
+            sx_lock_exit(&g_gfx.stage_lk);
+            return false;
+        }
+        _stage->state = STAGE_STATE_SUBMITTING;
+        stage_name = _stage->name;
     }
-    _stage->state = STAGE_STATE_SUBMITTING;
-    const char* stage_name = _stage->name;
-    sx_unlock(&g_gfx.stage_lk);
 
     sg_push_debug_group(stage_name);
 

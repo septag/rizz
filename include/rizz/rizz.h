@@ -558,6 +558,15 @@ typedef enum rizz_log_level {
     _RIZZ_LOG_LEVEL_COUNT
 } rizz_log_level;
 
+typedef enum rizz_mem_option {
+    RIZZ_MEMOPTION_TRACE_CALLSTACK = 0x1,
+    RIZZ_MEMOPTION_TRACE_LEAKS = 0x2,
+    RIZZ_MEMOPTION_INSERT_CANARIES = 0x4,
+    RIZZ_MEMOPTION_MULTITHREAD = 0x8
+} rizz_mem_option;
+
+#define RIZZ_MEMOPTION_INHERIT 0xffffffff
+
 // main app/game config
 typedef struct rizz_config {
     const char* app_name;
@@ -661,39 +670,6 @@ typedef enum rizz_mem_id {
     _RIZZ_MEMID_COUNT
 } rizz_mem_id;
 
-typedef struct rizz_track_alloc_item {
-    char file[32];
-    char func[64];
-    void* ptr;
-    int64_t size;
-    int line;
-} rizz_track_alloc_item;
-
-typedef struct {
-    int64_t offset;
-    int64_t size;
-    int64_t peak;
-} rizz_linalloc_info;
-
-typedef struct {
-    const char* name;
-    const rizz_track_alloc_item* items;
-    int num_items;
-    int mem_id;
-    int64_t size;
-    int64_t peak;
-} rizz_trackalloc_info;
-
-typedef struct rizz_mem_info {
-    rizz_trackalloc_info trackers[_RIZZ_MEMID_COUNT];
-    rizz_linalloc_info temp_allocs[RIZZ_MAX_TEMP_ALLOCS];
-    int num_trackers;
-    int num_temp_allocs;
-    size_t heap;
-    size_t heap_max;
-    int heap_count;
-} rizz_mem_info;
-
 typedef struct rizz_version {
     int major;
     int minor;
@@ -732,7 +708,10 @@ typedef struct rizz_api_core {
 
     const sx_alloc* (*alloc)(rizz_mem_id id);
 
-    void (*get_mem_info)(rizz_mem_info* info);
+    sx_alloc* (*trace_alloc_create)(const char* name, uint32_t mem_opts, const char* parent, const sx_alloc* alloc);
+    void (*trace_alloc_destroy)(sx_alloc* alloc);
+    void (*trace_alloc_clear)(sx_alloc* alloc);
+    void (*trace_alloc_dump_contexts)(void);
 
     rizz_version (*version)(void);
 

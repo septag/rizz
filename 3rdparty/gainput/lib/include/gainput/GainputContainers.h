@@ -85,9 +85,6 @@ inline void MurmurHash3_x86_32(const void * key, int len, uint32_t seed, void * 
 	*(uint32_t*)out = h1;
 }
 
-// -- MurmurHash3 end --
-
-
 /// A std::vector-like data container for POD-types.
 /**
  * \tparam T A POD-type to hold in this container.

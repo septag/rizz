@@ -23,6 +23,9 @@
 #define DEFAULT_MAX_FIBERS 64
 #define DEFAULT_FIBER_STACK_SIZE 1048576    // 1MB
 
+// TEMP
+#define SX_CONFIG_EXPERIMENTAL_SPINLOCK 1
+
 typedef struct sx__job {
     int job_index;
     int done;
@@ -74,8 +77,8 @@ typedef struct sx_job_context {
     sx__job* waiting_list_last[SX_JOB_PRIORITY_COUNT];
     uint32_t* tags;      // count = num_threads + 1
     #if SX_CONFIG_EXPERIMENTAL_SPINLOCK
-    sx_anderson_lock* job_lk;    // used for 'job_pool', 'waiting_list' and 'pending' access
-    sx_anderson_lock* counter_lk;
+    sx_anderson_lock_t* job_lk;    // used for 'job_pool', 'waiting_list' and 'pending' access
+    sx_anderson_lock_t* counter_lk;
     #else
     sx_lock_t job_lk;
     sx_lock_t counter_lk;
@@ -92,7 +95,7 @@ typedef struct sx_job_context {
 
 static void sx__del_job(sx_job_context* ctx, sx__job* job)
 {
-    sx_lock_(ctx->job_lk) {
+    sx_anderson_lock(ctx->job_lk) {
         sx_pool_del(ctx->job_pool, job);
     }
 }
@@ -184,7 +187,7 @@ static sx__job_select_result sx__job_select(sx_job_context* ctx, uint32_t tid, u
 {
     sx__job_select_result r = { 0 };
     
-    sx_lock_(ctx->job_lk) {
+    sx_anderson_lock(ctx->job_lk) {
         for (int pr = 0; pr < SX_JOB_PRIORITY_COUNT; pr++) {
             sx__job* node = ctx->waiting_list[pr];
             while (node) {
@@ -314,7 +317,7 @@ sx_job_t sx_job_dispatch(sx_job_context* ctx, int count, sx_job_cb* callback, vo
 
     // Create a counter (job handle)
     sx_job_t counter;
-    sx_lock_(ctx->counter_lk) {
+    sx_anderson_lock(ctx->counter_lk) {
         counter = (sx_job_t)sx_pool_new_and_grow(ctx->counter_pool, ctx->alloc);
     }
 
@@ -332,7 +335,7 @@ sx_job_t sx_job_dispatch(sx_job_context* ctx, int count, sx_job_cb* callback, vo
         tdata->cur_job->wait_counter = counter;
 
     // Push jobs to the end of the list, so they can be collected by threads
-    sx_lock_(ctx->job_lk) {
+    sx_anderson_lock(ctx->job_lk) {
         if (!sx_pool_fulln(ctx->job_pool, num_jobs)) {
             int range_start = 0;
             int range_end = range_size + (range_reminder > 0 ? 1 : 0);
@@ -401,7 +404,7 @@ static void sx__job_process_pending(sx_job_context* ctx)
 
 static void sx__job_process_pending_single(sx_job_context* ctx, int index)
 {
-    sx_lock_(ctx->job_lk) {
+    sx_anderson_lock(ctx->job_lk) {
         // unlike sx__job_process_pending, only check the specific index to push into job-list
         sx__job_pending pending = ctx->pending[index];
         if (!sx_pool_fulln(ctx->job_pool, *pending.counter)) {
@@ -449,7 +452,7 @@ void sx_job_wait_and_del(sx_job_context* ctx, sx_job_t job)
             tdata->cur_job = NULL;
             cur_job->owner_tid = tdata->tid;
 
-            sx_lock_(ctx->job_lk) {
+            sx_anderson_lock(ctx->job_lk) {
                 int list_idx = cur_job->priority;
                 sx__job_add_list(&ctx->waiting_list[list_idx], &ctx->waiting_list_last[list_idx],
                                  cur_job);
@@ -474,12 +477,12 @@ void sx_job_wait_and_del(sx_job_context* ctx, sx_job_t job)
     }
 
     // All jobs are done, Delete the counter
-    sx_lock_(ctx->counter_lk) {
+    sx_anderson_lock(ctx->counter_lk) {
         sx_pool_del(ctx->counter_pool, (void*)job);
     }
 
     // auto-dispatch pending jobs
-    sx_lock_(ctx->job_lk) {
+    sx_anderson_lock(ctx->job_lk) {
         sx__job_process_pending(ctx);
     }
 }
@@ -489,12 +492,12 @@ bool sx_job_test_and_del(sx_job_context* ctx, sx_job_t job)
     sx_compiler_read_barrier();
     if (*job == 0) {
         // All jobs are done, Delete the counter
-        sx_lock_(ctx->counter_lk) {
+        sx_anderson_lock(ctx->counter_lk) {
             sx_pool_del(ctx->counter_pool, (void*)job);
         }
 
         // auto-dispatch pending jobs
-        sx_lock_(ctx->job_lk) {
+        sx_anderson_lock(ctx->job_lk) {
             sx__job_process_pending(ctx);
         }
         return true;
@@ -646,8 +649,8 @@ void sx_job_destroy_context(sx_job_context* ctx, const sx_alloc* alloc)
     sx_semaphore_release(&ctx->sem);
 
     #if SX_CONFIG_EXPERIMENTAL_SPINLOCK
-    sx_anderson_lock_destroy(ctx->job_lk, alloc);
-    sx_anderson_lock_destroy(ctx->counter_lk, alloc);
+        sx_anderson_lock_destroy(ctx->job_lk, alloc);
+        sx_anderson_lock_destroy(ctx->counter_lk, alloc);
     #endif
 
     sx_free(alloc, ctx->tags);

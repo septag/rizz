@@ -344,7 +344,6 @@ static void update(float dt)
         }
     }
 
-
     show_debugmenu(the_imgui, the_core);
 }
 
@@ -385,6 +384,7 @@ static void render(void)
     sx_box wall_box;
     wall_box.e = sx_vec3f(WALL_SIZE, WALL_SIZE, WALL_SIZE);
     wall_box.tx = sx_tx3d_ident();
+
 
     the_3d->debug.draw_box(&wall_box, &viewproj, RIZZ_3D_DEBUG_MAPTYPE_WHITE, sx_color4f(0.0f, 0.5f, 1.0f, 0.3f));
     the_gfx->staged.end_pass();

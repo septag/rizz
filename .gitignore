@@ -26,7 +26,6 @@ Thumbs.db
 .clangd
 build.bat
 
-# Gradle
 .gradle
 /local.properties
 /.idea/workspace.xml
@@ -34,6 +33,8 @@ build.bat
 /build
 /build-*
 /captures
+.clangd
+
 
 # assets
 assets/shaders/*

@@ -11,11 +11,11 @@
 
 #define rizz__json_lock()                                  \
     if (params->flags & RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD) \
-        sx_lock(&g_json.lock);
+        sx_lock_enter(&g_json.lock);
 
 #define rizz__json_unlock()                                \
     if (params->flags & RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD) \
-        sx_unlock(&g_json.lock);
+        sx_lock_exit(&g_json.lock);
 
 typedef struct rizz__json_context {
     const sx_alloc* alloc;

@@ -15,6 +15,7 @@
 #include "sx/math-vec.h"
 #include "sx/string.h"
 #include "sx/timer.h"
+#include "sx/pool.h"
 
 #include <alloca.h>
 #include <float.h>
@@ -42,6 +43,7 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 #define MAX_VERTS 32768      // 32k
 #define MAX_INDICES 98304    // 96k
 #define MAX_BUFFERED_FRAME_TIMES 120
+#define IMGUI_SMALL_MEMORY_SIZE 160
 
 typedef struct rizz_api_gfx rizz_api_gfx;
 static void imgui__render(void);
@@ -995,6 +997,7 @@ SX_PRAGMA_DIAGNOSTIC_POP();
 
 typedef struct imgui__context {
     ImGuiContext* ctx;
+    sx_pool* small_mem_pool;
     int max_verts;
     int max_indices;
     ImDrawVert* verts;
@@ -1036,12 +1039,22 @@ RIZZ_STATE static imgui__context g_imgui;
 
 static void* imgui__malloc(size_t sz, void* user_data)
 {
-    return sx_malloc((const sx_alloc*)user_data, sz);
+    const sx_alloc* fallback_alloc = (const sx_alloc*)user_data;
+    return (sz <= IMGUI_SMALL_MEMORY_SIZE)
+               ? sx_pool_new_and_grow(g_imgui.small_mem_pool, fallback_alloc)
+               : sx_malloc(fallback_alloc, sz);
 }
 
 static void imgui__free(void* ptr, void* user_data)
 {
-    sx_free((const sx_alloc*)user_data, ptr);
+    const sx_alloc* fallback_alloc = (const sx_alloc*)user_data;
+    if (ptr) {
+        if (sx_pool_valid_ptr(g_imgui.small_mem_pool, ptr)) {
+            sx_pool_del(g_imgui.small_mem_pool, ptr);
+        } else {
+            sx_free(fallback_alloc, ptr);
+        }
+    }
 }
 
 static bool imgui__resize_buffers(int max_verts, int max_indices)
@@ -1159,6 +1172,12 @@ static bool imgui__init(void)
 
     const sx_alloc* alloc = the_core->alloc(RIZZ_MEMID_TOOLSET);
     g_sg_imgui_alloc = alloc;
+    g_imgui.small_mem_pool = sx_pool_create(alloc, IMGUI_SMALL_MEMORY_SIZE, 1000);
+    if (!g_imgui.small_mem_pool) {
+        sx_memory_fail();
+        return false;
+    }
+
     the__imgui.SetAllocatorFunctions(imgui__malloc, imgui__free, (void*)alloc);
 
     g_imgui.last_cursor = ImGuiMouseCursor_COUNT;
@@ -1281,7 +1300,8 @@ static void imgui__release()
     the_gfx->destroy_image(g_imgui.font_tex);
     sx_free(alloc, g_imgui.verts);
     sx_free(alloc, g_imgui.indices);
-    sx_array_free(the_core->alloc(RIZZ_MEMID_TOOLSET), g_imgui.char_input);
+    sx_array_free(alloc, g_imgui.char_input);
+    sx_pool_destroy(g_imgui.small_mem_pool, alloc);
 }
 
 static void imgui__update_cursor()
@@ -1889,146 +1909,6 @@ static void imgui__graphics_debugger(const rizz_gfx_trace_info* info, bool* p_op
     the__imgui.End();
 }
 
-static void imgui__memory_debugger(const rizz_mem_info* info, bool* p_open)
-{
-    static bool peaks = true;
-    static int selected_heap = -1;
-
-    // TODO: add search filters to items in allocations
-    the__imgui.SetNextWindowSizeConstraints(sx_vec2f(600.0f, 100.0f), sx_vec2f(FLT_MAX, FLT_MAX),
-                                            NULL, NULL);
-
-    if (the__imgui.Begin("Memory Debugger", p_open, 0)) {
-        if (the__imgui.TreeNodeEx_Str("Heap", ImGuiTreeNodeFlags_DefaultOpen)) {
-            the__imgui.Columns(3, NULL, false);
-            imgui__label("Count", "%d", info->heap_count);
-            the__imgui.NextColumn();
-            the__imgui.NextColumn();
-            the__imgui.Checkbox("Peaks", &peaks);
-            the__imgui.Columns(1, NULL, false);
-            the__imgui.Separator();
-
-            char size_text[32];
-            char peak_text[32];
-            const sx_vec2 progress_size = sx_vec2f(-1.0f, 14.0f);
-
-            if (peaks)
-                sx_snprintf(peak_text, sizeof(peak_text), "%$.2d", info->heap_max);
-            sx_snprintf(size_text, sizeof(size_text), "%$.2d", info->heap);
-
-            the__imgui.Text("Heap");
-            the__imgui.SameLine(100.0f, -1);
-            if (peaks) {
-                imgui__dual_progress_bar((float)info->heap / (float)info->heap_max, 1.0f,
-                                         progress_size, size_text, peak_text);
-            } else {
-                the__imgui.ProgressBar((float)info->heap / (float)info->heap_max, progress_size,
-                                       size_text);
-            }
-
-            for (int i = 0; i < info->num_trackers; i++) {
-                const rizz_trackalloc_info* t = &info->trackers[i];
-                if (peaks)
-                    sx_snprintf(peak_text, sizeof(peak_text), "%$.2d", t->peak);
-                sx_snprintf(size_text, sizeof(size_text), "%$.2d", t->size);
-                if (the__imgui.Selectable_Bool(t->name, selected_heap == i,
-                                               ImGuiSelectableFlags_SpanAllColumns, SX_VEC2_ZERO)) {
-                    selected_heap = i;
-                }
-                the__imgui.SameLine(100.0f, -1);
-
-                float p = (float)t->size / (float)info->heap;
-                if (peaks) {
-                    imgui__dual_progress_bar(p, (float)t->peak / (float)info->heap, progress_size,
-                                             size_text, peak_text);
-                } else {
-                    the__imgui.ProgressBar(p, progress_size, size_text);
-                }
-            }
-
-            if (selected_heap != -1 && 
-                the__imgui.BeginTable("HeapAllocs", 6, 
-                                      ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_BordersOuterH|
-                                      ImGuiTableFlags_SizingFixedFit|ImGuiTableFlags_RowBg|ImGuiTableFlags_ScrollY,
-                                      SX_VEC2_ZERO, 0)) {
-                char text[32];
-                const rizz_trackalloc_info* t = &info->trackers[selected_heap];
-                ImGuiListClipper clipper;
-                int num_items = t->num_items;
-
-                if (num_items) {
-                    the__imgui.TableSetupColumn("#", 0, 35.0f, 0);
-                    the__imgui.TableSetupColumn("Ptr", 0, 150.0f, 0);
-                    the__imgui.TableSetupColumn("Size", 0, 50.0f, 0);
-                    the__imgui.TableSetupColumn("File", 0, 100.0f, 0);
-                    the__imgui.TableSetupColumn("Function", 0, 200.0f, 0);
-                    the__imgui.TableSetupColumn("Line", 0, 35.0f, 0);
-                    the__imgui.TableHeadersRow();
-
-                    the__imgui.Columns(6, NULL, false);
-                    the__imgui.ImGuiListClipper_Begin(&clipper, num_items, -1.0f);
-                    while (the__imgui.ImGuiListClipper_Step(&clipper)) {
-                        the__imgui.TableNextRow(0, 0);
-                        int start = num_items - clipper.DisplayStart - 1;
-                        int end = num_items - clipper.DisplayEnd;
-                        for (int i = start; i >= end; i--) {
-                            const rizz_track_alloc_item* mitem = &t->items[i];
-
-                            sx_snprintf(text, sizeof(text), "%d", i + 1);
-                            the__imgui.TableNextColumn();
-                            the__imgui.Text(text);
-
-                            sx_snprintf(text, sizeof(text), "0x%p", mitem->ptr);
-                            the__imgui.TableNextColumn();
-                            the__imgui.Text(text);
-
-                            sx_snprintf(text, sizeof(text), "%$.2d", mitem->size);
-                            the__imgui.TableNextColumn();
-                            the__imgui.Text(text);
-
-                            the__imgui.TableNextColumn();
-                            the__imgui.Text(mitem->file);
-
-                            the__imgui.TableNextColumn();
-                            the__imgui.Text(mitem->func);
-
-                            the__imgui.TableNextColumn();
-                            sx_snprintf(text, sizeof(text), "%d", mitem->line);
-                            the__imgui.Text(text);
-                        }
-                    }
-                    the__imgui.ImGuiListClipper_End(&clipper);
-                }    // list-clipper
-
-                the__imgui.EndTable();
-            }        // 
-            the__imgui.TreePop();
-        }            // Heap
-
-        // temp allocators
-        if (the__imgui.TreeNodeEx_Str("Temp Allocators", 0)) {
-            char text[32];
-            char size_text[32];
-            char peak_text[32];
-            for (int i = 0; i < info->num_temp_allocs; i++) {
-                const rizz_linalloc_info* l = &info->temp_allocs[i];
-                sx_snprintf(text, sizeof(text), "Temp #%d", i + 1);
-                sx_snprintf(size_text, sizeof(size_text), "%$.2d", l->offset);
-                sx_snprintf(peak_text, sizeof(peak_text), "%$.2d", l->peak);
-                float o = (float)l->offset / (float)l->size;
-                float p = (float)l->peak / (float)l->size;
-                the__imgui.Text(text);
-                the__imgui.SameLine(100.0f, -1);
-                imgui__dual_progress_bar(o, p, sx_vec2f(-1.0f, 14.0f), size_text, peak_text);
-            }
-
-            the__imgui.TreePop();
-        }
-    }
-
-    the__imgui.End();
-}
-
 static bool imgui__is_capturing_mouse(void) 
 {
     return igGetIO()->WantCaptureMouse;
@@ -2045,9 +1925,9 @@ static ImGuiID imgui__dock_space_id(void)
 }
 
 static rizz_api_imgui_extra the__imgui_extra = {
-    .memory_debugger = imgui__memory_debugger,
     .graphics_debugger = imgui__graphics_debugger,
     .show_log = imgui__show_log,
+    .dual_progress_bar = imgui__dual_progress_bar,
     .begin_fullscreen_draw = imgui__begin_fullscreen_draw,
     .draw_cursor = imgui__draw_cursor,
     .project_to_screen = imgui__project_to_screen,

@@ -1321,7 +1321,6 @@ static void snd__show_sources_tab_contents()
         char row_str[32];
         char pcount_str[32];
         while (the_imgui->ImGuiListClipper_Step(&clipper)) {
-
             int start = num_sources - clipper.DisplayStart - 1;
             int end = num_sources - clipper.DisplayEnd;
             for (int i = start; i >= end; i--) {

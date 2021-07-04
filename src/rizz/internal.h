@@ -32,7 +32,16 @@ void rizz__core_release();
 void rizz__core_frame();
 void rizz__core_fix_callback_ptrs(const void** ptrs, const void** new_ptrs, int num_ptrs);
 
-// clang-format off
+typedef struct mem_trace_context mem_trace_context;
+bool rizz__mem_init(uint32_t opts);
+void rizz__mem_release(void);
+sx_alloc* rizz__mem_create_allocator(const char* name, uint32_t mem_opts, const char* parent, const sx_alloc* alloc);
+void rizz__mem_destroy_allocator(sx_alloc* alloc);
+void rizz__mem_allocator_clear_trace(sx_alloc* alloc);
+void rizz__mem_trace_dump_contexts(void);
+void rizz__mem_show_debugger(bool*);
+void rizz__mem_reload_modules(void);
+
 // logging
 #define rizz__log_info(_text, ...)     the__core.print_info(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
 #define rizz__log_debug(_text, ...)    the__core.print_debug(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)
@@ -67,8 +76,6 @@ void rizz__core_fix_callback_ptrs(const void** ptrs, const void** new_ptrs, int 
 #define rizz__profile(_name) static uint32_t sx_concat(rmt_sample_hash_, _name) = 0; \
         sx_defer(the__core.begin_profile_sample(sx_stringize(_name), 0, &sx_concat(rmt_sample_hash_, _name)), \
                  the__core.end_profile_sample())
-
-// clang-format on
 
 bool rizz__vfs_init(const sx_alloc* alloc);
 void rizz__vfs_release();

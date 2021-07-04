@@ -175,6 +175,7 @@ elseif(APPLE)
 endif()
 
 target_include_directories(sx PUBLIC ../../include ${COMPAT_DIR})
+target_include_directories(sx INTERFACE 3rdparty)
 
 if (ANDROID)
     include(AndroidNdkModules)
@@ -191,7 +192,6 @@ if (SX_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-# temp
-add_definitions(-DSX_CONFIG_EXPERIMENTAL_SPINLOCK=1)
-
+# we don't want obsolete code in sx
+target_compile_definitions(sx PUBLIC SX_CONFIG_OBSOLETE_CODE=0)
 

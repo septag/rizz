@@ -98,12 +98,10 @@
 #   define SX_CONFIG_FORCE_INLINE_DEBUG 0
 #endif
 
-// This is a temp feature that enables experimental lock implementation along with it's integration in job system
-// in the future and after more thorough tests, I will probably remove this and make the feature permanent
-#ifndef SX_CONFIG_EXPERIMENTAL_LOCK 
-#   define SX_CONFIG_EXPERIMENTAL_LOCK 0
-#endif
-
 #ifndef SX_CONFIG_INCLUDE_BANNED 
 #   define SX_CONFIG_INCLUDE_BANNED 0
+#endif
+
+#ifndef SX_CONFIG_OBSOLETE_CODE
+#   define SX_CONFIG_OBSOLETE_CODE 1
 #endif

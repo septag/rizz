@@ -61,7 +61,28 @@
         "xutility": "c",
         "internal.h": "c",
         "2dtools.h": "c",
-        "sx.h": "c"
+        "sx.h": "c",
+        "stackwalkerc.h": "c",
+        "rizz.h": "c",
+        "vmem.h": "c",
+        "xlocmon": "c",
+        "algorithm": "c",
+        "charconv": "c",
+        "chrono": "c",
+        "format": "c",
+        "forward_list": "c",
+        "functional": "c",
+        "istream": "c",
+        "limits": "c",
+        "list": "c",
+        "random": "c",
+        "sstream": "c",
+        "vector": "c",
+        "xhash": "c",
+        "xmemory": "c",
+        "xstring": "c",
+        "xtree": "c",
+        "imgui.h": "c"
     },
     "files.exclude": {
         "**/.git": true,
@@ -74,7 +95,8 @@
         "build-*/**": true,
         "scripts/generators/fake_libc_include*": true,
         "misc/**": true,
-        "compile_commands.json": true
+        "compile_commands.json": true,
+        ".clangd/**": true
     },
     "cmake.configureOnOpen": true,
 }

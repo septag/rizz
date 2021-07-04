@@ -175,7 +175,7 @@ WIP
 <img align="right" src="http://opensource.org/trademarks/opensource/OSI-Approved-License-100x137.png">
 </a>
 
-	Copyright 2019 Sepehr Taghdisian. All rights reserved.
+	Copyright 2021 Sepehr Taghdisian. All rights reserved.
 	
 	https://github.com/septag/rizz
 	
