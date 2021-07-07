@@ -711,7 +711,6 @@ typedef struct rizz_api_core {
     sx_alloc* (*trace_alloc_create)(const char* name, uint32_t mem_opts, const char* parent, const sx_alloc* alloc);
     void (*trace_alloc_destroy)(sx_alloc* alloc);
     void (*trace_alloc_clear)(sx_alloc* alloc);
-    void (*trace_alloc_dump_contexts)(void);
 
     rizz_version (*version)(void);
 

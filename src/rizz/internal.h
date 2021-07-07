@@ -38,9 +38,11 @@ void rizz__mem_release(void);
 sx_alloc* rizz__mem_create_allocator(const char* name, uint32_t mem_opts, const char* parent, const sx_alloc* alloc);
 void rizz__mem_destroy_allocator(sx_alloc* alloc);
 void rizz__mem_allocator_clear_trace(sx_alloc* alloc);
-void rizz__mem_trace_dump_contexts(void);
 void rizz__mem_show_debugger(bool*);
 void rizz__mem_reload_modules(void);
+
+// windows.h
+bool rizz__win_get_vstudio_dir(char* vspath, size_t vspath_size);
 
 // logging
 #define rizz__log_info(_text, ...)     the__core.print_info(0, __FILE__, __LINE__, _text, ##__VA_ARGS__)

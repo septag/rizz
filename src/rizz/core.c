@@ -673,9 +673,14 @@ static void rizz__log_update()
 static void* rmt__malloc(void* ctx, uint32_t size)
 {
     const sx_alloc* fallback_alloc = (const sx_alloc*)ctx;
-    return (size <= RMT_SMALL_MEMORY_SIZE) ? 
-        sx_pool_new_and_grow(g_core.rmt_alloc_pool, fallback_alloc) : 
-        sx_malloc(fallback_alloc, size);
+    if (size <= RMT_SMALL_MEMORY_SIZE) {
+        sx_mutex_enter(&g_core.rmt_mtx);
+        void* ptr = sx_pool_new_and_grow(g_core.rmt_alloc_pool, fallback_alloc);
+        sx_mutex_exit(&g_core.rmt_mtx);
+        return ptr;
+    } else {
+        return sx_malloc(fallback_alloc, size);
+    }
 }
 
 static void rmt__free(void* ctx, void* ptr)
@@ -683,7 +688,10 @@ static void rmt__free(void* ctx, void* ptr)
     const sx_alloc* fallback_alloc = (const sx_alloc*)ctx;
     if (ptr) {
         if (sx_pool_valid_ptr(g_core.rmt_alloc_pool, ptr)) {
-            sx_pool_del(g_core.rmt_alloc_pool, ptr);
+            sx_mutex_lock(g_core.rmt_mtx) {
+                sx_pool_del(g_core.rmt_alloc_pool, ptr);
+            }
+            sx_mutex_exit(&g_core.rmt_mtx);
         } else {
             sx_free(fallback_alloc, ptr);
         }
@@ -694,13 +702,14 @@ static void* rmt__realloc(void* ctx, void* ptr, uint32_t size)
 {
     const sx_alloc* fallback_alloc = (const sx_alloc*)ctx;
     if (sx_pool_valid_ptr(g_core.rmt_alloc_pool, ptr)) {
-        sx_pool_del(g_core.rmt_alloc_pool, ptr);
+        sx_mutex_lock(g_core.rmt_mtx) {
+            sx_pool_del(g_core.rmt_alloc_pool, ptr);
+        }
     } else {
         sx_free(fallback_alloc, ptr);
     }
-    return (size <= RMT_SMALL_MEMORY_SIZE) ? 
-        sx_pool_new_and_grow(g_core.rmt_alloc_pool, fallback_alloc) : 
-        sx_malloc(fallback_alloc, size);
+    
+    return rmt__malloc(ctx, size);
 }
 
 static const sx_alloc* rizz__heap_alloc(void)
@@ -1294,6 +1303,7 @@ bool rizz__core_init(const rizz_config* conf)
 
     // profiler
     #if RMT_ENABLED 
+        sx_mutex_init(&g_core.rmt_mtx);
         g_core.rmt_alloc_pool = sx_pool_create(rizz__alloc(RIZZ_MEMID_TOOLSET), RMT_SMALL_MEMORY_SIZE, 1000);
         if (g_core.rmt_alloc_pool == NULL) {
             sx_memory_fail();
@@ -1444,6 +1454,7 @@ void rizz__core_release()
             rmt_DestroyGlobalInstance(g_core.rmt);
         }
         sx_pool_destroy(g_core.rmt_alloc_pool, rizz__alloc(RIZZ_MEMID_TOOLSET));
+        sx_mutex_exit(&g_core.rmt_mtx);
     #endif // RMT_ENABLED
     sx_array_free(alloc, g_core.console_cmds);
 
@@ -1936,7 +1947,6 @@ rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .alloc = rizz__alloc,
                             .trace_alloc_destroy = rizz__mem_destroy_allocator,
                             .trace_alloc_clear = rizz__mem_allocator_clear_trace,
-                            .trace_alloc_dump_contexts = rizz__mem_trace_dump_contexts,
                             .version = rizz__version,
                             .delta_tick = rizz__delta_tick,
                             .delta_time = rizz__delta_time,

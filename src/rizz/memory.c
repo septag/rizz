@@ -10,11 +10,14 @@
 #include "rizz/imgui.h"
 #include "rizz/imgui-extra.h"
 
+static void mem_callstack_error_msg(const char* msg, ...);
+
 #if SX_PLATFORM_WINDOWS
 #    define SW_IMPL
 #    define SW_ASSERT(e) sx_assert(e)
 #    define SW_MAX_FRAMES 20
 #    define SW_MAX_NAME_LEN 256
+#    define SW_LOG_ERROR(fmt, ...) mem_callstack_error_msg(fmt, ##__VA_ARGS__)
 #endif
 #include "stackwalkerc/stackwalkerc.h"
 
@@ -50,7 +53,6 @@ typedef struct mem_item
     mem_action          action;
     size_t              size;
     void*               ptr;
-    char                module_name[32];        // first alloc call's module name
 
     union {
         void*           callstack[SW_MAX_FRAMES];
@@ -100,33 +102,14 @@ typedef struct mem_state
 
 static mem_state g_mem;
 
-void mem_callstack_load_module(const char* img, const char* module, uint64_t base_addr, uint32_t size, 
-                               uint32_t result, const char* sym_type, const char* pdb_name, uint64_t file_version,
-                               void* userptr)
+static void mem_callstack_load_module(const char* img, const char* module, uint64_t base_addr, uint32_t size, void* userptr)
 {
     sx_unused(img);
     sx_unused(base_addr);
     sx_unused(size);
-    sx_unused(result);
-    sx_unused(sym_type);
-    sx_unused(file_version);
     sx_unused(userptr);
 
-    rizz__log_debug("(init) module: %s (pdb: %s)", module, pdb_name);
-}
-
-void mem_callstack_error_msg(const char* msg, uint32_t gle, uint64_t addr, void* userptr)
-{
-    sx_unused(msg);
-    sx_unused(gle);
-    sx_unused(addr);
-    sx_unused(userptr);
-    
-    #if SX_PLATFORM_WINDOWS
-        char formatted_msg[1024];
-        sx_snprintf(formatted_msg, sizeof(formatted_msg), "Error: Memory tracer: %s - GetLastError: %u\n", msg, gle);
-        OutputDebugStringA(formatted_msg);
-    #endif
+    rizz__log_debug("(init) module: %s (size=%$d)", module, size);
 }
 
 static mem_trace_context* mem_find_trace_context(uint32_t name_hash, mem_trace_context* node)
@@ -145,6 +128,21 @@ static mem_trace_context* mem_find_trace_context(uint32_t name_hash, mem_trace_c
     }
 
     return NULL;
+}
+
+static void mem_callstack_error_msg(const char* msg, ...)
+{
+    sx_unused(msg);
+    
+    #if SX_PLATFORM_WINDOWS
+        char formatted[512];
+        va_list args;
+        va_start(args, msg);
+        sx_vsnprintf(formatted, sizeof(formatted), msg, args);
+        va_end(args);
+        sx_strcat(formatted, sizeof(formatted), "\n");
+        OutputDebugStringA(formatted);
+    #endif
 }
 
 static mem_trace_context* mem_create_trace_context(const char* name, uint32_t mem_opts, const char* parent)
@@ -251,9 +249,7 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
                     if (file)  sx_strcpy(item.source_file, sizeof(item.source_file), file);
                     if (func)  sx_strcpy(item.source_func, sizeof(item.source_func), func);
                     item.source_line = line;
-                } else {
-                    sw_get_symbol_module(g_mem.sw, item.callstack[0], item.module_name);
-                }
+                } 
             #else
                 if (file)  sx_strcpy(item.source_file, sizeof(item.source_file), file);
                 if (func)  sx_strcpy(item.source_func, sizeof(item.source_func), func);
@@ -409,17 +405,32 @@ bool rizz__mem_init(uint32_t opts)
     sx_assert(opts != RIZZ_MEMOPTION_INHERIT);
 
     #if SX_PLATFORM_WINDOWS
-        g_mem.sw = sw_create_context_capture(SW_OPTIONS_SYMBOL|SW_OPTIONS_SOURCEPOS|SW_OPTIONS_MODULEINFO|SW_OPTIONS_SYMBUILDPATH,
-            (sw_callbacks) { 
-                .load_module = mem_callstack_load_module,
-                .error_msg = mem_callstack_error_msg 
-        }, NULL);
-        sw_set_callstack_captures(g_mem.sw, 3, SW_MAX_FRAMES);
+        g_mem.sw = sw_create_context_capture(
+            SW_OPTIONS_SYMBOL|SW_OPTIONS_SOURCEPOS|SW_OPTIONS_MODULEINFO|SW_OPTIONS_SYMBUILDPATH,
+            (sw_callbacks) { .load_module = mem_callstack_load_module }, NULL);
+        if (!g_mem.sw) {
+            return false;
+        }
+
+        char vspath[SW_MAX_NAME_LEN];
+        if (rizz__win_get_vstudio_dir(vspath, sizeof(vspath))) {
+            #if SX_ARCH_64BIT
+                sx_strcat(vspath, sizeof(vspath), "Common7\\IDE\\Extensions\\TestPlatform\\Extensions\\Cpp\\x64");
+            #elif SX_ARCH_32BIT
+                sx_strcat(vspath, sizeof(vspath), "Common7\\IDE\\Extensions\\TestPlatform\\Extensions\\Cpp");
+            #endif
+            sw_set_dbghelp_hintpath(vspath);
+        }
+
+        sw_set_callstack_limits(g_mem.sw, 3, SW_MAX_FRAMES);
     #endif // SX_PLATFORM_WINDOWS
 
     // dummy root trace context
     g_mem.root = mem_create_trace_context("<memory>", opts, NULL);
-    sx_assert_always(g_mem.root);
+    if (!g_mem.root) {
+        sx_memory_fail();
+        return false;
+    }
 
     return true;
 }
@@ -489,44 +500,6 @@ static void mem_trace_dump_entry(mem_item* item, int depth, sw_callstack_entry e
         #endif
     } else {
         rizz__log_debug("%s%s(%u) - %s", depth_str, item->source_file, item->source_line, item->source_func);
-    }
-}
-
-static void mem_trace_dump_context(mem_trace_context* ctx, int depth, sw_callstack_entry entries[SW_MAX_FRAMES])
-{
-    sx_assert(depth < 256);
-    char depth_str[256] = {0};
-    for (int i = 0; i < depth; i++) {
-        depth_str[i] = '\t';
-    }
-    depth_str[depth] = '\0';
-    rizz__log_debug("CONTEXT: %s%s {", depth_str, ctx->name);
-
-    mem_trace_context_mutex_enter(ctx->options, ctx->mtx);
-    mem_item* item = ctx->items_list;
-    while (item) {
-        mem_trace_dump_entry(item, depth + 1, entries);
-        item = item->next;
-    }
-    mem_trace_context_mutex_exit(ctx->options, ctx->mtx);
-
-    ctx = ctx->child;
-    while (ctx) {
-        mem_trace_dump_context(ctx, depth+1, entries);
-        ctx = ctx->next;
-    }
-}
-
-void rizz__mem_trace_dump_contexts(void)
-{
-    sx_assert(g_mem.root);
-    sw_callstack_entry entries[SW_MAX_FRAMES];
-
-    mem_trace_context* ctx = g_mem.root->child;
-    int depth = 0;
-    while (ctx) {
-        mem_trace_dump_context(ctx, depth+1, entries);
-        ctx = ctx->next;
     }
 }
 
@@ -612,7 +585,7 @@ static void mem_imgui_context_info(rizz_api_imgui* imgui, rizz_api_imgui_extra* 
 static void mem_imgui_context_items(rizz_api_imgui* imgui, rizz_api_imgui_extra* imguix, mem_trace_context* ctx)
 {
     sx_unused(imguix);
-    if (imgui->BeginTable("MemItems", 5, 
+    if (imgui->BeginTable("MemItems", 4, 
                         ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_BordersOuterH|
                         ImGuiTableFlags_SizingFixedFit|ImGuiTableFlags_RowBg|ImGuiTableFlags_ScrollY,
                         SX_VEC2_ZERO, 0)) {
@@ -638,7 +611,6 @@ static void mem_imgui_context_items(rizz_api_imgui* imgui, rizz_api_imgui_extra*
                 imgui->TableSetupColumn("Ptr", 0, 150.0f, 0);
                 imgui->TableSetupColumn("Size", 0, 50.0f, 0);
                 imgui->TableSetupColumn("Action", 0, 50.0f, 0);
-                imgui->TableSetupColumn("Module", 0, 100.0f, 0);
                 imgui->TableHeadersRow();
 
                 imgui->ImGuiListClipper_Begin(&clipper, num_items, -1.0f);
@@ -649,10 +621,21 @@ static void mem_imgui_context_items(rizz_api_imgui* imgui, rizz_api_imgui_extra*
 
                         sx_snprintf(text, sizeof(text), "%d", i + 1);
                         imgui->TableNextColumn();
+                        imgui->PushID_Int(i);
                         if (imgui->Selectable_Bool(text, g_mem_imgui.selected_item == item,
                                                    ImGuiSelectableFlags_SpanAllColumns, SX_VEC2_ZERO)) {
                             g_mem_imgui.selected_item = item;
                         }
+
+                        if (imgui->BeginPopupContextItem("MemItemContextMenu", ImGuiPopupFlags_MouseButtonRight)) {
+                            if (imgui->Selectable_Bool("Copy address", false, 0, SX_VEC2_ZERO)) {
+                                char ptr_str[32];
+                                sx_snprintf(ptr_str, sizeof(ptr_str), "%p", item->ptr);
+                                the__app.set_clipboard_string(ptr_str);
+                            }
+                            imgui->EndPopup();
+                        }
+                        imgui->PopID();
 
                         sx_snprintf(text, sizeof(text), "0x%p", item->ptr);
                         imgui->TableNextColumn();
@@ -669,10 +652,6 @@ static void mem_imgui_context_items(rizz_api_imgui* imgui, rizz_api_imgui_extra*
                         case MEM_ACTION_FREE:       imgui->Text("free"); break;
                         default:                    imgui->Text("N/A"); break;
                         }
-
-                        imgui->TableNextColumn();
-                        imgui->Text(item->module_name);
-
                     }
                 }
                 imgui->ImGuiListClipper_End(&clipper);
@@ -714,6 +693,16 @@ static void mem_imgui_item(rizz_api_imgui* imgui, rizz_api_imgui_extra* imguix, 
 {
     sx_unused(imguix);
 
+    #if SX_PLATFORM_WINDOWS
+        if (item->num_callstack_items) {
+            char module_name[32];
+            if (sw_get_symbol_module(g_mem.sw, item->callstack[0], module_name)) {
+                imguix->label("Module", module_name);
+            } else {
+                imguix->label("Module", "N/A");
+            }
+        }
+    #endif
     imgui->TextColored(*imgui->GetStyleColorVec4(ImGuiCol_TextDisabled), "Callstack:");
     imgui->Indent(0);
     char text[512];

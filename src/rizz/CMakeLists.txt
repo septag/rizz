@@ -15,6 +15,7 @@ set(SOURCE_FILES internal.h
                  basisut.cpp 
                  basisut.h 
                  json.c 
+                 windows.cpp 
                  memory.c)
 
 set(INCLUDE_FILES ../../include/rizz/config.h
