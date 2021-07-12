@@ -26,14 +26,13 @@ typedef struct sx_queue_spsc {
     int buff_size;
 
     sx__queue_spsc_node* first;
-    sx_atomic_ptr last;
-    sx_atomic_ptr divider;
+    sx_align_decl(SX_CACHE_LINE_SIZE, sx_atomic_ptr) last;
+    sx_align_decl(SX_CACHE_LINE_SIZE, sx_atomic_ptr) divider;
 
     sx__queue_spsc_bin* grow_bins;    // linked-list of bins, if queue is grown
 } sx_queue_spsc;
 
-static sx__queue_spsc_bin* sx__queue_spsc_create_bin(const sx_alloc* alloc, int item_sz,
-                                                     int capacity)
+static sx__queue_spsc_bin* sx__queue_spsc_create_bin(const sx_alloc* alloc, int item_sz, int capacity)
 {
     sx_assert(capacity % 16 == 0);
 

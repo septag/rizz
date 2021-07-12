@@ -691,14 +691,14 @@ void sx_thread_setname(sx_thread* thrd, const char* name)
     tn.flags = 0;
 
     #if !SX_CRT_MINGW
-        __try {
-        #endif
+    __try {
+    #endif
 
-            RaiseException(0x406d1388, 0, sizeof(tn) / 4, (ULONG_PTR*)(&tn));
+        RaiseException(0x406d1388, 0, sizeof(tn) / 4, (ULONG_PTR*)(&tn));
 
-        #if !SX_CRT_MINGW
-        } __except (EXCEPTION_EXECUTE_HANDLER) {
-        }
+    #if !SX_CRT_MINGW
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
     #endif
 }
 
@@ -769,8 +769,7 @@ void sx_anderson_lock_destroy(sx_anderson_lock_t* lock, const sx_alloc* alloc)
 
 void sx_anderson_lock_enter(sx_anderson_lock_t* lock) 
 {
-    const uint64_t index = 
-        c89atomic_fetch_add_explicit_64(&lock->next_free_idx, 1, c89atomic_memory_order_release) % lock->max_threads;
+    const uint64_t index = c89atomic_fetch_add_64(&lock->next_free_idx, 1) % lock->max_threads;
     c89atomic_flag* flag = &lock->locked[index].flag;
 
     // ensure overflow never happens

@@ -558,12 +558,13 @@ typedef enum rizz_log_level {
     _RIZZ_LOG_LEVEL_COUNT
 } rizz_log_level;
 
-typedef enum rizz_mem_option {
-    RIZZ_MEMOPTION_TRACE_CALLSTACK = 0x1,
-    RIZZ_MEMOPTION_TRACE_LEAKS = 0x2,
-    RIZZ_MEMOPTION_INSERT_CANARIES = 0x4,
-    RIZZ_MEMOPTION_MULTITHREAD = 0x8
-} rizz_mem_option;
+enum rizz_mem_options_ {
+    RIZZ_MEMOPTION_TRACE_CALLSTACK  = 0x1,  // Stores callstacks per allocation call
+    RIZZ_MEMOPTION_INSERT_CANARIES  = 0x4,  // inserts canaries for out of boundary detection
+    RIZZ_MEMOPTION_MULTITHREAD      = 0x8,  // allocation calls can be called from multiple threads
+    RIZZ_MEMOPTION_ALL              = 0xf   // all options above
+};
+typedef uint32_t rizz_mem_options;
 
 #define RIZZ_MEMOPTION_INHERIT 0xffffffff
 
@@ -708,7 +709,7 @@ typedef struct rizz_api_core {
 
     const sx_alloc* (*alloc)(rizz_mem_id id);
 
-    sx_alloc* (*trace_alloc_create)(const char* name, uint32_t mem_opts, const char* parent, const sx_alloc* alloc);
+    sx_alloc* (*trace_alloc_create)(const char* name, rizz_mem_options mem_opts, const char* parent, const sx_alloc* alloc);
     void (*trace_alloc_destroy)(sx_alloc* alloc);
     void (*trace_alloc_clear)(sx_alloc* alloc);
 

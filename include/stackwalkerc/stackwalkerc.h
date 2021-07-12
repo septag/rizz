@@ -540,7 +540,6 @@ _SW_PRIVATE bool sw__get_module_list_TH32(sw_context_internal* ctxi, DWORD pid)
 
 _SW_PRIVATE bool sw__load_modules_internal(sw_context_internal* ctxi, HANDLE process, DWORD process_id)
 {
-    sx_unused(process_id);
     if (!sw__get_module_list_TH32(ctxi, process_id)) {
         return ctxi->fEnumerateLoadedModules64(process, sw__enum_loaded_modules_cb, ctxi) ? true : false;
     }

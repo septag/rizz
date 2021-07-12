@@ -66,6 +66,7 @@ typedef struct mem_item
     
     struct mem_item*    next;
     struct mem_item*    prev;
+    int64_t             frame;         // record frame number
     bool                freed;         // for mallocs, reallocs that got freed, but we want to keep the record
 } mem_item;
 
@@ -89,6 +90,14 @@ typedef struct mem_trace_context
     struct mem_trace_context* prev;
 } mem_trace_context;
 
+typedef struct mem_capture_context
+{
+    char name[32];
+    uint64_t start_tm; 
+    sx_mutex mtx;
+    mem_item** items;        // sx_array
+} mem_capture_context;
+
 typedef struct mem_state
 {
     #if SX_PLATFORM_WINDOWS
@@ -97,6 +106,8 @@ typedef struct mem_state
 
     sx_align_decl(SX_CACHE_LINE_SIZE, c89atomic_int64) debug_mem_size;
     mem_trace_context* root;
+    mem_capture_context capture;
+    sx_align_decl(SX_CACHE_LINE_SIZE, c89atomic_flag) in_capture;
 } mem_state;
 
 
@@ -261,8 +272,10 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
     item.owner = ctx;
     item.size = size;
     item.ptr = ptr;
+    item.frame = the__core.frame_index();
+    bool in_capture = c89atoimc_flag_load_explicit(&g_mem.in_capture, c89atomic_memory_order_acquire);
 
-    // propogate memory usage to the context and it's parents
+    // special case: FREE and REALLOC, always have previous malloc trace items that we should take care of
     if (item.action == MEM_ACTION_FREE || item.action == MEM_ACTION_REALLOC) {
         mem_trace_context_mutex_enter(ctx->options, ctx->mtx);
         mem_item* old_item = mem_find_occupied_item(ctx, old_ptr);
@@ -284,10 +297,17 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
                 item.size = old_item->size;
             }
 
-            mem_destroy_trace_item(ctx, old_item);
+            if (!in_capture) {
+                mem_destroy_trace_item(ctx, old_item);
+            } else {
+                sx_mutex_lock(g_mem.capture.mtx) {
+                    sx_array_push(sx_alloc_malloc(), g_mem.capture.items, old_item);
+                }
+            }
         }
     } 
 
+    // propogate memory usage to the context and it's parents
     if (size > 0) {
         mem_trace_context* _ctx = ctx;
         while (_ctx) {
@@ -323,6 +343,12 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
         } 
         ctx->items_list = new_item;
         mem_trace_context_mutex_exit(ctx->options, ctx->mtx);
+
+        if (in_capture) {
+            sx_mutex_lock(g_mem.capture.mtx) {
+                sx_array_push(sx_alloc_malloc(), g_mem.capture.items, new_item);
+            }
+        }
     }
 }
 
@@ -703,6 +729,7 @@ static void mem_imgui_item(rizz_api_imgui* imgui, rizz_api_imgui_extra* imguix, 
             }
         }
     #endif
+    imguix->label("Frame", "%lld", item->frame);
     imgui->TextColored(*imgui->GetStyleColorVec4(ImGuiCol_TextDisabled), "Callstack:");
     imgui->Indent(0);
     char text[512];
@@ -808,3 +835,24 @@ void rizz__mem_reload_modules(void)
         sw_reload_modules(g_mem.sw);
     #endif
 }
+
+void rizz__mem_begin_capture(const char* name)
+{
+    sx_assertf(!g_mem.in_capture, "should end_capture before beginning a new one");
+
+    sx_strcpy(g_mem.capture.name, sizeof(g_mem.capture.name), name);
+    sx_array_clear(g_mem.capture.items);
+    g_mem.capture.start_tm = sx_tm_now();
+    c89atomic_flag_test_and_set_explicit(&g_mem.in_capture, c89atomic_memory_order_release);
+}
+
+void rizz__mem_end_capture(const char* filepath)
+{
+    sx_assertf(g_mem.in_capture, "begin_capture is not called");
+    sx_unused(filepath);
+
+    c89atomic_flag_clear(&g_mem.in_capture);
+
+    // TODO: remove all "freed" items
+}
+

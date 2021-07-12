@@ -579,14 +579,12 @@ static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, 
 
         if (!(flags & RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD)) {
             // Async load
-            asset = rizz__asset_create_new(path, params, amgr->async_obj, name_hash, obj_alloc,
-                                           flags, tags);
+            asset = rizz__asset_create_new(path, params, amgr->async_obj, name_hash, obj_alloc, flags, tags);
             rizz__asset* a = &g_asset.assets[sx_handle_index(asset.id)];
             a->state = RIZZ_ASSET_STATE_LOADING;
 
             rizz__asset_async_load_req req =
-                (rizz__asset_async_load_req){ .path_hash = sx_hash_fnv32_str(real_path),
-                                              .asset = asset };
+                (rizz__asset_async_load_req){ .path_hash = sx_hash_fnv32_str(real_path), .asset = asset };
             sx_array_push(g_asset.alloc, g_asset.async_reqs, req);
 
             the__vfs.read_async(
@@ -802,8 +800,7 @@ void rizz__asset_update()
 
                 sx_mem_destroy_block(ajob->mem);
 
-                rizz__asset_job_remove_list(&g_asset.async_job_list, &g_asset.async_job_list_last,
-                                            ajob);
+                rizz__asset_job_remove_list(&g_asset.async_job_list, &g_asset.async_job_list_last, ajob);
                 sx_free(g_asset.alloc, ajob);
             }    // if (job-is-done)
 
@@ -886,9 +883,7 @@ static rizz_asset rizz__asset_load_from_mem(const char* name, const char* path_a
 
             char fixed_path[RIZZ_MAX_PATH];
             rizz_asset_meta_keyval* metas;
-            if (rizz__asset_checkandfix_asset_type(mem, path_alias, fixed_path, sizeof(fixed_path),
-                                                   &aparams.num_meta)) 
-            {
+            if (rizz__asset_checkandfix_asset_type(mem, path_alias, fixed_path, sizeof(fixed_path), &aparams.num_meta)){
                 aparams.path = fixed_path;
                 if (aparams.num_meta > 0) {
                     sx_assert(aparams.num_meta < 64);
@@ -963,8 +958,7 @@ static void rizz__asset_unload(rizz_asset asset)
         // remove from async jobs
         for (rizz__asset_async_job* ajob = g_asset.async_job_list; ajob; ajob = ajob->next) {
             if (ajob->asset.id == asset.id) {
-                rizz__asset_job_remove_list(&g_asset.async_job_list, &g_asset.async_job_list_last,
-                                            ajob);
+                rizz__asset_job_remove_list(&g_asset.async_job_list, &g_asset.async_job_list_last, ajob);
                 sx_free(g_asset.alloc, ajob);
                 break;
             }

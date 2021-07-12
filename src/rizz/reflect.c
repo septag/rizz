@@ -1209,8 +1209,7 @@ static void refl__deserialize_json_struct_begin(const char* name, const char* ty
     refl__read_json_context* jctx = user;
     cj5_result* r = &jctx->json->result;
 
-    sx_assert_alwaysf(jctx->token_stack_idx < JSON_STACK_COUNT, 
-                      "Maximum stack for json serilize context reached");
+    sx_assert_alwaysf(jctx->token_stack_idx < JSON_STACK_COUNT, "Maximum stack for json serilize context reached");
     jctx->token_stack[jctx->token_stack_idx++] = jctx->cur_token;
     jctx->cur_token = cj5_seek(r, jctx->cur_token, name);
     if (count > 1) {
