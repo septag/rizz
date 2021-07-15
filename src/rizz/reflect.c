@@ -754,8 +754,6 @@ static bool refl__serialize_json_begin(const char* type_name, void* user)
 
     refl__write_json_context* jctx = user;
 
-    sx_mem_init_writer(&jctx->writer, jctx->alloc, 4096);
-
     if (!jctx->newline) {
         jctx->newline = "";
     }
@@ -776,7 +774,7 @@ static void refl__serialize_json_end(void* user)
     refl__writef(&jctx->writer, "}%s", jctx->newline);
 
     // close the string
-    char eof = '\0';
+    const char eof = '\0';
     sx_mem_write(&jctx->writer, &eof, sizeof(eof));
 }
 

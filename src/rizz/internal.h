@@ -40,6 +40,8 @@ void rizz__mem_destroy_allocator(sx_alloc* alloc);
 void rizz__mem_allocator_clear_trace(sx_alloc* alloc);
 void rizz__mem_show_debugger(bool*);
 void rizz__mem_reload_modules(void);
+void rizz__mem_begin_capture(const char* name);
+bool rizz__mem_end_capture(void);
 
 // windows.h
 bool rizz__win_get_vstudio_dir(char* vspath, size_t vspath_size);

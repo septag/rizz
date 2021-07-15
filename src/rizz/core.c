@@ -210,6 +210,8 @@ typedef struct rizz__core {
     sx_pool* rmt_alloc_pool;
     sx_strpool* strpool;
 
+    int64_t mem_capture_frame;
+
     bool paused;
 } rizz__core;
 
@@ -797,8 +799,7 @@ static void rizz__job_thread_init_cb(sx_job_context* ctx, int thread_index, uint
     rmt_SetCurrentThreadName(name);
 }
 
-static void rizz__job_thread_shutdown_cb(sx_job_context* ctx, int thread_index, uint32_t thread_id,
-                                         void* user)
+static void rizz__job_thread_shutdown_cb(sx_job_context* ctx, int thread_index, uint32_t thread_id, void* user)
 {
     sx_unused(ctx);
     sx_unused(thread_index);
@@ -1176,6 +1177,7 @@ bool rizz__core_init(const rizz_config* conf)
     #else
         g_core.heap_proxy_alloc = *g_core.heap_alloc;
     #endif
+    g_core.mem_capture_frame = -1;
 
     const sx_alloc* alloc = rizz__alloc(RIZZ_MEMID_CORE);
     sx_strcpy(g_core.app_name, sizeof(g_core.app_name), conf->app_name);
@@ -1517,6 +1519,15 @@ void rizz__core_frame()
         return;
     }
 
+    bool call_end_capture = false;
+    if (g_core.mem_capture_frame == g_core.frame_idx) {
+        char name[32];
+        time_t t = time(NULL);
+        sx_snprintf(name, sizeof(name), "frame_%lld", g_core.frame_idx);
+        rizz__mem_begin_capture(name);
+        call_end_capture = true;
+    }
+
     rizz__profile(Frame) {
         {
             static uint32_t gpu_frame_hash = 0;
@@ -1646,6 +1657,11 @@ void rizz__core_frame()
 
         the__gfx.imm.end_profile_sample();
     } // profile
+
+    if (call_end_capture) {
+        rizz__mem_end_capture();
+        g_core.mem_capture_frame = -1;
+    }    
 }
 
 static const sx_alloc* rizz__core_tmp_alloc_push_trace(const char* file, uint32_t line)
@@ -1937,6 +1953,11 @@ static const char* rizz__str_cstr(sx_str_t handle)
     return sx_strpool_cstr(g_core.strpool, handle);
 }
 
+static void rizz__trace_alloc_capture_frame(void)
+{
+    g_core.mem_capture_frame = g_core.frame_idx + 1;
+}
+
 // Core API
 rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .tmp_alloc_push = rizz__core_tmp_alloc_push,
@@ -1947,6 +1968,7 @@ rizz_api_core the__core = { .heap_alloc = rizz__heap_alloc,
                             .alloc = rizz__alloc,
                             .trace_alloc_destroy = rizz__mem_destroy_allocator,
                             .trace_alloc_clear = rizz__mem_allocator_clear_trace,
+                            .trace_alloc_capture_frame = rizz__trace_alloc_capture_frame,
                             .version = rizz__version,
                             .delta_tick = rizz__delta_tick,
                             .delta_time = rizz__delta_time,

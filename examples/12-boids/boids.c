@@ -345,6 +345,9 @@ static void update(float dt)
 
     if (the_imgui->Begin("Boids", NULL, 0)) {
         the_imgui->Checkbox("Use JobSystem", &g_simulation.use_jobs);
+        if (the_imgui->Button("Memory Snapshot", SX_VEC2_ZERO)) {
+            the_core->trace_alloc_capture_frame();
+        }
     }
     the_imgui->End();
 

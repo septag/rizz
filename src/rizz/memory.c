@@ -6,9 +6,12 @@
 #include "sx/os.h"
 #include "sx/threads.h"
 #include "sx/pool.h"
+#include "sx/io.h"
 
 #include "rizz/imgui.h"
 #include "rizz/imgui-extra.h"
+
+#include <time.h>
 
 static void mem_callstack_error_msg(const char* msg, ...);
 
@@ -237,6 +240,9 @@ static void mem_destroy_trace_item(mem_trace_context* ctx, mem_item* item)
     if (ctx->items_list == item) {
         ctx->items_list = item->next;
     }
+    item->next = item->prev = NULL;
+    item->freed = false;
+
     sx_pool_del(ctx->item_pool, item);
     mem_trace_context_mutex_exit(ctx->options, ctx->mtx);
 }
@@ -284,7 +290,6 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
         // old_ptr should be either malloc or realloc and belong to this mem_trace_context
         sx_assert(old_item && old_item->action == MEM_ACTION_MALLOC || old_item->action == MEM_ACTION_REALLOC);
         if (old_item) {
-            old_item->freed = true;
             sx_assert(old_item->size > 0);
             mem_trace_context* _ctx = ctx;
             while (_ctx) {
@@ -300,6 +305,7 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
             if (!in_capture) {
                 mem_destroy_trace_item(ctx, old_item);
             } else {
+                old_item->freed = true;
                 sx_mutex_lock(g_mem.capture.mtx) {
                     sx_array_push(sx_alloc_malloc(), g_mem.capture.items, old_item);
                 }
@@ -335,12 +341,12 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
             sx_memory_fail();
             return;
         }
-        memcpy(new_item, &item, sizeof(item));
+        sx_memcpy(new_item, &item, sizeof(item));
 
         if (ctx->items_list) {
             ctx->items_list->prev = new_item;
-            new_item->next = ctx->items_list;
         } 
+        new_item->next = ctx->items_list;
         ctx->items_list = new_item;
         mem_trace_context_mutex_exit(ctx->options, ctx->mtx);
 
@@ -458,6 +464,8 @@ bool rizz__mem_init(uint32_t opts)
         return false;
     }
 
+    sx_mutex_init(&g_mem.capture.mtx);
+
     return true;
 }
 
@@ -470,6 +478,8 @@ void rizz__mem_release(void)
     if (g_mem.root) {
         mem_destroy_trace_context(g_mem.root);
     }
+
+    sx_mutex_release(&g_mem.capture.mtx);
 }
 
 sx_alloc* rizz__mem_create_allocator(const char* name, uint32_t mem_opts, const char* parent, const sx_alloc* alloc)
@@ -492,41 +502,6 @@ void rizz__mem_allocator_clear_trace(sx_alloc* alloc)
 {
     mem_trace_context* ctx = alloc->user_data;
     mem_trace_context_clear(ctx);
-}
-
-static void mem_trace_dump_entry(mem_item* item, int depth, sw_callstack_entry entries[SW_MAX_FRAMES])
-{
-    sx_assert(depth < 256);
-    if (item->action == MEM_ACTION_FREE) {
-        return;
-    }
-    char depth_str[256] = {0};
-    for (int i = 0; i < depth; i++) {
-        depth_str[i] = '\t';
-    }
-    depth_str[depth] = '\0';
-
-    const char* action = "";
-    switch (item->action) {
-        case MEM_ACTION_MALLOC:  action = "malloc";  break;
-        case MEM_ACTION_FREE:    action = "Free";    break;
-        case MEM_ACTION_REALLOC: action = "Realloc"; break;
-    }
-    rizz__log_debug("%s%s: %p (%llu)", depth_str, action, item->ptr, item->size);
-
-    if (item->num_callstack_items != 0) {
-        #if SX_PLATFORM_WINDOWS
-            uint16_t num_resolved = sw_resolve_callstack(g_mem.sw, item->callstack, entries, item->num_callstack_items);
-            if (num_resolved) {
-                rizz__log_debug("%sCallstack:", depth_str);
-                for (int i = 0; i < num_resolved; i++) {
-                    rizz__log_debug("%s%s(%u) - %s", depth_str, entries[i].line_filename, entries[i].line, entries[i].name);
-                }
-            } 
-        #endif
-    } else {
-        rizz__log_debug("%s%s(%u) - %s", depth_str, item->source_file, item->source_line, item->source_func);
-    }
 }
 
 typedef struct mem_imgui_state
@@ -846,13 +821,237 @@ void rizz__mem_begin_capture(const char* name)
     c89atomic_flag_test_and_set_explicit(&g_mem.in_capture, c89atomic_memory_order_release);
 }
 
-void rizz__mem_end_capture(const char* filepath)
+typedef struct mem__write_json_context {
+    sx_file file;
+    const char* newline;
+    const char* tab;
+
+    int _depth;
+    bool _is_struct_array;
+    char _tabs[128];
+    int _array_count;
+} mem__write_json_context;
+
+SX_INLINE void mem__writef(sx_file* file, const char* fmt, ...)
 {
-    sx_assertf(g_mem.in_capture, "begin_capture is not called");
-    sx_unused(filepath);
+    char str[1024];
+    va_list args;
+    va_start(args, fmt);
+    sx_vsnprintf(str, sizeof(str), fmt, args);
+    va_end(args);
+
+    sx_file_write(file, str, sx_strlen(str));
+}
+
+static const char* mem__serialize_json_update_tabs(mem__write_json_context* jctx)
+{
+    if (jctx->tab[0]) {
+        sx_strcpy(jctx->_tabs, sizeof(jctx->_tabs), jctx->tab);
+        for (int i = 0; i < jctx->_depth; i++) {
+            sx_strcat(jctx->_tabs, sizeof(jctx->_tabs), jctx->tab);
+        }
+    } else {
+        jctx->_tabs[0] = '\0';
+    }
+
+    return jctx->_tabs;
+}
+
+static void mem__serialize_callstack_item(mem__write_json_context* jctx, 
+                                          const char* file, uint32_t line, const char* func,
+                                          bool last_item)
+{
+
+    mem__writef(&jctx->file, "%s{%s", jctx->_tabs, jctx->newline);
+    ++jctx->_depth;
+    mem__serialize_json_update_tabs(jctx);
+
+    // convert paths to unix format, so we won't need to have escape chars
+    char file_unix[RIZZ_MAX_PATH];
+    sx_os_path_unixpath(file_unix, sizeof(file_unix), file);
+    mem__writef(&jctx->file, "%s\"file\": \"%s\",%s", jctx->_tabs, file_unix, jctx->newline);
+    mem__writef(&jctx->file, "%s\"line\": %u,%s", jctx->_tabs, line, jctx->newline);
+    mem__writef(&jctx->file, "%s\"func\": \"%s\"%s", jctx->_tabs, func, jctx->newline);
+
+    --jctx->_depth;
+    mem__serialize_json_update_tabs(jctx);
+
+    mem__writef(&jctx->file, "%s}%s%s", jctx->_tabs, !last_item ? "," : "", jctx->newline);
+}
+
+static void mem__serialize_item(mem__write_json_context* jctx, mem_item* item)
+{
+    const char* action = "";
+    switch (item->action) {
+        case MEM_ACTION_MALLOC:  action = "Malloc";  break;
+        case MEM_ACTION_FREE:    action = "Free";    break;
+        case MEM_ACTION_REALLOC: action = "Realloc"; break;
+    }
+
+    mem__writef(&jctx->file, "%s\"ptr\": \"0x%p\",%s", jctx->_tabs, item->ptr, jctx->newline);
+    mem__writef(&jctx->file, "%s\"size\": %llu,%s", jctx->_tabs, item->size, jctx->newline);
+    mem__writef(&jctx->file, "%s\"action\": \"%s\",%s", jctx->_tabs, action, jctx->newline);
+    mem__writef(&jctx->file, "%s\"callstack\": [%s", jctx->_tabs, jctx->newline);
+    ++jctx->_depth;
+    mem__serialize_json_update_tabs(jctx);
+
+    if (item->num_callstack_items != 0) {
+        #if SX_PLATFORM_WINDOWS
+            sw_callstack_entry entries[SW_MAX_FRAMES];
+            uint16_t num_resolved = sw_resolve_callstack(g_mem.sw, item->callstack, entries, item->num_callstack_items);
+            if (num_resolved) {
+                for (int i = 0; i < num_resolved; i++) {
+                    mem__serialize_callstack_item(jctx, entries[i].line_filename, entries[i].line, 
+                                                  entries[i].und_name, i == num_resolved - 1);
+                }
+            } 
+        #endif
+    } else {
+        mem__serialize_callstack_item(jctx, item->source_file, item->source_line, item->source_func, true);
+    }
+
+    --jctx->_depth;
+    mem__serialize_json_update_tabs(jctx);
+    mem__writef(&jctx->file, "%s]%s", jctx->_tabs, jctx->newline);
+}
+
+static void mem__serialize_context(mem__write_json_context* jctx, mem_trace_context* mctx)
+{
+    mem__writef(&jctx->file, "%s{%s", jctx->_tabs, jctx->newline);
+
+    ++jctx->_depth;
+    mem__serialize_json_update_tabs(jctx);
+
+    mem__writef(&jctx->file, "%s\"name\": \"%s\",%s", jctx->_tabs, mctx->name, jctx->newline);
+    mem__writef(&jctx->file, "%s\"num_items\": %d,%s", jctx->_tabs, mctx->num_items, jctx->newline);
+    mem__writef(&jctx->file, "%s\"alloc_size\": %llu,%s", jctx->_tabs, mctx->alloc_size, jctx->newline);
+    mem__writef(&jctx->file, "%s\"peak_size\": %llu,%s", jctx->_tabs, mctx->peak_size, jctx->newline);
+
+    mem__writef(&jctx->file, "%s\"items\": [%s", jctx->_tabs, jctx->newline);
+    ++jctx->_depth;
+    mem__serialize_json_update_tabs(jctx);       
+    bool first = true;
+    for (int i = 0, ic = sx_array_count(g_mem.capture.items); i < ic; i++) {
+        if (g_mem.capture.items[i]->owner == mctx) {
+            mem__writef(&jctx->file, "%s%s", jctx->_tabs, !first ? "," : "");
+            mem__writef(&jctx->file, "{%s", jctx->newline);
+            ++jctx->_depth;
+            mem__serialize_json_update_tabs(jctx);   
+
+            mem__serialize_item(jctx, g_mem.capture.items[i]);
+
+            --jctx->_depth;
+            mem__serialize_json_update_tabs(jctx);
+            mem__writef(&jctx->file, "%s}%s", jctx->_tabs, jctx->newline);
+            first = false;
+        }
+    }
+    --jctx->_depth;
+    mem__serialize_json_update_tabs(jctx);
+    mem__writef(&jctx->file, "%s]%s%s", jctx->_tabs, mctx->child ? "," : "", jctx->newline);
+
+    if (mctx->child) {
+        mem__writef(&jctx->file, "%s\"children\": [%s", jctx->_tabs, jctx->newline);
+
+        ++jctx->_depth;
+        mem__serialize_json_update_tabs(jctx);    
+
+        mem_trace_context* child = mctx->child;
+        while (child) {
+            mem__serialize_context(jctx, child);
+            child = child->next;
+        }
+
+        --jctx->_depth;
+        mem__serialize_json_update_tabs(jctx);
+
+        mem__writef(&jctx->file, "%s]%s", jctx->_tabs, jctx->newline);
+    }
+
+    --jctx->_depth;
+    mem__serialize_json_update_tabs(jctx);
+
+    mem__writef(&jctx->file, "%s}%s%s", jctx->_tabs, mctx->next ? "," : "", jctx->newline);
+}
+
+bool rizz__mem_end_capture(void)
+{
+    if (!g_mem.in_capture) {
+        return false;
+    }
 
     c89atomic_flag_clear(&g_mem.in_capture);
 
-    // TODO: remove all "freed" items
+    mem__write_json_context jctx = {
+        .newline = "\n",
+        .tab = "  "
+    };
+
+    char filepath[RIZZ_MAX_PATH] = {0};
+    #if !SX_PLATFORM_ANDROID && !SX_PLATFORM_IOS
+        sx_os_path_exepath(filepath, sizeof(filepath));
+    #endif
+    sx_os_path_dirname(filepath, sizeof(filepath), filepath);
+    sx_os_path_join(filepath, sizeof(filepath), filepath, ".memory");
+    if (!sx_os_path_isdir(filepath)) {
+        sx_os_mkdir(filepath);
+    }
+    sx_os_path_join(filepath, sizeof(filepath), filepath, g_mem.capture.name);
+    sx_strcat(filepath, sizeof(filepath), ".json");
+
+    if (!sx_file_open(&jctx.file, filepath, SX_FILE_WRITE)) {
+        rizz__log_error("Could not open file '%s' for writing", filepath);
+        return false;
+    }
+
+    mem__writef(&jctx.file, "{%s", jctx.newline);
+    ++jctx._depth;
+    mem__serialize_json_update_tabs(&jctx);
+
+    mem__writef(&jctx.file, "%s\"name\": \"%s\",%s", jctx._tabs, g_mem.capture.name, jctx.newline);
+    {
+        time_t t = time(NULL);
+        char time_str[64];
+        sx_strcpy(time_str, sizeof(time_str), asctime(localtime(&t)));
+        int len = sx_strlen(time_str);
+        if (time_str[len-1] == '\n')
+            time_str[len-1] = '\0';
+        mem__writef(&jctx.file, "%s\"time\": \"%s\",%s", jctx._tabs, time_str, jctx.newline);
+    }
+    mem__writef(&jctx.file, "%s\"duration\": %f,%s", jctx._tabs, 
+        sx_tm_sec(sx_tm_diff(sx_tm_now(), g_mem.capture.start_tm)), jctx.newline);
+    mem__writef(&jctx.file, "%s\"total_in_capture\": %d,%s", jctx._tabs, 
+        sx_array_count(g_mem.capture.items), jctx.newline);
+
+    // serialize all contexts, but just populate them with the items in the capture
+    mem__writef(&jctx.file, "%s\"items\": [%s", jctx._tabs, jctx.newline);
+
+    ++jctx._depth;
+    mem__serialize_json_update_tabs(&jctx);
+
+    sx_assert(g_mem.root);
+    mem_trace_context* mctx = g_mem.root->child;
+    while (mctx) {
+        mem__serialize_context(&jctx, mctx);
+        mctx = mctx->next;
+    }
+
+    --jctx._depth;
+    mem__serialize_json_update_tabs(&jctx);
+    mem__writef(&jctx.file, "%s]%s", jctx._tabs, jctx.newline);
+
+    mem__writef(&jctx.file, "}%s", jctx.newline);
+    
+    sx_file_close(&jctx.file);
+
+    // remove all "freed" items
+    for (int i = 0, ic = sx_array_count(g_mem.capture.items); i < ic; i++) {
+        mem_item* item = g_mem.capture.items[i];
+        if (item->freed) {
+            mem_destroy_trace_item(item->owner, item);
+        }
+    }
+
+    return true;
 }
 
