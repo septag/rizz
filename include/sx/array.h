@@ -152,7 +152,7 @@ struct sx_array
     {
         sx_assert(alloc);
         sx_assert(_index < sx_array_count(p));
-        sx_array_pop(alloc, _index);
+        sx_array_pop(p, _index);
     }
 
     void pop_last()
