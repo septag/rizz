@@ -12,8 +12,6 @@ set(SOURCE_FILES internal.h
                  http.c 
                  vfs.c 
                  android.c
-                 basisut.cpp 
-                 basisut.h 
                  json.c 
                  windows.cpp 
                  memory.c)
@@ -71,7 +69,7 @@ endif()
 
 # includes and extra compile flags
 target_include_directories(rizz PRIVATE ../../3rdparty)
-target_link_libraries(rizz PUBLIC sx PRIVATE remotery basisu)
+target_link_libraries(rizz PUBLIC sx PRIVATE remotery)
 target_compile_definitions(rizz PRIVATE -DRIZZ_INTERNAL_API) # Expose internal API structs when build the library
 if (ENABLE_HOT_LOADING)
     target_compile_definitions(rizz PRIVATE -DRIZZ_CONFIG_HOT_LOADING=1)
@@ -96,7 +94,16 @@ if (ANDROID)
     target_link_libraries(rizz PRIVATE EGL android GLESv3)
 elseif (RPI)
     target_link_directories(rizz PUBLIC ${CMAKE_SYSROOT}/opt/vc/lib)
-    target_link_libraries(rizz PRIVATE GLESv2 EGL bcm_host)
+    target_link_libraries(rizz PRIVATE brcmGLESv2 brcmEGL bcm_host atomic)
+
+    # add_custom_command(
+    #    OUTPUT ${output_filepath}
+    #    COMMAND ${glslcc_path}
+    #    ARGS ${args}
+    #    DEPENDS ${source_files_sub}
+    #    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    #    COMMENT "Compiling ${shader_lang_upper}: ${output_relpath}"
+    #    VERBATIM)    
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     target_link_libraries(rizz PRIVATE flextGL X11 GL)
 elseif (WIN32)

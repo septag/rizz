@@ -1272,6 +1272,7 @@ typedef struct rizz_api_gfx {
     const rizz_texture* (*texture_get)(rizz_asset texture_asset);
     void (*texture_set_default_quality)(sg_filter min_filter, sg_filter mag_filter, int aniso, int first_mip);
     void (*texture_default_quality)(sg_filter* min_filter, sg_filter* mag_filter, int* aniso, int* first_mip);
+    uint32_t (*texture_surface_pitch)(sg_pixel_format fmt, uint32_t width, uint32_t height, uint32_t row_align);
 
     // info
     const rizz_gfx_trace_info* (*trace_info)();

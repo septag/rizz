@@ -14,8 +14,12 @@ if (WIN32)
 endif()
 
 set(CMAKE_SYSROOT ${RPI_SYSGCC_ROOT}/arm-linux-gnueabihf/sysroot)
-set(CMAKE_C_COMPILER ${RPI_SYSGCC_ROOT}/bin/arm-linux-gnueabihf-gcc${executable_suffix})
-set(CMAKE_CXX_COMPILER ${RPI_SYSGCC_ROOT}/bin/arm-linux-gnueabihf-g++${executable_suffix})
+if (NOT CMAKE_C_COMPILER)
+    set(CMAKE_C_COMPILER ${RPI_SYSGCC_ROOT}/bin/arm-linux-gnueabihf-gcc${executable_suffix})
+endif()
+if (NOT CMAKE_CXX_COMPILER)
+    set(CMAKE_CXX_COMPILER ${RPI_SYSGCC_ROOT}/bin/arm-linux-gnueabihf-g++${executable_suffix})
+endif()
 
 # find path
 set(CMAKE_FIND_ROOT_PATH ${RPI_SYSGCC_ROOT}/arm-linux-gnueabihf/sysroot)
