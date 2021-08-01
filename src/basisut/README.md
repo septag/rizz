@@ -6,7 +6,7 @@ where you need to maintain minimal size and be able to transcode to different ha
 
 The asset type name is "texture_basisu" with `rizz_texture_load_params` (same as textures) as load parameters for asset loader. 
 With the exception of `fmt` field, which is mandatory when loading basis files, because basis files needs to transcode to a valid 
-format at runtime and you need to provide it, here's an example usage:
+format at runtime and you need to provide it explicitly, here's an example usage:
 
 ```
 rizz_asset img = the_asset->load("texture_basisu", "/path/to/image.basis",
