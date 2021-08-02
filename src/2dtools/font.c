@@ -42,7 +42,7 @@ typedef struct font__fons {
 typedef struct font__context {
     const sx_alloc* alloc;
     rizz_api_gfx_draw* draw_api;
-    font__fons** fonts;    // sx_array
+    font__fons** SX_ARRAY fonts;
     sg_pipeline pip;
     sg_buffer vbuff;
     sg_shader shader;

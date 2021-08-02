@@ -25,7 +25,7 @@ typedef struct rizz_material_lib
 {
     const sx_alloc* alloc;
     sx_handle_pool* ids;          // binds to `datas`
-    material__data* datas;        // sx_array
+    material__data* SX_ARRAY datas;
     sx_hashtbl* hashes;           // data hash -> index to handles (sx_handle_at)
     rizz_material blank_mtl;
 } rizz_material_lib;
@@ -48,7 +48,7 @@ typedef struct shader_data
 typedef struct rizz_shader_lib 
 {
     const sx_alloc* alloc;
-    shader_data* shaders;       // sx_array
+    shader_data* SX_ARRAY shaders;
 } rizz_shader_lib;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

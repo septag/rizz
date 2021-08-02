@@ -42,7 +42,7 @@ typedef struct {
 typedef struct {
     const sx_alloc* alloc;
     sx_handle_pool* http_handles;    // rizz__http
-    rizz__http* https;               // sx_array
+    rizz__http* SX_ARRAY https;
     rizz_http pending[RIZZ_CONFIG_MAX_HTTP_REQUESTS];
     int num_pending;
 } rizz__http_context;

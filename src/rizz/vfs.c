@@ -69,7 +69,7 @@ typedef struct {
 typedef struct {
     const sx_alloc* alloc;
     rizz__vfs_mount_point* mounts;
-    rizz_vfs_async_modify_cb** modify_cbs;    // sx_array
+    rizz_vfs_async_modify_cb** SX_ARRAY modify_cbs;
     sx_thread* worker_thrd;
     sx_queue_spsc* req_queue;    // producer: main, consumer: worker, data: rizz__vfs_async_request
     sx_queue_spsc* res_queue;    // producer: worker, consumer: main, data: rizz__vfs_async_response

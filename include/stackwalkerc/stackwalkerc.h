@@ -21,6 +21,7 @@
 //      1.3.0  Added more advanced functions for resolving callstack lazily, sw_capture_current, sw_resolve_callstack
 //      1.4.0  Added module cache and reload modules on-demand
 //      1.5.0  House cleaning, added sw_set_dbghelp_hintpath, ditched error_msg callback for SW_LOG_ERROR macro
+//      1.6.0  [BREAKING] added optional "hash" argument to `sw_capture_current`
 //
 #pragma once
 
@@ -106,7 +107,7 @@ SW_API_DECL bool sw_show_callstack(sw_context* ctx, sw_sys_handle thread_hdl /*=
 
 // manual/advanced functions
 SW_API_DECL sw_sys_handle sw_load_dbghelp(void);
-SW_API_DECL uint16_t sw_capture_current(sw_context* ctx, void* symbols[SW_MAX_FRAMES]);
+SW_API_DECL uint16_t sw_capture_current(sw_context* ctx, void* symbols[SW_MAX_FRAMES], uint32_t* hash);
 SW_API_DECL uint16_t sw_resolve_callstack(sw_context* ctx, void* symbols[SW_MAX_FRAMES], 
                                           sw_callstack_entry entries[SW_MAX_FRAMES], uint16_t num_entries);
 SW_API_DECL void sw_reload_modules(sw_context* ctx);
@@ -1183,7 +1184,7 @@ SW_API_IMPL bool sw_show_callstack(sw_context* ctx, sw_sys_handle thread_hdl)
     return sw_show_callstack_userptr(ctx, thread_hdl, NULL);
 }
 
-SW_API_IMPL uint16_t sw_capture_current(sw_context* ctx, void* symbols[SW_MAX_FRAMES])
+SW_API_IMPL uint16_t sw_capture_current(sw_context* ctx, void* symbols[SW_MAX_FRAMES], uint32_t* hash)
 {
     SW_ASSERT(ctx);
 
@@ -1191,7 +1192,7 @@ SW_API_IMPL uint16_t sw_capture_current(sw_context* ctx, void* symbols[SW_MAX_FR
     max_frames = max_frames > SW_MAX_FRAMES ? SW_MAX_FRAMES : max_frames;
 
     uint32_t frames_to_skip = ctx->frames_to_skip > 1 ? ctx->frames_to_skip : 1;
-    return (uint16_t)RtlCaptureStackBackTrace(frames_to_skip, max_frames, symbols, NULL);
+    return (uint16_t)RtlCaptureStackBackTrace(frames_to_skip, max_frames, symbols, (PDWORD)hash);
 }
 
 SW_API_IMPL uint16_t sw_resolve_callstack(sw_context* ctx, void* symbols[SW_MAX_FRAMES], 

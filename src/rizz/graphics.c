@@ -212,8 +212,8 @@ typedef struct rizz__gfx_cmdbuffer_ref {
 
 typedef struct rizz__gfx_cmdbuffer {
     const sx_alloc* alloc;
-    uint8_t* params_buff;             // sx_array
-    rizz__gfx_cmdbuffer_ref* refs;    // sx_array
+    uint8_t* SX_ARRAY params_buff;
+    rizz__gfx_cmdbuffer_ref* SX_ARRAY refs;
     rizz_gfx_stage running_stage;
     int index;
     uint16_t stage_order;
@@ -263,13 +263,13 @@ typedef struct rizz__gfx_source_loc {
 } rizz__gfx_source_loc;
 
 typedef struct rizz__gfx {
-    rizz__gfx_stage* stages;                    // sx_array
+    rizz__gfx_stage* SX_ARRAY stages;
     rizz__gfx_cmdbuffer* cmd_buffers_feed;      // commands that are queued (sx_array)
     rizz__gfx_cmdbuffer* cmd_buffers_render;    // commands that are being rendered (sx_array)
     sx_lock_t stage_lk;
     rizz__gfx_texture_mgr tex_mgr;
     #ifdef SOKOL_METAL
-        rizz__pip_mtl* pips;    // sx_array: keep track of pipelines for shader hot-reloads
+        rizz__pip_mtl* SX_ARRAY pips;    // keep track of pipelines for shader hot-reloads
     #else
         sg_pipeline* pips;
     #endif
@@ -277,7 +277,7 @@ typedef struct rizz__gfx {
         ID3D11DeviceContext2* d3d11_ctx;
         bool                  d3d11_has_marker;
     #endif
-    rizz__gfx_stream_buffer* stream_buffs;    // sx_array: streaming buffers for append_buffers
+    rizz__gfx_stream_buffer* SX_ARRAY stream_buffs;    // streaming buffers for append_buffers
 
     sg_buffer* destroy_buffers;
     sg_shader* destroy_shaders;

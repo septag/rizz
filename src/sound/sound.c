@@ -140,8 +140,8 @@ typedef struct snd__cmdheader {
 } snd__cmdheader;
 
 typedef struct snd__cmdbuffer {
-    uint8_t* params_buff;    // sx_array
-    snd__cmdheader* cmds;    // sx_array
+    uint8_t* SX_ARRAY params_buff;
+    snd__cmdheader* SX_ARRAY cmds;
     int index;
     int cmd_idx;
 } snd__cmdbuffer;

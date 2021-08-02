@@ -30,7 +30,7 @@ typedef struct rizz__asset_mgr {
     char params_type_name[32];
     rizz_asset_obj failed_obj;
     rizz_asset_obj async_obj;
-    uint8_t* params_buff;                  // sx_array (byte-array, item-size: params_size)
+    uint8_t* SX_ARRAY params_buff;                  // (byte-array, item-size: params_size)
     rizz_asset_load_flags forced_flags;    // these flags are foced upon every load-call
     bool unreg;
 } rizz__asset_mgr;
@@ -92,15 +92,15 @@ typedef struct rizz__asset_async_job {
 } rizz__asset_async_job;
 
 typedef struct rizz__asset_group {
-    rizz_asset* assets;    // sx_array
+    rizz_asset* SX_ARRAY assets;   
 } rizz__asset_group;
 
 typedef struct rizz__asset_lib {
     const sx_alloc* alloc;    // allocator passed on init
     char asset_db_file[RIZZ_MAX_PATH];
     char variation[32];
-    rizz__asset_mgr* asset_mgrs;        // sx_array
-    uint32_t* asset_name_hashes;        // sx_array (count = count(asset_mgrs))
+    rizz__asset_mgr* SX_ARRAY asset_mgrs;        
+    uint32_t* SX_ARRAY asset_name_hashes;        // (count = count(asset_mgrs))
     rizz__asset* assets;                // loaded assets
     sx_handle_pool* asset_handles;
     sx_hashtbl* asset_tbl;              // key: hash(path+params), value: handle (asset_handles)

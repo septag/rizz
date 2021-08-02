@@ -154,9 +154,9 @@ struct input__context {
     ga_allocator ga_alloc;
     InputManager* mgr;
     InputMap* mapper;
-    input__device_info* devices;           // sx_array
-    input__debug_item* debug_items;        // sx_array
-    input__gainput_listener* listeners;    // sx_array
+    input__device_info*      SX_ARRAY devices;
+    input__debug_item*       SX_ARRAY debug_items;
+    input__gainput_listener* SX_ARRAY listeners;
     bool debugger;
 };
 

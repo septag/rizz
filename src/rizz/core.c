@@ -90,7 +90,7 @@ typedef struct rizz__core_tmpalloc_inst {
 
 typedef struct rizz__core_tmpalloc {
     sx_vmem_context vmem;
-    rizz__core_tmpalloc_inst* alloc_stack;    // sx_array - stack for push()/pop()
+    rizz__core_tmpalloc_inst* SX_ARRAY alloc_stack;    // stack for push()/pop()
     sx_atomic_int stack_depth;
     float wait_time;
     size_t peak;
@@ -121,8 +121,8 @@ typedef struct rizz__core_tmpalloc_debug {
     size_t frame_peak;
     sx_atomic_int stack_depth;
     float wait_time;
-    rizz__core_tmpalloc_debug_item* items;          // sx_array: allocated items within 
-    rizz__core_tmpalloc_debug_inst* alloc_stack;    // sx_array - stack for push()/pop() api
+    rizz__core_tmpalloc_debug_item* SX_ARRAY items;          // allocated items within 
+    rizz__core_tmpalloc_debug_inst* SX_ARRAY alloc_stack;    // stack for push()/pop() api
 } rizz__core_tmpalloc_debug;
 
 typedef struct rizz__core_cmd {
@@ -197,9 +197,9 @@ typedef struct rizz__core {
     Remotery* rmt;
     sx_queue_spsc* rmt_command_queue;   // type: char*, producer: remotery thread, consumer: main thread
     
-    rizz__core_cmd* console_cmds;       // sx_array
-    rizz__log_backend* log_backends;    // sx_array
-    rizz__tls_var* tls_vars;            // sx_array
+    rizz__core_cmd* SX_ARRAY console_cmds;
+    rizz__log_backend* SX_ARRAY log_backends;
+    rizz__tls_var* SX_ARRAY tls_vars;
     sx_atomic_int num_log_backends;
 
     rizz__show_debugger_deferred show_memory;
@@ -1522,7 +1522,6 @@ void rizz__core_frame()
     bool call_end_capture = false;
     if (g_core.mem_capture_frame == g_core.frame_idx) {
         char name[32];
-        time_t t = time(NULL);
         sx_snprintf(name, sizeof(name), "frame_%lld", g_core.frame_idx);
         rizz__mem_begin_capture(name);
         call_end_capture = true;

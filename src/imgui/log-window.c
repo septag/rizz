@@ -36,7 +36,7 @@ typedef struct imgui__log_context {
     sx_ringbuffer* buffer;
     uint32_t filter_channels;
     uint32_t filter_types;
-    imgui__log_entry_ref* cached;   // sx_array
+    imgui__log_entry_ref* SX_ARRAY cached;
     int selected;
     bool reset_focus;
     bool toggle;

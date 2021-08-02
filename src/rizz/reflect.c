@@ -40,11 +40,11 @@ typedef struct refl__data {
 } refl__data;
 
 typedef struct rizz_refl_context {
-    refl__struct* structs; // sx_array
-    refl__enum* enums;     // sx_array
-    refl__data* regs;      // sx_array
-    const sx_alloc* alloc;
-    sx_hashtbl* reg_tbl;        // refl.name --> index(regs)
+    refl__struct* SX_ARRAY structs;
+    refl__enum*   SX_ARRAY enums;
+    refl__data*   SX_ARRAY regs;
+    const sx_alloc*        alloc;
+    sx_hashtbl*            reg_tbl;        // refl.name --> index(regs)
 } rizz_refl_context;
 
 static uint32_t k_builtin_type_hashes[_RIZZ_REFL_VARIANTTYPE_COUNT];

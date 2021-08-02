@@ -1012,7 +1012,7 @@ typedef struct imgui__context {
     float mouse_wheel_h;
     float mouse_wheel;
     bool keys_down[512];
-    ImWchar* char_input;    // sx_array
+    ImWchar* SX_ARRAY char_input;
     ImGuiMouseCursor last_cursor;
     sg_imgui_t sg_imgui;
     float fts[MAX_BUFFERED_FRAME_TIMES];

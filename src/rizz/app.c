@@ -60,9 +60,9 @@ typedef struct rizz__app {
     char game_filepath[RIZZ_MAX_PATH];
     sx_vec2 window_size;
     bool keys_pressed[RIZZ_APP_MAX_KEYCODES];
-    sx_cmdline_opt* cmdline_args;       // sx_array
+    sx_cmdline_opt* SX_ARRAY cmdline_args;
     rizz__cmdline_item* cmdline_items;  // saved items with values
-    rizz__shortcut_item* shortcuts;     // sx_array
+    rizz__shortcut_item* SX_ARRAY shortcuts;
     void (*crash_cb)(void*, void*);
     void* crash_user_data;
     bool suspended;
