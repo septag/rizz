@@ -158,7 +158,7 @@ static void rizz__json_on_release(rizz_asset_obj obj, const sx_alloc* alloc)
 
 void rizz__json_init(void)
 {
-    g_json.alloc = the__core.alloc(RIZZ_MEMID_CORE);
+    g_json.alloc = the__core.alloc();
 
     // TODO: add dummy json (actually, what is the point of having dummy json? so this maybe not necessary)
     the__asset.register_asset_type("json",

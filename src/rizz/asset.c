@@ -96,7 +96,7 @@ typedef struct rizz__asset_group {
 } rizz__asset_group;
 
 typedef struct rizz__asset_lib {
-    const sx_alloc* alloc;    // allocator passed on init
+    sx_alloc* alloc;    // allocator passed on init
     char asset_db_file[RIZZ_MAX_PATH];
     char variation[32];
     rizz__asset_mgr* SX_ARRAY asset_mgrs;        
@@ -590,7 +590,7 @@ static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, 
             the__vfs.read_async(
                 real_path,
                 (flags & RIZZ_ASSET_LOAD_FLAG_ABSOLUTE_PATH) ? RIZZ_VFS_FLAG_ABSOLUTE_PATH : 0,
-                the__core.alloc(RIZZ_MEMID_CORE), rizz__asset_on_read, NULL);
+                the__vfs.alloc(), rizz__asset_on_read, NULL);
         } else {
             // Blocking load (+ reloads)
             asset = rizz__asset_add(path, params, amgr->failed_obj, name_hash, obj_alloc, flags, tags,
@@ -598,8 +598,7 @@ static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, 
 
             sx_mem_block* mem = the__vfs.read(
                 real_path,
-                (flags & RIZZ_ASSET_LOAD_FLAG_ABSOLUTE_PATH) ? RIZZ_VFS_FLAG_ABSOLUTE_PATH : 0,
-                the__core.alloc(RIZZ_MEMID_CORE));
+                (flags & RIZZ_ASSET_LOAD_FLAG_ABSOLUTE_PATH) ? RIZZ_VFS_FLAG_ABSOLUTE_PATH : 0, the__vfs.alloc());
 
             if (!mem) {
                 rizz__asset_errmsg(path, real_path, "opening");
@@ -674,27 +673,27 @@ static rizz_asset rizz__asset_load_hashed(uint32_t name_hash, const char* path, 
     return asset;
 }
 
-bool rizz__asset_init(const sx_alloc* alloc, const char* dbfile, const char* variation)
+bool rizz__asset_init(const char* dbfile, const char* variation)
 {
     sx_assert(dbfile);
 
-    g_asset.alloc = alloc;
+    g_asset.alloc = rizz__mem_create_allocator("AssetSystem", RIZZ_MEMOPTION_INHERIT, "Core", the__core.heap_alloc());
     sx_strcpy(g_asset.variation, sizeof(g_asset.variation), variation);
     sx_strcpy(g_asset.asset_db_file, sizeof(g_asset.asset_db_file), dbfile);
 
     the__vfs.register_modify(rizz__asset_on_modified);
 
-    g_asset.asset_tbl = sx_hashtbl_create(alloc, RIZZ_CONFIG_ASSET_POOL_SIZE);
-    g_asset.resource_tbl = sx_hashtbl_create(alloc, RIZZ_CONFIG_ASSET_POOL_SIZE);
+    g_asset.asset_tbl = sx_hashtbl_create(g_asset.alloc, RIZZ_CONFIG_ASSET_POOL_SIZE);
+    g_asset.resource_tbl = sx_hashtbl_create(g_asset.alloc, RIZZ_CONFIG_ASSET_POOL_SIZE);
     sx_assert(g_asset.asset_tbl);
 
-    g_asset.asset_handles = sx_handle_create_pool(alloc, RIZZ_CONFIG_ASSET_POOL_SIZE);
+    g_asset.asset_handles = sx_handle_create_pool(g_asset.alloc, RIZZ_CONFIG_ASSET_POOL_SIZE);
     sx_assert(g_asset.asset_handles);
 
-    g_asset.group_handles = sx_handle_create_pool(alloc, 32);
+    g_asset.group_handles = sx_handle_create_pool(g_asset.alloc, 32);
     sx_assert(g_asset.group_handles);
 
-    g_asset.hasher = sx_hash_create_xxh32(alloc);
+    g_asset.hasher = sx_hash_create_xxh32(g_asset.alloc);
     sx_assert(g_asset.hasher);
 
     return true;
@@ -761,6 +760,9 @@ void rizz__asset_release()
         ajob = next;
     }
     g_asset.async_job_list = g_asset.async_job_list_last = NULL;
+
+    rizz__mem_destroy_allocator(g_asset.alloc);
+    g_asset.alloc = NULL;
 }
 
 void rizz__asset_update()

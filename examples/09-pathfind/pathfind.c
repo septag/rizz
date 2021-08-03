@@ -273,7 +273,7 @@ static bool init()
         g_draw3d.agents[i] = (agent_state){
             .path =
                 (rizz_astar_path){
-                    .alloc = the_core->alloc(RIZZ_MEMID_GAME),
+                    .alloc = the_core->heap_alloc(),
                     .array = NULL,
                 },
             .cindex = 0,

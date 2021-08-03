@@ -996,6 +996,7 @@ SX_PRAGMA_DIAGNOSTIC_POP();
 #include rizz_shader_path(shaders_h, imgui.vert.h)
 
 typedef struct imgui__context {
+    sx_alloc* alloc;
     ImGuiContext* ctx;
     sx_pool* small_mem_pool;
     int max_verts;
@@ -1059,10 +1060,8 @@ static void imgui__free(void* ptr, void* user_data)
 
 static bool imgui__resize_buffers(int max_verts, int max_indices)
 {
-    const sx_alloc* alloc = the_core->alloc(RIZZ_MEMID_TOOLSET);
-
-    g_imgui.verts = (ImDrawVert*)sx_realloc(alloc, g_imgui.verts, sizeof(ImDrawVert) * max_verts);
-    g_imgui.indices = (uint16_t*)sx_realloc(alloc, g_imgui.indices, sizeof(uint16_t) * max_indices);
+    g_imgui.verts = (ImDrawVert*)sx_realloc(g_imgui.alloc, g_imgui.verts, sizeof(ImDrawVert) * max_verts);
+    g_imgui.indices = (uint16_t*)sx_realloc(g_imgui.alloc, g_imgui.indices, sizeof(uint16_t) * max_indices);
     if (!g_imgui.verts || !g_imgui.indices) {
         sx_out_of_memory();
         return false;
@@ -1169,16 +1168,15 @@ static bool imgui__init(void)
     sx_assert(g_imgui.ctx == NULL);
 
     g_imgui.docking = the_app->config()->imgui_docking;
-
-    const sx_alloc* alloc = the_core->alloc(RIZZ_MEMID_TOOLSET);
-    g_sg_imgui_alloc = alloc;
-    g_imgui.small_mem_pool = sx_pool_create(alloc, IMGUI_SMALL_MEMORY_SIZE, 1000);
+    g_imgui.alloc = the_core->trace_alloc_create("ImGUI", RIZZ_MEMOPTION_INHERIT, NULL, the_core->heap_alloc());
+    g_sg_imgui_alloc = g_imgui.alloc;
+    g_imgui.small_mem_pool = sx_pool_create(g_imgui.alloc, IMGUI_SMALL_MEMORY_SIZE, 1000);
     if (!g_imgui.small_mem_pool) {
         sx_memory_fail();
         return false;
     }
 
-    the__imgui.SetAllocatorFunctions(imgui__malloc, imgui__free, (void*)alloc);
+    the__imgui.SetAllocatorFunctions(imgui__malloc, imgui__free, (void*)g_imgui.alloc);
 
     g_imgui.last_cursor = ImGuiMouseCursor_COUNT;
     g_imgui.ctx = the__imgui.CreateContext(NULL);
@@ -1288,8 +1286,6 @@ static bool imgui__init(void)
 
 static void imgui__release()
 {
-    const sx_alloc* alloc = the_core->alloc(RIZZ_MEMID_TOOLSET);
-
     if (g_imgui.ctx)
         the__imgui.DestroyContext(g_imgui.ctx);
 
@@ -1298,10 +1294,12 @@ static void imgui__release()
     the_gfx->destroy_buffer(g_imgui.bind.index_buffer);
     the_gfx->destroy_shader(g_imgui.shader);
     the_gfx->destroy_image(g_imgui.font_tex);
-    sx_free(alloc, g_imgui.verts);
-    sx_free(alloc, g_imgui.indices);
-    sx_array_free(alloc, g_imgui.char_input);
-    sx_pool_destroy(g_imgui.small_mem_pool, alloc);
+    sx_free(g_imgui.alloc, g_imgui.verts);
+    sx_free(g_imgui.alloc, g_imgui.indices);
+    sx_array_free(g_imgui.alloc, g_imgui.char_input);
+    sx_pool_destroy(g_imgui.small_mem_pool, g_imgui.alloc);
+    the_core->trace_alloc_destroy(g_imgui.alloc);
+    g_imgui.alloc = NULL;
 }
 
 static void imgui__update_cursor()
@@ -1980,8 +1978,7 @@ rizz_plugin_decl_event_handler(imgui, e)
         g_imgui.keys_down[e->key_code] = false;
         break;
     case RIZZ_APP_EVENTTYPE_CHAR:
-        sx_array_push(the_core->alloc(RIZZ_MEMID_TOOLSET), g_imgui.char_input,
-                      (ImWchar)e->char_code);
+        sx_array_push(g_imgui.alloc, g_imgui.char_input, (ImWchar)e->char_code);
         break;
     case RIZZ_APP_EVENTTYPE_UPDATE_CURSOR:
         imgui__update_cursor();

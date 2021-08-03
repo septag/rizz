@@ -6,6 +6,8 @@
 typedef rizz_camera rizz_camera;
 typedef struct rizz_api_imgui rizz_api_imgui;
 
+const sx_alloc* tools3d__alloc(void);
+
 bool debug3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam);
 void debug3d__release(void);
 

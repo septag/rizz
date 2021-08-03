@@ -81,25 +81,25 @@ bool rizz__win_get_vstudio_dir(char* vspath, size_t vspath_size);
         sx_defer(the__core.begin_profile_sample(sx_stringize(_name), 0, &sx_concat(rmt_sample_hash_, _name)), \
                  the__core.end_profile_sample())
 
-bool rizz__vfs_init(const sx_alloc* alloc);
-void rizz__vfs_release();
-void rizz__vfs_async_update();
+bool rizz__vfs_init(void);
+void rizz__vfs_release(void);
+void rizz__vfs_async_update(void);
 
-bool rizz__asset_init(const sx_alloc* alloc, const char* dbfile, const char* variation);
+bool rizz__asset_init(const char* dbfile, const char* variation);
 bool rizz__asset_dump_unused(const char* filepath);
-void rizz__asset_release();
-void rizz__asset_update();
+void rizz__asset_release(void);
+void rizz__asset_update(void);
 
-bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_profile);
-void rizz__gfx_release();
+bool rizz__gfx_init(const sg_desc* desc, bool enable_profile);
+void rizz__gfx_release(void);
 void rizz__gfx_trace_reset_frame_stats(rizz_gfx_perframe_trace_zone zone);
-void rizz__gfx_execute_command_buffers_final();
-void rizz__gfx_update();
-void rizz__gfx_commit_gpu();
+void rizz__gfx_execute_command_buffers_final(void);
+void rizz__gfx_update(void);
+void rizz__gfx_commit_gpu(void);
 
-bool rizz__http_init(const sx_alloc* alloc);
-void rizz__http_release();
-void rizz__http_update();
+bool rizz__http_init(void);
+void rizz__http_release(void);
+void rizz__http_update(void);
 
 typedef struct sg_desc sg_desc;
 void rizz__app_init_gfx_desc(sg_desc* desc);

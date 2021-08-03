@@ -50,7 +50,7 @@ RIZZ_STATE static rizz_api_app* the_app;
 RIZZ_STATE static rizz_api_imgui* the_imgui;
 RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
 
-RIZZ_STATE static const sx_alloc* g_input_alloc;
+RIZZ_STATE static sx_alloc* g_input_alloc;
 
 class ga_allocator : public Allocator
 {
@@ -208,7 +208,7 @@ class input__gainput_debugger : public gainput::DebugRenderer
 
 static bool input__init()
 {
-    g_input_alloc = the_core->alloc(RIZZ_MEMID_INPUT);
+    g_input_alloc = the_core->trace_alloc_create("Input", RIZZ_MEMOPTION_ALL, NULL, the_core->heap_alloc());
 
     g_input.mgr = sx_new(g_input_alloc, InputManager)(false, g_input.ga_alloc);
     if (!g_input.mgr) {
@@ -233,6 +233,9 @@ static void input__release()
     sx_delete(g_input_alloc, InputManager, g_input.mgr);
     sx_array_free(g_input_alloc, g_input.devices);
     sx_array_free(g_input_alloc, g_input.debug_items);
+
+    the_core->trace_alloc_destroy(g_input_alloc);
+    g_input_alloc = NULL;
 }
 
 static rizz_input_device input__create_device(rizz_input_device_type type)

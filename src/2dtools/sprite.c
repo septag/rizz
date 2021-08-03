@@ -1,4 +1,4 @@
-#include "rizz/2dtools.h"
+#include "2dtools-internal.h"
 
 #include "sx/allocator.h"
 #include "sx/array.h"
@@ -1266,7 +1266,7 @@ bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx)
     the_asset = asset;
     the_gfx = gfx;
 
-    g_spr.alloc = the_core->alloc(RIZZ_MEMID_GRAPHICS);
+    g_spr.alloc = tools2d__alloc();
     g_spr.draw_api = &the_gfx->staged;
     g_spr.name_pool = sx_strpool_create(
         g_spr.alloc, &(sx_strpool_config){ .counter_bits = SX_CONFIG_HANDLE_GEN_BITS,

@@ -274,7 +274,7 @@ static bool init()
         sx_linear_buffer_addtype(&lb, boid_t, sx_vec3, acl, boid_count, 0);
         sx_linear_buffer_addtype(&lb, boid_t, sx_color, col, boid_count, 0);
 
-        boid_t* buf = sx_linear_buffer_calloc(&lb, the_core->alloc(RIZZ_MEMID_GAME));
+        boid_t* buf = sx_linear_buffer_calloc(&lb, the_core->heap_alloc());
         buf->count = boid_count;
         g_simulation.boids = buf;
         sx_rng rng;
@@ -308,7 +308,7 @@ static bool init()
 
 static void shutdown(void) 
 {
-    sx_free(the_core->alloc(RIZZ_MEMID_GAME), g_simulation.boids);
+    sx_free(the_core->heap_alloc(), g_simulation.boids);
 }
 
 static void update_job_cb(int start, int end, int thrd_index, void* user)

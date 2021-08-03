@@ -428,8 +428,7 @@ rizz_plugin_decl_main(basisut, plugin, e)
         the_asset = (rizz_api_asset*)the_plugin->get_api(RIZZ_API_ASSET, 0);
         the_gfx = (rizz_api_gfx*)the_plugin->get_api(RIZZ_API_GFX, 0);
 
-        basisut_init(the_core->alloc(RIZZ_MEMID_GRAPHICS));
-
+        basisut_init(the_gfx->alloc());
         break;
     }
     case RIZZ_PLUGIN_EVENT_LOAD:

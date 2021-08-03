@@ -145,6 +145,7 @@ typedef struct mem_state
         sw_context* sw;
     #endif
 
+    const sx_alloc* alloc;
     sx_align_decl(SX_CACHE_LINE_SIZE, c89atomic_int64) debug_mem_size;
     mem_trace_context* root;
     mem_capture_context capture;
@@ -227,7 +228,7 @@ static mem_trace_context* mem_create_trace_context(const char* name, uint32_t me
         }
     }
 
-    mem_trace_context* ctx = sx_calloc(sx_alloc_malloc(), sizeof(mem_trace_context));
+    mem_trace_context* ctx = sx_calloc(g_mem.alloc, sizeof(mem_trace_context));
     if (!ctx) {
         sx_memory_fail();
         return NULL;
@@ -237,9 +238,9 @@ static mem_trace_context* mem_create_trace_context(const char* name, uint32_t me
     ctx->name_hash = name_hash;
     ctx->options = (mem_opts == RIZZ_MEMOPTION_INHERIT && parent_ctx) ? parent_ctx->options : mem_opts;
     ctx->parent = parent_ctx;
-    ctx->item_pool = sx_pool_create(sx_alloc_malloc(), sizeof(mem_item), 150);
+    ctx->item_pool = sx_pool_create(g_mem.alloc, sizeof(mem_item), 150);
     if (!ctx->item_pool) {
-        sx_free(sx_alloc_malloc(), ctx);        
+        sx_free(g_mem.alloc, ctx);        
         sx_memory_fail();
         return NULL;
     }
@@ -360,7 +361,7 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
             } else if (in_capture) {
                 old_item->freed = true;
                 sx_mutex_lock(g_mem.capture.mtx) {
-                    sx_array_push(sx_alloc_malloc(), g_mem.capture.items, old_item);
+                    sx_array_push(g_mem.alloc, g_mem.capture.items, old_item);
                 }
             }
         }
@@ -386,7 +387,7 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
     // create tracking item and add to linked-list
     if (save_current_call) {
         mem_trace_context_mutex_enter(ctx->options, ctx->mtx);
-        mem_item* new_item = (mem_item*)sx_pool_new_and_grow(ctx->item_pool, sx_alloc_malloc());
+        mem_item* new_item = (mem_item*)sx_pool_new_and_grow(ctx->item_pool, g_mem.alloc);
         if (!new_item) {
             mem_trace_context_mutex_exit(ctx->options, ctx->mtx);
             sx_memory_fail();
@@ -404,7 +405,7 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
 
         if (in_capture) {
             sx_mutex_lock(g_mem.capture.mtx) {
-                sx_array_push(sx_alloc_malloc(), g_mem.capture.items, new_item);
+                sx_array_push(g_mem.alloc, g_mem.capture.items, new_item);
             }
         }
     }
@@ -448,8 +449,8 @@ static void mem_destroy_trace_context(mem_trace_context* ctx)
             sx_mutex_release(&ctx->mtx);
         }
 
-        sx_pool_destroy(ctx->item_pool, sx_alloc_malloc());
-        sx_free(sx_alloc_malloc(), ctx);
+        sx_pool_destroy(ctx->item_pool, g_mem.alloc);
+        sx_free(g_mem.alloc, ctx);
     }
 }
 
@@ -487,6 +488,8 @@ static void* mem_alloc_cb(void* ptr, size_t size, uint32_t align, const char* fi
 bool rizz__mem_init(uint32_t opts)
 {
     sx_assert(opts != RIZZ_MEMOPTION_INHERIT);
+
+    g_mem.alloc = the__core.heap_alloc();
 
     #if SX_PLATFORM_WINDOWS
         g_mem.sw = sw_create_context_capture(
@@ -591,8 +594,8 @@ static void mem_imgui_context_info(rizz_api_imgui* imgui, rizz_api_imgui_extra* 
 {
     sx_unused(imgui);
 
-    imguix->label("Allocated size", "%$d", ctx->alloc_size);
-    imguix->label("Peak size ", "%$d", ctx->peak_size);
+    imguix->label("Allocated size", "%$.2d", ctx->alloc_size);
+    imguix->label("Peak size ", "%$.2d", ctx->peak_size);
 
     char size_text[32];
     char peak_text[32];
@@ -830,7 +833,7 @@ static mem_item_collapsed* mem_imgui_context_get_collapsed_items(mem_trace_conte
                         sx_strcpy(citem.entry_symbol, sizeof(citem.entry_symbol), item->source_func);
                     }
 
-                    sx_array_push(sx_alloc_malloc(), ctx->cached, citem);
+                    sx_array_push(g_mem.alloc, ctx->cached, citem);
                     hash = item->callstack_hash;
                 } else {
                     sx_assert(sx_array_count(ctx->cached) > 0);

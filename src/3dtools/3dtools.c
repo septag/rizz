@@ -12,6 +12,9 @@
 RIZZ_STATE static rizz_api_plugin* the_plugin;
 RIZZ_STATE static rizz_api_asset* the_asset;
 RIZZ_STATE static rizz_api_gfx* the_gfx;
+RIZZ_STATE static rizz_api_core* the_core;
+
+RIZZ_STATE static sx_alloc* g_tools3d_alloc;
 
 #define HASH_SEED 0x14f2d8b8
 
@@ -369,6 +372,9 @@ rizz_plugin_decl_main(3dtools, plugin, e)
         rizz_api_imgui* imgui = the_plugin->get_api_byname("imgui", 0);
         the_asset = asset;
         the_gfx = gfx;
+        the_core = core;
+
+        g_tools3d_alloc = the_core->trace_alloc_create("3DTools", RIZZ_MEMOPTION_INHERIT, NULL, the_core->heap_alloc());
 
         if (!debug3d__init(core, gfx, cam)) {
             return -1;
@@ -392,6 +398,8 @@ rizz_plugin_decl_main(3dtools, plugin, e)
         the_plugin->remove_api("3dtools", 0);
         debug3d__release();
         model__release();
+
+        the_core->trace_alloc_destroy(g_tools3d_alloc);
         break;
     }
 
@@ -404,6 +412,11 @@ rizz_plugin_decl_event_handler(3dtools, e)
         rizz_api_imgui* imgui = the_plugin->get_api_byname("imgui", 0);
         model__set_imgui(imgui);
     }
+}
+
+const sx_alloc* tools3d__alloc(void)
+{
+    return g_tools3d_alloc;
 }
 
 static const char* tools3d__deps[] = { "imgui" };

@@ -4,6 +4,8 @@
 
 typedef struct rizz_api_imgui rizz_api_imgui;
 
+const sx_alloc* tools2d__alloc(void);
+
 // sprite
 bool sprite__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx);
 void sprite__release(void);

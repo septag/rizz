@@ -39,7 +39,7 @@
 #define STAGE_ORDER_ID_MASK         0x03ff   
 #define CHECKER_TEXTURE_SIZE        128
 
-static const sx_alloc*      g_gfx_alloc = NULL;
+static sx_alloc* g_gfx_alloc = NULL;
 
 // Choose api based on the platform
 #if RIZZ_GRAPHICS_API_D3D==11
@@ -894,7 +894,7 @@ static rizz_texture rizz__texture_create_checker(int checker_size, int size, con
     return tex;
 }
 
-static void rizz__texture_init()
+static void rizz__texture_init(void)
 {
     static uint32_t k_white_pixel = 0xffffffff;
     static uint32_t k_black_pixel = 0xff000000;
@@ -1998,7 +1998,7 @@ static void rizz__shader_on_release(rizz_asset_obj obj, const sx_alloc* alloc)
     sx_free(alloc, shader);
 }
 
-static void rizz__shader_init()
+static void rizz__shader_init(void)
 {
     // NOTE: shaders are always forced to load in blocking mode
     the__asset.register_asset_type("shader",
@@ -2338,7 +2338,7 @@ static rizz__gfx_cmdbuffer* rizz__gfx_create_command_buffers(const sx_alloc* all
 }
 
 //
-bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_profile)
+bool rizz__gfx_init(const sg_desc* desc, bool enable_profile)
 {
 #if SX_PLATFORM_LINUX
     if (flextInit() != GL_TRUE) {
@@ -2346,18 +2346,19 @@ bool rizz__gfx_init(const sx_alloc* alloc, const sg_desc* desc, bool enable_prof
         return false;
     }
 #endif
-    g_gfx_alloc = alloc;
+    g_gfx_alloc = rizz__mem_create_allocator("Graphics", RIZZ_MEMOPTION_INHERIT, "Core", the__core.heap_alloc());
+
     sg_setup(desc);
     g_gfx.enable_profile = enable_profile;
     g_gfx.trace.active_trace = &g_gfx.trace.t.pf[RIZZ_GFX_TRACE_COMMON];
 
     // command buffers
-    g_gfx.cmd_buffers_feed = rizz__gfx_create_command_buffers(alloc);
-    g_gfx.cmd_buffers_render = rizz__gfx_create_command_buffers(alloc);
+    g_gfx.cmd_buffers_feed = rizz__gfx_create_command_buffers(g_gfx_alloc);
+    g_gfx.cmd_buffers_render = rizz__gfx_create_command_buffers(g_gfx_alloc);
 
     // trace calls
     {
-        sx_mem_init_writer(&g_gfx.trace.make_cmds_writer, alloc, 0);
+        sx_mem_init_writer(&g_gfx.trace.make_cmds_writer, g_gfx_alloc, 0);
 
         g_gfx.trace.hooks = (sg_trace_hooks){ .make_buffer = rizz__trace_make_buffer,
                                               .make_image = rizz__trace_make_image,
@@ -2457,6 +2458,9 @@ void rizz__gfx_release()
         }
     #endif
     sg_shutdown();
+
+    rizz__mem_destroy_allocator(g_gfx_alloc);
+    g_gfx_alloc = NULL;
 }
 
 void rizz__gfx_update()
@@ -3871,9 +3875,14 @@ static void rizz__imm_end_stage()
     #endif
 }
 
-void rizz__gfx_log_error(const char* source_file, int line, const char* str)
+static void rizz__gfx_log_error(const char* source_file, int line, const char* str)
 {
     the__core.print_error(0, source_file, line, str);
+}
+
+static const sx_alloc* rizz__gfx_alloc(void)
+{
+    return g_gfx_alloc;
 }
 
 // clang-format off
@@ -3928,6 +3937,7 @@ rizz_api_gfx the__gfx = {
                 .append_buffer_d      = rizz__cb_append_buffer_d,
                 .update_image_d       = rizz__cb_update_image_d,
         },
+    .alloc                      = rizz__gfx_alloc,
     .backend                    = rizz__gfx_backend,
     .GL_family                  = rizz__gfx_GL_family,
     .GLES_family                = rizz__gfx_GLES_family,
