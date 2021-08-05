@@ -87,7 +87,8 @@
         "bcm_host.h": "c",
         "vcgencmd.h": "c",
         "vc_dispmanx.h": "c",
-        "2dtools-internal.h": "c"
+        "2dtools-internal.h": "c",
+        "ostream": "c"
     },
     "files.exclude": {
         "**/.git": true,

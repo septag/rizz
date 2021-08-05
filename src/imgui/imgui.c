@@ -1331,7 +1331,7 @@ static void imgui__update_cursor()
         case ImGuiMouseCursor_ResizeNS:
             win32_cursor = IDC_SIZENS;
             break;
-        case ImGuiMouseCursor_ResizeNESW:
+        case ImGuiMouseCursor_ResizeNESW: 
             win32_cursor = IDC_SIZENESW;
             break;
         case ImGuiMouseCursor_ResizeNWSE:

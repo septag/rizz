@@ -1758,16 +1758,21 @@ static bool cr_plugin_load_internal(cr_plugin &ctx, bool rollback) {
         p2->event_fn = (cr_plugin_event_func)cr_so_symbol(new_dll, CR_EVENT_FUNC);
 
         // run reload callback
-        cr_plugin_section* sec = 
-            &p2->data[cr_plugin_section_type::ptrs][cr_plugin_section_version::current];
-        if (p2->reload_fn && ctx.version && sec->size && 
-            (p2->mode == CR_SAFE || p2->mode == CR_SAFEST)) {
-            CR_ASSERT(sec->ptr);
-            CR_ASSERT(sec->data);
-            int num_ptrs = int(sec->size/sizeof(void*));
-            const void** ptrs = (const void **)sec->data;
-            const void** new_ptrs = (const void**)sec->ptr;
-            p->reload_fn(&ctx, p2->fullname.c_str(), ptrs, new_ptrs, num_ptrs);
+        cr_plugin_section* sec = &p2->data[cr_plugin_section_type::ptrs][cr_plugin_section_version::current];
+        if (p2->reload_fn && ctx.version && (p2->mode == CR_SAFE || p2->mode == CR_SAFEST)) {
+            const void** ptrs = NULL;
+            const void** new_ptrs = NULL;
+            int num_ptrs = 0;
+
+            if (sec->size) {
+                CR_ASSERT(sec->ptr);
+                CR_ASSERT(sec->data);
+                num_ptrs = int(sec->size/sizeof(void*));
+                ptrs = (const void **)sec->data;
+                new_ptrs = (const void**)sec->ptr;
+            }
+
+            p->reload_fn(&ctx, old_file.c_str(), ptrs, new_ptrs, num_ptrs);
         }        
 
         ctx.version = new_version;

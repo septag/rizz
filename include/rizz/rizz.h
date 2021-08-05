@@ -1286,8 +1286,7 @@ typedef struct rizz_api_gfx {
 #        pragma section(".state", read, write)
 #        define RIZZ_STATE __attribute__((section(".state")))
 #        pragma section(".ptrs", read, write)
-//#        define RIZZ_POINTER __attribute__((section(".ptrs")))
-#        define RIZZ_POINTER    // not working yet, see: https://github.com/fungos/cr/issues/32
+#        define RIZZ_POINTER __attribute__((section(".ptrs"))) // may not work on some platforms, see: https://github.com/fungos/cr/issues/32
 #    endif
 
 // RIZZ_PLUGIN_EXPORT

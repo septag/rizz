@@ -448,7 +448,8 @@ static void mem_destroy_trace_context(mem_trace_context* ctx)
         if (ctx->options & RIZZ_MEMOPTION_MULTITHREAD) {
             sx_mutex_release(&ctx->mtx);
         }
-
+        
+        sx_array_free(g_mem.alloc, ctx->cached);
         sx_pool_destroy(ctx->item_pool, g_mem.alloc);
         sx_free(g_mem.alloc, ctx);
     }
@@ -1062,27 +1063,28 @@ void rizz__mem_show_debugger(bool* popen)
         imgui->EndChild();
 
         if (g_mem_imgui.selected_ctx) {
-            imgui->BeginChild_Str("ItemsContainer", SX_VEC2_ZERO, true, 0);
-            if (imgui->BeginTable("Contexts", 2, 
-                ImGuiTableFlags_Resizable|ImGuiTableFlags_Borders|ImGuiTableFlags_SizingStretchProp, 
-                SX_VEC2_ZERO, 0))
-            {
-                imgui->TableSetupColumn("ContextTree", 0, region.x*0.4f, 0);
-                imgui->TableSetupColumn("ContextInfo", 0, region.x*0.6f, 0);
-                imgui->TableNextRow(0, 0);
+            if (imgui->BeginChild_Str("ItemsContainer", SX_VEC2_ZERO, true, 0)) {
+                if (imgui->BeginTable("Contexts", 2, 
+                    ImGuiTableFlags_Resizable|ImGuiTableFlags_Borders|ImGuiTableFlags_SizingStretchProp, 
+                    SX_VEC2_ZERO, 0))
+                {
+                    imgui->TableSetupColumn("ContextTree", 0, region.x*0.4f, 0);
+                    imgui->TableSetupColumn("ContextInfo", 0, region.x*0.6f, 0);
+                    imgui->TableNextRow(0, 0);
 
-                imgui->TableSetColumnIndex(0);
-                mem_imgui_context_items(imgui, imguix, g_mem_imgui.selected_ctx);
+                    imgui->TableSetColumnIndex(0);
+                    mem_imgui_context_items(imgui, imguix, g_mem_imgui.selected_ctx);
 
-                imgui->TableSetColumnIndex(1);
-                if (g_mem_imgui.selected_item) {
-                    mem_imgui_item(imgui, imguix, g_mem_imgui.selected_item);
-                } else {
-                    imgui->Text("No item selected");
+                    imgui->TableSetColumnIndex(1);
+                    if (g_mem_imgui.selected_item) {
+                        mem_imgui_item(imgui, imguix, g_mem_imgui.selected_item);
+                    } else {
+                        imgui->Text("No item selected");
+                    }
+
                 }
-
+                imgui->EndTable();
             }
-            imgui->EndTable();
             imgui->EndChild();
         }
     }

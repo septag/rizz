@@ -389,9 +389,8 @@ static void rizz__plugin_reload_handler(cr_plugin* plugin, const char* filename,
     sx_unused(filename);
     sx_unused(plugin);
 
-    for (int i = 0; i < num_ptrs; i++) {
-        rizz__core_fix_callback_ptrs(ptrs, new_ptrs, num_ptrs);
-    }
+    rizz__log_debug("plugin reload: %s", filename);
+    rizz__core_fix_callback_ptrs(ptrs, new_ptrs, num_ptrs);
 }
 
 static bool rizz__plugin_load(const char* name)

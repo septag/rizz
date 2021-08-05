@@ -1803,11 +1803,25 @@ static void rizz__core_coro_yield(void* pfrom, int nframes)
 void rizz__core_fix_callback_ptrs(const void** ptrs, const void** new_ptrs, int num_ptrs)
 {
     for (int i = 0; i < num_ptrs; i++) {
-        if (ptrs[i] && ptrs[i] != new_ptrs[i] &&
-            sx_coro_replace_callback(g_core.coro, (sx_fiber_cb*)ptrs[i],
-                                     (sx_fiber_cb*)new_ptrs[i])) {
-            rizz__log_warn("coroutine 0x%p replaced with 0x%p and restarted!", ptrs[i],
-                           new_ptrs[i]);
+        if (ptrs[i] && ptrs[i] != new_ptrs[i]) {
+            // co-routines
+            if (sx_coro_replace_callback(g_core.coro, (sx_fiber_cb*)ptrs[i], (sx_fiber_cb*)new_ptrs[i])) {
+                rizz__log_warn("coroutine 0x%p replaced with 0x%p and restarted!", ptrs[i], new_ptrs[i]);
+            }
+
+            // log backends
+            for (int k = 0; k < g_core.num_log_backends; k++) {
+                if (g_core.log_backends[k].log_cb == ptrs[i]) {
+                    g_core.log_backends[k].log_cb = new_ptrs[i];
+                }
+            }
+
+            // console commands
+            for (int k = 0, kc = sx_array_count(g_core.console_cmds); k < kc; k++) {
+                if (g_core.console_cmds[k].callback == ptrs[i]) {
+                    g_core.console_cmds[k].callback = new_ptrs[i];
+                }
+            }
         }
     }
 }
