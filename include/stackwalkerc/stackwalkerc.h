@@ -22,6 +22,7 @@
 //      1.4.0  Added module cache and reload modules on-demand
 //      1.5.0  House cleaning, added sw_set_dbghelp_hintpath, ditched error_msg callback for SW_LOG_ERROR macro
 //      1.6.0  [BREAKING] added optional "hash" argument to `sw_capture_current`
+//      1.6.1  sw_resolve_callstack skips non-existing symbols with "NA" entries
 //
 #pragma once
 
@@ -427,6 +428,9 @@ _SW_PRIVATE bool sw__get_module_info_csentry(sw_context_internal* ctxi, HANDLE p
         sw__strcpy(cs_entry->module_name, sizeof(cs_entry->module_name), module.ModuleName);
         cs_entry->baseof_image = module.BaseOfImage;
         sw__strcpy(cs_entry->loaded_image_name, sizeof(cs_entry->module_name), module.LoadedImageName);
+    } else {
+        sw__strcpy(cs_entry->module_name, sizeof(cs_entry->module_name), "[NA]");
+        sw__strcpy(cs_entry->loaded_image_name, sizeof(cs_entry->module_name), "[NA]");
     }
 
     return r;
@@ -1223,16 +1227,16 @@ SW_API_IMPL uint16_t sw_resolve_callstack(sw_context* ctx, void* symbols[SW_MAX_
         sw_callstack_entry entry = {0};
         if ((ctx->options & SW_OPTIONS_SYMBOL) && ctx->internal.fSymGetSymFromAddr64 != NULL) {
             if (ctx->internal.fSymGetSymFromAddr64(ctx->process, (DWORD64)symbols[i], &(entry.offset_from_symbol), symbol) != FALSE) {
-
                 sw__strcpy(entry.name, sizeof(entry.name), symbol->Name);
                 sw__strcpy(entry.und_name, sizeof(entry.und_name), symbol->Name);
             } else {
                 DWORD gle = GetLastError();
-                if (gle == ERROR_INVALID_ADDRESS || gle == ERROR_MOD_NOT_FOUND) {
-                    continue;
-                }                                       
-                SW_LOG_ERROR("SymGetSymFromAddr64 failed (ErrorCode=%lu)", gle);
-                break;
+                if (gle != ERROR_INVALID_ADDRESS && gle != ERROR_MOD_NOT_FOUND) {
+                    SW_LOG_ERROR("SymGetSymFromAddr64 failed (ErrorCode=%lu)", gle);
+                    break;
+                }
+                sw__strcpy(entry.name, sizeof(entry.name), "[NA]");
+                sw__strcpy(entry.und_name, sizeof(entry.und_name), "[NA]");
             }
         }
 
@@ -1245,19 +1249,17 @@ SW_API_IMPL uint16_t sw_resolve_callstack(sw_context* ctx, void* symbols[SW_MAX_
                 sw__strcpy(entry.line_filename, SW_MAX_NAME_LEN, line.FileName);
             } else {
                 DWORD gle = GetLastError();
-                if (gle == ERROR_INVALID_ADDRESS || gle == ERROR_MOD_NOT_FOUND) {
-                    continue;
+                if (gle != ERROR_INVALID_ADDRESS && gle != ERROR_MOD_NOT_FOUND) {
+                    SW_LOG_ERROR("SymGetLineFromAddr64 failed (ErrorCode=%lu)", gle);
+                    break;
                 }
-                SW_LOG_ERROR("SymGetLineFromAddr64 failed (ErrorCode=%lu)", gle);
-                break;
+                sw__strcpy(entry.line_filename, SW_MAX_NAME_LEN, "[NA]");
             }
         }    // yes, we have SymGetLineFromAddr64()
 
         // show module info (SymGetModuleInfo64())
         if (ctx->options & SW_OPTIONS_MODULEINFO) {
-            if (!sw__get_module_info_csentry(&ctx->internal, ctx->process, (uint64_t)symbols[i], &entry)) {
-                SW_LOG_ERROR("SymGetModuleInfo64 failed (ErrorCode=%lu)", GetLastError());
-            }
+            sw__get_module_info_csentry(&ctx->internal, ctx->process, (uint64_t)symbols[i], &entry);
         }        
 
         memcpy(&entries[count++], &entry, sizeof(sw_callstack_entry));

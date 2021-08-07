@@ -1330,4 +1330,3 @@ bool rizz__mem_end_capture(void)
 
     return true;
 }
-
