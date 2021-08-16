@@ -1281,12 +1281,14 @@ typedef struct rizz_api_gfx {
 #        define RIZZ_POINTER __declspec(allocate(".ptrs"))
 #    elif SX_PLATFORM_APPLE
 #        define RIZZ_STATE __attribute__((used, section("__DATA,__state")))
-#        define RIZZ_POINTER __attribute__((used, section("__DATA,__ptrs")))
+//#        define RIZZ_POINTER __attribute__((used, section("__DATA,__ptrs")))  // skipped this because of Regression bug
+#        define RIZZ_POINTER 
 #    elif SX_COMPILER_GCC || SX_COMPILER_CLANG
 #        pragma section(".state", read, write)
 #        define RIZZ_STATE __attribute__((section(".state")))
-#        pragma section(".ptrs", read, write)
-#        define RIZZ_POINTER __attribute__((section(".ptrs"))) // may not work on some platforms, see: https://github.com/fungos/cr/issues/32
+//#        pragma section(".ptrs", read, write)
+//#        define RIZZ_POINTER __attribute__((section(".ptrs"))) // may not work on some platforms, see: https://github.com/fungos/cr/issues/32
+#        define RIZZ_POINTER
 #    endif
 
 // RIZZ_PLUGIN_EXPORT
