@@ -33,7 +33,7 @@ RIZZ_STATE static rizz_api_refl* the_refl;
 RIZZ_STATE static rizz_api_imgui* the_imgui;
 RIZZ_STATE static rizz_api_imgui_extra* the_imguix;
 
-RIZZ_STATE static const sx_alloc* g_snd_alloc;
+RIZZ_STATE static sx_alloc* g_snd_alloc;
 
 #define DR_WAV_IMPLEMENTATION
 #define DRWAV_ASSERT(e) sx_assert(e)
@@ -140,8 +140,8 @@ typedef struct snd__cmdheader {
 } snd__cmdheader;
 
 typedef struct snd__cmdbuffer {
-    uint8_t* params_buff;    // sx_array
-    snd__cmdheader* cmds;    // sx_array
+    uint8_t* SX_ARRAY params_buff;
+    snd__cmdheader* SX_ARRAY cmds;
     int index;
     int cmd_idx;
 } snd__cmdbuffer;
@@ -613,7 +613,7 @@ static bool snd__init()
     static_assert(RIZZ_SND_DEVICE_NUM_CHANNELS == 1 || RIZZ_SND_DEVICE_NUM_CHANNELS == 2,
                   "only mono or stereo output channel is supported");
 
-    g_snd_alloc = the_core->alloc(RIZZ_MEMID_AUDIO);
+    g_snd_alloc = the_core->trace_alloc_create("Sound", RIZZ_MEMOPTION_INHERIT, NULL, the_core->heap_alloc());
 
     g_snd.source_handles = sx_handle_create_pool(g_snd_alloc, 128);
     g_snd.instance_handles = sx_handle_create_pool(g_snd_alloc, 256);
@@ -670,8 +670,7 @@ static bool snd__init()
     g_snd.buses[0].max_lanes = RIZZ_SND_DEVICE_MAX_LANES;
 
     // we have a command buffer for each worker thread
-    g_snd.cmd_buffers =
-        sx_malloc(g_snd_alloc, sizeof(snd__cmdbuffer*) * the_core->job_num_threads());
+    g_snd.cmd_buffers = sx_malloc(g_snd_alloc, sizeof(snd__cmdbuffer*) * the_core->job_num_threads());
     if (!g_snd.cmd_buffers) {
         sx_out_of_memory();
         return false;
@@ -739,6 +738,8 @@ static void snd__release()
     }
 
     the_asset->unregister_asset_type("sound");
+    the_core->trace_alloc_destroy(g_snd_alloc);
+    g_snd_alloc = NULL;
 }
 
 static inline rizz_snd_instance snd__create_instance(rizz_snd_source srchandle, int bus,

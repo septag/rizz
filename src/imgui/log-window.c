@@ -36,7 +36,7 @@ typedef struct imgui__log_context {
     sx_ringbuffer* buffer;
     uint32_t filter_channels;
     uint32_t filter_types;
-    imgui__log_entry_ref* cached;   // sx_array
+    imgui__log_entry_ref* SX_ARRAY cached;
     int selected;
     bool reset_focus;
     bool toggle;
@@ -45,7 +45,7 @@ typedef struct imgui__log_context {
     bool show_filters;
 } imgui__log_context;
 
-static imgui__log_context g_log;
+RIZZ_STATE static imgui__log_context g_log;
 
 #define LOG_ENTRY sx_makefourcc('_', 'L', 'O', 'G')
 
@@ -302,7 +302,7 @@ static void imgui__draw_log(bool* p_open)
 }
 
 
-static void imgui__log_entryfn(const rizz_log_entry* entry, void* user)
+RIZZ_POINTER static void imgui__log_entryfn(const rizz_log_entry* entry, void* user)
 {
     sx_unused(user);
     
@@ -368,7 +368,7 @@ void imgui__log_update(void)
     }
 }
 
-static int imgui__toggle_log_cb(int argc, char* argv[], void* user)
+RIZZ_POINTER static int imgui__toggle_log_cb(int argc, char* argv[], void* user)
 {
     sx_unused(argc);
     sx_unused(argv);

@@ -113,7 +113,7 @@ bool debug3d__init(rizz_api_core* core, rizz_api_gfx* gfx, rizz_api_camera* cam)
     the_gfx = gfx;
     the_camera = cam;
     g_debug3d.draw_api = &the_gfx->staged;
-    g_debug3d.alloc = the_core->alloc(RIZZ_MEMID_GRAPHICS);
+    g_debug3d.alloc = tools3d__alloc();
     
     const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
     sx_scope(the_core->tmp_alloc_pop()) {

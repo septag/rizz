@@ -1,4 +1,4 @@
-#include "rizz/2dtools.h"
+#include "2dtools-internal.h"
 
 #include "sx/array.h"
 #include "sx/math-scalar.h"
@@ -42,7 +42,7 @@ typedef struct font__fons {
 typedef struct font__context {
     const sx_alloc* alloc;
     rizz_api_gfx_draw* draw_api;
-    font__fons** fonts;    // sx_array
+    font__fons** SX_ARRAY fonts;
     sg_pipeline pip;
     sg_buffer vbuff;
     sg_shader shader;
@@ -362,7 +362,7 @@ bool font__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx, r
     the_gfx = gfx;
     the_app = app;
     
-    g_font.alloc = the_core->alloc(RIZZ_MEMID_GRAPHICS);
+    g_font.alloc = tools2d__alloc();
     g_font.draw_api = &the_gfx->staged;
 
     // gfx objects

@@ -67,9 +67,9 @@ typedef struct {
 } rizz__vfs_mount_point;
 
 typedef struct {
-    const sx_alloc* alloc;
+    sx_alloc* alloc;
     rizz__vfs_mount_point* mounts;
-    rizz_vfs_async_modify_cb** modify_cbs;    // sx_array
+    rizz_vfs_async_modify_cb** SX_ARRAY modify_cbs;
     sx_thread* worker_thrd;
     sx_queue_spsc* req_queue;    // producer: main, consumer: worker, data: rizz__vfs_async_request
     sx_queue_spsc* res_queue;    // producer: worker, consumer: main, data: rizz__vfs_async_response
@@ -319,24 +319,24 @@ void rizz__vfs_mount_mobile_assets(const char* alias)
 #endif
 }
 
-bool rizz__vfs_init(const sx_alloc* alloc)
+bool rizz__vfs_init(void)
 {
-    g_vfs.alloc = alloc;
+    g_vfs.alloc = rizz__mem_create_allocator("FileSystem", RIZZ_MEMOPTION_INHERIT, "Core", the__core.heap_alloc());
 
-    g_vfs.req_queue = sx_queue_spsc_create(alloc, sizeof(rizz__vfs_async_request), 128);
-    g_vfs.res_queue = sx_queue_spsc_create(alloc, sizeof(rizz__vfs_async_response), 128);
+    g_vfs.req_queue = sx_queue_spsc_create(g_vfs.alloc, sizeof(rizz__vfs_async_request), 128);
+    g_vfs.res_queue = sx_queue_spsc_create(g_vfs.alloc, sizeof(rizz__vfs_async_response), 128);
     if (!g_vfs.req_queue || !g_vfs.res_queue)
         return false;
 
     // create async worker thread and work queue
     sx_semaphore_init(&g_vfs.worker_sem);
     g_vfs.worker_thrd =
-        sx_thread_create(alloc, rizz__vfs_worker, NULL, 1024 * 1024, "rizz_vfs", NULL);
+        sx_thread_create(g_vfs.alloc, rizz__vfs_worker, NULL, 1024 * 1024, "rizz_vfs", NULL);
 
 #if RIZZ_CONFIG_HOT_LOADING
     dmon_init();
 
-    g_vfs.dmon_queue = sx_queue_spsc_create(alloc, sizeof(dmon__result), 128);
+    g_vfs.dmon_queue = sx_queue_spsc_create(g_vfs.alloc, sizeof(dmon__result), 128);
     if (!g_vfs.dmon_queue)
         return false;
 #endif // RIZZ_CONFIG_HOT_LOADING
@@ -352,7 +352,7 @@ bool rizz__vfs_init(const sx_alloc* alloc)
     return true;
 }
 
-void rizz__vfs_release()
+void rizz__vfs_release(void)
 {
     if (!g_vfs.alloc)
         return;
@@ -379,10 +379,12 @@ void rizz__vfs_release()
 
     sx_array_free(g_vfs.alloc, g_vfs.modify_cbs);
     sx_array_free(g_vfs.alloc, g_vfs.mounts);
+
+    rizz__mem_destroy_allocator(g_vfs.alloc);
     g_vfs.alloc = NULL;
 }
 
-void rizz__vfs_async_update()
+void rizz__vfs_async_update(void)
 {
     // retreive results from worker thread and call the callback functions
     rizz__vfs_async_response res;
@@ -525,7 +527,13 @@ static void dmon__event_cb(dmon_watch_id watch_id, dmon_action action, const cha
 }
 #endif // RIZZ_CONFIG_HOT_LOADING
 
-rizz_api_vfs the__vfs = { .register_modify = rizz__vfs_register_modify,
+static const sx_alloc* rizz__vfs_alloc(void)
+{
+    return g_vfs.alloc;
+}
+
+rizz_api_vfs the__vfs = { .alloc = rizz__vfs_alloc,
+                          .register_modify = rizz__vfs_register_modify,
                           .mount = rizz__vfs_mount,
                           .mount_mobile_assets = rizz__vfs_mount_mobile_assets,
                           .read_async = rizz__vfs_read_async,

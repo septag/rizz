@@ -174,6 +174,10 @@
 #    define SX_CONSTEXPR 
 #endif
 
+// see array.h
+#ifndef SX_ARRAY
+#   define SX_ARRAY
+#endif 
 
 // Idea: https://www.youtube.com/watch?v=QpAhX-gsHMs&t=967s
 // sx_defer and scope can be used to mimick the behavior of go and zig's defer 

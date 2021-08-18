@@ -102,10 +102,8 @@ static bool init()
 
     // note: we should define .fmt property when loading .basis textures
     bool etc_fmt = the_gfx->GLES_family() || the_gfx->backend() == RIZZ_GFX_BACKEND_METAL_IOS;
-    g_quad.img =
-        the_asset->load("texture", "/assets/textures/logo.basis",
-                        &(rizz_texture_load_params){ .fmt = etc_fmt ? SG_PIXELFORMAT_ETC2_RGB8
-                                                                    : SG_PIXELFORMAT_BC1_RGBA },
+    g_quad.img = the_asset->load("texture_basisu", "/assets/textures/logo.basis",
+                        &(rizz_texture_load_params){ .fmt = etc_fmt ? SG_PIXELFORMAT_ETC2_RGB8 : SG_PIXELFORMAT_BC1_RGBA },
                         0, NULL, 0);
     
     // camera
@@ -238,4 +236,5 @@ rizz_game_decl_config(conf)
     conf->window_height = EXAMPLES_DEFAULT_HEIGHT;
     conf->swap_interval = 2;
     conf->plugins[0] = "imgui";
+    conf->plugins[1] = "basisut";
 }

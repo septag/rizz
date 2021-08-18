@@ -60,7 +60,7 @@ sx_vec2 start = sx_vec2f(0, 0);
 sx_vec2 end = sx_vec2f(16, 16);
 
 rizz_astar_path my_path = (rizz_astar_path){
-    .alloc = the_core->alloc(RIZZ_MEMID_GAME),
+    .alloc = the_core->heap_alloc(),
     .array = NULL, // the_astar->findpath will allocate and fill a sx_array
 };
 

@@ -47,7 +47,7 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 #undef CUTE_C2_IMPLEMENTATION
 
 typedef struct coll_spatial_grid_cell_t {
-    sx_handle_t* ents;  // sx_array: handle to coll_context arrays
+    sx_handle_t* SX_ARRAY ents;  // handle to coll_context arrays
     sx_ivec2 pos_grid;  // integer position in the grid
     sx_vec2 center;     // the actual center on x-y plane
 
@@ -68,17 +68,17 @@ typedef struct rizz_coll_context_t {
     const sx_alloc* alloc;
     sx_hashtbl* ent_tbl;                    // key = entity(uint64_t) -> handle to arrays
     sx_handle_pool* handles;                // handle pool for arrays below
-    coll_entity_mask_pair* ent_mask_pairs;  // sx_array
-    sx_aabb* aabbs;                         // sx_array
-    rizz_coll_shape_poly* polys;            // sx_array
-    sx_box* boxes;                          // sx_array: .e.x == .e.y == .e.z == 0 if static/poly only
-    sx_aabb* transformed_aabbs;             // sx_array
-    sx_box* transformed_boxes;              // sx_array
+    coll_entity_mask_pair* SX_ARRAY ent_mask_pairs;  
+    sx_aabb*               SX_ARRAY aabbs;                         
+    rizz_coll_shape_poly*  SX_ARRAY polys;            
+    sx_box*                SX_ARRAY boxes;           // .e.x == .e.y == .e.z == 0 if static/poly only
+    sx_aabb*               SX_ARRAY transformed_aabbs;             
+    sx_box*                SX_ARRAY transformed_boxes;              
 #if STRIKE_DEBUG_COLLISION
-    int64_t* collision_frames;              // sx_array: (debug only) frame number for each entity that is collided
-    int64_t* rayhit_frames;                 // sx_array: (debug only) frame number for each entity that is rayhit
-    int64_t* raymarch_frames;               // sx_array: (debug only) frame number for each entity ray-march
-    rizz_coll_ray* rays;                    // sx_array: (debug only) total rays that are casted 
+    int64_t* SX_ARRAY collision_frames;              // (debug only) frame number for each entity that is collided
+    int64_t* SX_ARRAY rayhit_frames;                 // (debug only) frame number for each entity that is rayhit
+    int64_t* SX_ARRAY raymarch_frames;               // (debug only) frame number for each entity ray-march
+    rizz_coll_ray* SX_ARRAY rays;                    // (debug only) total rays that are casted 
 #endif
     float map_size_x;                       // real logical dim
     float map_size_y;                       // real logical dim

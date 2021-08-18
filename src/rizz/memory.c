@@ -7,6 +7,7 @@
 #include "sx/threads.h"
 #include "sx/pool.h"
 #include "sx/io.h"
+#include "sx/hash.h"
 
 #include "rizz/imgui.h"
 #include "rizz/imgui-extra.h"
@@ -24,8 +25,9 @@ static void mem_callstack_error_msg(const char* msg, ...);
 #endif
 #include "stackwalkerc/stackwalkerc.h"
 
-#include <stdlib.h>  // malloc,free,realloc
+#include <stdlib.h>  // malloc,free,realloc,qsort
 #include <float.h>
+#include <string.h>  // strcmp
 
 #include "c89atomic/c89atomic.h"
 
@@ -67,11 +69,46 @@ typedef struct mem_item
         };
     };
     
+    uint32_t            callstack_hash;
     struct mem_item*    next;
     struct mem_item*    prev;
     int64_t             frame;         // record frame number
     bool                freed;         // for mallocs, reallocs that got freed, but we want to keep the record
 } mem_item;
+
+typedef struct mem_item_index
+{
+    int index;
+    mem_item* item;
+} mem_item_index;
+
+typedef struct mem_item_collapsed
+{
+    int       item_idx;
+    mem_item* item;
+    uint32_t  count;
+    char      entry_symbol[64];
+    size_t    size;
+} mem_item_collapsed;
+
+typedef enum mem_item_collapsed_id
+{
+    MEMITEM_COLLAPSED_ORDER,
+    MEMITEM_COLLAPSED_SYMBOL,
+    MEMITEM_COLLAPSED_SIZE,
+    MEMITEM_COLLAPSED_COUNT
+} mem_item_collapsed_id;
+
+typedef struct mem__write_json_context {
+    sx_file file;
+    const char* newline;
+    const char* tab;
+
+    int _depth;
+    bool _is_struct_array;
+    char _tabs[128];
+    int _array_count;
+} mem__write_json_context;
 
 typedef struct mem_trace_context
 {
@@ -86,6 +123,7 @@ typedef struct mem_trace_context
     sx_pool*  item_pool;    // item_size = sizeof(mem_item)
     mem_item* items_list;   // first node
     sx_mutex  mtx;
+    mem_item_collapsed* SX_ARRAY cached;     // keep sorted cached data 
 
     struct mem_trace_context* parent;
     struct mem_trace_context* child;
@@ -98,7 +136,7 @@ typedef struct mem_capture_context
     char name[32];
     uint64_t start_tm; 
     sx_mutex mtx;
-    mem_item** items;        // sx_array
+    mem_item** SX_ARRAY items; 
 } mem_capture_context;
 
 typedef struct mem_state
@@ -107,14 +145,25 @@ typedef struct mem_state
         sw_context* sw;
     #endif
 
+    const sx_alloc* alloc;
     sx_align_decl(SX_CACHE_LINE_SIZE, c89atomic_int64) debug_mem_size;
     mem_trace_context* root;
     mem_capture_context capture;
     sx_align_decl(SX_CACHE_LINE_SIZE, c89atomic_flag) in_capture;
 } mem_state;
 
+typedef struct mem_imgui_state
+{
+    mem_trace_context* selected_ctx;
+    mem_item* selected_item;
+    int selected_stack_item;
+    int dummy;
+    const ImGuiTableColumnSortSpecs* sort_spec;
+    bool collapse_items;
+} mem_imgui_state;
 
 static mem_state g_mem;
+static mem_imgui_state g_mem_imgui;
 
 static void mem_callstack_load_module(const char* img, const char* module, uint64_t base_addr, uint32_t size, void* userptr)
 {
@@ -179,7 +228,7 @@ static mem_trace_context* mem_create_trace_context(const char* name, uint32_t me
         }
     }
 
-    mem_trace_context* ctx = sx_calloc(sx_alloc_malloc(), sizeof(mem_trace_context));
+    mem_trace_context* ctx = sx_calloc(g_mem.alloc, sizeof(mem_trace_context));
     if (!ctx) {
         sx_memory_fail();
         return NULL;
@@ -189,9 +238,9 @@ static mem_trace_context* mem_create_trace_context(const char* name, uint32_t me
     ctx->name_hash = name_hash;
     ctx->options = (mem_opts == RIZZ_MEMOPTION_INHERIT && parent_ctx) ? parent_ctx->options : mem_opts;
     ctx->parent = parent_ctx;
-    ctx->item_pool = sx_pool_create(sx_alloc_malloc(), sizeof(mem_item), 150);
+    ctx->item_pool = sx_pool_create(g_mem.alloc, sizeof(mem_item), 150);
     if (!ctx->item_pool) {
-        sx_free(sx_alloc_malloc(), ctx);        
+        sx_free(g_mem.alloc, ctx);        
         sx_memory_fail();
         return NULL;
     }
@@ -244,6 +293,8 @@ static void mem_destroy_trace_item(mem_trace_context* ctx, mem_item* item)
     item->freed = false;
 
     sx_pool_del(ctx->item_pool, item);
+
+    sx_array_clear(ctx->cached);
     mem_trace_context_mutex_exit(ctx->options, ctx->mtx);
 }
 
@@ -261,16 +312,18 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
 
         if (ctx->options & RIZZ_MEMOPTION_TRACE_CALLSTACK) {
             #if SX_PLATFORM_WINDOWS
-                item.num_callstack_items = sw_capture_current(g_mem.sw, item.callstack);
+                item.num_callstack_items = sw_capture_current(g_mem.sw, item.callstack, &item.callstack_hash);
                 if (item.num_callstack_items == 0) {
                     if (file)  sx_strcpy(item.source_file, sizeof(item.source_file), file);
                     if (func)  sx_strcpy(item.source_func, sizeof(item.source_func), func);
                     item.source_line = line;
+                    item.callstack_hash = sx_hash_xxh32(item.callstack, sizeof(item.callstack), 0);
                 } 
             #else
                 if (file)  sx_strcpy(item.source_file, sizeof(item.source_file), file);
                 if (func)  sx_strcpy(item.source_func, sizeof(item.source_func), func);
                 item.source_line = line;
+                item.callstack_hash = sx_hash_xxh32(item.callstack, sizeof(item.callstack), 0);
             #endif
         }
     }
@@ -302,12 +355,13 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
                 item.size = old_item->size;
             }
 
-            if (!in_capture) {
+            if (!in_capture && item.action == MEM_ACTION_FREE) {
                 mem_destroy_trace_item(ctx, old_item);
-            } else {
+                old_item->freed = true;
+            } else if (in_capture) {
                 old_item->freed = true;
                 sx_mutex_lock(g_mem.capture.mtx) {
-                    sx_array_push(sx_alloc_malloc(), g_mem.capture.items, old_item);
+                    sx_array_push(g_mem.alloc, g_mem.capture.items, old_item);
                 }
             }
         }
@@ -326,8 +380,6 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
             { 
                 sx_yield_cpu(); 
             }
-            
-
             _ctx = _ctx->parent;
         }
     } 
@@ -335,7 +387,7 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
     // create tracking item and add to linked-list
     if (save_current_call) {
         mem_trace_context_mutex_enter(ctx->options, ctx->mtx);
-        mem_item* new_item = (mem_item*)sx_pool_new_and_grow(ctx->item_pool, sx_alloc_malloc());
+        mem_item* new_item = (mem_item*)sx_pool_new_and_grow(ctx->item_pool, g_mem.alloc);
         if (!new_item) {
             mem_trace_context_mutex_exit(ctx->options, ctx->mtx);
             sx_memory_fail();
@@ -348,11 +400,12 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
         } 
         new_item->next = ctx->items_list;
         ctx->items_list = new_item;
+        sx_array_clear(ctx->cached);
         mem_trace_context_mutex_exit(ctx->options, ctx->mtx);
 
         if (in_capture) {
             sx_mutex_lock(g_mem.capture.mtx) {
-                sx_array_push(sx_alloc_malloc(), g_mem.capture.items, new_item);
+                sx_array_push(g_mem.alloc, g_mem.capture.items, new_item);
             }
         }
     }
@@ -395,9 +448,10 @@ static void mem_destroy_trace_context(mem_trace_context* ctx)
         if (ctx->options & RIZZ_MEMOPTION_MULTITHREAD) {
             sx_mutex_release(&ctx->mtx);
         }
-
-        sx_pool_destroy(ctx->item_pool, sx_alloc_malloc());
-        sx_free(sx_alloc_malloc(), ctx);
+        
+        sx_array_free(g_mem.alloc, ctx->cached);
+        sx_pool_destroy(ctx->item_pool, g_mem.alloc);
+        sx_free(g_mem.alloc, ctx);
     }
 }
 
@@ -436,6 +490,8 @@ bool rizz__mem_init(uint32_t opts)
 {
     sx_assert(opts != RIZZ_MEMOPTION_INHERIT);
 
+    g_mem.alloc = the__core.heap_alloc();
+
     #if SX_PLATFORM_WINDOWS
         g_mem.sw = sw_create_context_capture(
             SW_OPTIONS_SYMBOL|SW_OPTIONS_SOURCEPOS|SW_OPTIONS_MODULEINFO|SW_OPTIONS_SYMBUILDPATH,
@@ -465,6 +521,8 @@ bool rizz__mem_init(uint32_t opts)
     }
 
     sx_mutex_init(&g_mem.capture.mtx);
+
+    g_mem_imgui.collapse_items = true;
 
     return true;
 }
@@ -504,16 +562,6 @@ void rizz__mem_allocator_clear_trace(sx_alloc* alloc)
     mem_trace_context_clear(ctx);
 }
 
-typedef struct mem_imgui_state
-{
-    mem_trace_context* selected_ctx;
-    mem_item* selected_item;
-    int selected_stack_item;
-    int dummy;
-} mem_imgui_state;
-
-static mem_imgui_state g_mem_imgui;
-
 static void mem_imgui_context_node(rizz_api_imgui* imgui, mem_trace_context* ctx)
 {
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow|ImGuiTreeNodeFlags_SpanFullWidth|
@@ -547,8 +595,8 @@ static void mem_imgui_context_info(rizz_api_imgui* imgui, rizz_api_imgui_extra* 
 {
     sx_unused(imgui);
 
-    imguix->label("Allocated size", "%$d", ctx->alloc_size);
-    imguix->label("Peak size ", "%$d", ctx->peak_size);
+    imguix->label("Allocated size", "%$.2d", ctx->alloc_size);
+    imguix->label("Peak size ", "%$.2d", ctx->peak_size);
 
     char size_text[32];
     char peak_text[32];
@@ -583,81 +631,317 @@ static void mem_imgui_context_info(rizz_api_imgui* imgui, rizz_api_imgui_extra* 
     #endif
 }
 
+static void mem_imgui_context_show_all_items(rizz_api_imgui* imgui, mem_trace_context* ctx)
+{
+    char text[32];
+    ImGuiListClipper clipper;
+
+    rizz__with_temp_alloc(tmp_alloc) {
+        mem_item** SX_ARRAY items = NULL;
+        {
+            mem_trace_context_mutex_enter(ctx->options, ctx->mtx);
+            mem_item* item = ctx->items_list;
+            while (item) {
+                sx_array_push(tmp_alloc, items, item);
+                item = item->next;
+            }
+            mem_trace_context_mutex_exit(ctx->options, ctx->mtx);
+        }
+        int num_items = sx_array_count(items);
+
+        if (num_items) {
+            imgui->TableSetupColumn("#", 0, 35.0f, 0);
+            imgui->TableSetupColumn("Ptr", 0, 150.0f, 0);
+            imgui->TableSetupColumn("Size", 0, 50.0f, 0);
+            imgui->TableSetupColumn("Action", 0, 50.0f, 0);
+            imgui->TableHeadersRow();
+
+            imgui->ImGuiListClipper_Begin(&clipper, num_items, -1.0f);
+            while (imgui->ImGuiListClipper_Step(&clipper)) {
+                for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
+                    imgui->TableNextRow(0, 0);
+                    mem_item* item = items[i];
+
+                    sx_snprintf(text, sizeof(text), "%d", i + 1);
+                    imgui->TableNextColumn();
+                    imgui->PushID_Int(i);
+                    if (imgui->Selectable_Bool(text, g_mem_imgui.selected_item == item,
+                                                ImGuiSelectableFlags_SpanAllColumns, SX_VEC2_ZERO)) {
+                        g_mem_imgui.selected_item = item;
+                    }
+
+                    if (imgui->BeginPopupContextItem("MemItemContextMenu", ImGuiPopupFlags_MouseButtonRight)) {
+                        if (imgui->Selectable_Bool("Copy address", false, 0, SX_VEC2_ZERO)) {
+                            char ptr_str[32];
+                            sx_snprintf(ptr_str, sizeof(ptr_str), "%p", item->ptr);
+                            the__app.set_clipboard_string(ptr_str);
+                        }
+                        imgui->EndPopup();
+                    }
+                    imgui->PopID();
+
+                    sx_snprintf(text, sizeof(text), "0x%p", item->ptr);
+                    imgui->TableNextColumn();
+                    imgui->Text(text);
+
+                    sx_snprintf(text, sizeof(text), "%$.2d", item->size);
+                    imgui->TableNextColumn();
+                    imgui->Text(text);
+
+                    imgui->TableNextColumn();
+                    switch (item->action) {
+                    case MEM_ACTION_MALLOC:     imgui->Text("malloc");  break;
+                    case MEM_ACTION_REALLOC:    imgui->Text("realloc"); break;
+                    case MEM_ACTION_FREE:       imgui->Text("free"); break;
+                    default:                    imgui->Text("N/A"); break;
+                    }
+                }
+            }
+            imgui->ImGuiListClipper_End(&clipper);
+        }
+    }   // temp_alloc
+}
+
+// void* = mem_item
+static int mem_imgui_compare_callstack_hash(const void* m1, const void* m2)
+{
+    const mem_item_index* item1 = m1;
+    const mem_item_index* item2 = m2;
+
+    if (item1->item->callstack_hash < item2->item->callstack_hash)       return -1;
+    else if (item1->item->callstack_hash > item2->item->callstack_hash)  return 1;
+    else                                                                 return 0;
+}
+
+static int mem_imgui_compare_collapsed_item_id(const void* i1, const void* i2)
+{
+    const mem_item_collapsed* item1 = i1;
+    const mem_item_collapsed* item2 = i2;
+
+    return (g_mem_imgui.sort_spec->SortDirection == ImGuiSortDirection_Ascending) ? 
+        (item1->item_idx - item2->item_idx) : 
+        (item2->item_idx - item1->item_idx);
+}
+
+static int mem_imgui_compare_collapsed_item_symbol(const void* i1, const void* i2)
+{
+    const mem_item_collapsed* item1 = i1;
+    const mem_item_collapsed* item2 = i2;
+    
+    int r = strcmp(item1->entry_symbol, item2->entry_symbol);
+
+    if (g_mem_imgui.sort_spec->SortDirection == ImGuiSortDirection_Descending)
+        r = -r;
+
+    if (r == 0) {
+        return (g_mem_imgui.sort_spec->SortDirection == ImGuiSortDirection_Ascending) ? 
+            (item1->item_idx - item2->item_idx) : 
+            (item2->item_idx - item1->item_idx); 
+    } 
+
+    return r;
+}
+
+static int mem_imgui_compare_collapsed_item_size(const void* i1, const void* i2)
+{
+    const mem_item_collapsed* item1 = i1;
+    const mem_item_collapsed* item2 = i2;
+    
+    int r = 0;
+    if (item1->size < item2->size)      r = -1;
+    else if (item1->size > item2->size) r = 1;
+    if (g_mem_imgui.sort_spec->SortDirection == ImGuiSortDirection_Descending)
+        r = -r;
+
+    if (r == 0) {
+        return (g_mem_imgui.sort_spec->SortDirection == ImGuiSortDirection_Ascending) ? 
+            (item1->item_idx - item2->item_idx) : 
+            (item2->item_idx - item1->item_idx);         
+    }
+
+    return r;
+}
+
+static int mem_imgui_compare_collapsed_item_count(const void* i1, const void* i2)
+{
+    const mem_item_collapsed* item1 = i1;
+    const mem_item_collapsed* item2 = i2;
+    
+    int r = 0;
+    if (item1->count < item2->count)      r = -1;
+    else if (item1->count > item2->count) r = 1;
+    if (g_mem_imgui.sort_spec->SortDirection == ImGuiSortDirection_Descending)
+        r = -r;    
+
+    if (r == 0) {
+        return (g_mem_imgui.sort_spec->SortDirection == ImGuiSortDirection_Ascending) ? 
+            (item1->item_idx - item2->item_idx) : 
+            (item2->item_idx - item1->item_idx);         
+    }
+
+    return r;
+}
+
+static mem_item_collapsed* mem_imgui_context_get_collapsed_items(mem_trace_context* ctx)
+{
+    mem_item_collapsed* SX_ARRAY collapsed_items = ctx->cached;
+    
+    // re-populate the cache if it's 
+    if (sx_array_count(ctx->cached) == 0 && ctx->items_list) {
+        rizz__with_temp_alloc(tmp_alloc) {
+            mem_item_index* SX_ARRAY items = NULL;
+            {
+                mem_item* item = ctx->items_list;
+                int index = 0;
+                while (item) {
+                    mem_item_index item_indexed = {
+                        .index = index,
+                        .item = item
+                    };
+                    sx_array_push(tmp_alloc, items, item_indexed);
+                    item = item->next;
+                    index++;
+                }
+            }
+
+            sw_callstack_entry callstack_entries[SW_MAX_FRAMES];
+            qsort(items, sx_array_count(items), sizeof(mem_item_index), mem_imgui_compare_callstack_hash);
+            uint32_t hash = 0;
+            for (int i = 0, c = sx_array_count(items); i < c; i++) {
+                mem_item* item = items[i].item;
+
+                if (item->action == MEM_ACTION_FREE)
+                    continue;
+                if (hash != item->callstack_hash) {
+                    // create a new collapsed item
+                    mem_item_collapsed citem = {
+                        .item_idx = items[i].index,
+                        .item = item,
+                        .count = 1,
+                        .size = item->size
+                    };
+
+                    if (item->num_callstack_items > 0) {    
+                        #if SX_PLATFORM_WINDOWS
+                            uint16_t n = sw_resolve_callstack(g_mem.sw, item->callstack, callstack_entries, 
+                                                            sx_min((uint16_t)2, item->num_callstack_items));
+                            sx_strcpy(citem.entry_symbol, sizeof(citem.entry_symbol), 
+                                    callstack_entries[n > 1 ? 1 : 0].und_name);
+                        #else
+                            sx_unused(item->num_callstack_items);
+                        #endif
+                    } else {
+                        sx_strcpy(citem.entry_symbol, sizeof(citem.entry_symbol), item->source_func);
+                    }
+
+                    sx_array_push(g_mem.alloc, ctx->cached, citem);
+                    hash = item->callstack_hash;
+                } else {
+                    sx_assert(sx_array_count(ctx->cached) > 0);
+                    mem_item_collapsed* citem = &ctx->cached[sx_array_count(ctx->cached)-1];
+                    citem->item_idx = items[i].index;
+                    citem->size += item->size;
+                    ++citem->count;
+                }
+            }
+
+            collapsed_items = ctx->cached;
+        } //with_temp
+    }
+
+    int num_items = sx_array_count(collapsed_items);
+    switch (g_mem_imgui.sort_spec->ColumnUserID) {
+        case MEMITEM_COLLAPSED_ORDER:
+            qsort(collapsed_items, num_items, sizeof(mem_item_collapsed), mem_imgui_compare_collapsed_item_id);
+            break;
+        case MEMITEM_COLLAPSED_SYMBOL:
+            qsort(collapsed_items, num_items, sizeof(mem_item_collapsed), mem_imgui_compare_collapsed_item_symbol);
+            break;
+        case MEMITEM_COLLAPSED_SIZE:
+            qsort(collapsed_items, num_items, sizeof(mem_item_collapsed), mem_imgui_compare_collapsed_item_size);
+            break;
+        case MEMITEM_COLLAPSED_COUNT:
+            qsort(collapsed_items, num_items, sizeof(mem_item_collapsed), mem_imgui_compare_collapsed_item_count);
+            break;
+    }    
+
+    return collapsed_items;
+}
+
+static void mem_imgui_context_show_collapsed_items(rizz_api_imgui* imgui, mem_trace_context* ctx)
+{
+    char text[32];
+    ImGuiListClipper clipper;
+
+    mem_trace_context_mutex_enter(ctx->options, ctx->mtx);
+
+    imgui->TableSetupColumn("#", ImGuiTableColumnFlags_DefaultSort, 35.0f, MEMITEM_COLLAPSED_ORDER);
+    imgui->TableSetupColumn("Symbol", 0, 150.0f, MEMITEM_COLLAPSED_SYMBOL);
+    imgui->TableSetupColumn("Size", ImGuiTableColumnFlags_PreferSortDescending, 50.0f, MEMITEM_COLLAPSED_SIZE);
+    imgui->TableSetupColumn("Count", 0, 50.0f, MEMITEM_COLLAPSED_COUNT);
+    imgui->TableHeadersRow();
+
+    ImGuiTableSortSpecs* sort_specs = imgui->TableGetSortSpecs();
+    if (sort_specs) {
+        if (sort_specs->SpecsCount > 0) {
+            g_mem_imgui.sort_spec = &sort_specs->Specs[0];
+
+            if (sort_specs->SpecsDirty) {
+                sx_array_clear(ctx->cached);
+                sort_specs->SpecsDirty = false;
+            }
+        }
+    }
+
+    mem_item_collapsed* collapsed_items = mem_imgui_context_get_collapsed_items(ctx);
+    int num_items = sx_array_count(collapsed_items);
+
+    if (num_items) {
+        imgui->ImGuiListClipper_Begin(&clipper, num_items, -1.0f);
+        while (imgui->ImGuiListClipper_Step(&clipper)) {
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
+                imgui->TableNextRow(0, 0);
+                mem_item_collapsed* item = &collapsed_items[i];
+
+                sx_snprintf(text, sizeof(text), "%d", item->item_idx+1);
+                imgui->TableNextColumn();
+                imgui->PushID_Int(i);
+                if (imgui->Selectable_Bool(text, g_mem_imgui.selected_item == item->item,
+                                            ImGuiSelectableFlags_SpanAllColumns, SX_VEC2_ZERO)) {
+                    g_mem_imgui.selected_item = item->item;
+                }
+                imgui->PopID();
+
+                imgui->TableNextColumn();
+                imgui->Text(item->entry_symbol);
+
+                sx_snprintf(text, sizeof(text), "%$.2d", item->size);
+                imgui->TableNextColumn();
+                imgui->Text(text);
+
+                sx_snprintf(text, sizeof(text), "%$.2d", item->count);
+                imgui->TableNextColumn();
+                imgui->Text(text);
+            }
+        }
+        imgui->ImGuiListClipper_End(&clipper);
+    }
+
+    mem_trace_context_mutex_exit(ctx->options, ctx->mtx);
+}
+
 static void mem_imgui_context_items(rizz_api_imgui* imgui, rizz_api_imgui_extra* imguix, mem_trace_context* ctx)
 {
     sx_unused(imguix);
     if (imgui->BeginTable("MemItems", 4, 
                         ImGuiTableFlags_Resizable|ImGuiTableFlags_BordersV|ImGuiTableFlags_BordersOuterH|
-                        ImGuiTableFlags_SizingFixedFit|ImGuiTableFlags_RowBg|ImGuiTableFlags_ScrollY,
+                        ImGuiTableFlags_SizingFixedFit|ImGuiTableFlags_RowBg|ImGuiTableFlags_ScrollY|ImGuiTableFlags_Sortable,
                         SX_VEC2_ZERO, 0)) {
-        char text[32];
-        ImGuiListClipper clipper;
-
-        // gather all items
-        mem_item** items = NULL;    // sx_array
-        rizz__with_temp_alloc(tmp_alloc) {
-            {
-                mem_trace_context_mutex_enter(ctx->options, ctx->mtx);
-                mem_item* item = ctx->items_list;
-                while (item) {
-                    sx_array_push(tmp_alloc, items, item);
-                    item = item->next;
-                }
-                mem_trace_context_mutex_exit(ctx->options, ctx->mtx);
-            }
-            int num_items = sx_array_count(items);
-
-            if (num_items) {
-                imgui->TableSetupColumn("#", 0, 35.0f, 0);
-                imgui->TableSetupColumn("Ptr", 0, 150.0f, 0);
-                imgui->TableSetupColumn("Size", 0, 50.0f, 0);
-                imgui->TableSetupColumn("Action", 0, 50.0f, 0);
-                imgui->TableHeadersRow();
-
-                imgui->ImGuiListClipper_Begin(&clipper, num_items, -1.0f);
-                while (imgui->ImGuiListClipper_Step(&clipper)) {
-                    for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
-                        imgui->TableNextRow(0, 0);
-                        mem_item* item = items[i];
-
-                        sx_snprintf(text, sizeof(text), "%d", i + 1);
-                        imgui->TableNextColumn();
-                        imgui->PushID_Int(i);
-                        if (imgui->Selectable_Bool(text, g_mem_imgui.selected_item == item,
-                                                   ImGuiSelectableFlags_SpanAllColumns, SX_VEC2_ZERO)) {
-                            g_mem_imgui.selected_item = item;
-                        }
-
-                        if (imgui->BeginPopupContextItem("MemItemContextMenu", ImGuiPopupFlags_MouseButtonRight)) {
-                            if (imgui->Selectable_Bool("Copy address", false, 0, SX_VEC2_ZERO)) {
-                                char ptr_str[32];
-                                sx_snprintf(ptr_str, sizeof(ptr_str), "%p", item->ptr);
-                                the__app.set_clipboard_string(ptr_str);
-                            }
-                            imgui->EndPopup();
-                        }
-                        imgui->PopID();
-
-                        sx_snprintf(text, sizeof(text), "0x%p", item->ptr);
-                        imgui->TableNextColumn();
-                        imgui->Text(text);
-
-                        sx_snprintf(text, sizeof(text), "%$.2d", item->size);
-                        imgui->TableNextColumn();
-                        imgui->Text(text);
-
-                        imgui->TableNextColumn();
-                        switch (item->action) {
-                        case MEM_ACTION_MALLOC:     imgui->Text("malloc");  break;
-                        case MEM_ACTION_REALLOC:    imgui->Text("realloc"); break;
-                        case MEM_ACTION_FREE:       imgui->Text("free"); break;
-                        default:                    imgui->Text("N/A"); break;
-                        }
-                    }
-                }
-                imgui->ImGuiListClipper_End(&clipper);
-            }
-        }   // temp_alloc
+        if (g_mem_imgui.collapse_items) {
+            mem_imgui_context_show_collapsed_items(imgui, ctx);
+        } else {
+            mem_imgui_context_show_all_items(imgui, ctx);
+        }
     }
     imgui->EndTable();
 }
@@ -746,6 +1030,8 @@ void rizz__mem_show_debugger(bool* popen)
 
     imgui->SetNextWindowSizeConstraints(sx_vec2f(550, 400), sx_vec2f(FLT_MAX, FLT_MAX), NULL, NULL);
     if (imgui->Begin("Memory Debugger", popen, 0)) {
+        imgui->Checkbox("Collapse memory items", &g_mem_imgui.collapse_items);
+
         sx_vec2 region;
         imgui->GetContentRegionAvail(&region);
         imgui->BeginChild_Str("ContextsContainer", sx_vec2f(0, region.y*0.4f), true, 0);
@@ -777,27 +1063,28 @@ void rizz__mem_show_debugger(bool* popen)
         imgui->EndChild();
 
         if (g_mem_imgui.selected_ctx) {
-            imgui->BeginChild_Str("ItemsContainer", SX_VEC2_ZERO, true, 0);
-            if (imgui->BeginTable("Contexts", 2, 
-                ImGuiTableFlags_Resizable|ImGuiTableFlags_Borders|ImGuiTableFlags_SizingStretchProp, 
-                SX_VEC2_ZERO, 0))
-            {
-                imgui->TableSetupColumn("ContextTree", 0, region.x*0.4f, 0);
-                imgui->TableSetupColumn("ContextInfo", 0, region.x*0.6f, 0);
-                imgui->TableNextRow(0, 0);
+            if (imgui->BeginChild_Str("ItemsContainer", SX_VEC2_ZERO, true, 0)) {
+                if (imgui->BeginTable("Contexts", 2, 
+                    ImGuiTableFlags_Resizable|ImGuiTableFlags_Borders|ImGuiTableFlags_SizingStretchProp, 
+                    SX_VEC2_ZERO, 0))
+                {
+                    imgui->TableSetupColumn("ContextTree", 0, region.x*0.4f, 0);
+                    imgui->TableSetupColumn("ContextInfo", 0, region.x*0.6f, 0);
+                    imgui->TableNextRow(0, 0);
 
-                imgui->TableSetColumnIndex(0);
-                mem_imgui_context_items(imgui, imguix, g_mem_imgui.selected_ctx);
+                    imgui->TableSetColumnIndex(0);
+                    mem_imgui_context_items(imgui, imguix, g_mem_imgui.selected_ctx);
 
-                imgui->TableSetColumnIndex(1);
-                if (g_mem_imgui.selected_item) {
-                    mem_imgui_item(imgui, imguix, g_mem_imgui.selected_item);
-                } else {
-                    imgui->Text("No item selected");
+                    imgui->TableSetColumnIndex(1);
+                    if (g_mem_imgui.selected_item) {
+                        mem_imgui_item(imgui, imguix, g_mem_imgui.selected_item);
+                    } else {
+                        imgui->Text("No item selected");
+                    }
+
                 }
-
+                imgui->EndTable();
             }
-            imgui->EndTable();
             imgui->EndChild();
         }
     }
@@ -820,17 +1107,6 @@ void rizz__mem_begin_capture(const char* name)
     g_mem.capture.start_tm = sx_tm_now();
     c89atomic_flag_test_and_set_explicit(&g_mem.in_capture, c89atomic_memory_order_release);
 }
-
-typedef struct mem__write_json_context {
-    sx_file file;
-    const char* newline;
-    const char* tab;
-
-    int _depth;
-    bool _is_struct_array;
-    char _tabs[128];
-    int _array_count;
-} mem__write_json_context;
 
 SX_INLINE void mem__writef(sx_file* file, const char* fmt, ...)
 {
@@ -1054,4 +1330,3 @@ bool rizz__mem_end_capture(void)
 
     return true;
 }
-

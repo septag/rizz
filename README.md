@@ -34,7 +34,6 @@ This is not a game engine, it's a relatively low-level framework for programmers
 - *Portable shaders*: Write shaders once in GLSL, toolset will automatically translate the shader to other APIs.
 - *Multi-threaded GPU command-buffer*: Draw commands can be submitted by multiple threads with _staged_ API.
 - *Compute shader support (Experimental)*: Experimental compute-shader support, currently only under Direct3D, more backends will be added.
-- [basis_universal](https://github.com/BinomialLLC/basis_universal) texture format support
 
 ### Plugins
 Many of the engine features are implemented in the plugins, visit each link to read their README:
@@ -47,6 +46,7 @@ Many of the engine features are implemented in the plugins, visit each link to r
 - [astar](src/astar): A-star path-finding implementation plugin 
 - [collision](src/collision): 2.5D/Isometric Collision detection plugin
 - [utility](src/utility): misc utility functionality. Currently, _spline_ and _noise_ generator
+- [basisut](src/basisut): [basis_universal](https://github.com/BinomialLLC/basis_universal) texture format support (asset type name: `"texture_basisu"`)
 
 ### Debugging and Profiling
 - *Remote Profiler*: Integrated *Remotery* for remote debugger/command console and log viewer.
@@ -150,6 +150,7 @@ WIP
 - [cj5](https://github.com/septag/cj5): Very minimal single header JSON5 parser in C99, derived from jsmn
 - [atlasc](https://github.com/septag/atlasc): Command-line tool that builds atlas texture from a bunch of input images. *(External binary tool)*
 - [dmon](https://github.com/septag/dmon): Single header C99 portable library for monitoring directory changes.
+- [stackwalkerc](https://github.com/septag/stackwalkerc): Windows single header stack walker.
 
 #### 3rdparties
 - [sokol](https://github.com/floooh/sokol): minimal cross-platform standalone C headers

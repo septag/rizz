@@ -1515,11 +1515,13 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
     _sapp_macos_win_dlg_obj = [[_sapp_macos_window_delegate alloc] init];
     _sapp_macos_window_obj.delegate = _sapp_macos_win_dlg_obj;
     #if defined(SOKOL_METAL)
+        // TODO: currently don't have any good solution for nosync on METAL
+        int swap_interval = _sapp.swap_interval != SAPP_SWAP_INTERVAL_NOSYNC ? _sapp.swap_interval : 1;
         _sapp_mtl_device_obj = MTLCreateSystemDefaultDevice();
         _sapp_macos_mtk_view_dlg_obj = [[_sapp_macos_mtk_view_dlg alloc] init];
         _sapp_view_obj = [[_sapp_macos_view alloc] init];
         [_sapp_view_obj updateTrackingAreas];
-        _sapp_view_obj.preferredFramesPerSecond = 60 / _sapp.swap_interval;
+        _sapp_view_obj.preferredFramesPerSecond = 60 / swap_interval;
         _sapp_view_obj.delegate = _sapp_macos_mtk_view_dlg_obj;
         _sapp_view_obj.device = _sapp_mtl_device_obj;
         _sapp_view_obj.colorPixelFormat = MTLPixelFormatBGRA8Unorm;
@@ -2047,10 +2049,11 @@ _SOKOL_PRIVATE void _sapp_ios_show_keyboard(bool shown) {
     }
     _sapp.dpi_scale = (float)_sapp.framebuffer_width / (float) _sapp.window_width;
     #if defined(SOKOL_METAL)
+        int swap_interval = _sapp.swap_interval != SAPP_SWAP_INTERVAL_NOSYNC ? _sapp.swap_interval : 1;
         _sapp_mtl_device_obj = MTLCreateSystemDefaultDevice();
         _sapp_ios_mtk_view_dlg_obj = [[_sapp_ios_mtk_view_dlg alloc] init];
         _sapp_view_obj = [[_sapp_ios_view alloc] init];
-        _sapp_view_obj.preferredFramesPerSecond = 60 / _sapp.swap_interval;
+        _sapp_view_obj.preferredFramesPerSecond = 60 / swap_interval;
         _sapp_view_obj.delegate = _sapp_ios_mtk_view_dlg_obj;
         _sapp_view_obj.device = _sapp_mtl_device_obj;
         _sapp_view_obj.colorPixelFormat = MTLPixelFormatBGRA8Unorm;
@@ -2100,7 +2103,7 @@ _SOKOL_PRIVATE void _sapp_ios_show_keyboard(bool shown) {
         [_sapp_ios_window_obj addSubview:_sapp_view_obj];
         _sapp_ios_view_ctrl_obj = [[GLKViewController alloc] init];
         _sapp_ios_view_ctrl_obj.view = _sapp_view_obj;
-        _sapp_ios_view_ctrl_obj.preferredFramesPerSecond = 60 / _sapp.swap_interval;
+        _sapp_ios_view_ctrl_obj.preferredFramesPerSecond = 60 / swap_interval;
         _sapp_ios_window_obj.rootViewController = _sapp_ios_view_ctrl_obj;
     #endif
     [_sapp_ios_window_obj makeKeyAndVisible];

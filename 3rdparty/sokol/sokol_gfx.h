@@ -4416,6 +4416,10 @@ _SOKOL_PRIVATE void _sg_dummy_update_image(_sg_image_t* img, const sg_image_cont
 /*== GL BACKEND ==============================================================*/
 #elif defined(_SOKOL_ANY_GL)
 
+#ifndef GL_RGBA8
+    #define GL_RGBA8				0x8058  // RaspberryPI SDK didn't have this definition
+#endif
+
 /*-- type translation --------------------------------------------------------*/
 _SOKOL_PRIVATE GLenum _sg_gl_buffer_target(sg_buffer_type t) {
     switch (t) {

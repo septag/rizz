@@ -318,6 +318,8 @@ typedef void(rizz_vfs_async_modify_cb)(const char* path);
 typedef struct rizz_api_vfs {
     void (*register_modify)(rizz_vfs_async_modify_cb* modify_fn);
 
+    const sx_alloc* (*alloc)(void);
+
     bool (*mount)(const char* path, const char* alias);
     void (*mount_mobile_assets)(const char* alias);
 
@@ -657,20 +659,6 @@ typedef struct rizz_log_entry {
     int line;
 } rizz_log_entry;
 
-typedef enum rizz_mem_id {
-    RIZZ_MEMID_CORE = 0,
-    RIZZ_MEMID_GRAPHICS,
-    RIZZ_MEMID_AUDIO,
-    RIZZ_MEMID_VFS,
-    RIZZ_MEMID_REFLECT,
-    RIZZ_MEMID_OTHER,
-    RIZZ_MEMID_DEBUG,
-    RIZZ_MEMID_TOOLSET,
-    RIZZ_MEMID_INPUT,
-    RIZZ_MEMID_GAME,
-    _RIZZ_MEMID_COUNT
-} rizz_mem_id;
-
 typedef struct rizz_version {
     int major;
     int minor;
@@ -684,7 +672,9 @@ typedef enum rizz_profile_flag {
 typedef uint32_t rizz_profile_flags;
 
 typedef struct rizz_api_core {
-    // heap allocator: thread-safe, allocates dynamically from heap (libc->malloc)
+    // Thread-safe tracking allocator, this is the recommended allocator to use outside of core
+    const sx_alloc* (*alloc)(void);
+    // heap allocator: thread-safe, lowest-level allocator. allocates dynamically from heap (libc->malloc)
     const sx_alloc* (*heap_alloc)(void);
 
     // temp stack allocator: fast and thread-safe (per job thread only).
@@ -706,8 +696,6 @@ typedef struct rizz_api_core {
     void (*tls_register)(const char* name, void* user,
                          void* (*init_cb)(int thread_idx, uint32_t thread_id, void* user));
     void* (*tls_var)(const char* name);
-
-    const sx_alloc* (*alloc)(rizz_mem_id id);
 
     sx_alloc* (*trace_alloc_create)(const char* name, rizz_mem_options mem_opts, const char* parent, const sx_alloc* alloc);
     void (*trace_alloc_destroy)(sx_alloc* alloc);
@@ -1146,6 +1134,7 @@ typedef struct rizz_api_gfx {
     rizz_api_gfx_draw imm;       // immediate draw API
     rizz_api_gfx_draw staged;    // staged (deferred calls) draw API
 
+    const sx_alloc* (*alloc)(void);
     rizz_gfx_backend (*backend)(void);
     bool (*GL_family)();
     bool (*GLES_family)();
@@ -1272,6 +1261,7 @@ typedef struct rizz_api_gfx {
     const rizz_texture* (*texture_get)(rizz_asset texture_asset);
     void (*texture_set_default_quality)(sg_filter min_filter, sg_filter mag_filter, int aniso, int first_mip);
     void (*texture_default_quality)(sg_filter* min_filter, sg_filter* mag_filter, int* aniso, int* first_mip);
+    uint32_t (*texture_surface_pitch)(sg_pixel_format fmt, uint32_t width, uint32_t height, uint32_t row_align);
 
     // info
     const rizz_gfx_trace_info* (*trace_info)();
@@ -1291,13 +1281,14 @@ typedef struct rizz_api_gfx {
 #        define RIZZ_POINTER __declspec(allocate(".ptrs"))
 #    elif SX_PLATFORM_APPLE
 #        define RIZZ_STATE __attribute__((used, section("__DATA,__state")))
-#        define RIZZ_POINTER __attribute__((used, section("__DATA,__ptrs")))
+//#        define RIZZ_POINTER __attribute__((used, section("__DATA,__ptrs")))  // skipped this because of Regression bug
+#        define RIZZ_POINTER 
 #    elif SX_COMPILER_GCC || SX_COMPILER_CLANG
 #        pragma section(".state", read, write)
 #        define RIZZ_STATE __attribute__((section(".state")))
-#        pragma section(".ptrs", read, write)
-//#        define RIZZ_POINTER __attribute__((section(".ptrs")))
-#        define RIZZ_POINTER    // not working yet, see: https://github.com/fungos/cr/issues/32
+//#        pragma section(".ptrs", read, write)
+//#        define RIZZ_POINTER __attribute__((section(".ptrs"))) // may not work on some platforms, see: https://github.com/fungos/cr/issues/32
+#        define RIZZ_POINTER
 #    endif
 
 // RIZZ_PLUGIN_EXPORT
@@ -1463,6 +1454,8 @@ typedef struct rizz_http_state {
 typedef void(rizz_http_cb)(const rizz_http_state* http, void* user);
 
 typedef struct rizz_api_http {
+    const sx_alloc* (*alloc)(void);
+    
     // normal requests: returns immediately (async sockets)
     // check `status_code` for retrieved http object to determine if it's finished or failed
     // call `free` if http data is not needed any more. if not freed by the user, it will be freed

@@ -82,7 +82,13 @@
         "xmemory": "c",
         "xstring": "c",
         "xtree": "c",
-        "imgui.h": "c"
+        "imgui.h": "c",
+        "iterator": "c",
+        "bcm_host.h": "c",
+        "vcgencmd.h": "c",
+        "vc_dispmanx.h": "c",
+        "2dtools-internal.h": "c",
+        "ostream": "c"
     },
     "files.exclude": {
         "**/.git": true,
@@ -99,4 +105,6 @@
         ".clangd/**": true
     },
     "cmake.configureOnOpen": true,
+    // "cmake.buildDirectory": "${workspaceFolder}/build-rpi",
+    // "cmake.configureArgs": ["-DCMAKE_TOOLCHAIN_FILE=${workspaceFolder}/cmake/rpi.cmake", "-DRPI_SYSGCC_ROOT=c:/SDK/raspberry"],
 }

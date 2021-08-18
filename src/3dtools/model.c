@@ -920,7 +920,7 @@ bool model__init(rizz_api_core* core, rizz_api_asset* asset, rizz_api_gfx* gfx, 
     the_asset = asset;
     the_gfx = gfx;
     the_imgui = imgui;
-    g_model.alloc = the_core->alloc(RIZZ_MEMID_GRAPHICS);
+    g_model.alloc = tools3d__alloc();
 
     // default layout, this will be passed when no layout is set for loading models (matches rizz_prims3d_vertex)
     g_model.default_layout = (rizz_model_geometry_layout) {

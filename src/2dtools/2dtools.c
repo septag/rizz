@@ -9,6 +9,8 @@
 #include "2dtools-internal.h"
 
 RIZZ_STATE static rizz_api_plugin* the_plugin;
+RIZZ_STATE static rizz_api_core* the_core;
+RIZZ_STATE static sx_alloc* g_tools2d_alloc;
 
 static rizz_api_2d the__2d = {
     .font = { 
@@ -98,6 +100,9 @@ rizz_plugin_decl_main(2dtools, plugin, e)
         rizz_api_gfx* gfx = the_plugin->get_api(RIZZ_API_GFX, 0);
         rizz_api_app* app = the_plugin->get_api(RIZZ_API_APP, 0);
         rizz_api_imgui* imgui = the_plugin->get_api_byname("imgui", 0);
+
+        the_core = core;
+        g_tools2d_alloc = core->trace_alloc_create("2DTools", RIZZ_MEMOPTION_INHERIT, NULL, core->heap_alloc());
         if (!sprite__init(core, asset, gfx) || !font__init(core, asset, gfx, app)) {
             return -1;
         }
@@ -116,6 +121,7 @@ rizz_plugin_decl_main(2dtools, plugin, e)
         the_plugin->remove_api("2dtools", 0);
         sprite__release();
         font__release();
+        the_core->trace_alloc_destroy(g_tools2d_alloc);
         break;
     }
 
@@ -129,6 +135,11 @@ rizz_plugin_decl_event_handler(2dtools, e)
         sprite__set_imgui(imgui);
         font__set_imgui(imgui);
     }
+}
+
+const sx_alloc* tools2d__alloc(void)
+{
+    return g_tools2d_alloc;
 }
 
 static const char* tools2d__deps[] = { "imgui" };

@@ -40,19 +40,19 @@ typedef struct {
 } rizz__http;
 
 typedef struct {
-    const sx_alloc* alloc;
+    sx_alloc* alloc;
     sx_handle_pool* http_handles;    // rizz__http
-    rizz__http* https;               // sx_array
+    rizz__http* SX_ARRAY https;
     rizz_http pending[RIZZ_CONFIG_MAX_HTTP_REQUESTS];
     int num_pending;
 } rizz__http_context;
 
 static rizz__http_context g_http;
 
-bool rizz__http_init(const sx_alloc* alloc)
+bool rizz__http_init()
 {
-    g_http.alloc = alloc;
-    g_http.http_handles = sx_handle_create_pool(alloc, RIZZ_CONFIG_MAX_HTTP_REQUESTS);
+    g_http.alloc = rizz__mem_create_allocator("Http", RIZZ_MEMOPTION_INHERIT, "Core", the__core.heap_alloc());
+    g_http.http_handles = sx_handle_create_pool(g_http.alloc, RIZZ_CONFIG_MAX_HTTP_REQUESTS);
     if (!g_http.http_handles)
         return false;
 
@@ -81,6 +81,9 @@ void rizz__http_release()
 
         sx_array_free(g_http.alloc, g_http.https);
         sx_memset(&g_http, 0x0, sizeof(g_http));
+
+        rizz__mem_destroy_allocator(g_http.alloc);
+        g_http.alloc = NULL;
     }
 }
 
@@ -314,7 +317,13 @@ static void rizz__http_post_cb(const char* url, const void* data, size_t size,
         g_http.https[index] = _http;
 }
 
-rizz_api_http the__http = { .get = rizz__http_get,
+static const sx_alloc* rizz__http_alloc(void)
+{
+    return g_http.alloc;
+}
+
+rizz_api_http the__http = { .alloc = rizz__http_alloc,
+                            .get = rizz__http_get,
                             .post = rizz__http_post,
                             .free = rizz__http_free,
                             .state = rizz__http_state,

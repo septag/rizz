@@ -223,7 +223,7 @@ typedef uint32_t sx_iff_flags;
 
 typedef struct sx_iff_file {
     sx_iff_type type;
-    sx_iff_chunk* chunks;    // sx_array: chunk_id's are references to this array (chunks[chunk_id])
+    sx_iff_chunk* SX_ARRAY chunks;    // chunk_id's are references to this array (chunks[chunk_id])
     const sx_alloc* alloc;
     union {
         sx_mem_reader* mread;

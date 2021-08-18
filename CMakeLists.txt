@@ -44,11 +44,17 @@ if (NOT MSVC)
 endif()
 
 # output directories for binary files
+if (NOT RPI) 
+    set(bin_dir bin)
+else()
+    set(bin_dir bin/rpi)
+endif()
+
 if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${bin_dir})
 endif()
 if (NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${bin_dir})
 endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -301,7 +307,8 @@ set(native_projects sx
                     utility 
                     sound
                     input
-                    collision)
+                    collision 
+                    basisut)
 
 if (installed_plugins)
     message(STATUS "The following plugins are found:")

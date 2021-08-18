@@ -196,7 +196,9 @@ void* sx_os_dlsym(void* handle, const char* symbol)
 const char* sx_os_dlerr(void)
 {
 #if SX_PLATFORM_WINDOWS
-    return "";
+    static char err_id[32];
+    sx_snprintf(err_id, sizeof(err_id), "%u", GetLastError());
+    return err_id;
 #elif SX_PLATFORM_EMSCRIPTEN || SX_PLATFORM_PS4 || SX_PLATFORM_XBOXONE
     return "";
 #else
