@@ -2120,4 +2120,4 @@ rizz_plugin_decl_main(imgui, plugin, e)
     return 0;
 }
 
-rizz_plugin_implement_info(imgui, 1790, "dear-imgui plugin", NULL, 0);
+rizz_plugin_implement_info(imgui, 1820, "dear-imgui plugin", NULL, 0);

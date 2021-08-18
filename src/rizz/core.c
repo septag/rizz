@@ -1812,14 +1812,14 @@ void rizz__core_fix_callback_ptrs(const void** ptrs, const void** new_ptrs, int 
             // log backends
             for (int k = 0; k < g_core.num_log_backends; k++) {
                 if (g_core.log_backends[k].log_cb == ptrs[i]) {
-                    g_core.log_backends[k].log_cb = new_ptrs[i];
+                    g_core.log_backends[k].log_cb = (void (*)(const rizz_log_entry*, void*))new_ptrs[i];
                 }
             }
 
             // console commands
             for (int k = 0, kc = sx_array_count(g_core.console_cmds); k < kc; k++) {
                 if (g_core.console_cmds[k].callback == ptrs[i]) {
-                    g_core.console_cmds[k].callback = new_ptrs[i];
+                    g_core.console_cmds[k].callback = (rizz_core_cmd_cb*)new_ptrs[i];
                 }
             }
         }

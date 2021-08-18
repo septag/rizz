@@ -109,8 +109,7 @@ static void fons__update_fn(void* user_ptr, int* rect, const unsigned char* data
     fons->img_dirty = true;
 }
 
-static void fons__draw_fn(void* user_ptr, const float* poss, const float* tcoords,
-                          const unsigned int* colors, int nverts)
+static void fons__draw_fn(void* user_ptr, const float* poss, const float* tcoords, const unsigned int* colors, int nverts)
 {
     font__fons* fons = user_ptr;
     rizz_api_gfx_draw* draw_api = g_font.draw_api;
@@ -603,9 +602,8 @@ bool font__iter_next(const rizz_font* fnt, rizz_font_iter* iter, rizz_font_quad*
                               .end = fiter.end,
                               ._reserved = fiter.font };
 
-    *quad =
-        (rizz_font_quad){ .v0 = { .pos = {{ fquad.x0, fquad.y0 }}, .uv = {{ fquad.s0, fquad.t0 }} },
-                          .v1 = { .pos = {{ fquad.x1, fquad.y1 }}, .uv = {{ fquad.s1, fquad.t1 }} } };
+    *quad = (rizz_font_quad) { .v0 = { .pos = {{ fquad.x0, fquad.y0 }}, .uv = {{ fquad.s0, fquad.t0 }} },
+                               .v1 = { .pos = {{ fquad.x1, fquad.y1 }}, .uv = {{ fquad.s1, fquad.t1 }} } };
 
     return r;
 }

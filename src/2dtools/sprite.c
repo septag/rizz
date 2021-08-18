@@ -1605,11 +1605,14 @@ void sprite__set_flip(rizz_sprite handle, rizz_sprite_flip flip)
 }
 
 // draw-data
-rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs, int num_sprites,
-                                                  const sx_alloc* alloc)
+rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs, int num_sprites, const sx_alloc* alloc)
 {
     sx_assert(num_sprites > 0);
     sx_assert(sprs);
+
+    if (!alloc) {
+        alloc = g_spr.alloc;
+    }
 
     // count final vertices and indices,
     int num_verts = 0;
@@ -1642,19 +1645,21 @@ rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs, int n
         }
     }
 
-    // assume that every sprite is a batch, so we can pre-allocate loosely
-    int total_sz = sizeof(rizz_sprite_drawdata) + num_verts * sizeof(rizz_sprite_vertex) +
-                   num_indices * sizeof(uint16_t) +
-                   (sizeof(rizz_sprite_drawbatch) + sizeof(rizz_sprite_drawsprite)) * num_sprites;
-    rizz_sprite_drawdata* dd = sx_malloc(alloc, total_sz);
+    // assume that every sprite is a batch (num_batches = num_sprites), so we can pre-allocate loosely
+    sx_linear_buffer buff;
+    sx_linear_buffer_init(&buff, rizz_sprite_drawdata, 0);
+    sx_linear_buffer_addtype(&buff, rizz_sprite_drawdata, rizz_sprite_drawsprite, sprites, num_sprites, 0);
+    sx_linear_buffer_addtype(&buff, rizz_sprite_drawdata, rizz_sprite_drawbatch, batches, num_sprites, 0);
+    sx_linear_buffer_addtype(&buff, rizz_sprite_drawdata, rizz_sprite_vertex, verts, num_verts, 0);
+    sx_linear_buffer_addtype(&buff, rizz_sprite_drawdata, uint16_t, indices, num_indices, 0);
+
+    rizz_sprite_drawdata* dd = sx_linear_buffer_calloc(&buff, alloc);
     if (!dd) {
         sx_out_of_memory();
         return NULL;
     }
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
-    sx_scope(the_core->tmp_alloc_pop()) {
-
+    rizz_with_temp_alloc(tmp_alloc) {
         sprite__sort_key* keys = sx_malloc(tmp_alloc, sizeof(sprite__sort_key) * num_sprites);
         sx_assert(keys);
 
@@ -1675,15 +1680,6 @@ rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs, int n
             sprite__sort_tim_sort(keys, num_sprites);
         }
 
-        memset(dd, 0x0, sizeof(rizz_sprite_drawdata));
-        uint8_t* buff = (uint8_t*)(dd + 1);
-        dd->sprites = (rizz_sprite_drawsprite*)buff;
-        buff += sizeof(rizz_sprite_drawsprite) * num_sprites;
-        dd->batches = (rizz_sprite_drawbatch*)buff;
-        buff += sizeof(rizz_sprite_drawbatch) * num_sprites;
-        dd->verts = (rizz_sprite_vertex*)buff;
-        buff += sizeof(rizz_sprite_vertex) * num_verts;
-        dd->indices = (uint16_t*)buff;
         dd->num_batches = 0;
         dd->num_verts = num_verts;
         dd->num_indices = num_indices;
@@ -1755,11 +1751,9 @@ rizz_sprite_drawdata* sprite__drawdata_make_batch(const rizz_sprite* sprs, int n
                 verts[3].uv = sx_vec2f(1.0f, 0.0f);
                 verts[3].color = color;
 
-                // clang-format off
                 uint16_t v = (uint16_t)vertex_start;
                 indices[3] = v;         indices[4] = v + 2;     indices[5] = v + 1;
                 indices[0] = v + 1;     indices[1] = v + 2;     indices[2] = v + 3;
-                // clang-format on            
 
                 vertex_idx += 4;
                 index_idx += 6;
@@ -1808,11 +1802,8 @@ void sprite__drawdata_free(rizz_sprite_drawdata* data, const sx_alloc* alloc) {
 void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4* vp, 
                         const sx_mat3* mats, sx_color* tints) {
 
-    const sx_alloc* tmp_alloc = the_core->tmp_alloc_push();
-    sx_scope(the_core->tmp_alloc_pop()) {
-
-        rizz_sprite_drawdata* dd =
-            sprite__drawdata_make_batch(sprs, num_sprites, tmp_alloc);
+    rizz_with_temp_alloc(tmp_alloc) {
+        rizz_sprite_drawdata* dd = sprite__drawdata_make_batch(sprs, num_sprites, tmp_alloc);
         if (!dd) {
             sx_memory_fail();
             the_core->tmp_alloc_pop();
@@ -1835,13 +1826,10 @@ void sprite__draw_batch(const rizz_sprite* sprs, int num_sprites, const sx_mat4*
         const sprite__draw_context* dc = &g_spr.drawctx;
 
         // append drawdata to buffers
-        int ib_offset = g_spr.draw_api->append_buffer(dc->ibuff, dd->indices, 
-                                                      sizeof(uint16_t)*dd->num_indices);
-        int vb_offset1 = g_spr.draw_api->append_buffer(dc->vbuff[0], dd->verts, 
-                                                       sizeof(rizz_sprite_vertex)*dd->num_verts);
+        int ib_offset = g_spr.draw_api->append_buffer(dc->ibuff, dd->indices, sizeof(uint16_t)*dd->num_indices);
+        int vb_offset1 = g_spr.draw_api->append_buffer(dc->vbuff[0], dd->verts, sizeof(rizz_sprite_vertex)*dd->num_verts);
 
-        sprite__vertex_transform* tverts = sx_malloc(tmp_alloc, 
-                                                     sizeof(sprite__vertex_transform)*dd->num_verts);
+        sprite__vertex_transform* tverts = sx_malloc(tmp_alloc, sizeof(sprite__vertex_transform)*dd->num_verts);
         sx_assert(tverts);
 
         // put transforms into another vbuff
