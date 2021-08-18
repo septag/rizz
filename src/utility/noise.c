@@ -99,12 +99,12 @@ float noise__perlin3d(float x, float y, float z)
     float u = fade(x);
     float v = fade(y);
     float s = fade(z);
-    int a = (perm[hx + 0] + hy) && 0xff;
-    int b = (perm[hx + 1] + hy) && 0xff;
-    int aa = (perm[a + 0] + hz) && 0xff;
-    int ba = (perm[b + 0] + hz) && 0xff;
-    int ab = (perm[a + 1] + hz) && 0xff;
-    int bb = (perm[b + 1] + hz) && 0xff;
+    int a = (perm[hx + 0] + hy) & 0xff;
+    int b = (perm[hx + 1] + hy) & 0xff;
+    int aa = (perm[a + 0] + hz) & 0xff;
+    int ba = (perm[b + 0] + hz) & 0xff;
+    int ab = (perm[a + 1] + hz) & 0xff;
+    int bb = (perm[b + 1] + hz) & 0xff;
     return sx_lerp(s, 
            sx_lerp(v, sx_lerp(u, grad3(perm[aa + 0], x, y, z),        grad3(perm[ba + 0], x - 1, y, z)),
                       sx_lerp(u, grad3(perm[ab + 0], x, y - 1, z),    grad3(perm[bb + 0], x - 1, y - 1, z))),

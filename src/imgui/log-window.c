@@ -301,8 +301,9 @@ static void imgui__draw_log(bool* p_open)
     the__imgui.End();
 }
 
-
-RIZZ_POINTER static void imgui__log_entryfn(const rizz_log_entry* entry, void* user)
+static void imgui__log_entryfn_(const rizz_log_entry* entry, void* user);
+RIZZ_POINTER static void (*imgui__log_entryfn)(const rizz_log_entry* entry, void* user) = imgui__log_entryfn_;
+static void imgui__log_entryfn_(const rizz_log_entry* entry, void* user)
 {
     sx_unused(user);
     
@@ -368,7 +369,9 @@ void imgui__log_update(void)
     }
 }
 
-RIZZ_POINTER static int imgui__toggle_log_cb(int argc, char* argv[], void* user)
+static int imgui__toggle_log_cb_(int argc, char* argv[], void* user);
+RIZZ_POINTER static int (*imgui__toggle_log_cb)(int argc, char* argv[], void* user) = imgui__toggle_log_cb_;
+static int imgui__toggle_log_cb_(int argc, char* argv[], void* user)
 {
     sx_unused(argc);
     sx_unused(argv);
