@@ -79,8 +79,10 @@ typedef struct rizz_api_utility {
     struct {
         float (*perlin1d)(float x);
         float (*perlin2d)(float x, float y);
+        float (*perlin3d)(float x, float y, float z);
         float (*perlin1d_fbm)(float x, int octave);
         float (*perlin2d_fbm)(float x, float y, int octave);
+        float (*perlin3d_fbm)(float x, float y, float z, int octave);
     } noise;
     struct {
         void (*init)(rizz_gradient* gradient, sx_color start, sx_color end);
