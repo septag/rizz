@@ -37,11 +37,28 @@ static int perm[] = {
 };
 // clang-format on
 
-static inline float fade(float x) { return x * x * x * (x * (x * 6 - 15) + 10); }
+static inline float fade(float x)
+{
+    return x * x * x * (x * (x * 6 - 15) + 10);
+}
 
-static inline float grad1(int hash, float x) { return (hash & 1) ? -x : x; }
+static inline float grad1(int hash, float x)
+{
+    return (hash & 1) ? -x : x;
+}
 
-static inline float grad2(int hash, float x, float y) { return ((hash & 1) ? -x : x) + ((hash & 2) ? -y : y); }
+static inline float grad2(int hash, float x, float y)
+{
+    return ((hash & 1) ? -x : x) + ((hash & 2) ? -y : y);
+}
+
+static inline float grad3(int hash, float x, float y, float z)
+{
+    int h = hash & 15;
+    float u = h < 8 ? x : y;
+    float v = h < 4 ? y : (h == 12 || h == 14 ? x : z);
+    return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v);
+}
 
 float noise__perlin1d(float x)
 {
@@ -49,7 +66,7 @@ float noise__perlin1d(float x)
     int hx = ((int)fx & 0xff);
     x -= fx;
     float u = fade(x);
-    return sx_lerp(grad1(perm[hx], x), grad1(perm[hx + 1], x - 1), u) * 2;
+    return sx_lerp(grad1(perm[hx + 0], x), grad1(perm[hx + 1], x - 1), u) * 2;
 }
 
 float noise__perlin2d(float x, float y)
@@ -66,6 +83,33 @@ float noise__perlin2d(float x, float y)
     int b = (perm[hx + 1] + hy) & 0xff;
     return sx_lerp(sx_lerp(grad2(perm[a + 0], x, y - 0), grad2(perm[b + 0], x - 1, y - 0), u),
                    sx_lerp(grad2(perm[a + 1], x, y - 1), grad2(perm[b + 1], x - 1, y - 1), u), v);
+}
+
+float noise__perlin3d(float x, float y, float z)
+{
+    float fx = sx_floor(x);
+    float fy = sx_floor(y);
+    float fz = sx_floor(z);
+    int hx = (int)fx & 0xff;
+    int hy = (int)fy & 0xff;
+    int hz = (int)fz & 0xff;
+    x -= fx;
+    y -= fy;
+    z -= fz;
+    float u = fade(x);
+    float v = fade(y);
+    float s = fade(z);
+    int a = (perm[hx + 0] + hy) && 0xff;
+    int b = (perm[hx + 1] + hy) && 0xff;
+    int aa = (perm[a + 0] + hz) && 0xff;
+    int ba = (perm[b + 0] + hz) && 0xff;
+    int ab = (perm[a + 1] + hz) && 0xff;
+    int bb = (perm[b + 1] + hz) && 0xff;
+    return sx_lerp(s, 
+           sx_lerp(v, sx_lerp(u, grad3(perm[aa + 0], x, y, z),        grad3(perm[ba + 0], x - 1, y, z)),
+                      sx_lerp(u, grad3(perm[ab + 0], x, y - 1, z),    grad3(perm[bb + 0], x - 1, y - 1, z))),
+           sx_lerp(v, sx_lerp(u, grad3(perm[aa + 1], x, y, z - 1),    grad3(perm[ba + 1], x - 1, y, z - 1)),
+                      sx_lerp(u, grad3(perm[ab + 1], x, y - 1, z - 1),grad3(perm[bb + 1], x - 1, y - 1, z - 1))));
 }
 
 float noise__perlin1d_fbm(float x, int octave)
@@ -86,6 +130,19 @@ float noise__perlin2d_fbm(float x, float y, int octave)
         f += w * noise__perlin2d(x, y);
         x *= 2.0f;
         y *= 2.0f;
+        w *= 0.5f;
+    }
+    return f;
+}
+
+float noise__perlin3d_fbm(float x, float y, float z, int octave)
+{
+    float f = 0.0f, w = 0.5f;
+    for (int i = 0; i < octave; i++) {
+        f += w * noise__perlin3d(x, y, z);
+        x *= 2.0f;
+        y *= 2.0f;
+        z *= 2.0f;
         w *= 0.5f;
     }
     return f;

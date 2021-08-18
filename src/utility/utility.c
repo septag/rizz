@@ -8,8 +8,10 @@ void spline__eval3d(const rizz_spline3d_desc* desc, sx_vec3* result);
 
 float noise__perlin1d(float x);
 float noise__perlin2d(float x, float y);
+float noise__perlin3d(float x, float y, float z);
 float noise__perlin1d_fbm(float x, int octave);
 float noise__perlin2d_fbm(float x, float y, int octave);
+float noise__perlin3d_fbm(float x, float y, float z, int octave);
 
 void gradient__init(rizz_gradient* gradient, sx_color start, sx_color end);
 bool gradient__add_key(rizz_gradient* gradient, rizz_gradient_key key);
@@ -35,8 +37,10 @@ static rizz_api_utility the__utility = {
 
     .noise.perlin1d = noise__perlin1d,
     .noise.perlin2d = noise__perlin2d,
+    .noise.perlin3d = noise__perlin3d,
     .noise.perlin1d_fbm = noise__perlin1d_fbm,
     .noise.perlin2d_fbm = noise__perlin2d_fbm,
+    .noise.perlin3d_fbm = noise__perlin3d_fbm,
 
     .gradient.init = gradient__init,
     .gradient.add_key = gradient__add_key,
