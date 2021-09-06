@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.1)
 set(GAINPUT_MAJOR_VERSION 1)
 set(GAINPUT_MINOR_VERSION 0)
 set(GAINPUT_PATCH_VERSION 0)
