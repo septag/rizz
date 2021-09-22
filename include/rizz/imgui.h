@@ -3238,8 +3238,8 @@ typedef struct rizz_api_imgui
     void           (*ImFontAtlasBuildMultiplyCalcLookupTable)(unsigned char out_table[256], float in_multiply_factor);
     void           (*ImFontAtlasBuildMultiplyRectAlpha8)(const unsigned char table[256], unsigned char *pixels, int x, int y, int w, int h, int stride);
     void           (*LogText)(const char *fmt, ...);
-    float          (*GET_FLT_MAX)();
-    float          (*GET_FLT_MIN)();
+    float          (*GET_FLT_MAX)(void);
+    float          (*GET_FLT_MIN)(void);
     // ImGuiIO
     void           (*ImGuiIO_AddInputCharacter)(ImGuiIO *self, unsigned int c);
     void           (*ImGuiIO_AddInputCharacterUTF16)(ImGuiIO *self, ImWchar16 c);

@@ -38,13 +38,13 @@ extern "C" void _rmt_BindMetal(id command_buffer)
     SetCommandBuffer(command_buffer);
 }
 
-extern "C" void _rmt_UnbindMetal()
+extern "C" void _rmt_UnbindMetal(void)
 {
     SetCommandBuffer(0);
 }
 
 // Needs to be in the same lib for this to work
-extern "C" unsigned long long rmtMetal_usGetTime();
+extern "C" unsigned long long rmtMetal_usGetTime(void);
 
 static void SetTimestamp(void* data)
 {

@@ -2636,6 +2636,7 @@ inline void sg_init_pass(sg_pass pass_id, const sg_pass_desc& desc) { return sg_
             #error "sokol_app.h requires __has_feature(objc_arc_field) if ARC is enabled (use a more recent compiler version)"
         #endif
     #endif
+
     #include <TargetConditionals.h>
     #import <Metal/Metal.h>
     #if defined(TARGET_OS_IPHONE) && !TARGET_OS_IPHONE
@@ -10620,7 +10621,10 @@ _SOKOL_PRIVATE void _sg_mtl_begin_pass(_sg_pass_t* pass, const sg_pass_action* a
     }
     else {
         /* setup pass descriptor for default rendering */
+        bool is_msaa = _sg.desc.context.sample_count > 1;
         pass_desc.colorAttachments[0].loadAction = _sg_mtl_load_action(action->colors[0].action);
+        pass_desc.colorAttachments[0].storeAction = is_msaa ? MTLStoreActionStoreAndMultisampleResolve :
+                                                              MTLStoreActionStore;
         const float* c = &(action->colors[0].val[0]);
         pass_desc.colorAttachments[0].clearColor = MTLClearColorMake(c[0], c[1], c[2], c[3]);
         pass_desc.depthAttachment.loadAction = _sg_mtl_load_action(action->depth.action);

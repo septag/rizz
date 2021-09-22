@@ -638,7 +638,7 @@ char* sx_os_path_normpath(char* dst, int size, const char* path)
 #endif
 }
 
-int sx_os_numcores()
+int sx_os_numcores(void)
 {
 #if SX_PLATFORM_WINDOWS
     SYSTEM_INFO sysinfo;

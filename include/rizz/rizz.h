@@ -463,7 +463,7 @@ typedef struct rizz_api_asset {
     void (*unload_by_tags)(uint32_t tags);
 
     rizz_asset_group (*group_begin)(rizz_asset_group group);
-    void (*group_end)();
+    void (*group_end)(rizz_asset_group group);
     void (*group_wait)(rizz_asset_group group);
     bool (*group_loaded)(rizz_asset_group group);
     void (*group_delete)(rizz_asset_group group);
@@ -715,8 +715,8 @@ typedef struct rizz_api_core {
     bool (*is_paused)(void);
 
     void (*set_cache_dir)(const char* path);
-    const char* (*cache_dir)();
-    const char* (*data_dir)();
+    const char* (*cache_dir)(void);
+    const char* (*data_dir)(void);
 
     const char* (*str_alloc)(uint32_t* phandle, const char* fmt, ...);
     void        (*str_free)(uint32_t handle);
@@ -728,8 +728,8 @@ typedef struct rizz_api_core {
                              void* user, sx_job_priority priority, uint32_t tags);
     void (*job_wait_and_del)(sx_job_t job);
     bool (*job_test_and_del)(sx_job_t job);
-    int (*job_num_threads)();
-    int (*job_thread_index)();
+    int (*job_num_threads)(void);
+    int (*job_thread_index)(void);
 
     void (*coro_invoke)(void (*coro_cb)(sx_fiber_transfer), void* user);
     void (*coro_end)(void* pfrom);
@@ -749,7 +749,7 @@ typedef struct rizz_api_core {
     void (*set_log_level)(rizz_log_level level);
 
     void (*begin_profile_sample)(const char* name, rizz_profile_flags flags, uint32_t* hash_cache);
-    void (*end_profile_sample)();
+    void (*end_profile_sample)(void);
 
     void (*register_console_command)(const char* cmd, rizz_core_cmd_cb* callback, const char* shortcut, void* user);
     void (*execute_console_command)(const char* cmd_and_args);
@@ -1053,7 +1053,7 @@ typedef struct sjson_context sjson_context;    // shader_parse_reflection
 //
 typedef struct rizz_api_gfx_draw {
     bool (*begin)(rizz_gfx_stage stage);
-    void (*end)();
+    void (*end)(void);
 
     void (*begin_default_pass)(const sg_pass_action* pass_action, int width, int height);
     void (*begin_pass)(sg_pass pass, const sg_pass_action* pass_action);
@@ -1064,14 +1064,14 @@ typedef struct rizz_api_gfx_draw {
     void (*apply_uniforms)(sg_shader_stage stage, int ub_index, const void* data, int num_bytes);
     void (*draw)(int base_element, int num_elements, int num_instances);
     void (*dispatch)(int thread_group_x, int thread_group_y, int thread_group_z);
-    void (*end_pass)();
+    void (*end_pass)(void);
     void (*update_buffer)(sg_buffer buf, const void* data_ptr, int data_size);
     int (*append_buffer)(sg_buffer buf, const void* data_ptr, int data_size);
     void (*update_image)(sg_image img, const sg_image_content* data);
 
     // profile
     void (*begin_profile_sample)(const char* name, uint32_t* hash_cache);
-    void (*end_profile_sample)();
+    void (*end_profile_sample)(void);
 
     // debug version of calls (see macros below)
     void (*begin_default_pass_d)(const sg_pass_action* pass_action, int width, int height, const char* file, uint32_t line);
@@ -1136,8 +1136,8 @@ typedef struct rizz_api_gfx {
 
     const sx_alloc* (*alloc)(void);
     rizz_gfx_backend (*backend)(void);
-    bool (*GL_family)();
-    bool (*GLES_family)();
+    bool (*GL_family)(void);
+    bool (*GLES_family)(void);
     void (*reset_state_cache)(void);
 
     // multi-threading
@@ -1254,9 +1254,9 @@ typedef struct rizz_api_gfx {
     const rizz_shader* (*shader_get)(rizz_asset shader_asset);
 
     // texture
-    sg_image (*texture_white)();
-    sg_image (*texture_black)();
-    sg_image (*texture_checker)();
+    sg_image (*texture_white)(void);
+    sg_image (*texture_black)(void);
+    sg_image (*texture_checker)(void);
     rizz_texture (*texture_create_checker)(int checker_size, int size, const sx_color colors[2]);
     const rizz_texture* (*texture_get)(rizz_asset texture_asset);
     void (*texture_set_default_quality)(sg_filter min_filter, sg_filter mag_filter, int aniso, int first_mip);
@@ -1264,7 +1264,7 @@ typedef struct rizz_api_gfx {
     uint32_t (*texture_surface_pitch)(sg_pixel_format fmt, uint32_t width, uint32_t height, uint32_t row_align);
 
     // info
-    const rizz_gfx_trace_info* (*trace_info)();
+    const rizz_gfx_trace_info* (*trace_info)(void);
 } rizz_api_gfx;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

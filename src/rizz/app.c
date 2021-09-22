@@ -74,7 +74,6 @@ static rizz__app g_app;
 // default config fields
 static char default_name[64];
 static char default_title[64];
-static char default_html5_canvas[64];
 static char default_plugin_path[256];
 static char default_cache_path[256];
 static char default_plugins[32][RIZZ_CONFIG_MAX_PLUGINS];

@@ -107,6 +107,5 @@ elseif (RPI)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     target_link_libraries(rizz PRIVATE flextGL X11 GL)
 elseif (WIN32)
-    # TODO: eventually remove DbgHelp, that one should be optional and loaded from system paths
     target_link_libraries(rizz PRIVATE dxgi d3d11 Version)  
 endif()

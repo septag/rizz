@@ -889,7 +889,7 @@ SOKOL_API_DECL bool sapp_keyboard_shown(void);
 /* show or hide the mouse cursor */
 SOKOL_API_DECL void sapp_show_mouse(bool visible);
 /* show or hide the mouse cursor */
-SOKOL_API_DECL bool sapp_mouse_shown();
+SOKOL_API_DECL bool sapp_mouse_shown(void);
 /* return the userdata pointer optionally provided in sapp_desc */
 SOKOL_API_DECL void* sapp_userdata(void);
 /* return a copy of the sapp_desc structure */
@@ -1829,7 +1829,7 @@ _SOKOL_PRIVATE void _sapp_macos_app_event(sapp_event_type type) {
 }
 - (void)flagsChanged:(NSEvent*)event {
     const uint32_t old_f = _sapp_macos_flags_changed_store;
-    const uint32_t new_f = event.modifierFlags;
+    const uint32_t new_f = (uint32_t)event.modifierFlags;
     _sapp_macos_flags_changed_store = new_f;
     sapp_keycode key_code = SAPP_KEYCODE_INVALID;
     bool down = false;

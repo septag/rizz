@@ -40,13 +40,13 @@ SX_API sx_thread* sx_thread_create(const sx_alloc* alloc, sx_thread_cb* callback
 SX_API int sx_thread_destroy(sx_thread* thrd, const sx_alloc* alloc);
 SX_API bool sx_thread_running(sx_thread* thrd);
 SX_API void sx_thread_setname(sx_thread* thrd, const char* name);
-SX_API void sx_thread_yield();
-SX_API uint32_t sx_thread_tid();
+SX_API void sx_thread_yield(void);
+SX_API uint32_t sx_thread_tid(void);
 
 // Tls data
 typedef void* sx_tls;
 
-SX_API sx_tls sx_tls_create();
+SX_API sx_tls sx_tls_create(void);
 SX_API void sx_tls_destroy(sx_tls tls);
 SX_API void sx_tls_set(sx_tls tls, void* data);
 SX_API void* sx_tls_get(sx_tls tls);

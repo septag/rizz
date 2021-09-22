@@ -962,17 +962,17 @@ static void rizz__texture_release()
         the__gfx.destroy_image(g_gfx.tex_mgr.checker_tex.img);
 }
 
-static sg_image rizz__texture_white()
+static sg_image rizz__texture_white(void)
 {
     return g_gfx.tex_mgr.white_tex.img;
 }
 
-static sg_image rizz__texture_black()
+static sg_image rizz__texture_black(void)
 {
     return g_gfx.tex_mgr.black_tex.img;
 }
 
-static sg_image rizz__texture_checker()
+static sg_image rizz__texture_checker(void)
 {
     return g_gfx.tex_mgr.checker_tex.img;
 }
@@ -1605,6 +1605,7 @@ static sg_shader_desc* rizz__shader_setup_desc_cs(sg_shader_desc* desc,
                                                   int cs_size, uint32_t* name_hdl)
 {
     sx_memset(desc, 0x0, sizeof(sg_shader_desc));
+
     const int num_stages = 1;
     rizz__shader_setup_desc_stage stages[] = {
         { .refl = cs_refl, .code = cs, .code_size = cs_size }
@@ -2398,7 +2399,7 @@ bool rizz__gfx_init(const sg_desc* desc, bool enable_profile)
         } else {
             rizz__log_warn("D3D11: feature version 11_2 is not supported");
         }
-    #endif
+    #endif // SOKOL_D3D11
 
     {   // config
         const rizz_config* conf = the__app.config();
@@ -2479,14 +2480,14 @@ static rizz_gfx_backend rizz__gfx_backend(void)
     return (rizz_gfx_backend)sg_query_backend();
 }
 
-static bool rizz__gfx_GL_family()
+static bool rizz__gfx_GL_family(void)
 {
     sg_backend backend = sg_query_backend();
     return backend == SG_BACKEND_GLCORE33 || backend == SG_BACKEND_GLES2 ||
            backend == SG_BACKEND_GLES3;
 }
 
-static bool rizz__gfx_GLES_family()
+static bool rizz__gfx_GLES_family(void)
 {
     sg_backend backend = sg_query_backend();
     return backend == SG_BACKEND_GLES2 || backend == SG_BACKEND_GLES3;
@@ -2703,7 +2704,7 @@ static bool rizz__cb_begin_stage(rizz_gfx_stage stage)
     return true;
 }
 
-static void rizz__cb_end_stage()
+static void rizz__cb_end_stage(void)
 {
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
     sx_assertf(cb->running_stage.id, "must call begin_stage before this call");
@@ -3810,7 +3811,7 @@ static void rizz__begin_profile_sample(const char* name, uint32_t* hash_cache)
     rmt__begin_gpu_sample(name, hash_cache);
 }
 
-static void rizz__end_profile_sample()
+static void rizz__end_profile_sample(void)
 {
     rmt__end_gpu_sample();
 }
@@ -3822,7 +3823,7 @@ static void rizz__internal_state(void** make_cmdbuff, int* make_cmdbuff_sz)
     g_gfx.record_make_commands = false;
 }
 
-static const rizz_gfx_trace_info* rizz__trace_info()
+static const rizz_gfx_trace_info* rizz__trace_info(void)
 {
     return &g_gfx.trace.t;
 }

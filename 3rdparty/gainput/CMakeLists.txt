@@ -15,6 +15,8 @@ endif()
 
 if (CLANG_CL)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-private-field")
+elseif (APPLE)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-import-preprocessor-directive-pedantic")
 endif()
 
 rizz__remove_compile_options(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}" "-fobjc-arc")

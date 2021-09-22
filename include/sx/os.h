@@ -73,4 +73,4 @@ SX_API char* sx_os_path_exepath(char* dst, int size);
 
 SX_API sx_file_info sx_os_stat(const char* filepath);
 
-SX_API int sx_os_numcores();
+SX_API int sx_os_numcores(void);

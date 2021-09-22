@@ -151,7 +151,7 @@ void* rizz__plugin_get_api_byname(const char* name, uint32_t version)
     return NULL;
 }
 
-void rizz__plugin_release()
+void rizz__plugin_release(void)
 {
     if (!g_plugin.alloc)
         return;
@@ -466,7 +466,7 @@ bool rizz__plugin_load_abs(const char* filepath, bool entry, const char** edeps,
     return true;
 }
 
-bool rizz__plugin_init_plugins()
+bool rizz__plugin_init_plugins(void)
 {
     if (!rizz__plugin_order_dependencies())
         return false;

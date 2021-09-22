@@ -32,12 +32,12 @@ void sx__mem_run_fail_callback(const char* sourcefile, uint32_t line)
     }
 }
 
-const sx_alloc* sx_alloc_malloc()
+const sx_alloc* sx_alloc_malloc(void)
 {
     return &g_alloc_malloc;
 }
 
-const sx_alloc* sx_alloc_malloc_leak_detect()
+const sx_alloc* sx_alloc_malloc_leak_detect(void)
 {
     return &g_alloc_malloc_leakd;
 }

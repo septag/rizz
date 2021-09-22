@@ -12,9 +12,9 @@ typedef enum { GIZMO_MODE_LOCAL, GIZMO_MODE_WORLD } imgui_gizmo_mode;
 
 // Gizmo
 typedef struct rizz_api_imguizmo {
-    bool (*hover)();
-    bool (*is_using)();
-    void (*set_current_window)();
+    bool (*hover)(void);
+    bool (*is_using)(void);
+    void (*set_current_window)(void);
     void (*set_rect)(const sx_rect rc);
     void (*set_ortho)(bool ortho);
     void (*enable)(bool enable);

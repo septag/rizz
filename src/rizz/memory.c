@@ -803,8 +803,10 @@ static mem_item_collapsed* mem_imgui_context_get_collapsed_items(mem_trace_conte
                     index++;
                 }
             }
-
-            sw_callstack_entry callstack_entries[SW_MAX_FRAMES];
+            
+            #if SX_PLATFORM_WINDOWS
+                sw_callstack_entry callstack_entries[SW_MAX_FRAMES];
+            #endif
             qsort(items, sx_array_count(items), sizeof(mem_item_index), mem_imgui_compare_callstack_hash);
             uint32_t hash = 0;
             for (int i = 0, c = sx_array_count(items); i < c; i++) {
@@ -948,11 +950,11 @@ static void mem_imgui_context_items(rizz_api_imgui* imgui, rizz_api_imgui_extra*
 
 static void mem_imgui_open_vscode_file_loc(const char* filename, uint32_t line)
 {
-    char vscode_path[RIZZ_MAX_PATH];
     char goto_str[RIZZ_MAX_PATH];
     sx_snprintf(goto_str, sizeof(goto_str), "\"%s:%u\"", filename, line);
 
     #if SX_PLATFORM_WINDOWS
+        char vscode_path[RIZZ_MAX_PATH];
         char local_dir[RIZZ_MAX_PATH];
         GetEnvironmentVariableA("LocalAppData", local_dir, sizeof(local_dir));
         sx_strcpy(vscode_path, sizeof(vscode_path), "\"");
@@ -1330,3 +1332,4 @@ bool rizz__mem_end_capture(void)
 
     return true;
 }
+

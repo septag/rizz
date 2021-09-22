@@ -63,7 +63,7 @@ CGEventRef MouseTap(CGEventTapProxy proxy, CGEventType type, CGEventRef event, v
 		{
 			int buttonNum = CGEventGetIntegerValueField(event, kCGMouseEventButtonNumber);
 			gainput::DeviceButtonId buttonId = gainput::MouseButton1;
-			if (buttonNum > kCGMouseButtonCenter)
+			if (buttonNum > (int)kCGMouseButtonCenter)
 			{
 				buttonId = gainput::MouseButton3 + buttonNum - kCGMouseButtonCenter;
 			}

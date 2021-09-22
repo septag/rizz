@@ -1241,8 +1241,7 @@ static bool imgui__init(void)
 
     uint8_t* font_pixels;
     int font_width, font_height, bpp;
-    the__imgui.ImFontAtlas_GetTexDataAsRGBA32(conf->Fonts, &font_pixels, &font_width, &font_height,
-                                              &bpp);
+    the__imgui.ImFontAtlas_GetTexDataAsRGBA32(conf->Fonts, &font_pixels, &font_width, &font_height, &bpp);
     g_imgui.font_tex = the_gfx->make_image(
         &(sg_image_desc){ .width = font_width,
                           .height = font_height,

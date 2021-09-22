@@ -654,7 +654,7 @@ RMT_API void _rmt_EndMetalSample(void);
 #if RMT_USE_METAL
 #ifdef __OBJC__
 RMT_API void _rmt_BindMetal(id command_buffer);
-RMT_API void _rmt_UnbindMetal();
+RMT_API void _rmt_UnbindMetal(void);
 #endif
 #endif
 

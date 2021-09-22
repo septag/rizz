@@ -733,17 +733,17 @@ void rizz__set_cache_dir(const char* path)
     sx_unused(path);
 }
 
-const char* rizz__cache_dir()
+const char* rizz__cache_dir(void)
 {
     return NULL;
 }
 
-const char* rizz__data_dir()
+const char* rizz__data_dir(void)
 {
     return NULL;
 }
 
-sx_job_context* rizz__job_ctx()
+sx_job_context* rizz__job_ctx(void)
 {
     return g_core.jobs;
 }
@@ -1389,7 +1389,7 @@ static void rizz__core_dump_leak(const char* formatted_msg,
 #endif
 
 
-void rizz__core_release()
+void rizz__core_release(void)
 {
     if (!g_core.heap_alloc)
         return;
@@ -1481,7 +1481,7 @@ void rizz__core_release()
     sx_memset(&g_core, 0x0, sizeof(g_core));
 }
 
-void rizz__core_frame()
+void rizz__core_frame(void)
 {
     if (g_core.paused) {
         return;
@@ -1756,12 +1756,12 @@ static bool rizz__job_test_and_del(sx_job_t job)
     return sx_job_test_and_del(g_core.jobs, job);
 }
 
-static int rizz__job_num_threads()
+static int rizz__job_num_threads(void)
 {
     return g_core.num_threads;
 }
 
-static int rizz__job_thread_index()
+static int rizz__job_thread_index(void)
 {
     sx_assert(g_core.jobs);
     return sx_job_thread_index(g_core.jobs);
@@ -1775,7 +1775,7 @@ static void rizz__begin_profile_sample(const char* name, rizz_profile_flags flag
     rmt__begin_cpu_sample(name, flags, hash_cache);
 }
 
-static void rizz__end_profile_sample()
+static void rizz__end_profile_sample(void)
 {
     rmt__end_cpu_sample();
 }

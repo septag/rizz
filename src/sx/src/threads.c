@@ -144,7 +144,7 @@ bool sx_semaphore_wait(sx_sem* sem, int msecs)
 #if SX_PLATFORM_POSIX
 
 // Tls
-sx_tls sx_tls_create()
+sx_tls sx_tls_create(void)
 {
     pthread_key_t key;
     int r = pthread_key_create(&key, NULL);
@@ -283,7 +283,7 @@ void sx_thread_setname(sx_thread* thrd, const char* name)
 #    endif
 }
 
-void sx_thread_yield()
+void sx_thread_yield(void)
 {
     sched_yield();
 }
@@ -706,7 +706,7 @@ void sx_thread_setname(sx_thread* thrd, const char* name)
 #    error "Not implemented for this platform"
 #endif
 
-uint32_t sx_thread_tid()
+uint32_t sx_thread_tid(void)
 {
 #if SX_PLATFORM_WINDOWS
     return GetCurrentThreadId();

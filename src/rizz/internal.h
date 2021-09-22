@@ -21,15 +21,15 @@ extern "C" {
 #endif
 
 bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path);
-void rizz__plugin_release();
+void rizz__plugin_release(void);
 void rizz__plugin_broadcast_event(const rizz_app_event* e);
 void rizz__plugin_update(float dt);
 bool rizz__plugin_load_abs(const char* filepath, bool entry, const char** deps, int num_deps);
-bool rizz__plugin_init_plugins();
+bool rizz__plugin_init_plugins(void);
 
 bool rizz__core_init(const rizz_config* conf);
-void rizz__core_release();
-void rizz__core_frame();
+void rizz__core_release(void);
+void rizz__core_frame(void);
 void rizz__core_fix_callback_ptrs(const void** ptrs, const void** new_ptrs, int num_ptrs);
 
 typedef struct mem_trace_context mem_trace_context;
