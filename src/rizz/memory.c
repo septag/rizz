@@ -15,6 +15,7 @@
 #include <time.h>
 
 static void mem_callstack_error_msg(const char* msg, ...);
+char* rizz__demangle(const char* symbol);   // demangle.cpp
 
 #if SX_PLATFORM_WINDOWS
 #    define SW_IMPL
@@ -34,6 +35,11 @@ static void mem_callstack_error_msg(const char* msg, ...);
 #define mem_trace_context_mutex_enter(opts, mtx) if (opts&RIZZ_MEMOPTION_MULTITHREAD) sx_mutex_enter(&mtx)
 #define mem_trace_context_mutex_exit(opts, mtx)  if (opts&RIZZ_MEMOPTION_MULTITHREAD) sx_mutex_exit(&mtx)
 
+#if SX_PLATFORM_OSX
+#   include <execinfo.h>
+#   include <dlfcn.h>
+#   include <cxxabi.h>
+#endif
 
 // feature-list:
 // callstack
@@ -318,7 +324,17 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
                     if (func)  sx_strcpy(item.source_func, sizeof(item.source_func), func);
                     item.source_line = line;
                     item.callstack_hash = sx_hash_xxh32(item.callstack, sizeof(item.callstack), 0);
-                } 
+                }
+            #elif SX_PLATFORM_OSX
+                item.num_callstack_items = backtrace(item.callstack, SW_MAX_FRAMES);
+                if (item.num_callstack_items == 0) {
+                    if (file)   sx_strcpy(item.source_file, sizeof(item.source_file), file);
+                    if (func)   sx_strcpy(item.source_func, sizeof(item.source_func), file);
+                    item.source_line = line;
+                    item.callstack_hash = sx_hash_xxh32(item.callstack, item.num_callstack_items*sizeof(void*), 0);
+                } else {
+                    item.callstack_hash = sx_hash_xxh32(item.callstack, sizeof(item.callstack), 0);
+                }
             #else
                 if (file)  sx_strcpy(item.source_file, sizeof(item.source_file), file);
                 if (func)  sx_strcpy(item.source_func, sizeof(item.source_func), func);
@@ -786,7 +802,7 @@ static mem_item_collapsed* mem_imgui_context_get_collapsed_items(mem_trace_conte
 {
     mem_item_collapsed* SX_ARRAY collapsed_items = ctx->cached;
     
-    // re-populate the cache if it's 
+    // re-populate the cache if it's invalidated
     if (sx_array_count(ctx->cached) == 0 && ctx->items_list) {
         rizz__with_temp_alloc(tmp_alloc) {
             mem_item_index* SX_ARRAY items = NULL;
@@ -829,6 +845,17 @@ static mem_item_collapsed* mem_imgui_context_get_collapsed_items(mem_trace_conte
                                                             sx_min((uint16_t)2, item->num_callstack_items));
                             sx_strcpy(citem.entry_symbol, sizeof(citem.entry_symbol), 
                                     callstack_entries[n > 1 ? 1 : 0].und_name);
+                        #elif SX_PLATFORM_OSX
+                            Dl_info syminfo;
+                            dladdr(item->callstack[item->num_callstack_items > 3 ? 3 : 0], &syminfo);
+                            char* demangled = rizz__demangle(syminfo.dli_sname);
+                            if (demangled) {
+                                char* paranthesis = (char*)sx_strchar(demangled, '(');
+                                if (paranthesis)
+                                    *paranthesis = '\0';
+                            }
+                            sx_strcpy(citem.entry_symbol, sizeof(citem.entry_symbol), demangled ? demangled : syminfo.dli_sname);
+                            free(demangled);
                         #else
                             sx_unused(item->num_callstack_items);
                         #endif
@@ -944,8 +971,8 @@ static void mem_imgui_context_items(rizz_api_imgui* imgui, rizz_api_imgui_extra*
         } else {
             mem_imgui_context_show_all_items(imgui, ctx);
         }
+        imgui->EndTable();
     }
-    imgui->EndTable();
 }
 
 static void mem_imgui_open_vscode_file_loc(const char* filename, uint32_t line)
@@ -999,7 +1026,7 @@ static void mem_imgui_item(rizz_api_imgui* imgui, rizz_api_imgui_extra* imguix, 
             sw_callstack_entry entries[SW_MAX_FRAMES];
             uint16_t resolved = sw_resolve_callstack(g_mem.sw, item->callstack, entries, item->num_callstack_items);
             for (uint16_t i = 0; i < resolved; i++) {
-                imgui->Bullet(); 
+                imgui->Bullet();
                 sx_snprintf(text, sizeof(text), "%s(%u): %s", entries[i].line_filename, entries[i].line, entries[i].name);
                 if (imgui->Selectable_Bool(text, i == g_mem_imgui.selected_stack_item, ImGuiSelectableFlags_SpanAvailWidth, SX_VEC2_ZERO)) {
                     g_mem_imgui.selected_stack_item = i;
@@ -1008,6 +1035,27 @@ static void mem_imgui_item(rizz_api_imgui* imgui, rizz_api_imgui_extra* imguix, 
                 if (imgui->IsItemHovered(0) && imgui->IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                     mem_imgui_open_vscode_file_loc(entries[i].line_filename, entries[i].line);
                 }
+            }
+        #elif SX_PLATFORM_OSX
+            Dl_info syminfo;
+            char filename[32];
+            for (uint16_t i = 3; i < item->num_callstack_items; i++) {
+                dladdr(item->callstack[i], &syminfo);
+                char* demangled = rizz__demangle(syminfo.dli_sname);
+                if (demangled) {
+                    char* paranthesis = (char*)sx_strchar(demangled, '(');
+                    if (paranthesis)
+                        *paranthesis = '\0';
+                }
+
+                imgui->Bullet();
+                sx_os_path_basename(filename, sizeof(filename), syminfo.dli_fname);
+                sx_snprintf(text, sizeof(text), "%s: %s", demangled ? demangled : syminfo.dli_sname, filename);
+                if (imgui->Selectable_Bool(text, i == g_mem_imgui.selected_stack_item, ImGuiSelectableFlags_SpanAvailWidth, SX_VEC2_ZERO)) {
+                    g_mem_imgui.selected_stack_item = i;
+                }
+                
+                free(demangled);
             }
         #endif
     } else {
@@ -1084,8 +1132,8 @@ void rizz__mem_show_debugger(bool* popen)
                         imgui->Text("No item selected");
                     }
 
+                    imgui->EndTable();
                 }
-                imgui->EndTable();
             }
             imgui->EndChild();
         }

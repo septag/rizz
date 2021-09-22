@@ -1753,12 +1753,12 @@ void ImGuizmo_SetOrthographic(bool isOrthographic)
    gContext.mIsOrthographic = isOrthographic;
 }
 
-void ImGuizmo_SetDrawlist()
+void ImGuizmo_SetDrawlist(void)
 {
    gContext.mDrawList = ImGui::GetWindowDrawList();
 }
 
-void ImGuizmo_BeginFrame()
+void ImGuizmo_BeginFrame(void)
 {
    ImGuiIO& io = ImGui::GetIO();
 
@@ -1777,12 +1777,12 @@ void ImGuizmo_BeginFrame()
    ImGui::PopStyleColor(2);
 }
 
-bool ImGuizmo_IsUsing()
+bool ImGuizmo_IsUsing(void)
 {
    return gContext.mbUsing||gContext.mbUsingBounds;
 }
 
-bool ImGuizmo_IsOver()
+bool ImGuizmo_IsOver(void)
 {
    return (GetMoveType(NULL) != NONE) || GetRotateType() != NONE || GetScaleType() != NONE || ImGuizmo_IsUsing();
 }

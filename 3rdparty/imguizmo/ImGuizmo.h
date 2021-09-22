@@ -111,16 +111,16 @@ void EditTransform(const Camera& camera, matrix_t& matrix)
 #endif
 
 // call inside your own window and before Manipulate() in order to draw gizmo to that window.
-IMGUIZMO_API void ImGuizmo_SetDrawlist();
+IMGUIZMO_API void ImGuizmo_SetDrawlist(void);
 
 // call BeginFrame right after ImGui_XXXX_NewFrame();
-IMGUIZMO_API void ImGuizmo_BeginFrame();
+IMGUIZMO_API void ImGuizmo_BeginFrame(void);
 
 // return true if mouse cursor is over any gizmo control (axis, plan or screen component)
-IMGUIZMO_API bool ImGuizmo_IsOver();
+IMGUIZMO_API bool ImGuizmo_IsOver(void);
 
 // return true if mouse IsOver or if the gizmo is in moving state
-IMGUIZMO_API bool ImGuizmo_IsUsing();
+IMGUIZMO_API bool ImGuizmo_IsUsing(void);
 
 // enable/disable the gizmo. Stay in the state until next call to Enable.
 // gizmo is rendered with gray half transparent color when disabled

@@ -1492,7 +1492,7 @@ static void imgui__draw(ImDrawData* draw_data)
                     (cmd->ClipRect.w - fb_pos.y) * fb_scale.y
                 }};
 
-                if (clip_rect.x < display_size.x && clip_rect.y < display_size.y && 
+                if (clip_rect.x < display_size.x*fb_scale.x && clip_rect.y < display_size.y*fb_scale.y &&
                     clip_rect.z >= 0.0f && clip_rect.w >= 0.0f) {
                     const int scissor_x = (int)(clip_rect.x);
                     const int scissor_y = (int)(clip_rect.y);

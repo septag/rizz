@@ -14,7 +14,8 @@ set(SOURCE_FILES internal.h
                  android.c
                  json.c 
                  windows.cpp 
-                 memory.c)
+                 memory.c
+                 demangle.cpp)
 
 set(INCLUDE_FILES ../../include/rizz/config.h
                   ../../include/rizz/sg-types.h
