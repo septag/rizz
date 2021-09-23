@@ -88,7 +88,8 @@
         "vcgencmd.h": "c",
         "vc_dispmanx.h": "c",
         "2dtools-internal.h": "c",
-        "ostream": "c"
+        "ostream": "c",
+        "dlfcn.h": "c"
     },
     "files.exclude": {
         "**/.git": true,

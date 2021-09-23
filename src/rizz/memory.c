@@ -35,10 +35,13 @@ char* rizz__demangle(const char* symbol);   // demangle.cpp
 #define mem_trace_context_mutex_enter(opts, mtx) if (opts&RIZZ_MEMOPTION_MULTITHREAD) sx_mutex_enter(&mtx)
 #define mem_trace_context_mutex_exit(opts, mtx)  if (opts&RIZZ_MEMOPTION_MULTITHREAD) sx_mutex_exit(&mtx)
 
-#if SX_PLATFORM_OSX
+#if SX_PLATFORM_OSX || SX_PLATFORM_LINUX
+#   if SX_PLATFORM_LINUX
+#   define __USE_GNU
+#   endif 
+
 #   include <execinfo.h>
 #   include <dlfcn.h>
-#   include <cxxabi.h>
 #endif
 
 // feature-list:
@@ -325,7 +328,7 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
                     item.source_line = line;
                     item.callstack_hash = sx_hash_xxh32(item.callstack, sizeof(item.callstack), 0);
                 }
-            #elif SX_PLATFORM_OSX
+            #elif SX_PLATFORM_OSX || SX_PLATFORM_LINUX
                 item.num_callstack_items = backtrace(item.callstack, SW_MAX_FRAMES);
                 if (item.num_callstack_items == 0) {
                     if (file)   sx_strcpy(item.source_file, sizeof(item.source_file), file);
@@ -845,9 +848,12 @@ static mem_item_collapsed* mem_imgui_context_get_collapsed_items(mem_trace_conte
                                                             sx_min((uint16_t)2, item->num_callstack_items));
                             sx_strcpy(citem.entry_symbol, sizeof(citem.entry_symbol), 
                                     callstack_entries[n > 1 ? 1 : 0].und_name);
-                        #elif SX_PLATFORM_OSX
+                        #elif SX_PLATFORM_OSX || SX_PLATFORM_LINUX
                             Dl_info syminfo;
-                            dladdr(item->callstack[item->num_callstack_items > 3 ? 3 : 0], &syminfo);
+                            int r = dladdr(item->callstack[item->num_callstack_items > 3 ? 3 : 0], &syminfo);
+                            if (syminfo.dli_sname == NULL)
+                                syminfo.dli_sname = "NA";
+
                             char* demangled = rizz__demangle(syminfo.dli_sname);
                             if (demangled) {
                                 char* paranthesis = (char*)sx_strchar(demangled, '(');
@@ -1036,11 +1042,13 @@ static void mem_imgui_item(rizz_api_imgui* imgui, rizz_api_imgui_extra* imguix, 
                     mem_imgui_open_vscode_file_loc(entries[i].line_filename, entries[i].line);
                 }
             }
-        #elif SX_PLATFORM_OSX
+        #elif SX_PLATFORM_OSX || SX_PLATFORM_LINUX
             Dl_info syminfo;
             char filename[32];
             for (uint16_t i = 3; i < item->num_callstack_items; i++) {
                 dladdr(item->callstack[i], &syminfo);
+                if (syminfo.dli_sname == NULL)
+                    syminfo.dli_sname = "NA";
                 char* demangled = rizz__demangle(syminfo.dli_sname);
                 if (demangled) {
                     char* paranthesis = (char*)sx_strchar(demangled, '(');

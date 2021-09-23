@@ -1,6 +1,6 @@
 #include "sx/sx.h"
 
-#if SX_PLATFORM_OSX
+#if SX_PLATFORM_OSX || SX_PLATFORM_LINUX
 #include <cxxabi.h>
 
 extern "C" char* rizz__demangle(const char* symbol)
