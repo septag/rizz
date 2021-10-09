@@ -36,7 +36,7 @@ SX_PRAGMA_DIAGNOSTIC_POP()
 #        include <cpu-features.h>    // android_getCpuCount
 #        include <malloc.h>          // mallinfo
 #        include <sys/sendfile.h>    // sendfile
-#    elif SX_PLATFORM_LINUX || SX_PLATFORM_RPI || SX_PLATFORM_STEAMLINK
+#    elif SX_PLATFORM_LINUX || SX_PLATFORM_RPI
 #        include <linux/limits.h>
 #        include <sys/sendfile.h>    // sendfile
 #        include <sys/syscall.h>
@@ -172,11 +172,13 @@ void* sx_os_dlopen(const char* filepath)
 void sx_os_dlclose(void* handle)
 {
 #if SX_PLATFORM_WINDOWS
-    FreeLibrary((HMODULE)handle);
+    if (handle) 
+        FreeLibrary((HMODULE)handle);
 #elif SX_PLATFORM_EMSCRIPTEN || SX_PLATFORM_PS4 || SX_PLATFORM_XBOXONE
     sx_unused(handle);
 #else
-    dlclose(handle);
+    if (handle)
+        dlclose(handle);
 #endif
 }
 
@@ -365,6 +367,16 @@ char* sx_os_path_exepath(char* dst, int size)
 #endif
 }
 
+uint32_t sx_os_getpid(void)
+{
+#if SX_PLATFORM_WINDOWS
+    return GetCurrentProcessId();
+#elif SX_PLATFORM_LINUX || SX_PLATFORM_RPI
+    return (uint32_t)getpid();
+#else
+    return 0;
+#endif
+}
 
 sx_file_info sx_os_stat(const char* filepath)
 {

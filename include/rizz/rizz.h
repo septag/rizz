@@ -28,13 +28,12 @@
 #endif
 
 // Global Ids
-// clang-format off
 typedef union  { uintptr_t id;  void* ptr; }    rizz_asset_obj;
 typedef struct { uint32_t id; } rizz_asset;
 typedef struct { uint32_t id; } rizz_asset_group;
 typedef struct { uint32_t id; } rizz_http;
 typedef struct { uint32_t id; } rizz_gfx_stage;
-// clang-format on
+typedef struct { uint32_t id; } rizz_profile_capture;
 
 // Id conversion macros
 #define rizz_to_id(_index) ((uint32_t)(_index) + 1)
@@ -320,7 +319,7 @@ typedef struct rizz_api_vfs {
 
     const sx_alloc* (*alloc)(void);
 
-    bool (*mount)(const char* path, const char* alias);
+    bool (*mount)(const char* path, const char* alias, bool watch);
     void (*mount_mobile_assets)(const char* alias);
 
     void (*read_async)(const char* path, rizz_vfs_flags flags, const sx_alloc* alloc,
@@ -546,7 +545,8 @@ enum rizz_core_flags_ {
     RIZZ_CORE_FLAG_PROFILE_GPU = 0x04,          // enable GPU profiling
     RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS = 0x08,   // write `unused-assets.json` on exit
     RIZZ_CORE_FLAG_DETECT_LEAKS = 0x10,         // Detect memory leaks (default on in _DEBUG builds)
-    RIZZ_CORE_FLAG_DEBUG_TEMP_ALLOCATOR = 0x20  // Replace temp allocator backends with heap, so we can better trace out-of-bounds and corruption
+    RIZZ_CORE_FLAG_DEBUG_TEMP_ALLOCATOR = 0x20, // Replace temp allocator backends with heap, so we can better trace out-of-bounds and corruption
+    RIZZ_CORE_FLAG_HOT_RELOAD_PLUGINS = 0x40    // Enables hot reloading for all modules and plugins including the game itself
 };
 typedef uint32_t rizz_core_flags;
 
@@ -751,6 +751,12 @@ typedef struct rizz_api_core {
     void (*begin_profile_sample)(const char* name, rizz_profile_flags flags, uint32_t* hash_cache);
     void (*end_profile_sample)(void);
 
+    rizz_profile_capture (*profile_capture_create)(const char* filename);
+    void (*profile_capture_end)(rizz_profile_capture tp);
+    void (*profile_capture_sample_begin)(rizz_profile_capture tp, const char* name, const char* file, uint32_t line);
+    void (*profile_capture_sample_end)(rizz_profile_capture tp);
+    rizz_profile_capture (*profile_capture_startup)(void);
+
     void (*register_console_command)(const char* cmd, rizz_core_cmd_cb* callback, const char* shortcut, void* user);
     void (*execute_console_command)(const char* cmd_and_args);
 
@@ -771,6 +777,7 @@ typedef struct rizz_api_core {
 #define rizz_log_verbose_channels(_channels, _text, ...)  (RIZZ_CORE_API_VARNAME)->print_verbose((_channels), __FILE__, __LINE__, _text, ##__VA_ARGS__)
 #define rizz_log_error_channels(_channels, _text, ...)    (RIZZ_CORE_API_VARNAME)->print_error((_channels), __FILE__, __LINE__, _text, ##__VA_ARGS__)
 #define rizz_log_warn_channels(_channels, _text, ...)     (RIZZ_CORE_API_VARNAME)->print_warning((_channels), __FILE__, __LINE__, _text, ##__VA_ARGS__)
+
 // coroutines
 #ifdef __cplusplus
 #    define rizz_coro_declare(_name)     \
@@ -799,6 +806,12 @@ typedef struct rizz_api_core {
         (void)rmt_sample_raii_##_name;   \
         (RIZZ_CORE_API_VARNAME)->end_profile_sample();
 
+// using these macros are preferred over profile_capture_sample_begin() and profile_capture_sample_end()
+// becuase they shorten the syntax, and pass __FILE__, __LINE__ by defult
+#define rizz_profile_capture_begin(_cid, _name) \
+        (RIZZ_CORE_API_VARNAME)->profile_capture_sample_begin(_cid, sx_stringize(_name), __FILE__, __LINE__)
+#define rizz_profile_capture_end(_cid, _name) (RIZZ_CORE_API_VARNAME)->profile_capture_sample_end(_cid)            
+
 // usage pattern:
 // rizz_profile(name) {
 //  ...
@@ -806,6 +819,14 @@ typedef struct rizz_api_core {
 #define rizz_profile(_name) static uint32_t sx_concat(rmt_sample_hash_, _name) = 0; \
         sx_defer((RIZZ_CORE_API_VARNAME)->begin_profile_sample(sx_stringize(_name), 0, &sx_concat(rmt_sample_hash_, _name)), \
                  (RIZZ_CORE_API_VARNAME)->end_profile_sample())
+
+#define rizz_profile_capture_sample(_cid, _name) \
+            sx_defer((RIZZ_CORE_API_VARNAME)->profile_capture_sample_begin(_cid, _name, __FILE__, __LINE__), \
+                     (RIZZ_CORE_API_VARNAME)->profile_capture_sample_end(_cid))
+
+// use these to profile startup times and inits 
+#define rizz_profile_startup_begin(_name)   (RIZZ_CORE_API_VARNAME)->profile_capture_sample_begin((RIZZ_CORE_API_VARNAME)->profile_capture_startup(), _name, __FILE__, __LINE__)
+#define rizz_profile_startup_end()          (RIZZ_CORE_API_VARNAME)->profile_capture_sample_end((RIZZ_CORE_API_VARNAME)->profile_capture_startup())
 
 #define rizz_with_temp_alloc(_name) sx_with(const sx_alloc* _name = (RIZZ_CORE_API_VARNAME)->tmp_alloc_push(), \
                                             (RIZZ_CORE_API_VARNAME)->tmp_alloc_pop()) 
@@ -821,9 +842,7 @@ typedef struct rizz_api_core {
 //       appends _api_ (hlsl/glsl/gles/msl) between `_basepath` and `_filename`
 //       only use this in including header shaders. example:
 //       #include rizz_shader_path(shaders/include, myshader.h)
-#define rizz_shader_path(_basepath, _filename) \
-    _rizz_shader_path_lang(_basepath, RIZZ_GRAPHICS_SHADER_LANG, _filename)
-// clang-format on
+#define rizz_shader_path(_basepath, _filename) _rizz_shader_path_lang(_basepath, RIZZ_GRAPHICS_SHADER_LANG, _filename)
 
 typedef enum rizz_gfx_backend {
     RIZZ_GFX_BACKEND_GLCORE33,

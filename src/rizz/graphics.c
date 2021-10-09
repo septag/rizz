@@ -3862,7 +3862,7 @@ static bool rizz__imm_begin_stage(rizz_gfx_stage stage)
     return true;
 }
 
-static void rizz__imm_end_stage() 
+static void rizz__imm_end_stage(void) 
 {
     rmt__end_gpu_sample();
 

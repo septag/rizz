@@ -505,6 +505,10 @@ static void* mem_alloc_cb(void* ptr, size_t size, uint32_t align, const char* fi
     return p;
 }
 
+static const char* k_hardcoded_vspaths[] = {
+    "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\Common7\\IDE\\Extensions\\TestPlatform\\Extensions\\Cpp\\x64"
+};
+
 bool rizz__mem_init(uint32_t opts)
 {
     sx_assert(opts != RIZZ_MEMOPTION_INHERIT);
@@ -519,15 +523,28 @@ bool rizz__mem_init(uint32_t opts)
             return false;
         }
 
-        char vspath[SW_MAX_NAME_LEN];
-        if (rizz__win_get_vstudio_dir(vspath, sizeof(vspath))) {
+        char vspath[SW_MAX_NAME_LEN] = {0};
+
+        size_t num_hardcoded_paths = sizeof(k_hardcoded_vspaths) / sizeof(char*);
+        for (size_t i = 0; i < num_hardcoded_paths; i++) {
+            if (sx_os_path_isdir(k_hardcoded_vspaths[i])) {
+                sx_strcpy(vspath, sizeof(vspath), k_hardcoded_vspaths[i]);
+                break;
+            }
+        }
+        
+        // This is a long process, it uses all kinds of shenagians to find visual studio (damn you msvc!)
+        // check previous hardcoded paths that we use to find dbghelp.dll, it is better to add to those instead 
+        if (vspath[0] == 0 && rizz__win_get_vstudio_dir(vspath, sizeof(vspath))) {
             #if SX_ARCH_64BIT
                 sx_strcat(vspath, sizeof(vspath), "Common7\\IDE\\Extensions\\TestPlatform\\Extensions\\Cpp\\x64");
             #elif SX_ARCH_32BIT
                 sx_strcat(vspath, sizeof(vspath), "Common7\\IDE\\Extensions\\TestPlatform\\Extensions\\Cpp");
             #endif
-            sw_set_dbghelp_hintpath(vspath);
         }
+
+        if (vspath[0])
+            sw_set_dbghelp_hintpath(vspath);
 
         sw_set_callstack_limits(g_mem.sw, 3, SW_MAX_FRAMES);
     #endif // SX_PLATFORM_WINDOWS

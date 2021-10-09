@@ -55,6 +55,8 @@ RIZZ_STATE static rizz_api_app* the_app;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // API
+SX_PRAGMA_DIAGNOSTIC_PUSH()
+SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4113)
 rizz_api_imgui the__imgui = {
     .CreateContext = igCreateContext,
     .DestroyContext = igDestroyContext,
@@ -971,6 +973,7 @@ rizz_api_imgui the__imgui = {
     .ImGuiTextBuffer_appendfv = ImGuiTextBuffer_appendfv,
     .ImGuiTextBuffer_appendf = ImGuiTextBuffer_appendf
 };
+SX_PRAGMA_DIAGNOSTIC_POP()
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // sokol impl with dummy-backend for imgui
@@ -2066,9 +2069,12 @@ rizz_plugin_decl_main(imgui, plugin, e)
         the_gfx = (rizz_api_gfx*)the_plugin->get_api(RIZZ_API_GFX, 0);
         the_app = (rizz_api_app*)the_plugin->get_api(RIZZ_API_APP, 0);
 
+        rizz_profile_startup_begin("imgui__init");
         if (!imgui__init()) {
+            rizz_profile_startup_end();
             return -1;
         }
+        rizz_profile_startup_end();
 
         sx_assert(the_plugin);
         imgui__get_imguizmo_api(&the__imgui_extra.gizmo);
@@ -2079,18 +2085,20 @@ rizz_plugin_decl_main(imgui, plugin, e)
         int make_cmdbuff_sz;
         the_gfx->internal_state(&make_cmdbuff, &make_cmdbuff_sz);
 
+        rizz_profile_startup_begin("sg_imgui_init");
         sg_imgui_init(&g_imgui.sg_imgui, the_gfx);
 
         // submit all make commands to the imgui
         if (make_cmdbuff_sz) {
             imgui__submit_make_commands(make_cmdbuff, make_cmdbuff_sz);
         }
+        rizz_profile_startup_end();
 
-        {
-            const char* log_buff_size_str = the_app->config_meta_value("imgui", "log_buffer_size");
-            int log_buff_size = log_buff_size_str ? sx_toint(log_buff_size_str) : 64;
-            imgui__log_init(the_core, the_app, g_sg_imgui_alloc, log_buff_size*1024);
-        }
+        rizz_profile_startup_begin("imgui_log_init");
+        const char* log_buff_size_str = the_app->config_meta_value("imgui", "log_buffer_size");
+        int log_buff_size = log_buff_size_str ? sx_toint(log_buff_size_str) : 64;
+        imgui__log_init(the_core, the_app, g_sg_imgui_alloc, log_buff_size*1024);
+        rizz_profile_startup_end();
         break;
     }
 

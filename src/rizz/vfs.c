@@ -279,17 +279,18 @@ static int rizz__vfs_worker(void* user1, void* user2)
     return 0;
 }
 
-bool rizz__vfs_mount(const char* path, const char* alias)
+bool rizz__vfs_mount(const char* path, const char* alias, bool watch)
 {
     if (sx_os_path_isdir(path)) {
-        rizz__vfs_mount_point mp;
+        rizz__vfs_mount_point mp = { 0 };
         sx_os_path_normpath(mp.path, sizeof(mp.path), path);
         sx_os_path_unixpath(mp.alias, sizeof(mp.alias), alias);
         mp.alias_len = sx_strlen(mp.alias);
 
-#if RIZZ_CONFIG_HOT_LOADING
-        mp.watch_id = dmon_watch(mp.path, dmon__event_cb, DMON_WATCHFLAGS_RECURSIVE, NULL).id;
-#endif
+        #if RIZZ_CONFIG_HOT_LOADING
+            if (watch)
+                mp.watch_id = dmon_watch(mp.path, dmon__event_cb, DMON_WATCHFLAGS_RECURSIVE, NULL).id;
+        #endif
 
         // check that the mount path is not already registered
         for (int i = 0, c = sx_array_count(g_vfs.mounts); i < c; i++) {

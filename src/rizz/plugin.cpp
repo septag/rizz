@@ -57,8 +57,18 @@ struct rizz__plugin_dependency {
     char name[32];
 };
 
+struct rizz__plugin_obj {
+    void*                         dll;
+    rizz_plugin_event_handler_cb* event_handler;
+    rizz_plugin_main_cb*          main;
+};
+
 struct rizz__plugin_item {
-    cr_plugin p;
+    union {
+        cr_plugin p;
+        rizz__plugin_obj obj;
+    };
+
     rizz_plugin_info info;
     int order;
     char filepath[RIZZ_MAX_PATH];
@@ -77,6 +87,7 @@ struct rizz__plugin_mgr {
         HMODULE dbghelp;
     #endif
     bool loaded;
+    bool hot_reload;
 };
 
 static rizz__plugin_mgr g_plugin;
@@ -94,11 +105,12 @@ SX_PRAGMA_DIAGNOSTIC_IGNORED_CLANG("-Wshorten-64-to-32")
 #include "sort/sort.h"
 SX_PRAGMA_DIAGNOSTIC_POP();
 
-bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path)
+bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path, bool hot_reload)
 {
     static_assert(RIZZ_PLUGIN_CRASH_OTHER == (rizz_plugin_crash)CR_OTHER, "crash enum mismatch");
     sx_assert(alloc);
     g_plugin.alloc = alloc;
+    g_plugin.hot_reload = hot_reload;
 
     if (plugin_path && plugin_path[0]) {
         sx_strcpy(g_plugin.plugin_path, sizeof(g_plugin.plugin_path), plugin_path);
@@ -113,18 +125,20 @@ bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path)
     #endif
     }
 
-#if RIZZ_BUNDLE
-    rizz__plugin_bundle();
-#elif SX_PLATFORM_WINDOWS
-    g_plugin.dbghelp = (HMODULE)sw_load_dbghelp();
-    if (g_plugin.dbghelp) {
-        fImageNtHeader = (ImageNtHeader_t)GetProcAddress(g_plugin.dbghelp, "ImageNtHeader");
-    }
-    if (!fImageNtHeader) {
-        rizz__log_error("cannot find 'ImageNtHeader' function from dbghelp.dll");
-        return false;
-    }
-#endif
+    #ifdef RIZZ_BUNDLE
+        rizz__plugin_bundle();
+    #elif SX_PLATFORM_WINDOWS
+        if (hot_reload) {
+            g_plugin.dbghelp = (HMODULE)sw_load_dbghelp();
+            if (g_plugin.dbghelp) {
+                fImageNtHeader = (ImageNtHeader_t)GetProcAddress(g_plugin.dbghelp, "ImageNtHeader");
+            }
+            if (!fImageNtHeader) {
+                rizz__log_error("cannot find 'ImageNtHeader' function from dbghelp.dll");
+                return false;
+            }
+        }
+    #endif
 
     return true;
 }
@@ -159,19 +173,29 @@ void rizz__plugin_release(void)
     if (g_plugin.plugins) {
         // unload plugins in reverse order of loading
         // so game module will be unloaded first
-    #ifndef RIZZ_BUNDLE
+        #ifndef RIZZ_BUNDLE
         for (int i = sx_array_count(g_plugin.plugin_update_order) - 1; i >= 0; i--) {
             int index = g_plugin.plugin_update_order[i];
-            cr_plugin_close(g_plugin.plugins[index].p);
+            if (g_plugin.hot_reload) {
+                cr_plugin_close(g_plugin.plugins[index].p);
+            } else {
+                rizz__plugin_item* plugin = &g_plugin.plugins[index];
+                rizz_plugin p = {};
+                p._p = plugin->obj.dll;
+                p.api = &the__plugin;
+                plugin->obj.main(&p, RIZZ_PLUGIN_EVENT_SHUTDOWN);
+                
+                sx_os_dlclose(g_plugin.plugins[index].obj.dll);
+            }
         }
-    #else
+        #else
         for (int i = sx_array_count(g_plugin.plugin_update_order) - 1; i >= 0; i--) {
             int index = g_plugin.plugin_update_order[i];
             sx_assert(g_plugin.plugins[index].info.main_cb);
             g_plugin.plugins[index].info.main_cb((rizz_plugin*)&g_plugin.plugins[index].p,
                                                  RIZZ_PLUGIN_EVENT_SHUTDOWN);
         }
-    #endif
+        #endif
 
         for (int i = 0; i < sx_array_count(g_plugin.plugins); i++) {
             sx_free(g_plugin.alloc, g_plugin.plugins[i].deps);
@@ -183,7 +207,7 @@ void rizz__plugin_release(void)
     sx_array_free(g_plugin.alloc, g_plugin.plugin_update_order);
 
     #if SX_PLATFORM_WINDOWS && !defined(RIZZ_BUNDLE)
-        if (g_plugin.dbghelp) {
+        if (g_plugin.hot_reload && g_plugin.dbghelp) {
             FreeLibrary(g_plugin.dbghelp);
         }
     #endif
@@ -258,8 +282,7 @@ static bool rizz__plugin_order_dependencies()
     }
 
     // sort them by their order and load
-    rizz__plugin_tim_sort(g_plugin.plugin_update_order,
-                          sx_array_count(g_plugin.plugin_update_order));
+    rizz__plugin_tim_sort(g_plugin.plugin_update_order, sx_array_count(g_plugin.plugin_update_order));
 
     return true;
 }
@@ -334,11 +357,14 @@ bool rizz__plugin_init_plugins()
         rizz__plugin_item* item = &g_plugin.plugins[index];
 
         // load the plugin
+        rizz__profile_startup_begin(item->info.name);
         int r;
         if ((r = item->info.main_cb((rizz_plugin*)&item->p, RIZZ_PLUGIN_EVENT_INIT)) != 0) {
             rizz__log_error("plugin load failed: %s, returned: %d", item->info.name, r);
+            rizz__profile_startup_end();
             return false;
         }
+        rizz__profile_startup_end();
 
         item->p._p = (void*)0x1;    // set it to something that indicates plugin is loaded
 
@@ -351,7 +377,6 @@ bool rizz__plugin_init_plugins()
                            rizz_version_minor(version), rizz_version_bugfix(version));
         }
     }
-
 
     g_plugin.loaded = true;
     return true;
@@ -416,16 +441,16 @@ bool rizz__plugin_load_abs(const char* filepath, bool entry, const char** edeps,
     item.p.userdata = &the__plugin;
 
     // get info from the plugin
+    // plugins must have rizz_plugin_get_info function, but it is not mandatory for game module
     void* dll = NULL;
     if (!entry) {
         dll = sx_os_dlopen(filepath);
         if (!dll) {
-            rizz__log_error("plugin load failed: %s: %s", filepath, sx_os_dlerr());
+            rizz__log_error("plugin load failed: %s: dlerr(%s)", filepath, sx_os_dlerr());
             return false;
         }
 
-        rizz_plugin_get_info_cb* get_info =
-            (rizz_plugin_get_info_cb*)sx_os_dlsym(dll, "rizz_plugin_get_info");
+        rizz_plugin_get_info_cb* get_info = (rizz_plugin_get_info_cb*)sx_os_dlsym(dll, "rizz_plugin_get_info");
         if (!get_info) {
             rizz__log_error("plugin missing rizz_plugin_get_info symbol: %s", filepath);
             return false;
@@ -433,6 +458,7 @@ bool rizz__plugin_load_abs(const char* filepath, bool entry, const char** edeps,
 
         get_info(&item.info);
     } else {
+        dll = rizz__app_get_game_module();
         sx_strcpy(item.info.name, sizeof(item.info.name), the__app.name());
     }
 
@@ -449,19 +475,29 @@ bool rizz__plugin_load_abs(const char* filepath, bool entry, const char** edeps,
             return false;
         }
         item.num_deps = num_deps;
-        for (int i = 0; i < num_deps; i++)
+        for (int i = 0; i < num_deps; i++) {
             sx_strcpy(item.deps[i].name, sizeof(item.deps[i].name), deps[i]);
+        }
     }
 
     item.order = -1;
 
-    if (dll) {
+    if (!g_plugin.hot_reload) {
+        item.obj.dll = dll;
+        item.obj.main = (rizz_plugin_main_cb*)sx_os_dlsym(dll, "rizz_plugin_main");
+        item.obj.event_handler = (rizz_plugin_event_handler_cb*)sx_os_dlsym(dll, "rizz_plugin_event_handler");
+        if (!item.obj.main) {
+            rizz__log_error("plugin missing rizz_plugin_main function: %s", filepath);
+            sx_free(g_plugin.alloc, item.deps);
+            return false;
+        }
+    } else {
+        // handle everything on the CR side
         sx_os_dlclose(dll);
     }
 
     sx_array_push(g_plugin.alloc, g_plugin.plugins, item);
-    sx_array_push(g_plugin.alloc, g_plugin.plugin_update_order,
-                  sx_array_count(g_plugin.plugins) - 1);
+    sx_array_push(g_plugin.alloc, g_plugin.plugin_update_order, sx_array_count(g_plugin.plugins) - 1);
 
     return true;
 }
@@ -476,11 +512,28 @@ bool rizz__plugin_init_plugins(void)
         rizz__plugin_item* item = &g_plugin.plugins[index];
 
         rizz__mem_reload_modules();
-        if (!cr_plugin_load(item->p, item->filepath, rizz__plugin_reload_handler)) {
-            rizz__log_error("plugin init failed: %s", item->filepath);
-            return false;
-        }
 
+        rizz__profile_startup_begin(item->info.name);
+        if (g_plugin.hot_reload) {
+            if (!cr_plugin_load(item->p, item->filepath, rizz__plugin_reload_handler)) {
+                rizz__profile_startup_end();
+                rizz__log_error("plugin init failed: %s", item->filepath);
+                return false;
+            }
+        } else {
+            rizz_plugin p = {};
+            p._p = item->obj.dll;
+            p.api = &the__plugin;
+            int r = item->obj.main(&p, RIZZ_PLUGIN_EVENT_INIT);
+            if (r != 0) {
+                rizz__profile_startup_end();
+                rizz__log_error("plugin load failed: %s, returned: %d", item->info.name, r);
+                return false;
+            }
+        }
+        rizz__profile_startup_end();
+
+        // plugin init was a success, show some info
         if (item->info.name[0]) {
             int version = item->info.version;
             char filename[32];
@@ -512,16 +565,26 @@ void rizz__plugin_update(float dt)
             const char* name = plugin->info.name[0] ? plugin->info.name : "Game";
             the__core.begin_profile_sample(name, 0, &game_name_cache);
         }
-
-        int r = cr_plugin_update(plugin->p, check_reload);
-        if (r == -2) {
-            rizz__log_error("plugin '%s' failed to reload", g_plugin.plugins[i].info.name);
-        } else if (r < -1) {
-            if (plugin->p.failure == CR_USER) {
-                rizz__log_error("plugin '%s' failed (main ret = -1)",
-                                g_plugin.plugins[i].info.name);
-            } else {
-                rizz__log_error("plugin '%s' crashed", g_plugin.plugins[i].info.name);
+        
+        if (!g_plugin.hot_reload) {
+            rizz_plugin p = {};
+            p._p = plugin->obj.dll;
+            p.api = &the__plugin;
+            int r = plugin->obj.main(&p, RIZZ_PLUGIN_EVENT_STEP);
+            if (r < -1) {
+                rizz__log_error("something went wrong with plugin '%s' (update ret code=%d)", plugin->info.name, r);
+            }
+        } else {
+            int r = cr_plugin_update(plugin->p, check_reload);
+            if (r == -2) {
+                rizz__log_error("plugin '%s' failed to reload", g_plugin.plugins[i].info.name);
+            } else if (r < -1) {
+                if (plugin->p.failure == CR_USER) {
+                    rizz__log_error("plugin '%s' failed (main ret = -1)",
+                        g_plugin.plugins[i].info.name);
+                } else {
+                    rizz__log_error("plugin '%s' crashed", g_plugin.plugins[i].info.name);
+                }
             }
         }
 
@@ -533,8 +596,16 @@ void rizz__plugin_update(float dt)
 
 void rizz__plugin_broadcast_event(const rizz_app_event* e)
 {
-    for (int i = 0, c = sx_array_count(g_plugin.plugin_update_order); i < c; i++) {
-        cr_plugin_event(g_plugin.plugins[g_plugin.plugin_update_order[i]].p, e);
+    if (g_plugin.hot_reload) {
+        for (int i = 0, c = sx_array_count(g_plugin.plugin_update_order); i < c; i++) {
+            cr_plugin_event(g_plugin.plugins[g_plugin.plugin_update_order[i]].p, e);
+        }
+    } else {
+        for (int i = 0, c = sx_array_count(g_plugin.plugin_update_order); i < c; i++) {
+            rizz__plugin_item* item = &g_plugin.plugins[g_plugin.plugin_update_order[i]];
+            if (item->obj.event_handler)
+                item->obj.event_handler(e);
+        }
     }
 }
 #endif    // RIZZ_BUNDLE

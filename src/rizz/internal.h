@@ -16,11 +16,13 @@ RIZZ_API rizz_api_http the__http;
 RIZZ_API rizz_api_app the__app;
 RIZZ_API rizz_api_camera the__camera;
 
+RIZZ_API rizz_profile_capture the__startup_profile_ctx;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path);
+bool rizz__plugin_init(const sx_alloc* alloc, const char* plugin_path, bool hot_reload);
 void rizz__plugin_release(void);
 void rizz__plugin_broadcast_event(const rizz_app_event* e);
 void rizz__plugin_update(float dt);
@@ -42,6 +44,13 @@ void rizz__mem_show_debugger(bool*);
 void rizz__mem_reload_modules(void);
 void rizz__mem_begin_capture(const char* name);
 bool rizz__mem_end_capture(void);
+
+bool rizz__profile_init(const sx_alloc* alloc);
+void rizz__profile_release(void);
+rizz_profile_capture rizz__profile_capture_create(const char* filename);
+void rizz__profile_capture_end(rizz_profile_capture cid);
+void rizz__profile_capture_sample_begin(rizz_profile_capture cid, const char* name, const char* file, uint32_t line);
+void rizz__profile_capture_sample_end(rizz_profile_capture cid);
 
 // windows.h
 bool rizz__win_get_vstudio_dir(char* vspath, size_t vspath_size);
@@ -81,6 +90,13 @@ bool rizz__win_get_vstudio_dir(char* vspath, size_t vspath_size);
         sx_defer(the__core.begin_profile_sample(sx_stringize(_name), 0, &sx_concat(rmt_sample_hash_, _name)), \
                  the__core.end_profile_sample())
 
+#define rizz__profile_capture_sample(_id, _name) \
+            sx_defer(the__core.profile_capture_sample_begin(_id, _name, __FILE__, __LINE__), \
+            the__core.profile_capture_sample_end(_id))
+
+#define rizz__profile_startup_begin(_name)   rizz__profile_capture_sample_begin(the__startup_profile_ctx, _name, __FILE__, __LINE__)
+#define rizz__profile_startup_end()     rizz__profile_capture_sample_end(the__startup_profile_ctx)
+            
 bool rizz__vfs_init(void);
 void rizz__vfs_release(void);
 void rizz__vfs_async_update(void);
@@ -105,6 +121,7 @@ typedef struct sg_desc sg_desc;
 void rizz__app_init_gfx_desc(sg_desc* desc);
 const void* rizz__app_d3d11_device(void);
 const void* rizz__app_d3d11_device_context(void);
+void* rizz__app_get_game_module(void);
 
 void rizz__json_init(void);
 

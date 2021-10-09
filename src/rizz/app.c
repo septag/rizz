@@ -65,11 +65,14 @@ typedef struct rizz__app {
     rizz__shortcut_item* SX_ARRAY shortcuts;
     void (*crash_cb)(void*, void*);
     void* crash_user_data;
+    void* game_module_handle;   // keep game module handle, so we can pass it later to plugin loader 
     bool suspended;
     bool iconified;
 } rizz__app;
 
 static rizz__app g_app;
+
+rizz_profile_capture the__startup_profile_ctx = { 0 };
 
 // default config fields
 static char default_name[64];
@@ -407,47 +410,59 @@ static void rizz__app_init(void)
 #endif
 
     // Initialize engine components
+    rizz__profile_startup_begin("core_init");
     if (!rizz__core_init(&g_app.conf)) {
         rizz__log_error("core init failed");
+        rizz__profile_startup_end();
         rizz__app_message_box("core init failed, see log for details");
         exit(-1);
     }
+    rizz__profile_startup_end();
 
     // add game plugins
     int num_plugins = 0;
+    rizz__profile_startup_begin("plugins_load");
     for (int i = 0; i < RIZZ_CONFIG_MAX_PLUGINS; i++) {
         if (!g_app.conf.plugins[i] || !g_app.conf.plugins[i][0])
             break;
-
+        
+        rizz__profile_startup_begin(g_app.conf.plugins[i]);
         if (!the__plugin.load(g_app.conf.plugins[i])) {
             exit(-1);
         }
+        rizz__profile_startup_end();
+        
         ++num_plugins;
     }
+    rizz__profile_startup_end();
 
     // add game
-#ifndef RIZZ_BUNDLE
-    if (!rizz__plugin_load_abs(g_app.game_filepath, true, g_app.conf.plugins, num_plugins)) {
-        sx_snprintf(errmsg, sizeof(errmsg), g_app.game_filepath);
-        rizz__log_error(errmsg);
-        rizz__app_message_box(errmsg);
-        exit(-1);
-    }
-#else
-    if (!rizz__plugin_load_abs(ENTRY_NAME, true, g_app.conf.plugins, num_plugins)) {
-        sx_snprintf(errmsg, sizeof(errmsg), g_app.game_filepath);
-        rizz__log_error(errmsg);
-        rizz__app_message_box(errmsg);
-        exit(-1);
-    }
-#endif
+    rizz__profile_startup_begin("game_load");
+    #ifndef RIZZ_BUNDLE
+        if (!rizz__plugin_load_abs(g_app.game_filepath, true, g_app.conf.plugins, num_plugins)) {
+            sx_snprintf(errmsg, sizeof(errmsg), g_app.game_filepath);
+            rizz__log_error(errmsg);
+            rizz__app_message_box(errmsg);
+            exit(-1);
+        }
+    #else
+        if (!rizz__plugin_load_abs(ENTRY_NAME, true, g_app.conf.plugins, num_plugins)) {
+            sx_snprintf(errmsg, sizeof(errmsg), g_app.game_filepath);
+            rizz__log_error(errmsg);
+            rizz__app_message_box(errmsg);
+            exit(-1);
+        }
+    #endif
+    rizz__profile_startup_end();
 
     // initialize all plugins
+    rizz__profile_startup_begin("init_plugins");
     if (!rizz__plugin_init_plugins()) {
         rizz__log_error("initializing plugins failed");
         rizz__app_message_box("initializing plugins failed, see log for details");
         exit(-1);
     }
+    rizz__profile_startup_end();
 
     // At this point we can change the current directory if it's set
     if (g_app.conf.cwd && g_app.conf.cwd[0]) {
@@ -460,9 +475,15 @@ static void rizz__app_frame(void)
     rizz__core_frame();
 }
 
-static void rizz__app_cleanup(void)
+static void rizz__app_release(void)
 {
+    if (the__startup_profile_ctx.id) {
+        rizz__profile_capture_end(the__startup_profile_ctx);
+        the__startup_profile_ctx = (rizz_profile_capture) {0};
+    }
+
     rizz__core_release();
+    rizz__profile_release();
 
     for (int i = 0; i < sx_array_count(g_app.cmdline_items); i++) {
         if (g_app.cmdline_items[i].allocated_value) {
@@ -676,18 +697,20 @@ static void rizz__app_cmdline_arg(const char* name, char short_name, rizz_cmdlin
 sapp_desc sokol_main(int argc, char* argv[])
 {
     g_app.alloc = sx_alloc_malloc();
+    sx_tm_init();
 
-    int profile_gpu = 0, dump_unused_assets = 0, crash_dump = 0;
-
+    int profile_gpu = 0, dump_unused_assets = 0, crash_dump = 0, profile_startup = 0, hot_reload = 0;
     int version = 0, show_help = 0;
     const sx_cmdline_opt opts[] = {
         { "version", 'V', SX_CMDLINE_OPTYPE_FLAG_SET, &version, 1, "Print version", 0x0 },
         { "run", 'r', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'r', "Game/App module to run", "filepath" },
         { "profile-gpu", 'g', SX_CMDLINE_OPTYPE_FLAG_SET, &profile_gpu, 1, "Enable gpu profiler", 0x0 },
+        { "profile-startup", 'S', SX_CMDLINE_OPTYPE_FLAG_SET, &profile_startup, 1, "Profile startup times and save them to .profile/startup.json", 0x0 },
         { "cwd", 'c', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'c', "Change current directory after initialization", 0x0 },
         { "dump-unused-assets", 'U', SX_CMDLINE_OPTYPE_FLAG_SET, &dump_unused_assets, 1, "Dump unused assets into `unused-assets.json`", 0x0 },
         { "crash-dump", 'd', SX_CMDLINE_OPTYPE_FLAG_SET, &crash_dump, 1, "Create crash dump file on program exceptions", 0x0 },
         { "first-mip", 'M', SX_CMDLINE_OPTYPE_REQUIRED, 0x0, 'M', "Set the first mip of textures. Higher values lower texture sizes (default=0)", 0x0 },
+        { "hot-reload-plugins", 'H', SX_CMDLINE_OPTYPE_FLAG_SET, 0x0, 'H', "Hot reload all plugins and game modules", 0x0 },
         { "help", 'h', SX_CMDLINE_OPTYPE_FLAG_SET, &show_help, 1, "Show this help message", 0x0 },
         SX_CMDLINE_OPT_END
     };
@@ -724,7 +747,13 @@ sapp_desc sokol_main(int argc, char* argv[])
             break;
         }
     }
-
+    
+    // initialize profiler because we want to profile the startup times
+    if (rizz__profile_init(g_app.alloc)) {
+        if (profile_startup)
+            the__startup_profile_ctx = rizz__profile_capture_create("startup");
+    }
+    
 #ifndef RIZZ_BUNDLE
     if (game_filepath == NULL) {
         rizz__app_message_box("provide a game module to run (--run)");
@@ -754,7 +783,7 @@ sapp_desc sokol_main(int argc, char* argv[])
     game_filepath = argc > 0 ? argv[0] : "";
     rizz_game_config_cb* game_config_fn = rizz_game_config;
 #endif    // RIZZ_BUNDLE
-
+    
     char ext[16];
     sx_os_path_basename(default_name, sizeof(default_name), game_filepath);
     sx_os_path_splitext(ext, sizeof(ext), default_name, sizeof(default_name), default_name);
@@ -800,6 +829,8 @@ sapp_desc sokol_main(int argc, char* argv[])
         conf.core_flags |= RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS;
     if (crash_dump)
         conf.app_flags |= RIZZ_APP_FLAG_CRASH_DUMP;
+    if (hot_reload) 
+        conf.core_flags |= RIZZ_CORE_FLAG_HOT_RELOAD_PLUGINS;
 #ifdef _DEBUG
     conf.core_flags |= RIZZ_CORE_FLAG_DETECT_LEAKS;
 #endif
@@ -854,7 +885,11 @@ sapp_desc sokol_main(int argc, char* argv[])
     }
 
 #ifndef RIZZ_BUNDLE
-    sx_os_dlclose(game_dll);
+    if (conf.core_flags&RIZZ_CORE_FLAG_HOT_RELOAD_PLUGINS)
+        sx_os_dlclose(game_dll);
+    else
+        g_app.game_module_handle = game_dll;
+
     sx_cmdline_destroy_context(cmdline, g_app.alloc);
 #endif
 
@@ -865,7 +900,7 @@ sapp_desc sokol_main(int argc, char* argv[])
     return (sapp_desc) {
         .init_cb = rizz__app_init,
         .frame_cb = rizz__app_frame,
-        .cleanup_cb = rizz__app_cleanup,
+        .cleanup_cb = rizz__app_release,
         .event_cb = rizz__app_event,
         .fail_cb = rizz__app_fail,
         .width = conf.window_width,
@@ -1075,6 +1110,11 @@ static void rizz__set_crash_callback(void (*crash_cb)(void*, void*), void* user)
 {
     g_app.crash_cb = crash_cb;
     g_app.crash_user_data = user;
+}
+
+void* rizz__app_get_game_module(void)
+{
+    return g_app.game_module_handle;
 }
 
 rizz_api_app the__app = { .width = sapp_width,

@@ -52,8 +52,8 @@ SX_API void sx_tls_set(sx_tls tls, void* data);
 SX_API void* sx_tls_get(sx_tls tls);
 
 // Mutex
-typedef struct sx_mutex_s {
-    sx_align_decl(16, uint8_t) data[64];
+typedef sx_align_decl(64, struct) sx_mutex_s {
+    uint8_t data[64];
 } sx_mutex;
 
 SX_API void sx_mutex_init(sx_mutex* mutex);
@@ -71,8 +71,8 @@ SX_API bool sx_mutex_try(sx_mutex* mutex);
 #endif
 
 // Semaphore
-typedef struct sx_sem_s {
-    sx_align_decl(16, uint8_t) data[128];
+typedef sx_align_decl(16, struct) sx_sem_s {
+    uint8_t data[128];
 } sx_sem;
 
 SX_API void sx_semaphore_init(sx_sem* sem);
@@ -81,8 +81,8 @@ SX_API void sx_semaphore_post(sx_sem* sem, int count sx_default(1));
 SX_API bool sx_semaphore_wait(sx_sem* sem, int msecs sx_default(-1));
 
 // Signal
-typedef struct sx_signal_s {
-    sx_align_decl(16, uint8_t) data[128];
+typedef sx_align_decl(16, struct) sx_signal_s {
+     uint8_t data[128];
 } sx_signal;
 
 SX_API void sx_signal_init(sx_signal* sig);

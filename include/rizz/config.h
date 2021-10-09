@@ -8,7 +8,16 @@
 
 #include "sx/platform.h"
 
-#define RIZZ_FINAL 0
+// Indicate if we are on the final build
+#ifndef RIZZ_FINAL
+#   define RIZZ_FINAL 0
+#endif
+
+// BUNDLE+NDEBUG is always considered to be the final version
+#if defined(RIZZ_BUNDLE) && !defined(_DEBUG) && defined(NDEBUG)
+#   undef RIZZ_FINAL
+#   define RIZZ_FINAL 1
+#endif
 
 // choose sokol api based on platform
 #define RIZZ_GRAPHICS_API_D3D 0
@@ -86,7 +95,7 @@
 #    if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
 #        define RIZZ_CONFIG_HOT_LOADING 0
 #    else
-#        define RIZZ_CONFIG_HOT_LOADING 1
+#        define RIZZ_CONFIG_HOT_LOADING RIZZ_FINAL
 #    endif
 #endif    // RIZZ_CONFIG_HOT_LOADING
 
@@ -104,7 +113,7 @@
 #endif
 
 #ifndef RIZZ_CONFIG_DEBUG_MEMORY
-#   define RIZZ_CONFIG_DEBUG_MEMORY 1
+#   define RIZZ_CONFIG_DEBUG_MEMORY (~RIZZ_FINAL)
 #endif
 
 #ifndef RIZZ_CONFIG_MAX_PLUGINS
@@ -115,12 +124,10 @@
 #    define RIZZ_CONFIG_EVENTQUEUE_MAX_EVENTS 4
 #endif
 
-#ifndef RIZZ_MAX_PATH
-#    define RIZZ_MAX_PATH 256
+#ifndef RIZZ_CONFIG_PROFILER
+#    define RIZZ_CONFIG_PROFILER (~RIZZ_FINAL)
 #endif
 
-
-#if defined(RIZZ_BUNDLE) && !defined(_DEBUG) && defined(NDEBUG)
-#   undef RIZZ_FINAL
-#   define RIZZ_FINAL 1
+#ifndef RIZZ_MAX_PATH
+#    define RIZZ_MAX_PATH 256
 #endif

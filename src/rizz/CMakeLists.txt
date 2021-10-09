@@ -3,6 +3,7 @@ project(rizz)
 
 set(SOURCE_FILES internal.h
                  app.c
+                 profiler.c 
                  core.c 
                  plugin.cpp
                  graphics.c
@@ -81,6 +82,12 @@ else()
     target_compile_definitions(rizz PRIVATE -DRIZZ_CONFIG_HOT_LOADING=0)
 endif()
 
+if (ENABLE_PROFILER)
+    target_compile_definitions(rizz PRIVATE -DRIZZ_CONFIG_PROFILER=1)
+else()
+    target_compile_definitions(rizz PRIVATE -DRIZZ_CONFIG_PROFILER=0)
+endif()
+
 # versioning
 if (version)
     target_compile_definitions(rizz PRIVATE -DRIZZ_VERSION=${version})
@@ -110,3 +117,4 @@ elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
 elseif (WIN32)
     target_link_libraries(rizz PRIVATE dxgi d3d11 Version)  
 endif()
+

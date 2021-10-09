@@ -153,7 +153,7 @@ static bool init()
     // mount `/asset` directory
     char asset_dir[RIZZ_MAX_PATH];
     sx_os_path_join(asset_dir, sizeof(asset_dir), EXAMPLES_ROOT, "assets");    // "/examples/assets"
-    the_vfs->mount(asset_dir, "/assets");
+    the_vfs->mount(asset_dir, "/assets", true);
 #endif
 
     sx_rng_seed_time(&g_draw3d.rng);
