@@ -87,6 +87,9 @@
 #       define SX_INLINE static inline  
 #    endif
 #    define SX_NO_VTABLE __declspec(novtable)
+#    ifndef __cplusplus
+#       define _Thread_local __declspec(thread)
+#    endif // __cplusplus
 #else
 #    error "Unknown SX_COMPILER_?"
 #endif

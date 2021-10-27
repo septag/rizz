@@ -555,7 +555,6 @@ struct cr_plugin {
 #include <chrono>  // duration for sleep
 #include <cstring> // memcpy
 #include <string>
-#include <thread> // this_thread::sleep_for
 
 #if defined(CR_WINDOWS)
 #define CR_PATH_SEPARATOR '\\'

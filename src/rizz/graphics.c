@@ -14,13 +14,15 @@
 #include "rizz/config.h"
 
 #include "sx/allocator.h"
-#include "sx/array.h"
 #include "sx/threads.h"
+#include "sx/array.h"
 #include "sx/hash.h"
 #include "sx/io.h"
 #include "sx/lin-alloc.h"
 #include "sx/os.h"
 #include "sx/string.h"
+#include "sx/atomic.h"
+#include "sx/lockless.h"
 
 #include "cj5/cj5.h"
 
@@ -145,8 +147,6 @@ SX_PRAGMA_DIAGNOSTIC_POP()
     sx_array_push(_alloc, _a, _id)
 #endif
 
-// clang-format on
-
 typedef struct rizz__sgs_chunk {
     int64_t pos;
     uint32_t size;
@@ -223,7 +223,7 @@ typedef struct rizz__gfx_cmdbuffer {
 // stream-buffers are used to emulate sg_append_buffer behaviour
 typedef struct rizz__gfx_stream_buffer {
     sg_buffer buf;
-    sx_atomic_int offset;
+    sx_atomic_uint32 offset;
     int size;
 } rizz__gfx_stream_buffer;
 
@@ -1538,7 +1538,6 @@ static sg_shader_desc* rizz__shader_setup_desc(sg_shader_desc* desc,
     for (int i = 0; i < num_stages; i++) {
         const rizz__shader_setup_desc_stage* stage = &stages[i];
         sg_shader_stage_desc* stage_desc = NULL;
-        // clang-format off
         switch (stage->refl->stage) {
         case RIZZ_SHADER_STAGE_VS:   
             stage_desc = &desc->vs;
@@ -1552,7 +1551,6 @@ static sg_shader_desc* rizz__shader_setup_desc(sg_shader_desc* desc,
             sx_assertf(0, "not implemented");   
             break;
         }
-        // clang-format on
 
         #if SX_PLATFORM_APPLE
             stage_desc->entry = "main0";
@@ -3330,8 +3328,8 @@ static int rizz__cb_append_buffer_d(sg_buffer buf, const void* data_ptr, int dat
 
     sx_assertf(index != -1, "buffer must be stream and not destroyed during render");
     rizz__gfx_stream_buffer* sbuff = &g_gfx.stream_buffs[index];
-    sx_assert(sbuff->offset + data_size <= sbuff->size);
-    int stream_offset = sx_atomic_fetch_add(&sbuff->offset, data_size);
+    sx_assert(sbuff->offset + (uint32_t)data_size <= (uint32_t)sbuff->size);
+    uint32_t stream_offset = sx_atomic_fetch_add32(&sbuff->offset, (uint32_t)data_size);
 
     rizz__gfx_cmdbuffer* cb = &g_gfx.cmd_buffers_feed[the__core.job_thread_index()];
 
@@ -3355,7 +3353,7 @@ static int rizz__cb_append_buffer_d(sg_buffer buf, const void* data_ptr, int dat
     buff += sizeof(int);
     *((sg_buffer*)buff) = buf;
     buff += sizeof(sg_buffer);    // keep this for validation
-    *((int*)buff) = stream_offset;
+    *((uint32_t*)buff) = stream_offset;
     buff += sizeof(int);
     *((int*)buff) = data_size;
     buff += sizeof(int);
@@ -3364,7 +3362,7 @@ static int rizz__cb_append_buffer_d(sg_buffer buf, const void* data_ptr, int dat
     _sg_buffer_t* _buff = _sg_lookup_buffer(&_sg.pools, buf.id);
     _buff->cmn.used_frame = the__core.frame_index();
 
-    return stream_offset;
+    return (int)stream_offset;
 }
 
 static int rizz__cb_append_buffer(sg_buffer buf, const void* data_ptr, int data_size)
@@ -3477,7 +3475,6 @@ static uint8_t* rizz__cb_run_update_image(uint8_t* buff)
     return buff;
 }
 
-// clang-format off
 static const rizz__run_command_cb k_run_cbs[_GFX_COMMAND_COUNT] = {
     rizz__cb_run_begin_default_pass, 
     rizz__cb_run_begin_pass,
@@ -3497,7 +3494,6 @@ static const rizz__run_command_cb k_run_cbs[_GFX_COMMAND_COUNT] = {
     rizz__cb_run_begin_stage,
     rizz__cb_run_end_stage
 };
-// clang-format on
 
 static void rizz__gfx_validate_stage_deps()
 {
@@ -3886,7 +3882,6 @@ static const sx_alloc* rizz__gfx_alloc(void)
     return g_gfx_alloc;
 }
 
-// clang-format off
 rizz_api_gfx the__gfx = {
     .imm = { 
              .begin                 = rizz__imm_begin_stage,
@@ -4017,4 +4012,3 @@ rizz_api_gfx the__gfx = {
     .texture_surface_pitch      = _sg_surface_pitch,
     .trace_info                 = rizz__trace_info,
 };
-// clang-format on

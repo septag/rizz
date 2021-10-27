@@ -7,9 +7,10 @@
 #include <malloc.h>
 #include <stdlib.h>
 
-#include "sx/threads.h"
+#include "sx/threads.h"     // sx_lock
 #include "sx/os.h"
 #include "sx/string.h"
+#include "sx/lockless.h"
 
 static void* sx__malloc_cb(void* ptr, size_t size, uint32_t align, const char* file,
                            const char* func, uint32_t line, void* user_data);

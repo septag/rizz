@@ -70,7 +70,7 @@ typedef struct {
     sx_alloc* alloc;
     rizz__vfs_mount_point* mounts;
     rizz_vfs_async_modify_cb** SX_ARRAY modify_cbs;
-    sx_thread* worker_thrd;
+    rizz_thread* worker_thrd;
     sx_queue_spsc* req_queue;    // producer: main, consumer: worker, data: rizz__vfs_async_request
     sx_queue_spsc* res_queue;    // producer: worker, consumer: main, data: rizz__vfs_async_response
     sx_sem worker_sem;
@@ -229,10 +229,10 @@ static int64_t rizz__vfs_write(const char* path, const sx_mem_block* mem, rizz_v
     }
 }
 
-static int rizz__vfs_worker(void* user1, void* user2)
+static int rizz__vfs_worker(void* user)
 {
-    sx_unused(user1);
-    sx_unused(user2);
+    sx_unused(user);
+
     while (!g_vfs.quit) {
         rizz__vfs_async_request req;
         if (sx_queue_spsc_consume(g_vfs.req_queue, &req)) {
@@ -331,8 +331,7 @@ bool rizz__vfs_init(void)
 
     // create async worker thread and work queue
     sx_semaphore_init(&g_vfs.worker_sem);
-    g_vfs.worker_thrd =
-        sx_thread_create(g_vfs.alloc, rizz__vfs_worker, NULL, 1024 * 1024, "rizz_vfs", NULL);
+    g_vfs.worker_thrd = the__core.thread_create(rizz__vfs_worker, NULL, "vfs_worker");
 
 #if RIZZ_CONFIG_HOT_LOADING
     dmon_init();
@@ -361,7 +360,7 @@ void rizz__vfs_release(void)
     if (g_vfs.worker_thrd) {
         g_vfs.quit = 1;
         sx_semaphore_post(&g_vfs.worker_sem, 1);
-        sx_thread_destroy(g_vfs.worker_thrd, g_vfs.alloc);
+        the__core.thread_destroy(g_vfs.worker_thrd);
         sx_semaphore_release(&g_vfs.worker_sem);
     }
 

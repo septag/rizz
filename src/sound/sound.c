@@ -100,10 +100,10 @@ typedef struct snd__instance {
 
 typedef struct snd__ringbuffer {
     float* samples;
-    int capacity;
-    int start;
-    int end;
-    sx_atomic_int size;
+    uint32_t capacity;
+    uint32_t start;
+    uint32_t end;
+    sx_atomic_uint32 size;
 } snd__ringbuffer;
 
 typedef struct snd__bus {
@@ -182,7 +182,7 @@ static char k__snd_silent[] = { 0, 0, 0, 0 };
 //       more). It just may make it not very optimal.
 //       But again, more tests are needed, because obviously I'm not doing the right thing in
 //       terms of thread-safetly
-static bool snd__ringbuffer_init(snd__ringbuffer* rb, int size)
+static bool snd__ringbuffer_init(snd__ringbuffer* rb, uint32_t size)
 {
     sx_memset(rb, 0x0, sizeof(*rb));
 
@@ -204,22 +204,21 @@ static void snd__ringbuffer_release(snd__ringbuffer* rb)
     sx_free(g_snd_alloc, rb->samples);
 }
 
-static inline int snd__ringbuffer_expect(snd__ringbuffer* rb)
+static inline uint32_t snd__ringbuffer_expect(snd__ringbuffer* rb)
 {
     return rb->capacity - rb->size;
 }
 
-static int snd__ringbuffer_consume(snd__ringbuffer* rb, float* samples, int count)
+static int snd__ringbuffer_consume(snd__ringbuffer* rb, float* samples, uint32_t count)
 {
     sx_assert(count > 0);
 
     count = sx_min(count, rb->size);
-    if (count == 0) {
+    if (count == 0)
         return 0;
-    }
-    sx_atomic_fetch_add(&rb->size, -count);
+    sx_atomic_fetch_sub32(&rb->size, count);
 
-    int remain = rb->capacity - rb->start;
+    uint32_t remain = rb->capacity - rb->start;
     if (remain >= count) {
         sx_memcpy(samples, &rb->samples[rb->start], count * sizeof(float));
     } else {
@@ -232,12 +231,11 @@ static int snd__ringbuffer_consume(snd__ringbuffer* rb, float* samples, int coun
     return count;
 }
 
-static void snd__ringbuffer_produce(snd__ringbuffer* rb, const float* samples, int count)
+static void snd__ringbuffer_produce(snd__ringbuffer* rb, const float* samples, uint32_t count)
 {
-    sx_assert(count > 0);
     sx_assert(count <= snd__ringbuffer_expect(rb));
 
-    int remain = rb->capacity - rb->end;
+    uint32_t remain = rb->capacity - rb->end;
     if (remain >= count) {
         sx_memcpy(&rb->samples[rb->end], samples, count * sizeof(float));
     } else {
@@ -246,7 +244,7 @@ static void snd__ringbuffer_produce(snd__ringbuffer* rb, const float* samples, i
     }
 
     rb->end = (rb->end + count) % rb->capacity;
-    sx_atomic_fetch_add(&rb->size, count);
+    sx_atomic_fetch_add32(&rb->size, count);
 }
 
 
@@ -535,16 +533,16 @@ static void snd__on_release(rizz_asset_obj obj, const sx_alloc* alloc)
 
 static void snd__stream_cb(float* buffer, int num_frames, int num_channels)
 {
-    int r = snd__ringbuffer_consume(&g_snd.mixer_buffer, buffer, num_frames * num_channels) /
-            num_channels;
+    uint32_t num_samples = (uint32_t)num_frames * (uint32_t)num_channels;
+    uint32_t r = snd__ringbuffer_consume(&g_snd.mixer_buffer, buffer, num_samples) / num_channels;
 
-    if (r < num_frames) {
+    if (r < (uint32_t)num_frames) {
         sx_memset(buffer + r * num_channels, 0x0, (num_frames - r) * num_channels * sizeof(float));
     }
 
     if (the_imgui) {
-        int num_expected = snd__ringbuffer_expect(&g_snd.mixer_plot_buffer);
-        int num_push_samples = sx_min(num_expected, num_frames * num_channels);
+        uint32_t num_expected = snd__ringbuffer_expect(&g_snd.mixer_plot_buffer);
+        uint32_t num_push_samples = sx_min(num_expected, num_samples);
         if (num_push_samples > 0) {
             snd__ringbuffer_produce(&g_snd.mixer_plot_buffer, buffer, num_push_samples);
         }
@@ -1840,7 +1838,6 @@ rizz_plugin_decl_event_handler(sound, e)
         the_imgui = the_plugin->get_api_byname("imgui", 0);
     }
 }
-
 
 static const char* sound__deps[] = { "imgui" };
 rizz_plugin_implement_info(sound, 1000, "sound plugin", sound__deps, 1);

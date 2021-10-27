@@ -244,8 +244,12 @@ static uint32_t rizz__app_convert_core_flags(const char* value)
         return RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS;
     } else if (sx_strequalnocase(value, "DETECT_LEAKS")) {
         return RIZZ_CORE_FLAG_DETECT_LEAKS;
-    } else if (sx_strequalnocase(value, "DEBUG_TEMP_ALLOCATOR")) {
-        return RIZZ_CORE_FLAG_DEBUG_TEMP_ALLOCATOR;
+    } else if (sx_strequalnocase(value, "HEAP_TEMP_ALLOCATOR")) {
+        return RIZZ_CORE_FLAG_HEAP_TEMP_ALLOCATOR;
+    } else if (sx_strequalnocase(value, "TRACE_TEMP_ALLOCATOR")) {
+        return RIZZ_CORE_FLAG_TRACE_TEMP_ALLOCATOR;
+    } else if (sx_strequalnocase(value, "HOT_RELOAD_PLUGINS")) {
+        return RIZZ_CORE_FLAG_HOT_RELOAD_PLUGINS;
     } else {
         return 0;
     }
@@ -806,7 +810,7 @@ sapp_desc sokol_main(int argc, char* argv[])
                          .app_version = 1000,
                          .app_flags = RIZZ_APP_FLAG_USER_CURSOR,
                          .core_flags = 0,
-                         .log_level = RIZZ_LOG_LEVEL_INFO,
+                         .log_level = RIZZ_LOG_LEVEL_DEBUG,
                          .window_width = 800,
                          .window_height = 600,
                          .multisample_count = 1,

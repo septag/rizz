@@ -89,7 +89,8 @@
         "vc_dispmanx.h": "c",
         "2dtools-internal.h": "c",
         "ostream": "c",
-        "dlfcn.h": "c"
+        "dlfcn.h": "c",
+        "platform.h": "c"
     },
     "files.exclude": {
         "**/.git": true,

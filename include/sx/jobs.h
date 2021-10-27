@@ -96,12 +96,13 @@
 // clang-format on
 #pragma once
 
-#include "macros.h"
+#include "sx.h"
 #include <stdbool.h>
+#include "sx/atomic.h"    // yield, sx_atomic_uint32
 
 typedef struct sx_alloc sx_alloc;
 typedef struct sx_job_context sx_job_context;
-typedef volatile int* sx_job_t;
+typedef sx_atomic_uint32* sx_job_t;
 
 typedef void(sx_job_cb)(int range_start, int range_end, int thread_index, void* user);
 typedef void(sx_job_thread_init_cb)(sx_job_context* ctx, int thread_index, unsigned int thread_id,

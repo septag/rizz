@@ -23,7 +23,6 @@
 #pragma once
 
 #include "sx.h"
-#include "atomic.h"
 
 typedef struct sx_alloc sx_alloc;
 
@@ -90,69 +89,3 @@ SX_API void sx_signal_release(sx_signal* sig);
 SX_API void sx_signal_raise(sx_signal* sig);
 SX_API bool sx_signal_wait(sx_signal* sig, int msecs sx_default(-1));
 
-// Lock-Free single-producer/single-consumer self-contained-data queue
-typedef struct sx_queue_spsc sx_queue_spsc;
-SX_API sx_queue_spsc* sx_queue_spsc_create(const sx_alloc* alloc, int item_sz, int capacity);
-SX_API void sx_queue_spsc_destroy(sx_queue_spsc* queue, const sx_alloc* alloc);
-SX_API bool sx_queue_spsc_produce(sx_queue_spsc* queue, const void* data);
-SX_API bool sx_queue_spsc_consume(sx_queue_spsc* queue, void* data);
-SX_API bool sx_queue_spsc_grow(sx_queue_spsc* queue, const sx_alloc* alloc);
-SX_API bool sx_queue_spsc_full(const sx_queue_spsc* queue);
-
-// spinlock
-// interesting read: https://software.intel.com/en-us/articles/a-common-construct-to-avoid-the-contention-of-threads-architecture-agnostic-spin-wait-loops
-typedef sx_align_decl(SX_CACHE_LINE_SIZE, sx_atomic_int) sx_lock_t;
-
-#define SX__LOCK_PRESPIN 1023
-#define SX__LOCK_MAXTIME 300
-#ifndef sx_track_contention
-#   define sx_track_contention()
-#endif
-
-SX_FORCE_INLINE void sx_lock_exit(sx_lock_t* lock)
-{
-    int prev = sx_atomic_xchg(lock, 0);
-    sx_unused(prev);
-    sx_assert_always(prev == 1);
-}
-
-SX_FORCE_INLINE bool sx_lock_try(sx_lock_t* lock)
-{
-    return *lock == 0 && sx_atomic_xchg(lock, 1) == 0;
-}
-
-SX_INLINE void sx_lock_enter(sx_lock_t* lock)
-{
-    int counter = 0;
-    while (!sx_lock_try(lock)) {
-        if ((++counter & SX__LOCK_PRESPIN) == 0) {
-            sx_track_contention();
-            sx_thread_yield();
-        } else {
-            uint64_t prev = sx_cycle_clock();
-            do {
-                sx_yield_cpu();
-            } while ((sx_cycle_clock() - prev) < SX__LOCK_MAXTIME);
-        }
-    }
-}
-
-// These types will be obsolete and replaced by the above code
-// So set SX_CONFIG_OBSOLETE_CODE=0 and update your code as soon as you can
-#if SX_CONFIG_OBSOLETE_CODE
-#   define sx_lock(_l) sx_lock_enter(_l)
-#   define sx_unlock(_l) sx_lock_exit(_l)
-#   define sx_trylock(_l) sx_lock_try(_l)
-#else
-#   define sx_lock(_lock) sx_defer(sx_lock_enter(&_lock), sx_lock_exit(&_lock))
-#endif
-
-// Anderson lock 
-typedef struct sx_anderson_lock_t sx_anderson_lock_t;
-
-SX_API sx_anderson_lock_t* sx_anderson_lock_create(const sx_alloc* alloc, int max_threads);
-SX_API void sx_anderson_lock_destroy(sx_anderson_lock_t* lock, const sx_alloc* alloc);
-SX_API void sx_anderson_lock_enter(sx_anderson_lock_t* lock);
-SX_API void sx_anderson_lock_exit(sx_anderson_lock_t* lock);
-
-#define sx_anderson_lock(_plock) sx_defer(sx_anderson_lock_enter(_plock), sx_anderson_lock_exit(_plock))

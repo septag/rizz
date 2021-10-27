@@ -663,6 +663,9 @@ const char* rizz__plugin_crash_reason(rizz_plugin_crash crash)
     }
 }
 
-rizz_api_plugin the__plugin = { rizz__plugin_load,           rizz__plugin_inject_api,
-                                rizz__plugin_remove_api,     rizz__plugin_get_api,
-                                rizz__plugin_get_api_byname, rizz__plugin_crash_reason };
+rizz_api_plugin the__plugin = { rizz__plugin_load,           
+                                rizz__plugin_inject_api,
+                                rizz__plugin_remove_api,     
+                                rizz__plugin_get_api,
+                                rizz__plugin_get_api_byname, 
+                                rizz__plugin_crash_reason };
