@@ -219,7 +219,7 @@ static void sx__job_selector_main_thrd(sx_fiber_transfer transfer)
     sx__job_select_result r =
         sx__job_select(ctx, tdata->tid, ctx->num_threads > 0 ? tdata->tags : 0xffffffff);
 
-    //
+    
     if (r.job) {
         // Job is a slave (in wait mode), get back to it and remove slave mode
         if (r.job->owner_tid > 0) {

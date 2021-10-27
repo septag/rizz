@@ -126,8 +126,7 @@ typedef struct dmon__result {
 } dmon__result;
 #endif    // RIZZ_CONFIG_HOT_LOADING
 
-static bool rizz__vfs_resolve_path(char* out_path, int out_path_sz, const char* path,
-                                   rizz_vfs_flags flags)
+static bool rizz__vfs_resolve_path(char* out_path, int out_path_sz, const char* path, rizz_vfs_flags flags)
 {
     if (flags & RIZZ_VFS_FLAG_ABSOLUTE_PATH) {
         sx_os_path_normpath(out_path, out_path_sz, path);
@@ -295,17 +294,17 @@ bool rizz__vfs_mount(const char* path, const char* alias, bool watch)
         // check that the mount path is not already registered
         for (int i = 0, c = sx_array_count(g_vfs.mounts); i < c; i++) {
             if (sx_strequal(g_vfs.mounts[i].path, mp.path)) {
-                rizz__log_error("vfs: path '%s' is already mounted on '%s'", mp.path, mp.alias);
+                rizz__log_error("(vfs) path '%s' is already mounted on '%s'", mp.path, mp.alias);
                 return false;
             }
         }
 
 
         sx_array_push(g_vfs.alloc, g_vfs.mounts, mp);
-        rizz__log_info("vfs: mounted '%s' on '%s'", mp.alias, mp.path);
+        rizz__log_info("(vfs) mounted '%s' on '%s'", mp.alias, mp.path);
         return true;
     } else {
-        rizz__log_error("mount path is not valid: %s", path);
+        rizz__log_error("(vfs) mount path is not valid: %s", path);
         return false;
     }
 }
@@ -316,7 +315,7 @@ void rizz__vfs_mount_mobile_assets(const char* alias)
 #if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
     sx_os_path_unixpath(g_vfs.assets_alias, sizeof(g_vfs.assets_alias), alias);
     g_vfs.assets_alias_len = sx_strlen(g_vfs.assets_alias);
-    rizz__log_info("vfs: mounted '%s' on app assets", g_vfs.assets_alias);
+    rizz__log_info("(vfs) mounted '%s' on app assets", g_vfs.assets_alias);
 #endif
 }
 
