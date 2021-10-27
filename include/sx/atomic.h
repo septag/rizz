@@ -41,34 +41,21 @@
 #include "macros.h"
 #include <stdint.h>
 
-#if SX_COMPILER_MSVC
-
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 SX_PRAGMA_DIAGNOSTIC_IGNORED_MSVC(4505) // unreferenced function with internal linkage has been removed
 #   include "../../3rdparty/c89atomic/c89atomic.h"
 SX_PRAGMA_DIAGNOSTIC_PUSH()
 
-typedef volatile sx_align_decl(4, c89atomic_uint32)     sx_atomic_uint32;
-typedef volatile sx_align_decl(8, c89atomic_uint64)     sx_atomic_uint64;
-#    if SX_ARCH_32BIT
-typedef volatile sx_align_decl(4, c89atomic_uint32)    sx_atomic_ptr;
-#    elif SX_ARCH_64BIT
-typedef volatile sx_align_decl(8, c89atomic_uint64)    sx_atomic_ptr;
-#    endif
-
-#   define sx_atomic_order_c11_value(_o) = c89atomic_##_o
-#else
-#    include <stdatomic.h>
-
-typedef sx_align_decl(4, atomic_uint)   sx_atomic_uint32;
-typedef sx_align_decl(8, atomic_ullong) sx_atomic_uint64;
-#    if SX_ARCH_32BIT
-typedef sx_align_decl(4, atomic_uint)   sx_atomic_ptr;
-#    elif SX_ARCH_64BIT
-typedef sx_align_decl(8, atomic_ullong) sx_atomic_ptr;
-#    endif
-#    define sx_atomic_order_c11_value(_o) = _o
+typedef c89atomic_uint32    sx_atomic_uint32;
+typedef c89atomic_uint64    sx_atomic_uint64;
+#if SX_ARCH_32BIT
+    typedef c89atomic_uint32    sx_atomic_ptr;
+#elif SX_ARCH_64BIT
+    typedef c89atomic_uint64    sx_atomic_ptr;
 #endif
+
+#define sx_atomic_order_c11_value(_o) = c89atomic_##_o
+
 
 typedef enum sx_atomic_memory_order
 {
@@ -119,19 +106,20 @@ SX_FORCE_INLINE uint64_t sx_atomic_fetch_sub64(sx_atomic_uint64* a, uint64_t b);
 SX_FORCE_INLINE uint64_t sx_atomic_exchange64(sx_atomic_uint64* a, uint64_t b);
 SX_FORCE_INLINE uint64_t sx_atomic_fetch_or64(sx_atomic_uint64* a, uint64_t b);
 SX_FORCE_INLINE uint64_t sx_atomic_fetch_and64(sx_atomic_uint64* a, uint64_t b);
-SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_weak(sx_atomic_uint64* a, uint64_t* expected, uint64_t desired);
-SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_strong(sx_atomic_uint64* a, uint64_t* expected, uint64_t desired);
+SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_weak(sx_atomic_uint64* a, unsigned long long* expected, uint64_t desired);
+SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_strong(sx_atomic_uint64* a, unsigned long long* expected, uint64_t desired);
 
 SX_FORCE_INLINE uint64_t sx_atomic_fetch_add64_explicit(sx_atomic_uint64* a, uint64_t b, sx_atomic_memory_order order);
 SX_FORCE_INLINE uint64_t sx_atomic_fetch_sub64_explicit(sx_atomic_uint64* a, uint64_t b, sx_atomic_memory_order order);
 SX_FORCE_INLINE uint64_t sx_atomic_exchange64_explicit(sx_atomic_uint64* a, uint64_t b, sx_atomic_memory_order order);
 SX_FORCE_INLINE uint64_t sx_atomic_fetch_or64_explicit(sx_atomic_uint64* a, uint64_t b, sx_atomic_memory_order order);
 SX_FORCE_INLINE uint64_t sx_atomic_fetch_and64_explicit(sx_atomic_uint64* a, uint64_t b, sx_atomic_memory_order order);
-SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_weak_explicit(sx_atomic_uint64* a, uint64_t* expected, uint64_t desired, 
+SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_weak_explicit(sx_atomic_uint64* a, unsigned long long* expected, uint64_t desired, 
                                                                     sx_atomic_memory_order success, sx_atomic_memory_order fail);
-SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_strong_explicit(sx_atomic_uint64* a, uint64_t* expected, uint64_t desired, 
+SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_strong_explicit(sx_atomic_uint64* a, unsigned long long* expected, uint64_t desired, 
                                                                       sx_atomic_memory_order success, sx_atomic_memory_order fail);
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
 #if SX_PLATFORM_WINDOWS
 #    if SX_ARCH_32BIT && SX_CPU_X86
 #       if !SX_COMPILER_MSVC
@@ -155,7 +143,6 @@ SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_strong_explicit(sx_atomic_
 #    include <emmintrin.h>    // _mm_pause
 #endif
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
 SX_FORCE_INLINE void sx_relax_cpu(void)
 {
 #if SX_PLATFORM_WINDOWS
@@ -224,7 +211,6 @@ SX_FORCE_INLINE uint64_t sx_cycle_clock(void)
 #endif
 }
 
-#if SX_COMPILER_MSVC
 SX_FORCE_INLINE void sx_atomic_thread_fence(sx_atomic_memory_order order)
 {
     c89atomic_thread_fence(order);
@@ -370,12 +356,12 @@ SX_FORCE_INLINE uint64_t sx_atomic_fetch_and64(sx_atomic_uint64* a, uint64_t b)
     return c89atomic_fetch_and_64(a, b);
 }
 
-SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_weak(sx_atomic_uint64* a, uint64_t* expected, uint64_t desired)
+SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_weak(sx_atomic_uint64* a, unsigned long long* expected, uint64_t desired)
 {
     return c89atomic_compare_exchange_weak_64(a, expected, desired);
 }
 
-SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_strong(sx_atomic_uint64* a, uint64_t* expected, uint64_t desired)
+SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_strong(sx_atomic_uint64* a, unsigned long long* expected, uint64_t desired)
 {
     return c89atomic_compare_exchange_strong_64(a, expected, desired);
 }
@@ -405,207 +391,15 @@ SX_FORCE_INLINE uint64_t sx_atomic_fetch_and64_explicit(sx_atomic_uint64* a, uin
     return c89atomic_fetch_and_explicit_64(a, b, order);
 }
 
-SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_weak_explicit(sx_atomic_uint64* a, uint64_t* expected, uint64_t desired, sx_atomic_memory_order success, sx_atomic_memory_order fail)
+SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_weak_explicit(sx_atomic_uint64* a, unsigned long long* expected, uint64_t desired, sx_atomic_memory_order success, sx_atomic_memory_order fail)
 {
     return c89atomic_compare_exchange_weak_explicit_64(a, expected, desired, success, fail);
 }
 
-SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_strong_explicit(sx_atomic_uint64* a, uint64_t* expected, uint64_t desired, sx_atomic_memory_order success, sx_atomic_memory_order fail)
+SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_strong_explicit(sx_atomic_uint64* a, unsigned long long* expected, uint64_t desired, sx_atomic_memory_order success, sx_atomic_memory_order fail)
 {
     return c89atomic_compare_exchange_strong_explicit_64(a, expected, desired, success, fail);
 }
-#else
-SX_FORCE_INLINE void sx_atomic_thread_fence(sx_atomic_memory_order order)
-{
-    atomic_thread_fence(order);
-}
-
-SX_FORCE_INLINE void sx_atomic_signal_fence(sx_atomic_memory_order order)
-{
-    atomic_signal_fence(order);
-}
-
-SX_FORCE_INLINE uint32_t sx_atomic_load32(sx_atomic_uint32* a)
-{
-    return atomic_load(a);
-}
-
-SX_FORCE_INLINE uint64_t sx_atomic_load64(sx_atomic_uint64* a)
-{
-    return atomic_load(a);
-}
-
-SX_FORCE_INLINE void sx_atomic_store32(sx_atomic_uint32* a, uint32_t b)
-{
-    atomic_store(a, b);
-}
-
-SX_FORCE_INLINE void sx_atomic_store64(sx_atomic_uint64* a, uint64_t b)
-{
-    atomic_store(a, b); 
-}
-
-SX_FORCE_INLINE uint32_t sx_atomic_load32_explicit(sx_atomic_uint32* a, sx_atomic_memory_order order)
-{
-    return atomic_load_explicit(a, order);
-}
-
-SX_FORCE_INLINE uint64_t sx_atomic_load64_explicit(sx_atomic_uint64* a, sx_atomic_memory_order order)
-{
-    return atomic_load_explicit(a, order);
-}
-
-SX_FORCE_INLINE void sx_atomic_store32_explicit(sx_atomic_uint32* a, uint32_t b, sx_atomic_memory_order order)
-{
-    atomic_store_explicit(a, b, order);
-}
-
-SX_FORCE_INLINE void sx_atomic_store64_explicit(sx_atomic_uint64* a, uint64_t b, sx_atomic_memory_order order)
-{
-    atomic_store_explicit(a, b, order);
-}
-
-SX_FORCE_INLINE uint32_t sx_atomic_fetch_add32(sx_atomic_uint32* a, uint32_t b)
-{
-    return atomic_fetch_add(a, b);
-}
-
-SX_FORCE_INLINE uint32_t sx_atomic_fetch_sub32(sx_atomic_uint32* a, uint32_t b)
-{
-    return atomic_fetch_sub(a, b);
-}
-
-SX_FORCE_INLINE uint32_t sx_atomic_fetch_or32(sx_atomic_uint32* a, uint32_t b)
-{
-    return atomic_fetch_or(a, b);
-}
-
-SX_FORCE_INLINE uint32_t sx_atomic_fetch_and32(sx_atomic_uint32* a, uint32_t b)
-{
-    return atomic_fetch_and(a, b);
-}
-
-SX_FORCE_INLINE uint32_t sx_atomic_exchange32(sx_atomic_uint32* a, uint32_t b)
-{
-    return atomic_exchange(a, b);
-}
-
-SX_FORCE_INLINE uint32_t sx_atomic_compare_exchange32_weak(sx_atomic_uint32* a, uint32_t* desired, uint32_t expected)
-{
-    return atomic_compare_exchange_weak(a, desired, expected);
-}
-
-SX_FORCE_INLINE uint32_t sx_atomic_compare_exchange32_strong(sx_atomic_uint32* a, uint32_t* desired, uint32_t expected)
-{
-    return atomic_compare_exchange_strong(a, desired, expected);
-}
-
-SX_FORCE_INLINE uint32_t sx_atomic_fetch_add32_explicit(sx_atomic_uint32* a, uint32_t b, sx_atomic_memory_order order)
-{
-    return atomic_fetch_add_explicit(a, b, order);
-}
-
-SX_FORCE_INLINE uint32_t sx_atomic_fetch_sub32_explicit(sx_atomic_uint32* a, uint32_t b, sx_atomic_memory_order order)
-{
-    return atomic_fetch_sub_explicit(a, b, order);
-}
-
-SX_FORCE_INLINE uint32_t sx_atomic_fetch_or32_explicit(sx_atomic_uint32* a, uint32_t b, sx_atomic_memory_order order)
-{
-    return atomic_fetch_or_explicit(a, b, order);
-}
-
-SX_FORCE_INLINE uint32_t sx_atomic_fetch_and32_explicit(sx_atomic_uint32* a, uint32_t b, sx_atomic_memory_order order)
-{
-    return atomic_fetch_and_explicit(a, b, order);
-}
-
-SX_FORCE_INLINE uint32_t sx_atomic_exchange32_explicit(sx_atomic_uint32* a, uint32_t b, sx_atomic_memory_order order)
-{
-    return atomic_exchange_explicit(a, b, order);
-}
-
-SX_FORCE_INLINE uint32_t sx_atomic_compare_exchange32_weak_explicit(sx_atomic_uint32* a, uint32_t* desired, uint32_t expected, sx_atomic_memory_order success, sx_atomic_memory_order fail)
-{
-    return atomic_compare_exchange_weak_explicit(a, desired, expected, success, fail);
-}
-
-SX_FORCE_INLINE uint32_t sx_atomic_compare_exchange32_strong_explicit(sx_atomic_uint32* a, uint32_t* desired, uint32_t expected, sx_atomic_memory_order success, sx_atomic_memory_order fail)
-{
-    return atomic_compare_exchange_strong_explicit(a, desired, expected, success, fail);
-}
-
-SX_FORCE_INLINE uint64_t sx_atomic_fetch_add64(sx_atomic_uint64* a, uint64_t b)
-{
-    return atomic_fetch_add(a, b);
-}
-
-SX_FORCE_INLINE uint64_t sx_atomic_fetch_sub64(sx_atomic_uint64* a, uint64_t b)
-{
-    return atomic_fetch_sub(a, b);
-}
-
-SX_FORCE_INLINE uint64_t sx_atomic_exchange64(sx_atomic_uint64* a, uint64_t b)
-{
-    return atomic_exchange(a, b);
-}
-
-SX_FORCE_INLINE uint64_t sx_atomic_fetch_or64(sx_atomic_uint64* a, uint64_t b)
-{
-    return atomic_fetch_or(a, b);
-}
-
-SX_FORCE_INLINE uint64_t sx_atomic_fetch_and64(sx_atomic_uint64* a, uint64_t b)
-{
-    return atomic_fetch_and(a, b);
-}
-
-SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_weak(sx_atomic_uint64* a, uint64_t* expected, uint64_t desired)
-{
-    return atomic_compare_exchange_weak(a, expected, desired);
-}
-
-SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_strong(sx_atomic_uint64* a, uint64_t* expected, uint64_t desired)
-{
-    return atomic_compare_exchange_strong(a, expected, desired);
-}
-
-SX_FORCE_INLINE uint64_t sx_atomic_fetch_add64_explicit(sx_atomic_uint64* a, uint64_t b, sx_atomic_memory_order order)
-{
-    return atomic_fetch_add_explicit(a, b, order);
-}
-
-SX_FORCE_INLINE uint64_t sx_atomic_fetch_sub64_explicit(sx_atomic_uint64* a, uint64_t b, sx_atomic_memory_order order)
-{
-    return atomic_fetch_sub_explicit(a, b, order);
-}
-
-SX_FORCE_INLINE uint64_t sx_atomic_exchange64_explicit(sx_atomic_uint64* a, uint64_t b, sx_atomic_memory_order order)
-{
-    return atomic_exchange_explicit(a, b, order);
-}
-
-SX_FORCE_INLINE uint64_t sx_atomic_fetch_or64_explicit(sx_atomic_uint64* a, uint64_t b, sx_atomic_memory_order order)
-{
-    return atomic_fetch_or_explicit(a, b, order);
-}
-
-SX_FORCE_INLINE uint64_t sx_atomic_fetch_and64_explicit(sx_atomic_uint64* a, uint64_t b, sx_atomic_memory_order order)
-{
-    return atomic_fetch_and_explicit(a, b, order);
-}
-
-SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_weak_explicit(sx_atomic_uint64* a, uint64_t* expected, uint64_t desired, sx_atomic_memory_order success, sx_atomic_memory_order fail)
-{
-    return atomic_compare_exchange_weak_explicit(a, expected, desired, success, fail);
-}
-
-SX_FORCE_INLINE uint64_t sx_atomic_compare_exchange64_strong_explicit(sx_atomic_uint64* a, uint64_t* expected, uint64_t desired, sx_atomic_memory_order success, sx_atomic_memory_order fail)
-{
-    return atomic_compare_exchange_strong_explicit(a, expected, desired, success, fail);
-}
-#endif // compiler
-
 
 #if SX_ARCH_64BIT
 #    define sx_atomic_loadptr                               sx_atomic_load64

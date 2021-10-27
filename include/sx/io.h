@@ -90,7 +90,6 @@
 #pragma once
 
 #include "sx.h"
-#include "atomic.h"
 
 typedef struct sx_alloc sx_alloc;
 
@@ -107,7 +106,7 @@ typedef struct sx_mem_block {
     int64_t size;
     int64_t start_offset;         // incremented offset. the actual *ptr would be (uint8_t*)ptr-offset
     int align;
-    sx_atomic_uint32 refcount; 
+    uint32_t refcount; 
 } sx_mem_block;
 
 SX_API sx_mem_block* sx_mem_create_block(const sx_alloc* alloc, int64_t size,

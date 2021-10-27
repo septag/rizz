@@ -6,6 +6,7 @@
 #include "sx/allocator.h"
 #include "sx/os.h"
 #include "sx/array.h"
+#include "sx/atomic.h"
 
 #include <limits.h>
 #include <stdio.h>

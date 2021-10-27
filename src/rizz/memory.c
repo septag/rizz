@@ -395,7 +395,7 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
             sx_atomic_fetch_add32_explicit(&_ctx->num_items, 1, SX_ATOMIC_MEMORYORDER_RELAXED);
             sx_atomic_fetch_add64_explicit(&_ctx->alloc_size, (int64_t)size, SX_ATOMIC_MEMORYORDER_ACQUIRE);
             
-            uint64_t cur_peak = _ctx->peak_size;
+            unsigned long long cur_peak = _ctx->peak_size;
             while (cur_peak < ctx->alloc_size && 
                    !sx_atomic_compare_exchange64_strong(&_ctx->peak_size, &cur_peak, _ctx->alloc_size))
             { 

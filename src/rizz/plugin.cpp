@@ -13,8 +13,6 @@
 #    include "stackwalkerc/stackwalkerc.h"
 #    define CR_MAIN_FUNC "rizz_plugin_main"
 #    define CR_EVENT_FUNC "rizz_plugin_event_handler"
-// uncomment this on to debug CR
-// #define CR_DEBUG 1
 #    if CR_DEBUG
 #        define CR_LOG(...) the__core.print_debug(0, __FILE__, __LINE__, __VA_ARGS__)
 #    else
