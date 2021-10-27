@@ -8,6 +8,7 @@
 #include "sx/io.h"
 #include "sx/threads.h"
 #include "sx/string.h"
+#include "sx/lockless.h"
 
 #define rizz__json_lock()                                  \
     if (params->flags & RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD) \

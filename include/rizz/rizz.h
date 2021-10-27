@@ -35,6 +35,8 @@ typedef struct { uint32_t id; } rizz_http;
 typedef struct { uint32_t id; } rizz_gfx_stage;
 typedef struct { uint32_t id; } rizz_profile_capture;
 
+typedef struct sx_thread rizz_thread;
+
 // Id conversion macros
 #define rizz_to_id(_index) ((uint32_t)(_index) + 1)
 #define rizz_to_index(_id) ((int)(_id)-1)
@@ -545,8 +547,9 @@ enum rizz_core_flags_ {
     RIZZ_CORE_FLAG_PROFILE_GPU = 0x04,          // enable GPU profiling
     RIZZ_CORE_FLAG_DUMP_UNUSED_ASSETS = 0x08,   // write `unused-assets.json` on exit
     RIZZ_CORE_FLAG_DETECT_LEAKS = 0x10,         // Detect memory leaks (default on in _DEBUG builds)
-    RIZZ_CORE_FLAG_DEBUG_TEMP_ALLOCATOR = 0x20, // Replace temp allocator backends with heap, so we can better trace out-of-bounds and corruption
-    RIZZ_CORE_FLAG_HOT_RELOAD_PLUGINS = 0x40    // Enables hot reloading for all modules and plugins including the game itself
+    RIZZ_CORE_FLAG_HEAP_TEMP_ALLOCATOR = 0x20,  // Replace temp allocator backends with heap, so we can better trace out-of-bounds and corruption
+    RIZZ_CORE_FLAG_HOT_RELOAD_PLUGINS = 0x40,   // Enables hot reloading for all modules and plugins including the game itself
+    RIZZ_CORE_FLAG_TRACE_TEMP_ALLOCATOR = 0x80  // Enable memory tracing on temp allocators, slows them down, but provides more insight on temp allocations
 };
 typedef uint32_t rizz_core_flags;
 
@@ -721,6 +724,10 @@ typedef struct rizz_api_core {
     const char* (*str_alloc)(uint32_t* phandle, const char* fmt, ...);
     void        (*str_free)(uint32_t handle);
     const char* (*str_cstr)(uint32_t handle);
+
+    // threads
+    rizz_thread* (*thread_create)(int (*thread_fn)(void* user_data), void* user_data, const char* debug_name);
+    int (*thread_destroy)(rizz_thread* thrd);
 
     // jobs
     sx_job_t (*job_dispatch)(int count,

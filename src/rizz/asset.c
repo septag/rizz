@@ -12,6 +12,7 @@
 #include "sx/os.h"
 #include "sx/pool.h"
 #include "sx/string.h"
+#include "sx/lockless.h"
 
 #include <alloca.h>
 
@@ -1276,7 +1277,7 @@ static void rizz__asset_group_wait(rizz_asset_group group)
 
         if (!loaded) {
             rizz__asset_update();
-            sx_yield_cpu();
+            sx_relax_cpu();
         }
     }
 }

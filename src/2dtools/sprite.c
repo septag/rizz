@@ -1063,12 +1063,12 @@ static rizz_asset_load_data atlas__on_prepare(const rizz_asset_load_params* para
     sx_hashtbl_init(&atlas->sprite_tbl, hashtbl_cap, keys, values);
 
     const rizz_atlas_load_params* aparams = params->params;
+    rizz_asset_load_flags flags = params->flags & ~RIZZ_ASSET_LOAD_FLAG_WAIT_ON_LOAD;
     rizz_texture_load_params tparams = { .min_filter = aparams->min_filter,
                                          .mag_filter = aparams->mag_filter,
                                          .wrap_u = SG_WRAP_CLAMP_TO_EDGE,
                                          .wrap_v = SG_WRAP_CLAMP_TO_EDGE };
-    atlas->a.texture =
-        the_asset->load("texture", img_filepath, &tparams, params->flags, alloc, params->tags);
+    atlas->a.texture = the_asset->load("texture", img_filepath, &tparams, flags, alloc, params->tags);
 
     cj5_result* predata = sx_malloc(g_spr.alloc, sizeof(cj5_result));
     if (!predata) {

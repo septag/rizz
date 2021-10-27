@@ -8,6 +8,7 @@
 #include "sx/pool.h"
 #include "sx/io.h"
 #include "sx/hash.h"
+#include "sx/atomic.h"
 
 #include "rizz/imgui.h"
 #include "rizz/imgui-extra.h"
@@ -29,8 +30,6 @@ char* rizz__demangle(const char* symbol);   // demangle.cpp
 #include <stdlib.h>  // malloc,free,realloc,qsort
 #include <float.h>
 #include <string.h>  // strcmp
-
-#include "c89atomic/c89atomic.h"
 
 #define mem_trace_context_mutex_enter(opts, mtx) if (opts&RIZZ_MEMOPTION_MULTITHREAD) sx_mutex_enter(&mtx)
 #define mem_trace_context_mutex_exit(opts, mtx)  if (opts&RIZZ_MEMOPTION_MULTITHREAD) sx_mutex_exit(&mtx)
@@ -122,13 +121,16 @@ typedef struct mem__write_json_context {
 typedef struct mem_trace_context
 {
     char      name[32];
+    char      name_view[32];
     sx_alloc  my_alloc;         // all allocations are redirected from this to redirect_alloc
     sx_alloc  redirect_alloc;   // receives all alloc calls and performs main allocations
     uint32_t  name_hash;
     uint32_t  options;
-    sx_align_decl(SX_CACHE_LINE_SIZE, c89atomic_int32) num_items;
-    sx_align_decl(SX_CACHE_LINE_SIZE, c89atomic_int64) alloc_size;
-    sx_align_decl(SX_CACHE_LINE_SIZE, c89atomic_int64) peak_size;
+    bool      disabled;
+    bool      viewDisabled;
+    sx_atomic_uint32 num_items;
+    sx_atomic_uint64 alloc_size;
+    sx_atomic_uint64 peak_size;
     sx_pool*  item_pool;    // item_size = sizeof(mem_item)
     mem_item* items_list;   // first node
     sx_mutex  mtx;
@@ -155,10 +157,10 @@ typedef struct mem_state
     #endif
 
     const sx_alloc* alloc;
-    sx_align_decl(SX_CACHE_LINE_SIZE, c89atomic_int64) debug_mem_size;
+    sx_atomic_uint64 debug_mem_size;
     mem_trace_context* root;
     mem_capture_context capture;
-    sx_align_decl(SX_CACHE_LINE_SIZE, c89atomic_flag) in_capture;
+    sx_atomic_uint32 in_capture;
 } mem_state;
 
 typedef struct mem_imgui_state
@@ -317,7 +319,7 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
     bool save_current_call = item.action != MEM_ACTION_FREE;
 
     if (save_current_call) {
-        c89atomic_fetch_add_explicit_i64(&g_mem.debug_mem_size, sizeof(mem_item), c89atomic_memory_order_relaxed);
+        sx_atomic_fetch_add64_explicit(&g_mem.debug_mem_size, sizeof(mem_item), SX_ATOMIC_MEMORYORDER_RELAXED);
 
         if (ctx->options & RIZZ_MEMOPTION_TRACE_CALLSTACK) {
             #if SX_PLATFORM_WINDOWS
@@ -351,7 +353,7 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
     item.size = size;
     item.ptr = ptr;
     item.frame = the__core.frame_index();
-    bool in_capture = c89atoimc_flag_load_explicit(&g_mem.in_capture, c89atomic_memory_order_acquire);
+    bool in_capture = sx_atomic_load32_explicit(&g_mem.in_capture, SX_ATOMIC_MEMORYORDER_ACQUIRE);
 
     // special case: FREE and REALLOC, always have previous malloc trace items that we should take care of
     if (item.action == MEM_ACTION_FREE || item.action == MEM_ACTION_REALLOC) {
@@ -365,8 +367,8 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
             sx_assert(old_item->size > 0);
             mem_trace_context* _ctx = ctx;
             while (_ctx) {
-                c89atomic_fetch_add_explicit_i32(&_ctx->num_items, -1, c89atomic_memory_order_relaxed);                
-                c89atomic_fetch_add_explicit_i64(&_ctx->alloc_size, -(int64_t)old_item->size, c89atomic_memory_order_relaxed);
+                sx_atomic_fetch_sub32_explicit(&_ctx->num_items, 1, SX_ATOMIC_MEMORYORDER_RELAXED);                
+                sx_atomic_fetch_sub64_explicit(&_ctx->alloc_size, old_item->size, SX_ATOMIC_MEMORYORDER_RELAXED);
                 _ctx = _ctx->parent;
             }
 
@@ -390,14 +392,14 @@ static void mem_create_trace_item(mem_trace_context* ctx, void* ptr, void* old_p
     if (size > 0) {
         mem_trace_context* _ctx = ctx;
         while (_ctx) {
-            c89atomic_fetch_add_explicit_i32(&_ctx->num_items, 1, c89atomic_memory_order_relaxed);
-            c89atomic_fetch_add_explicit_i64(&_ctx->alloc_size, (int64_t)size, c89atomic_memory_order_acquire);
+            sx_atomic_fetch_add32_explicit(&_ctx->num_items, 1, SX_ATOMIC_MEMORYORDER_RELAXED);
+            sx_atomic_fetch_add64_explicit(&_ctx->alloc_size, (int64_t)size, SX_ATOMIC_MEMORYORDER_ACQUIRE);
             
-            int64_t cur_peak = _ctx->peak_size;
+            unsigned long long cur_peak = _ctx->peak_size;
             while (cur_peak < ctx->alloc_size && 
-                   !c89atomic_compare_exchange_strong_i64(&_ctx->peak_size, &cur_peak, _ctx->alloc_size))
+                   !sx_atomic_compare_exchange64_strong(&_ctx->peak_size, &cur_peak, _ctx->alloc_size))
             { 
-                sx_yield_cpu(); 
+                sx_relax_cpu(); 
             }
             _ctx = _ctx->parent;
         }
@@ -493,6 +495,8 @@ static void mem_trace_context_clear(mem_trace_context* ctx)
     }
 
     ctx->items_list = NULL;
+    ctx->num_items = 0;
+    ctx->alloc_size = 0;
     mem_trace_context_mutex_exit(ctx->options, ctx->mtx);
 }
 
@@ -501,16 +505,17 @@ static void* mem_alloc_cb(void* ptr, size_t size, uint32_t align, const char* fi
 {
     mem_trace_context* ctx = user_data;
     void* p = ctx->redirect_alloc.alloc_cb(ptr, size, align, file, func, line, user_data);
-    mem_create_trace_item(ctx, p, ptr, size, file, func, line);
+    if (!ctx->disabled)
+        mem_create_trace_item(ctx, p, ptr, size, file, func, line);
     return p;
 }
 
-static const char* k_hardcoded_vspaths[] = {
-    "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\Common7\\IDE\\Extensions\\TestPlatform\\Extensions\\Cpp\\x64"
-};
-
 bool rizz__mem_init(uint32_t opts)
 {
+    static const char* k_hardcoded_vspaths[] = {
+        "C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\Common7\\IDE\\Extensions\\TestPlatform\\Extensions\\Cpp\\x64"
+    };
+
     sx_assert(opts != RIZZ_MEMOPTION_INHERIT);
 
     g_mem.alloc = the__core.heap_alloc();
@@ -578,13 +583,15 @@ void rizz__mem_release(void)
 
 sx_alloc* rizz__mem_create_allocator(const char* name, uint32_t mem_opts, const char* parent, const sx_alloc* alloc)
 {
-    sx_assert(alloc);
+    //sx_assert(alloc);
     mem_trace_context* ctx = mem_create_trace_context(name, mem_opts, parent);
 
     if (ctx) {
         ctx->my_alloc.alloc_cb = mem_alloc_cb;
         ctx->my_alloc.user_data = ctx;
-        ctx->redirect_alloc = *alloc;
+
+        if (alloc)
+            ctx->redirect_alloc = *alloc;
         
         return &ctx->my_alloc;
     }
@@ -610,7 +617,7 @@ static void mem_imgui_context_node(rizz_api_imgui* imgui, mem_trace_context* ctx
         flags |= ImGuiTreeNodeFlags_Selected;
     }
 
-    if (imgui->TreeNodeEx_Str(ctx->name, flags)) {
+    if (imgui->TreeNodeEx_Str(ctx->name_view[0] ? ctx->name_view : ctx->name, flags)) {
         if (imgui->IsItemClicked(ImGuiMouseButton_Left)) {
             g_mem_imgui.selected_ctx = ctx;
             g_mem_imgui.selected_item = NULL;
@@ -619,7 +626,8 @@ static void mem_imgui_context_node(rizz_api_imgui* imgui, mem_trace_context* ctx
 
         ctx = ctx->child;
         while (ctx) {
-            mem_imgui_context_node(imgui, ctx);
+            if (!ctx->viewDisabled)
+                mem_imgui_context_node(imgui, ctx);
             ctx = ctx->next;
         }
 
@@ -1122,7 +1130,8 @@ void rizz__mem_show_debugger(bool* popen)
 
             mem_trace_context* ctx = g_mem.root->child;
             while (ctx) {
-                mem_imgui_context_node(imgui, ctx);
+                if (!ctx->viewDisabled)
+                    mem_imgui_context_node(imgui, ctx);
                 ctx = ctx->next;
             }
 
@@ -1180,7 +1189,7 @@ void rizz__mem_begin_capture(const char* name)
     sx_strcpy(g_mem.capture.name, sizeof(g_mem.capture.name), name);
     sx_array_clear(g_mem.capture.items);
     g_mem.capture.start_tm = sx_tm_now();
-    c89atomic_flag_test_and_set_explicit(&g_mem.in_capture, c89atomic_memory_order_release);
+    sx_atomic_store32_explicit(&g_mem.in_capture, 1, SX_ATOMIC_MEMORYORDER_RELEASE);
 }
 
 SX_INLINE void mem__writef(sx_file* file, const char* fmt, ...)
@@ -1331,7 +1340,7 @@ bool rizz__mem_end_capture(void)
         return false;
     }
 
-    c89atomic_flag_clear(&g_mem.in_capture);
+    sx_atomic_store32_explicit(&g_mem.in_capture, 0, SX_ATOMIC_MEMORYORDER_RELEASE);
 
     mem__write_json_context jctx = {
         .newline = "\n",
@@ -1406,3 +1415,42 @@ bool rizz__mem_end_capture(void)
     return true;
 }
 
+void rizz__mem_merge_peak(sx_alloc* alloc1, sx_alloc* alloc2) 
+{
+    mem_trace_context* ctx1 = alloc1->user_data;
+    mem_trace_context* ctx2 = alloc2->user_data;
+    
+    int64_t max_peak = sx_max(ctx1->peak_size, ctx2->peak_size);
+    ctx1->peak_size = max_peak;
+    ctx2->peak_size = max_peak;
+}
+
+void rizz__mem_enable_trace(sx_alloc* alloc)
+{
+    mem_trace_context* ctx = alloc->user_data;
+    ctx->disabled = false;
+}
+
+void rizz__mem_disable_trace(sx_alloc* alloc)
+{
+    mem_trace_context* ctx = alloc->user_data;
+    ctx->disabled = true;
+}
+
+void rizz__mem_enable_trace_view(sx_alloc* alloc)
+{
+    mem_trace_context* ctx = alloc->user_data;
+    ctx->viewDisabled = false;
+}
+
+void rizz__mem_disable_trace_view(sx_alloc* alloc)
+{
+    mem_trace_context* ctx = alloc->user_data;
+    ctx->viewDisabled = true;
+}
+
+void rizz__mem_set_view_name(sx_alloc* alloc, const char* name)
+{
+    mem_trace_context* ctx = alloc->user_data;
+    sx_strcpy(ctx->name_view, sizeof(ctx->name_view), name);
+}

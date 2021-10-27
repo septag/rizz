@@ -44,6 +44,12 @@ void rizz__mem_show_debugger(bool*);
 void rizz__mem_reload_modules(void);
 void rizz__mem_begin_capture(const char* name);
 bool rizz__mem_end_capture(void);
+void rizz__mem_merge_peak(sx_alloc* alloc1, sx_alloc* alloc2);
+void rizz__mem_enable_trace(sx_alloc* alloc);
+void rizz__mem_disable_trace(sx_alloc* alloc);
+void rizz__mem_enable_trace_view(sx_alloc* alloc);
+void rizz__mem_disable_trace_view(sx_alloc* alloc);
+void rizz__mem_set_view_name(sx_alloc* alloc, const char* name);
 
 bool rizz__profile_init(const sx_alloc* alloc);
 void rizz__profile_release(void);
@@ -95,7 +101,7 @@ bool rizz__win_get_vstudio_dir(char* vspath, size_t vspath_size);
             the__core.profile_capture_sample_end(_id))
 
 #define rizz__profile_startup_begin(_name)   rizz__profile_capture_sample_begin(the__startup_profile_ctx, _name, __FILE__, __LINE__)
-#define rizz__profile_startup_end()     rizz__profile_capture_sample_end(the__startup_profile_ctx)
+#define rizz__profile_startup_end()          rizz__profile_capture_sample_end(the__startup_profile_ctx)
             
 bool rizz__vfs_init(void);
 void rizz__vfs_release(void);

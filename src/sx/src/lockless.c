@@ -98,7 +98,7 @@ sx_queue_spsc* sx_queue_spsc_create(const sx_alloc* alloc, int item_sz, int capa
     sx__queue_spsc_node* node = queue->ptrs[--queue->iter];
     node->next = NULL;
     queue->first = node;
-    queue->divider = queue->last = node;
+    queue->divider = queue->last = (uintptr_t)node;
     queue->grow_bins = NULL;
 
     return queue;
@@ -146,10 +146,10 @@ bool sx_queue_spsc_produce(sx_queue_spsc* queue, const void* data)
         sx__queue_spsc_node* last = (sx__queue_spsc_node*)queue->last;
         last->next = node;
 
-        sx_atomic_xchg_ptr(&queue->last, node);
+        sx_atomic_exchangeptr(&queue->last, (uintptr_t)node);
 
         // trim/remove un-used nodes
-        while (queue->first != queue->divider) {
+        while ((uintptr_t)queue->first != queue->divider) {
             sx__queue_spsc_node* first = (sx__queue_spsc_node*)queue->first;
             queue->first = first->next;
 
@@ -184,7 +184,7 @@ bool sx_queue_spsc_consume(sx_queue_spsc* queue, void* data)
         sx_assert(divider->next);
         sx_memcpy(data, divider->next + 1, queue->stride);
 
-        sx_atomic_xchg_ptr(&queue->divider, divider->next);
+        sx_atomic_exchangeptr(&queue->divider, (uintptr_t)divider->next);
         return true;
     }
 
