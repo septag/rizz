@@ -318,7 +318,7 @@ sx_job_t sx_job_dispatch(sx_job_context* ctx, int count, sx_job_cb* callback, vo
         return NULL;
     }
 
-    *counter = num_jobs;
+    sx_atomic_store32_explicit(counter, (uint32_t)num_jobs, SX_ATOMIC_MEMORYORDER_RELEASE);
     sx_assertf(tdata, "Dispatch must be called within main thread or job threads");
 
     // Another job is running on this thread. So depend the current running job to the new
@@ -369,7 +369,7 @@ static void sx__job_process_pending(sx_job_context* ctx)
     for (int i = 0, c = sx_array_count(ctx->pending); i < c; i++) {
         sx__job_pending pending = ctx->pending[i];
 
-        if (!sx_pool_fulln(ctx->job_pool, *pending.counter)) {
+        if (!sx_pool_fulln(ctx->job_pool, (int)sx_atomic_load32_explicit(pending.counter, SX_ATOMIC_MEMORYORDER_ACQUIRE))) {
             int range_start = 0;
             int range_end = pending.range_size + (pending.range_reminder > 0 ? 1 : 0);
             --pending.range_reminder;
@@ -399,14 +399,14 @@ static void sx__job_process_pending_single(sx_job_context* ctx, int index)
     sx_lock(ctx->job_lk) {
         // unlike sx__job_process_pending, only check the specific index to push into job-list
         sx__job_pending pending = ctx->pending[index];
-        if (!sx_pool_fulln(ctx->job_pool, *pending.counter)) {
+        int count = (int)sx_atomic_load32_explicit(pending.counter, SX_ATOMIC_MEMORYORDER_ACQUIRE);
+        if (!sx_pool_fulln(ctx->job_pool, count)) {
             sx_array_pop(ctx->pending, index);
 
             int range_start = 0;
             int range_end = pending.range_size + (pending.range_reminder > 0 ? 1 : 0);
             --pending.range_reminder;
 
-            int count = *pending.counter;
             for (int i = 0; i < count; i++) {
                 sx__job_add_list(
                     &ctx->waiting_list[pending.priority], &ctx->waiting_list_last[pending.priority],
@@ -428,7 +428,7 @@ void sx_job_wait_and_del(sx_job_context* ctx, sx_job_t job)
 
     uint64_t prev_tm = sx_cycle_clock();
     
-    while (*job > 0) {
+    while (sx_atomic_load32_explicit(job, SX_ATOMIC_MEMORYORDER_ACQUIRE) > 0) {
         // check if the current job is the pending list
         for (int i = 0, c = sx_array_count(ctx->pending); i < c; i++) {
             if (ctx->pending[i].counter == job) {
@@ -481,7 +481,7 @@ void sx_job_wait_and_del(sx_job_context* ctx, sx_job_t job)
 
 bool sx_job_test_and_del(sx_job_context* ctx, sx_job_t job)
 {
-    if (*job == 0) {
+    if (sx_atomic_load32_explicit(job, SX_ATOMIC_MEMORYORDER_ACQUIRE) == 0) {
         // All jobs are done, Delete the counter
         sx_lock(ctx->counter_lk) {
             sx_pool_del(ctx->counter_pool, (void*)job);

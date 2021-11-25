@@ -90,7 +90,7 @@ void material__remove(rizz_material_lib* lib, rizz_material mtl)
     sx_assert_always(sx_handle_valid(lib->ids, mtl.id));
 
     material__data* mtldata = &lib->datas[sx_handle_index(mtl.id)];
-    sx_assert_always(mtldata->refcount > 0)
+    sx_assert_always(mtldata->refcount > 0);
     if (--mtldata->refcount == 0) {
         uint32_t hash = sx_hash_xxh32(mtldata, sizeof(*mtldata), HASH_SEED);
 

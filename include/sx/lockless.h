@@ -72,9 +72,7 @@ SX_FORCE_INLINE void sx_lock_enter(sx_lock_t* lock)
 
 SX_FORCE_INLINE void sx_lock_exit(sx_lock_t* lock)
 {
-    uint32_t prev = sx_atomic_exchange32_explicit(lock, 0, SX_ATOMIC_MEMORYORDER_RELEASE);
-    sx_unused(prev);
-    sx_assert(prev == 1);
+    sx_atomic_store32_explicit(lock, 0, SX_ATOMIC_MEMORYORDER_RELEASE);
 }
 
 SX_FORCE_INLINE bool sx_lock_try(sx_lock_t* lock)

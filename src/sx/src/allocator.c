@@ -7,7 +7,6 @@
 #include <malloc.h>
 #include <stdlib.h>
 
-#include "sx/threads.h"     // sx_lock
 #include "sx/os.h"
 #include "sx/string.h"
 #include "sx/lockless.h"

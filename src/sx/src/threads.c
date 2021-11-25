@@ -726,4 +726,3 @@ uint32_t sx_thread_tid(void)
     sx_assertf(0, "Tid not implemented");
 #endif    // SX_PLATFORM_
 }
-

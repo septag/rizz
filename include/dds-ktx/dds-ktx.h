@@ -8,7 +8,7 @@
 // Copyright 2011-2019 Branimir Karadzic. All rights reserved.
 // License: https://github.com/bkaradzic/bimg#license-bsd-2-clause
 //
-// dds-ktx.h - v1.0.0 - Reader/Writer for DDS/KTX formats
+// dds-ktx.h - v1.1.0 - Reader/Writer for DDS/KTX formats
 //      Parses DDS and KTX files from a memory blob, written in C99
 //      
 //      Supported formats:
@@ -70,6 +70,7 @@
 //      1.0.0       Api change: ddsktx_sub_data
 //                  Added KTX support
 //      1.0.1       Fixed major bugs in KTX parsing
+//      1.1.0       Fixed bugs in get_sub routine, refactored some parts, image-viewer example
 //
 // TODO
 //      Write KTX/DDS
@@ -155,7 +156,8 @@ typedef enum ddsktx_texture_flags
     DDSKTX_TEXTURE_FLAG_SRGB    = 0x02,        
     DDSKTX_TEXTURE_FLAG_ALPHA   = 0x04,       // Has alpha channel
     DDSKTX_TEXTURE_FLAG_DDS     = 0x08,       // container was DDS file
-    DDSKTX_TEXTURE_FLAG_KTX     = 0x10        // container was KTX file
+    DDSKTX_TEXTURE_FLAG_KTX     = 0x10,       // container was KTX file
+    DDSKTX_TEXTURE_FLAG_VOLUME  = 0x20,       // 3D volume
 } ddsktx_texture_flags;
 
 typedef struct ddsktx_texture_info
@@ -329,12 +331,12 @@ DDSKTX_API bool        ddsktx_format_compressed(ddsktx_format format);
 #define DDSKTX__DDSCAPS2_CUBEMAP_NEGATIVEZ 0x00008000
 
 #define DDSKTX__DDSCAPS2_CUBEMAP_ALLSIDES (0      \
-			| DDSKTX__DDSCAPS2_CUBEMAP_POSITIVEX \
-			| DDSKTX__DDSCAPS2_CUBEMAP_NEGATIVEX \
-			| DDSKTX__DDSCAPS2_CUBEMAP_POSITIVEY \
-			| DDSKTX__DDSCAPS2_CUBEMAP_NEGATIVEY \
-			| DDSKTX__DDSCAPS2_CUBEMAP_POSITIVEZ \
-			| DDSKTX__DDSCAPS2_CUBEMAP_NEGATIVEZ )
+            | DDSKTX__DDSCAPS2_CUBEMAP_POSITIVEX \
+            | DDSKTX__DDSCAPS2_CUBEMAP_NEGATIVEX \
+            | DDSKTX__DDSCAPS2_CUBEMAP_POSITIVEY \
+            | DDSKTX__DDSCAPS2_CUBEMAP_NEGATIVEY \
+            | DDSKTX__DDSCAPS2_CUBEMAP_POSITIVEZ \
+            | DDSKTX__DDSCAPS2_CUBEMAP_NEGATIVEZ )
 
 #pragma pack(push, 1)
 typedef struct ddsktx__dds_pixel_format
@@ -770,56 +772,58 @@ typedef struct ddsktx__ktx_format_info
 
 typedef struct ddsktx__ktx_format_info2
 {
-	uint32_t            internal_fmt;
-	ddsktx_format  format;    
+    uint32_t       internal_fmt;
+    ddsktx_format  format;    
 } ddsktx__ktx_format_info2;
 
 static const ddsktx__ktx_format_info k__translate_ktx_fmt[] = {
-		{ DDSKTX__KTX_COMPRESSED_RGBA_S3TC_DXT1_EXT,            DDSKTX__KTX_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT,        DDSKTX__KTX_COMPRESSED_RGBA_S3TC_DXT1_EXT,            DDSKTX__KTX_ZERO,                         }, // BC1
-		{ DDSKTX__KTX_COMPRESSED_RGBA_S3TC_DXT3_EXT,            DDSKTX__KTX_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT,        DDSKTX__KTX_COMPRESSED_RGBA_S3TC_DXT3_EXT,            DDSKTX__KTX_ZERO,                         }, // BC2
-		{ DDSKTX__KTX_COMPRESSED_RGBA_S3TC_DXT5_EXT,            DDSKTX__KTX_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT,        DDSKTX__KTX_COMPRESSED_RGBA_S3TC_DXT5_EXT,            DDSKTX__KTX_ZERO,                         }, // BC3
-		{ DDSKTX__KTX_COMPRESSED_LUMINANCE_LATC1_EXT,           DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_COMPRESSED_LUMINANCE_LATC1_EXT,           DDSKTX__KTX_ZERO,                         }, // BC4
-		{ DDSKTX__KTX_COMPRESSED_LUMINANCE_ALPHA_LATC2_EXT,     DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_COMPRESSED_LUMINANCE_ALPHA_LATC2_EXT,     DDSKTX__KTX_ZERO,                         }, // BC5
-		{ DDSKTX__KTX_COMPRESSED_RGB_BPTC_SIGNED_FLOAT_ARB,     DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_COMPRESSED_RGB_BPTC_SIGNED_FLOAT_ARB,     DDSKTX__KTX_ZERO,                         }, // BC6H
-		{ DDSKTX__KTX_COMPRESSED_RGBA_BPTC_UNORM_ARB,           DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_COMPRESSED_RGBA_BPTC_UNORM_ARB,           DDSKTX__KTX_ZERO,                         }, // BC7
-		{ DDSKTX__KTX_ETC1_RGB8_OES,                            DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_ETC1_RGB8_OES,                            DDSKTX__KTX_ZERO,                         }, // ETC1
-		{ DDSKTX__KTX_COMPRESSED_RGB8_ETC2,                     DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_COMPRESSED_RGB8_ETC2,                     DDSKTX__KTX_ZERO,                         }, // ETC2
-		{ DDSKTX__KTX_COMPRESSED_RGBA8_ETC2_EAC,                DDSKTX__KTX_COMPRESSED_SRGB8_ETC2,                      DDSKTX__KTX_COMPRESSED_RGBA8_ETC2_EAC,                DDSKTX__KTX_ZERO,                         }, // ETC2A
-		{ DDSKTX__KTX_COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2, DDSKTX__KTX_COMPRESSED_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2,  DDSKTX__KTX_COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2, DDSKTX__KTX_ZERO,                         }, // ETC2A1
-		{ DDSKTX__KTX_COMPRESSED_RGB_PVRTC_2BPPV1_IMG,          DDSKTX__KTX_COMPRESSED_SRGB_PVRTC_2BPPV1_EXT,           DDSKTX__KTX_COMPRESSED_RGB_PVRTC_2BPPV1_IMG,          DDSKTX__KTX_ZERO,                         }, // PTC12
-		{ DDSKTX__KTX_COMPRESSED_RGB_PVRTC_4BPPV1_IMG,          DDSKTX__KTX_COMPRESSED_SRGB_PVRTC_4BPPV1_EXT,           DDSKTX__KTX_COMPRESSED_RGB_PVRTC_4BPPV1_IMG,          DDSKTX__KTX_ZERO,                         }, // PTC14
-		{ DDSKTX__KTX_COMPRESSED_RGBA_PVRTC_2BPPV1_IMG,         DDSKTX__KTX_COMPRESSED_SRGB_ALPHA_PVRTC_2BPPV1_EXT,     DDSKTX__KTX_COMPRESSED_RGBA_PVRTC_2BPPV1_IMG,         DDSKTX__KTX_ZERO,                         }, // PTC12A
-		{ DDSKTX__KTX_COMPRESSED_RGBA_PVRTC_4BPPV1_IMG,         DDSKTX__KTX_COMPRESSED_SRGB_ALPHA_PVRTC_4BPPV1_EXT,     DDSKTX__KTX_COMPRESSED_RGBA_PVRTC_4BPPV1_IMG,         DDSKTX__KTX_ZERO,                         }, // PTC14A
-		{ DDSKTX__KTX_COMPRESSED_RGBA_PVRTC_2BPPV2_IMG,         DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_COMPRESSED_RGBA_PVRTC_2BPPV2_IMG,         DDSKTX__KTX_ZERO,                         }, // PTC22
-		{ DDSKTX__KTX_COMPRESSED_RGBA_PVRTC_4BPPV2_IMG,         DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_COMPRESSED_RGBA_PVRTC_4BPPV2_IMG,         DDSKTX__KTX_ZERO,                         }, // PTC24
-		{ DDSKTX__KTX_ATC_RGB_AMD,                              DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_ATC_RGB_AMD,                              DDSKTX__KTX_ZERO,                         }, // ATC
-		{ DDSKTX__KTX_ATC_RGBA_EXPLICIT_ALPHA_AMD,              DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_ATC_RGBA_EXPLICIT_ALPHA_AMD,              DDSKTX__KTX_ZERO,                         }, // ATCE
-		{ DDSKTX__KTX_ATC_RGBA_INTERPOLATED_ALPHA_AMD,          DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_ATC_RGBA_INTERPOLATED_ALPHA_AMD,          DDSKTX__KTX_ZERO,                         }, // ATCI
-		{ DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_4x4_KHR,             DDSKTX__KTX_COMPRESSED_SRGB8_ALPHA8_ADDSKTX_4x4_KHR,       DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_4x4_KHR,             DDSKTX__KTX_ZERO,                         }, // ASTC4x4
-		{ DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_5x5_KHR,             DDSKTX__KTX_COMPRESSED_SRGB8_ALPHA8_ADDSKTX_5x5_KHR,       DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_5x5_KHR,             DDSKTX__KTX_ZERO,                         }, // ASTC5x5
-		{ DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_6x6_KHR,             DDSKTX__KTX_COMPRESSED_SRGB8_ALPHA8_ADDSKTX_6x6_KHR,       DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_6x6_KHR,             DDSKTX__KTX_ZERO,                         }, // ASTC6x6
-		{ DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_8x5_KHR,             DDSKTX__KTX_COMPRESSED_SRGB8_ALPHA8_ADDSKTX_8x5_KHR,       DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_8x5_KHR,             DDSKTX__KTX_ZERO,                         }, // ASTC8x5
-		{ DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_8x6_KHR,             DDSKTX__KTX_COMPRESSED_SRGB8_ALPHA8_ADDSKTX_8x6_KHR,       DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_8x6_KHR,             DDSKTX__KTX_ZERO,                         }, // ASTC8x6
-		{ DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_10x5_KHR,            DDSKTX__KTX_COMPRESSED_SRGB8_ALPHA8_ADDSKTX_10x5_KHR,      DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_10x5_KHR,            DDSKTX__KTX_ZERO,                         }, // ASTC10x5
-		{ DDSKTX__KTX_ZERO,                                     DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_ZERO,                                     DDSKTX__KTX_ZERO,                         }, // Unknown
-		{ DDSKTX__KTX_ALPHA,                                    DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_ALPHA,                                    DDSKTX__KTX_UNSIGNED_BYTE,                }, // A8
-		{ DDSKTX__KTX_R8,                                       DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RED,                                      DDSKTX__KTX_UNSIGNED_BYTE,                }, // R8
-		{ DDSKTX__KTX_RGBA8,                                    DDSKTX__KTX_SRGB8_ALPHA8,                               DDSKTX__KTX_RGBA,                                     DDSKTX__KTX_UNSIGNED_BYTE,                }, // RGBA8
-		{ DDSKTX__KTX_RGBA8_SNORM,                              DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RGBA,                                     DDSKTX__KTX_BYTE,                         }, // RGBA8S
-		{ DDSKTX__KTX_RG16,                                     DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RG,                                       DDSKTX__KTX_UNSIGNED_SHORT,               }, // RG16
-		{ DDSKTX__KTX_RGB8,                                     DDSKTX__KTX_SRGB8,                                      DDSKTX__KTX_RGB,                                      DDSKTX__KTX_UNSIGNED_BYTE,                }, // RGB8
-		{ DDSKTX__KTX_R16,                                      DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RED,                                      DDSKTX__KTX_UNSIGNED_SHORT,               }, // R16
-		{ DDSKTX__KTX_R32F,                                     DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RED,                                      DDSKTX__KTX_FLOAT,                        }, // R32F
-		{ DDSKTX__KTX_R16F,                                     DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RED,                                      DDSKTX__KTX_HALF_FLOAT,                   }, // R16F
-		{ DDSKTX__KTX_RG16F,                                    DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RG,                                       DDSKTX__KTX_FLOAT,                        }, // RG16F
-		{ DDSKTX__KTX_RG16_SNORM,                               DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RG,                                       DDSKTX__KTX_SHORT,                        }, // RG16S
-		{ DDSKTX__KTX_RGBA16F,                                  DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RGBA,                                     DDSKTX__KTX_HALF_FLOAT,                   }, // RGBA16F
-		{ DDSKTX__KTX_RGBA16,                                   DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RGBA,                                     DDSKTX__KTX_UNSIGNED_SHORT,               }, // RGBA16
-		{ DDSKTX__KTX_BGRA,                                     DDSKTX__KTX_SRGB8_ALPHA8,                               DDSKTX__KTX_BGRA,                                     DDSKTX__KTX_UNSIGNED_BYTE,                }, // BGRA8
-		{ DDSKTX__KTX_RGB10_A2,                                 DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RGBA,                                     DDSKTX__KTX_UNSIGNED_INT_2_10_10_10_REV,  }, // RGB10A2
-		{ DDSKTX__KTX_R11F_G11F_B10F,                           DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RGB,                                      DDSKTX__KTX_UNSIGNED_INT_10F_11F_11F_REV, }, // RG11B10F
-		{ DDSKTX__KTX_RG8,                                      DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RG,                                       DDSKTX__KTX_UNSIGNED_BYTE,                }, // RG8
-		{ DDSKTX__KTX_RG8_SNORM,                                DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RG,                                       DDSKTX__KTX_BYTE,                         }  // RG8S
+        { DDSKTX__KTX_COMPRESSED_RGBA_S3TC_DXT1_EXT,            DDSKTX__KTX_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT,        DDSKTX__KTX_COMPRESSED_RGBA_S3TC_DXT1_EXT,            DDSKTX__KTX_ZERO,                         }, // BC1
+        { DDSKTX__KTX_COMPRESSED_RGBA_S3TC_DXT3_EXT,            DDSKTX__KTX_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT,        DDSKTX__KTX_COMPRESSED_RGBA_S3TC_DXT3_EXT,            DDSKTX__KTX_ZERO,                         }, // BC2
+        { DDSKTX__KTX_COMPRESSED_RGBA_S3TC_DXT5_EXT,            DDSKTX__KTX_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT,        DDSKTX__KTX_COMPRESSED_RGBA_S3TC_DXT5_EXT,            DDSKTX__KTX_ZERO,                         }, // BC3
+        { DDSKTX__KTX_COMPRESSED_LUMINANCE_LATC1_EXT,           DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_COMPRESSED_LUMINANCE_LATC1_EXT,           DDSKTX__KTX_ZERO,                         }, // BC4
+        { DDSKTX__KTX_COMPRESSED_LUMINANCE_ALPHA_LATC2_EXT,     DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_COMPRESSED_LUMINANCE_ALPHA_LATC2_EXT,     DDSKTX__KTX_ZERO,                         }, // BC5
+        { DDSKTX__KTX_COMPRESSED_RGB_BPTC_SIGNED_FLOAT_ARB,     DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_COMPRESSED_RGB_BPTC_SIGNED_FLOAT_ARB,     DDSKTX__KTX_ZERO,                         }, // BC6H
+        { DDSKTX__KTX_COMPRESSED_RGBA_BPTC_UNORM_ARB,           DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_COMPRESSED_RGBA_BPTC_UNORM_ARB,           DDSKTX__KTX_ZERO,                         }, // BC7
+        { DDSKTX__KTX_ETC1_RGB8_OES,                            DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_ETC1_RGB8_OES,                            DDSKTX__KTX_ZERO,                         }, // ETC1
+        { DDSKTX__KTX_COMPRESSED_RGB8_ETC2,                     DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_COMPRESSED_RGB8_ETC2,                     DDSKTX__KTX_ZERO,                         }, // ETC2
+        { DDSKTX__KTX_COMPRESSED_RGBA8_ETC2_EAC,                DDSKTX__KTX_COMPRESSED_SRGB8_ETC2,                      DDSKTX__KTX_COMPRESSED_RGBA8_ETC2_EAC,                DDSKTX__KTX_ZERO,                         }, // ETC2A
+        { DDSKTX__KTX_COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2, DDSKTX__KTX_COMPRESSED_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2,  DDSKTX__KTX_COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2, DDSKTX__KTX_ZERO,                         }, // ETC2A1
+        { DDSKTX__KTX_COMPRESSED_RGB_PVRTC_2BPPV1_IMG,          DDSKTX__KTX_COMPRESSED_SRGB_PVRTC_2BPPV1_EXT,           DDSKTX__KTX_COMPRESSED_RGB_PVRTC_2BPPV1_IMG,          DDSKTX__KTX_ZERO,                         }, // PTC12
+        { DDSKTX__KTX_COMPRESSED_RGB_PVRTC_4BPPV1_IMG,          DDSKTX__KTX_COMPRESSED_SRGB_PVRTC_4BPPV1_EXT,           DDSKTX__KTX_COMPRESSED_RGB_PVRTC_4BPPV1_IMG,          DDSKTX__KTX_ZERO,                         }, // PTC14
+        { DDSKTX__KTX_COMPRESSED_RGBA_PVRTC_2BPPV1_IMG,         DDSKTX__KTX_COMPRESSED_SRGB_ALPHA_PVRTC_2BPPV1_EXT,     DDSKTX__KTX_COMPRESSED_RGBA_PVRTC_2BPPV1_IMG,         DDSKTX__KTX_ZERO,                         }, // PTC12A
+        { DDSKTX__KTX_COMPRESSED_RGBA_PVRTC_4BPPV1_IMG,         DDSKTX__KTX_COMPRESSED_SRGB_ALPHA_PVRTC_4BPPV1_EXT,     DDSKTX__KTX_COMPRESSED_RGBA_PVRTC_4BPPV1_IMG,         DDSKTX__KTX_ZERO,                         }, // PTC14A
+        { DDSKTX__KTX_COMPRESSED_RGBA_PVRTC_2BPPV2_IMG,         DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_COMPRESSED_RGBA_PVRTC_2BPPV2_IMG,         DDSKTX__KTX_ZERO,                         }, // PTC22
+        { DDSKTX__KTX_COMPRESSED_RGBA_PVRTC_4BPPV2_IMG,         DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_COMPRESSED_RGBA_PVRTC_4BPPV2_IMG,         DDSKTX__KTX_ZERO,                         }, // PTC24
+        { DDSKTX__KTX_ATC_RGB_AMD,                              DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_ATC_RGB_AMD,                              DDSKTX__KTX_ZERO,                         }, // ATC
+        { DDSKTX__KTX_ATC_RGBA_EXPLICIT_ALPHA_AMD,              DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_ATC_RGBA_EXPLICIT_ALPHA_AMD,              DDSKTX__KTX_ZERO,                         }, // ATCE
+        { DDSKTX__KTX_ATC_RGBA_INTERPOLATED_ALPHA_AMD,          DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_ATC_RGBA_INTERPOLATED_ALPHA_AMD,          DDSKTX__KTX_ZERO,                         }, // ATCI
+        { DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_4x4_KHR,          DDSKTX__KTX_COMPRESSED_SRGB8_ALPHA8_ADDSKTX_4x4_KHR,    DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_4x4_KHR,          DDSKTX__KTX_ZERO,                         }, // ASTC4x4
+        { DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_5x5_KHR,          DDSKTX__KTX_COMPRESSED_SRGB8_ALPHA8_ADDSKTX_5x5_KHR,    DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_5x5_KHR,          DDSKTX__KTX_ZERO,                         }, // ASTC5x5
+        { DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_6x6_KHR,          DDSKTX__KTX_COMPRESSED_SRGB8_ALPHA8_ADDSKTX_6x6_KHR,    DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_6x6_KHR,          DDSKTX__KTX_ZERO,                         }, // ASTC6x6
+        { DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_8x5_KHR,          DDSKTX__KTX_COMPRESSED_SRGB8_ALPHA8_ADDSKTX_8x5_KHR,    DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_8x5_KHR,          DDSKTX__KTX_ZERO,                         }, // ASTC8x5
+        { DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_8x6_KHR,          DDSKTX__KTX_COMPRESSED_SRGB8_ALPHA8_ADDSKTX_8x6_KHR,    DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_8x6_KHR,          DDSKTX__KTX_ZERO,                         }, // ASTC8x6
+        { DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_10x5_KHR,         DDSKTX__KTX_COMPRESSED_SRGB8_ALPHA8_ADDSKTX_10x5_KHR,   DDSKTX__KTX_COMPRESSED_RGBA_ADDSKTX_10x5_KHR,         DDSKTX__KTX_ZERO,                         }, // ASTC10x5
+        { DDSKTX__KTX_ZERO,                                     DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_ZERO,                                     DDSKTX__KTX_ZERO,                         }, // Unknown
+        { DDSKTX__KTX_ALPHA,                                    DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_ALPHA,                                    DDSKTX__KTX_UNSIGNED_BYTE,                }, // A8
+        { DDSKTX__KTX_R8,                                       DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RED,                                      DDSKTX__KTX_UNSIGNED_BYTE,                }, // R8
+        { DDSKTX__KTX_RGBA8,                                    DDSKTX__KTX_SRGB8_ALPHA8,                               DDSKTX__KTX_RGBA,                                     DDSKTX__KTX_UNSIGNED_BYTE,                }, // RGBA8
+        { DDSKTX__KTX_RGBA8_SNORM,                              DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RGBA,                                     DDSKTX__KTX_BYTE,                         }, // RGBA8S
+        { DDSKTX__KTX_RG16,                                     DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RG,                                       DDSKTX__KTX_UNSIGNED_SHORT,               }, // RG16
+        { DDSKTX__KTX_RGB8,                                     DDSKTX__KTX_SRGB8,                                      DDSKTX__KTX_RGB,                                      DDSKTX__KTX_UNSIGNED_BYTE,                }, // RGB8
+        { DDSKTX__KTX_R16,                                      DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RED,                                      DDSKTX__KTX_UNSIGNED_SHORT,               }, // R16
+        { DDSKTX__KTX_R32F,                                     DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RED,                                      DDSKTX__KTX_FLOAT,                        }, // R32F
+        { DDSKTX__KTX_R16F,                                     DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RED,                                      DDSKTX__KTX_HALF_FLOAT,                   }, // R16F
+        { DDSKTX__KTX_RG16F,                                    DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RG,                                       DDSKTX__KTX_FLOAT,                        }, // RG16F
+        { DDSKTX__KTX_RG16_SNORM,                               DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RG,                                       DDSKTX__KTX_SHORT,                        }, // RG16S
+        { DDSKTX__KTX_RGBA16F,                                  DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RGBA,                                     DDSKTX__KTX_HALF_FLOAT,                   }, // RGBA16F
+        { DDSKTX__KTX_RGBA16,                                   DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RGBA,                                     DDSKTX__KTX_UNSIGNED_SHORT,               }, // RGBA16
+        { DDSKTX__KTX_BGRA,                                     DDSKTX__KTX_SRGB8_ALPHA8,                               DDSKTX__KTX_BGRA,                                     DDSKTX__KTX_UNSIGNED_BYTE,                }, // BGRA8
+        { DDSKTX__KTX_RGB10_A2,                                 DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RGBA,                                     DDSKTX__KTX_UNSIGNED_INT_2_10_10_10_REV,  }, // RGB10A2
+        { DDSKTX__KTX_R11F_G11F_B10F,                           DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RGB,                                      DDSKTX__KTX_UNSIGNED_INT_10F_11F_11F_REV, }, // RG11B10F
+        { DDSKTX__KTX_RG8,                                      DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RG,                                       DDSKTX__KTX_UNSIGNED_BYTE,                }, // RG8
+        { DDSKTX__KTX_RG8_SNORM,                                DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RG,                                       DDSKTX__KTX_BYTE,                         }, // RG8S
+        { DDSKTX__KTX_R16I,                                     DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RED,                                      DDSKTX__KTX_UNSIGNED_SHORT,               }, // R16I
+        { DDSKTX__KTX_R16UI,                                    DDSKTX__KTX_ZERO,                                       DDSKTX__KTX_RED,                                      DDSKTX__KTX_UNSIGNED_SHORT,               }, // R16UI
 };
 
 static const ddsktx__ktx_format_info2 k__translate_ktx_fmt2[] =
@@ -1003,6 +1007,7 @@ static bool ddsktx__parse_dds(ddsktx_texture_info* tc, const void* file_data, in
     if (cubemap && (header.caps2 & DDSKTX__DDSCAPS2_CUBEMAP_ALLSIDES) != DDSKTX__DDSCAPS2_CUBEMAP_ALLSIDES) {
         ddsktx__err(err, "dds: incomplete cubemap");
     }
+    bool volume = (header.caps2 & DDSKTX__DDSCAPS2_VOLUME) != 0;
 
     ddsktx_format format = _DDSKTX_FORMAT_COUNT;
     bool has_alpha = (header.pixel_format.flags & DDSKTX__DDPF_ALPHA) != 0;
@@ -1062,6 +1067,8 @@ static bool ddsktx__parse_dds(ddsktx_texture_info* tc, const void* file_data, in
         tc->flags |= DDSKTX_TEXTURE_FLAG_ALPHA;
     if (cubemap)
         tc->flags |= DDSKTX_TEXTURE_FLAG_CUBEMAP;
+    if (volume)
+        tc->flags |= DDSKTX_TEXTURE_FLAG_VOLUME;
     if (srgb) 
         tc->flags |= DDSKTX_TEXTURE_FLAG_SRGB;
     tc->flags |= DDSKTX_TEXTURE_FLAG_DDS;
@@ -1221,7 +1228,7 @@ void ddsktx_get_sub(const ddsktx_texture_info* tc, ddsktx_sub_data* sub_data,
             r.offset = ddsktx__align_mask(r.offset, 3); // mip-padding
         }   // foreach mip     
     } else {
-        ddsktx_assert("invalid file format" && 0);
+        ddsktx_assert(0 && "invalid file format");
     }
 }
 
