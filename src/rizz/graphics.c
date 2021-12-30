@@ -3001,7 +3001,7 @@ static void rizz__cb_apply_bindings_d(const sg_bindings* bind, const char* file,
         _sg_buffer_t* ib = _sg_lookup_buffer(&_sg.pools, bind->index_buffer.id);
         ib->cmn.used_frame = frame_idx;
     }
-
+    
     for (int i = 0; i < SG_MAX_SHADERSTAGE_IMAGES; i++) {
         if (bind->vs_images[i].id) {
             _sg_image_t* img = _sg_lookup_image(&_sg.pools, bind->vs_images[i].id);
