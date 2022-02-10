@@ -650,7 +650,7 @@ static sx_cmdline_context* rizz__app_parse_cmdline(int argc, char* argv[])
 
             if (arg) {
                 int arg_len = sx_strlen(arg);
-                if (arg_len > (int)sizeof(item.value) - 1) {
+                if (arg_len < (int)sizeof(item.value) - 1) {
                     item.allocated_value = false;
                     sx_strcpy(item.value, sizeof(item.value), arg);
                 } else {
