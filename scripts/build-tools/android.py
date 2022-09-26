@@ -244,6 +244,7 @@ def make_manifest(manifest_filepath, args):
         f.write('      android:label="{}"\n'.format(args.name))
         f.write('      android:launchMode="singleTask"\n')
         f.write('      android:screenOrientation="fullUser"\n')
+        f.write('      android:exported="true"\n')
         f.write('      android:configChanges="orientation|screenSize|keyboard|keyboardHidden">\n')
         f.write('      <meta-data android:name="android.app.lib_name" android:value="{}"/>\n'.format(args.name))
         f.write('      <intent-filter>\n')
@@ -427,10 +428,11 @@ def java_compile_sources(args, java_class_root, java_src_root, apk_root, RUNTIME
     try:
         cmd = [
             DEX,
-            '--verbose',
-            '--dex',
-            '--output=' + os.path.join(apk_root, 'classes.dex'),
-            java_class_root
+            # '--verbose',
+            # '--dex',
+            '--output=' + os.path.join(apk_root, 'classes.zip'),
+            # java_class_root
+            os.path.join(java_class_root, *args.package.split("."), "*.class")
         ]
         logging.debug(' '.join(cmd))
         dex_result = subprocess.check_output(cmd)
@@ -476,7 +478,7 @@ def build_android(args):
         exit(-1)
 
     AAPT = os.path.join(BUILD_TOOLS, 'aapt' + EXE)
-    DEX = os.path.join(BUILD_TOOLS, 'dx' + BAT)
+    DEX = os.path.join(BUILD_TOOLS, 'd8' + BAT)
     ZIPALIGN = os.path.join(BUILD_TOOLS, 'zipalign' + EXE)
     APKSIGNER = os.path.join(BUILD_TOOLS, 'apksigner' + BAT)
     KEYTOOL = os.path.join(args.java_root, 'bin', 'keytool' + EXE)
@@ -566,6 +568,7 @@ def build_android(args):
                     '-DBUNDLE=1',
                     '-DBUNDLE_TARGET=' + args.cmake_target,
                     '-DBUNDLE_TARGET_NAME=' + args.name,
+                    '-DBUNDLE_PLUGINS=' + args.plugins,
                     '-DCMAKE_BUILD_TYPE=' + args.build_type,
                     '-G', cmake_generator,
                     args.cmake_source]
@@ -836,6 +839,7 @@ if __name__ == "__main__":
     arg_parser.add_argument('--cmake-source', help='cmake (native) source directory')
     arg_parser.add_argument('--cmake-target', help='cmake (native) project name (default is same as `name`)')
     arg_parser.add_argument('--cmake-args', help='additional cmake arguments', default='')
+    arg_parser.add_argument('--plugins', help='bundle plugins', default='')
     arg_parser.add_argument('--build-type', help='build type', choices=['Debug', 'Release', 'RelWithDebInfo'], default='Debug')
     arg_parser.add_argument('--target-dir', help='target build directory', required=True)
     arg_parser.add_argument('--package', help='Java package name')
@@ -850,7 +854,7 @@ if __name__ == "__main__":
     arg_parser.add_argument('--ndk-abi', help='NDK ABI type', action='append', choices=['armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'])
     arg_parser.add_argument('--sdk-min-platform-version', help='Minimum Android platform version', type=int, default=23)
     arg_parser.add_argument('--sdk-platform-version', help='Android platform version', type=int, default=23)
-    arg_parser.add_argument('--sdk-buildtools-version', help='build tools version', default='27.0.3')
+    arg_parser.add_argument('--sdk-buildtools-version', help='build tools version', default='33.0.0')
     arg_parser.add_argument('--version', action='version', version='1.0.0')
     arg_parser.add_argument('--keystore', help='key store file path', default='')
     arg_parser.add_argument('--key-alias', help='key alias in the key store file', default='')
@@ -877,7 +881,7 @@ if __name__ == "__main__":
     args.sdk_root = os.path.normpath(args.sdk_root)
         
     if (not args.ndk_root or not os.path.isdir(args.ndk_root)):
-        args.ndk_root = os.path.join(args.sdk_root, 'ndk-bundle')
+        args.ndk_root = os.path.join(args.sdk_root, 'ndk')
         if (not os.path.isdir(args.ndk_root)):
             logging.error('ndk_root directory is invalid: %s' % args.ndk_root)
             exit(-1)
