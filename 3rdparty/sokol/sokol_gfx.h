@@ -5342,7 +5342,7 @@ _SOKOL_PRIVATE void _sg_gl_init_caps_gles3(void) {
                 _sg.gl.ext_anisotropic = true;
             }
             else if (strstr(ext, "_texture_sRGB")) {
-                _sg.gl.image_srgb = true;
+                // _sg.gl.image_srgb = true;
             }
         }
     }

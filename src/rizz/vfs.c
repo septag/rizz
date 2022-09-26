@@ -12,6 +12,7 @@
 #include "sx/threads.h"
 
 #if SX_PLATFORM_ANDROID
+#    include "rizz/android.h"
 #    include <android/asset_manager.h>
 #    include <android/asset_manager_jni.h>
 #    include <jni.h>
@@ -280,6 +281,8 @@ static int rizz__vfs_worker(void* user)
 
 bool rizz__vfs_mount(const char* path, const char* alias, bool watch)
 {
+    sx_unused(watch);
+    
     if (sx_os_path_isdir(path)) {
         rizz__vfs_mount_point mp = { 0 };
         sx_os_path_normpath(mp.path, sizeof(mp.path), path);
