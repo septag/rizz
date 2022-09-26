@@ -11,7 +11,7 @@
 # Arguments: see --help
 # Examples:
 # 1) prepare the '02-quad' example in `android/quad` directory, the package will be named 'com.glitterbombg.quad':
-#    ```python android.py --package com.glitterbombg.quad --name quad --cmake-target 02-quad --sdk-root=/path/to/android/sdk --target-dir=android/quad --cmake-source=/path/to/rizz configure```
+#    ```python android.py --package com.glitterbombg.quad --name quad --cmake-target 02-quad --plugins="imgui;basisut" --sdk-root=/path/to/android/sdk --target-dir=android/quad --cmake-source=/path/to/rizz configure```
 #    after successfully finished, you can browse the `android/quad` directory for generated files:
 #       - `apk` directory will contain native libraries, compiled java and assets. you can sync or copy 
 #         your assets into this folder
@@ -23,9 +23,9 @@
 #       - `AndroidManifest.xml` will be generated if you don't provide one, you can edit this file for your purposes
 #         But note that some arguments like `--sdk-min-platform-version`, `--sdk-platform-version` and `--app-version` will affect this file
 # 2) Build the binaries and java dex files
-#    ```python android.py --package com.glitterbombg.quad --name quad --cmake-target 02-quad --sdk-root=/path/to/android/sdk --target-dir=android/quad --cmake-source=/path/to/rizz build```
+#    ```python android.py --package com.glitterbombg.quad --name quad --cmake-target 02-quad --plugins="imgui;basisut" --sdk-root=/path/to/android/sdk --target-dir=android/quad --cmake-source=/path/to/rizz build```
 # 3) Make the final APK
-#    ```python android.py --package com.glitterbombg.quad --name quad --cmake-target 02-quad --sdk-root=d:/sdk/android --target-dir=android/quad --cmake-source=c:/projects/rizz --copy=/your/second/location package```
+#    ```python android.py --package com.glitterbombg.quad --name quad --cmake-target 02-quad --plugins="imgui;basisut" --sdk-root=d:/sdk/android --target-dir=android/quad --cmake-source=c:/projects/rizz --copy=/your/second/location package```
 #    Makes the final APK file, signs it (with debug key) and copy it to another location
 #    if you provide `--keystore`, `--key-alias`, `--keystore-password`, `--key-password` then it will signed by your custom key
 #
