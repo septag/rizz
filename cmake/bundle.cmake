@@ -82,6 +82,7 @@ function(rizz_set_executable target_name)
         
         generate_bundle_file_internal("${plugins}" ${RIZZ_SOURCE_DIR}plugin_bundle.h 
                                       "rizz__plugin_bundle" ${internal_name})
+        target_sources(rizz PRIVATE ${RIZZ_SOURCE_DIR}plugin_bundle.h)
         target_link_libraries(${target_name} PRIVATE rizz)   # bundle mode always links with the rizz
         target_compile_definitions(${target_name} PRIVATE -DRIZZ_BUNDLE)
     elseif (plugins)
