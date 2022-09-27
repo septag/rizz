@@ -82,4 +82,9 @@ rizz_plugin_decl_main(utility, plugin, e)
     return 0;
 }
 
+rizz_plugin_decl_event_handler(utility, e)
+{
+    sx_unused(e);
+}
+
 rizz_plugin_implement_info(utility, 1000, "utility plugin", NULL, 0);
