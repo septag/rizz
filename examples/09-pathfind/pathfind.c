@@ -195,8 +195,8 @@ static inline sx_vec2 random_pos()
 
 static bool init()
 {
-#if SX_PLATFORM_ANDROID
-    the_vfs->mount_android_assets("/assets");
+#if SX_PLATFORM_ANDROID || SX_PLATFORM_IOS
+    the_vfs->mount_mobile_assets("/assets");
 #else
     // mount `/asset` directory
     char asset_dir[RIZZ_MAX_PATH];
