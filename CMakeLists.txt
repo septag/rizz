@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.1)
 project(rizz)
 
+# generate compile_commands.json for clangd
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 if (ANDROID OR IOS)
     set(BUNDLE ON CACHE INTERNAL "Bundle mode" FORCE)
     set(BUILD_TOOLS OFF CACHE INTERNAL "Build tools" FORCE)
