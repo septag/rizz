@@ -11,6 +11,7 @@
 #include "sx/array.h"
 #include "sx/io.h"
 #include "sx/handle.h"
+#include "sx/macros.h"
 #include "sx/threads.h"
 #include "sx/string.h"
 #include "sx/os.h"
@@ -57,6 +58,8 @@ bool rizz__profile_init(const sx_alloc* alloc)
         g_profile.capture_context_handles = sx_handle_create_pool(g_profile.alloc, 16);
         if (!g_profile.capture_context_handles)
             return false;
+    #else
+        sx_unused(alloc);
     #endif
     return true;
 }
