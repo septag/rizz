@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.1)
 project(rizz)
 
+# generate compile_commands.json for clangd
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 if (ANDROID OR IOS)
     set(BUNDLE ON CACHE INTERNAL "Bundle mode" FORCE)
     set(BUILD_TOOLS OFF CACHE INTERNAL "Build tools" FORCE)
@@ -89,7 +92,7 @@ function(rizz__add_example proj_name)
     target_link_libraries(${proj_name} PRIVATE sx)
     add_dependencies(${proj_name} rizz)
 
-	IF (MSVC)
+	IF (MSVC AND NOT BUNDLE)
 		set_target_properties(${proj_name} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:${proj_name}>/")
 		set_target_properties(${proj_name} PROPERTIES VS_DEBUGGER_COMMAND "rizz.exe")
 		set_target_properties(${proj_name} PROPERTIES VS_DEBUGGER_COMMAND_ARGUMENTS "--run ${proj_name}.dll")

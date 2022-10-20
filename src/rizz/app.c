@@ -5,6 +5,7 @@
 
 #include "internal.h"
 
+#include "rizz/android.h"
 #include "rizz/ios.h"
 
 #include "sx/cmdline.h"

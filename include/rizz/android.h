@@ -4,6 +4,7 @@
 
 #if SX_PLATFORM_ANDROID
 
+#    include "rizz/rizz.h"
 #    include <jni.h>
 
 typedef struct rizz_android_method {

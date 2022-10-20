@@ -1,14 +1,11 @@
-#include "rizz/android.h"
+#    include "rizz/android.h"
 
 #if SX_PLATFORM_ANDROID
-
-#    include "rizz/core.h"
-
 #    include "sx/string.h"
-
 #    include "android/native_activity.h"
 #    include <jni.h>
 #    include <pthread.h>
+#    include "internal.h"
 
 // app.c
 const void* sapp_android_get_native_activity(void);
