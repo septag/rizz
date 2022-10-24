@@ -36,6 +36,7 @@
 //  [x] Numbers may begin with an explicit plus sign.
 //  [x] Single and multi-line comments are allowed.
 //  [x] Additional white space characters are allowed.
+//  [x] Multiline comments
 //
 // Usage:
 //  The main function to parse json is `cj5_parse`. 
@@ -90,6 +91,10 @@
 #    endif
 #endif
 
+#ifndef CJ5_SKIP_ASAN
+#    define CJ5_SKIP_ASAN
+#endif
+
 typedef enum cj5_token_type {
     CJ5_TOKEN_OBJECT = 0,
     CJ5_TOKEN_ARRAY,
@@ -121,6 +126,8 @@ typedef struct cj5_token {
         cj5_token_number_type num_type;
         uint32_t key_hash;
     };
+    int key_start;
+    int key_end;
     int start;
     int end;
     int size;
@@ -161,6 +168,7 @@ CJ5_API uint64_t cj5_seekget_uint64(cj5_result* r, int parent_id, const char* ke
 CJ5_API int64_t cj5_seekget_int64(cj5_result* r, int parent_id, const char* key, int64_t def_val);
 CJ5_API bool cj5_seekget_bool(cj5_result* r, int parent_id, const char* key, bool def_val);
 CJ5_API const char* cj5_seekget_string(cj5_result* r, int parent_id, const char* key, char* str, int max_str, const char* def_val);
+
 CJ5_API int cj5_seekget_array_double(cj5_result* r, int parent_id, const char* key, double* values, int max_values);
 CJ5_API int cj5_seekget_array_float(cj5_result* r, int parent_id, const char* key, float* values, int max_values);
 CJ5_API int cj5_seekget_array_int(cj5_result* r, int parent_id, const char* key, int* values, int max_values);
@@ -269,8 +277,7 @@ static inline bool cj5__isnum(char ch)
     return cj5__isrange(ch, '0', '9');
 }
 
-static inline char* cj5__strcpy(char* CJ5__RESTRICT dst, int dst_sz, const char* CJ5__RESTRICT src,
-                                int num)
+static inline char* cj5__strcpy(char* CJ5__RESTRICT dst, int dst_sz, const char* CJ5__RESTRICT src, int num)
 {
     const int _max = dst_sz - 1;
     const int _num = (num < _max ? num : _max);
@@ -282,7 +289,7 @@ static inline char* cj5__strcpy(char* CJ5__RESTRICT dst, int dst_sz, const char*
 }
 
 // https://github.com/lattera/glibc/blob/master/string/strlen.c
-static int cj5__strlen(const char* str)
+CJ5_SKIP_ASAN static int cj5__strlen(const char* str)
 {
     const char* char_ptr;
     const uintptr_t* longword_ptr;
@@ -430,13 +437,11 @@ found:
         type = CJ5_TOKEN_STRING;
     } else {
         // detect other types, subtypes
-#if __arm__
-        uint32_t fourcc_ = (uint32_t)json5[start];
+        // note that we have to use memcpy here or we will get unaligned access on some
+        uint32_t fourcc_;
         CJ5_MEMCPY(&fourcc_, &json5[start], 4);
         uint32_t* fourcc = &fourcc_;
-#else
-        uint32_t* fourcc = (uint32_t*)&json5[start];
-#endif
+ 
         if (*fourcc == CJ5__NULL_FOURCC) {
             type = CJ5_TOKEN_NULL;
         } else if (*fourcc == CJ5__TRUE_FOURCC) {
@@ -499,6 +504,8 @@ found:
     token->type = type;
     if (type == CJ5_TOKEN_STRING) {
         token->key_hash = cj5__hash_fnv32(&json5[start], &json5[parser->pos]);
+        token->key_start = start;
+        token->key_end = parser->pos;
     } else {
         token->num_type = num_type;
     }
@@ -591,6 +598,15 @@ static void cj5__skip_comment(cj5__parser* parser, const char* json5, int len)
     }
 }
 
+static void cj5__skip_multiline_comment(cj5__parser* parser, const char* json5, int len)
+{
+    for (; parser->pos < len; parser->pos++) {
+        if (json5[parser->pos] == '*' && parser->pos < (len - 1) && json5[parser->pos+1] == '/') {
+            return;
+        }
+    }
+}
+
 cj5_result cj5_parse(const char* json5, int len, cj5_token* tokens, int max_tokens)
 {
     cj5__parser parser;
@@ -626,6 +642,8 @@ cj5_result cj5_parse(const char* json5, int len, cj5_token* tokens, int max_toke
                 if (++super_token->size == 1 && super_token->type == CJ5_TOKEN_STRING) {
                     super_token->key_hash =
                         cj5__hash_fnv32(&json5[super_token->start], &json5[super_token->end]);
+                    super_token->key_start = super_token->start;
+                    super_token->key_end = super_token->end;
                 }
             }
 
@@ -688,6 +706,8 @@ cj5_result cj5_parse(const char* json5, int len, cj5_token* tokens, int max_toke
                     // it's not a value, it's a key, so hash it
                     tokens[parser.super_id].key_hash = cj5__hash_fnv32(
                         &json5[tokens[parser.super_id].start], &json5[tokens[parser.super_id].end]);
+                    tokens[parser.super_id].key_start = tokens[parser.super_id].start;
+                    tokens[parser.super_id].key_end = tokens[parser.super_id].end;
                 }
             }
             break;
@@ -717,9 +737,13 @@ cj5_result cj5_parse(const char* json5, int len, cj5_token* tokens, int max_toke
             }
             break;
         case '/':
-            if (can_comment && parser.pos < len - 1 && json5[parser.pos + 1] == '/') {
-                cj5__skip_comment(&parser, json5, len);
-            }
+            if (can_comment && parser.pos < len - 1) {
+                if (json5[parser.pos + 1] == '/') {
+                    cj5__skip_comment(&parser, json5, len);
+                } else if (json5[parser.pos + 1] == '*') {
+                    cj5__skip_multiline_comment(&parser, json5, len);
+                }
+            } 
             break;
 
         default:
@@ -734,6 +758,8 @@ cj5_result cj5_parse(const char* json5, int len, cj5_token* tokens, int max_toke
                     tokens[parser.super_id].type == CJ5_TOKEN_STRING) {
                     tokens[parser.super_id].key_hash = cj5__hash_fnv32(
                         &json5[tokens[parser.super_id].start], &json5[tokens[parser.super_id].end]);
+                    tokens[parser.super_id].key_start = tokens[parser.super_id].start;
+                    tokens[parser.super_id].key_end = tokens[parser.super_id].end;
                 }
             }
             break;
@@ -1221,7 +1247,7 @@ int cj5_get_array_elem_incremental(cj5_result* r, int id, int index, int prev_el
     const cj5_token* tok = &r->tokens[id];
     CJ5_ASSERT(tok->type == CJ5_TOKEN_ARRAY);
     CJ5_ASSERT(index < tok->size);
-	int start = prev_elem <= 0 ? (id + 1) : (prev_elem + 1);
+    int start = prev_elem <= 0 ? (id + 1) : (prev_elem + 1);
     for (int i = start, count = index, ic = r->num_tokens; i < ic && count < tok->size; i++) {
         if (r->tokens[i].parent_id == id) {
             if (count == index) {
